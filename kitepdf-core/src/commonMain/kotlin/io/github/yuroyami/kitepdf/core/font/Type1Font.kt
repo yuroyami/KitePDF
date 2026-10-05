@@ -32,6 +32,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
  */
 internal class Type1Font private constructor(
     val name: String,
+    /** The decrypted subroutines, which the interpreter runs as they are. */
     private val subrs: List<ByteArray>,
     private val charStrings: Map<String, ByteArray>,
     /** /Encoding[i] = glyph name (or .notdef) for the standard 256 slots. */
@@ -110,7 +111,8 @@ internal class Type1Font private constructor(
             val plaintext = decryptedEexec.copyOfRange(4, decryptedEexec.size)  // strip 4 random bytes
 
             val lenIV = parseLenIV(plaintext)
-            val subrs = parseSubrs(plaintext)
+            // Each subroutine is encrypted on its own, as each charstring is (#596).
+            val subrs = parseSubrs(plaintext).map { decryptCharstring(it, lenIV) }
             val charStrings = parseCharStrings(plaintext)
             val fontMatrix = parseFontMatrix(header) ?: parseFontMatrix(plaintext)
 

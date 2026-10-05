@@ -144,6 +144,88 @@ class Type1Test {
         assertEquals(listOf(0.0, 0.0, 500.0, 700.0), boxBounds(boxFont("/FontMatrix [0.0005 0 0 x 0 0] readonly def")))
     }
 
+    /**
+     * A Type 1 font whose glyph /A runs [glyph] with [subrs] as its `/Subrs`, each program
+     * charstring-encrypted behind four random bytes, as a font file stores it.
+     */
+    private fun subrFont(subrs: List<IntArray>, glyph: IntArray): Type1Font {
+        fun encrypted(program: IntArray) = csEncrypt(byteArrayOf(7, 7, 7, 7) + ByteArray(program.size) { program[it].toByte() })
+        val subrText = subrs.withIndex().fold("/Subrs ${subrs.size} array\n".encodeToByteArray()) { acc, (i, program) ->
+            val bytes = encrypted(program)
+            acc + "dup $i ${bytes.size} RD ".encodeToByteArray() + bytes + " NP\n".encodeToByteArray()
+        }
+        val charstring = encrypted(glyph)
+        val privateText = "dup /Private 5 dict dup begin\n/lenIV 4 def\n".encodeToByteArray() + subrText +
+            "ND\n/CharStrings 1 dict dup begin\n/A ${charstring.size} RD ".encodeToByteArray() + charstring +
+            "\nND\nend\nend\n".encodeToByteArray()
+        val eexec = eexecEncrypt(byteArrayOf(0, 0, 0, 0) + privateText)
+        val header = "%!PS-AdobeFont-1.0: SubrFont 001.000\n/FontName /SubrFont def\ncurrentfile eexec\n".encodeToByteArray()
+        return Type1Font.parse(header + eexec, header.size, eexec.size)
+    }
+
+    /** The segments of glyph /A that draw, without the closing ones. */
+    private fun drawn(font: Type1Font): List<KitePath.Segment> =
+        font.outlineForGlyphName("A")!!.segments.filter { it != KitePath.Segment.Close }
+
+    /**
+     * Each subroutine is charstring-encrypted on its own, as each charstring is. Run still
+     * encrypted, a subroutine that draws part of a letter drew noise, so every letter of a
+     * LaTeX font that calls one broke (#596).
+     */
+    @Test
+    fun a_subroutine_is_decrypted_before_it_runs() {
+        // Subr 0: rlineto 500 0, rlineto 0 700, rlineto -500 0, return.
+        val sides = intArrayOf(248, 136, 139, 5, 139, 249, 80, 5, 252, 136, 139, 5, 11)
+        // hsbw 0 500, rmoveto 0 0, 0 callsubr, closepath, endchar.
+        val glyph = intArrayOf(139, 248, 136, 13, 139, 139, 21, 139, 10, 9, 14)
+        assertEquals(
+            listOf(
+                KitePath.Segment.MoveTo(0.0, 0.0), KitePath.Segment.LineTo(500.0, 0.0),
+                KitePath.Segment.LineTo(500.0, 700.0), KitePath.Segment.LineTo(0.0, 700.0),
+            ),
+            drawn(subrFont(listOf(sides), glyph)),
+        )
+    }
+
+    /**
+     * Flex reaches OtherSubrs 0, 1 and 2 through Subrs 0, 1 and 2, so a font's flex draws its
+     * two curves only when those subroutines run decrypted. Without them, each flex point
+     * drew a move, and the letter fell apart into pieces (#596).
+     */
+    @Test
+    fun flex_through_the_standard_subroutines_draws_two_curves() {
+        val subrs = listOf(
+            intArrayOf(142, 139, 12, 16, 12, 17, 12, 17, 12, 33, 11), // 3 0 callothersubr pop pop setcurrentpoint return
+            intArrayOf(139, 140, 12, 16, 11),                         // 0 1 callothersubr return
+            intArrayOf(139, 141, 12, 16, 11),                         // 0 2 callothersubr return
+        )
+        val glyph = intArrayOf(
+            139, 248, 136, 13,                  // hsbw 0 500
+            139, 139, 21,                       // rmoveto 0 0
+            140, 10,                            // 1 callsubr: flex begins
+            247, 92, 139, 21, 141, 10,          // 200 0 rmoveto 2 callsubr: the reference point
+            39, 159, 21, 141, 10,               // -100 20 rmoveto 2 callsubr
+            189, 139, 21, 141, 10,              // 50 0 rmoveto 2 callsubr, four times
+            189, 139, 21, 141, 10,
+            189, 139, 21, 141, 10,
+            189, 139, 21, 141, 10,
+            239, 119, 21, 141, 10,              // 100 -20 rmoveto 2 callsubr
+            189, 248, 36, 139, 139, 10,         // 50 400 0 0 callsubr: flex ends at (400, 0)
+            139, 247, 192, 5,                   // rlineto 0 300
+            252, 36, 139, 5,                    // rlineto -400 0
+            9, 14,                              // closepath endchar
+        )
+        assertEquals(
+            listOf(
+                KitePath.Segment.MoveTo(0.0, 0.0),
+                KitePath.Segment.CurveTo(100.0, 20.0, 150.0, 20.0, 200.0, 20.0),
+                KitePath.Segment.CurveTo(250.0, 20.0, 300.0, 20.0, 400.0, 0.0),
+                KitePath.Segment.LineTo(400.0, 300.0), KitePath.Segment.LineTo(0.0, 300.0),
+            ),
+            drawn(subrFont(subrs, glyph)),
+        )
+    }
+
     /* ─── Helpers: encrypt routines (inverse of Type 1's decrypt) ───────── */
 
     private fun eexecEncrypt(plain: ByteArray): ByteArray = streamEncrypt(plain, seed = 55665)
