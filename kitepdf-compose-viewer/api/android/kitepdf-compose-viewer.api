@@ -202,6 +202,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun hitTest-k-4lQ0M (J)Lio/github/yuroyami/kitepdf/compose/KitePageHit;
 	public final fun hitTestDisplay-k-4lQ0M (J)Lio/github/yuroyami/kitepdf/compose/KitePageHit;
 	public final fun isComplete ()Z
+	public final fun isScrollInProgress ()Z
 	public final fun isSelectionActive ()Z
 	public final fun isZoomed ()Z
 	public final fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;

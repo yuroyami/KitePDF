@@ -273,6 +273,8 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
         final fun <get-document>(): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.compose/KiteDocViewState.document.<get-document>|<get-document>(){}[0]
     final val isComplete // io.github.yuroyami.kitepdf.compose/KiteDocViewState.isComplete|{}isComplete[0]
         final fun <get-isComplete>(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocViewState.isComplete.<get-isComplete>|<get-isComplete>(){}[0]
+    final val isScrollInProgress // io.github.yuroyami.kitepdf.compose/KiteDocViewState.isScrollInProgress|{}isScrollInProgress[0]
+        final fun <get-isScrollInProgress>(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocViewState.isScrollInProgress.<get-isScrollInProgress>|<get-isScrollInProgress>(){}[0]
     final val isZoomed // io.github.yuroyami.kitepdf.compose/KiteDocViewState.isZoomed|{}isZoomed[0]
         final fun <get-isZoomed>(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocViewState.isZoomed.<get-isZoomed>|<get-isZoomed>(){}[0]
     final val knownPageCount // io.github.yuroyami.kitepdf.compose/KiteDocViewState.knownPageCount|{}knownPageCount[0]

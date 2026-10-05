@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
 import io.github.yuroyami.kitepdf.compose.KiteDocViewState
 import io.github.yuroyami.kitepdf.compose.KiteHighlight
@@ -23,9 +24,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.time.Duration
@@ -47,7 +52,12 @@ import kotlin.time.Duration.Companion.seconds
  * or after it, in that chapter or the next one with an overlay. It plays each clip's audio out of
  * the book, from the clip's `clipBegin` to its `clipEnd`, or to the end of the file without one
  * (EPUB Reading Systems 3.3, 9.2.2). When a chapter's overlay ends, it goes on with the next
- * chapter that has one (9.1). False pauses it, and true again goes on from there.
+ * chapter that has one (9.1). False pauses it, and true again goes on from there. When the reader
+ * moves the viewer to another place, by a link, the table of contents, a page turn or a scroll,
+ * the reading goes on from the first clip at or after that place once the view settles, also
+ * while it is paused (Media Overlays 3.3, navigation during playback). The page turns that the
+ * reading makes to follow its text do not count, and it turns no page while the reader moves the
+ * view.
  *
  * The text of the clip being read gets one entry in [KiteDocViewState.highlights], with the id
  * [READ_ALOUD_HIGHLIGHT_ID], next to the app's own entries, and the viewer turns to the page of
@@ -135,6 +145,12 @@ internal class ReadAloud(
     private var shownPage: KiteLocation? = null
     private var turn: Job? = null
 
+    /**
+     * Where the view was when the reading started there, or where its last turn left it. The view
+     * settling anywhere else, outside a turn of the reading's own, is a move by the reader.
+     */
+    private var settled: KiteLocation? = null
+
     fun play() {
         wanted = true
         if (reading == null) reading = scope.launch { read() } else if (placed) player?.follow(true)
@@ -156,17 +172,17 @@ internal class ReadAloud(
     }
 
     private suspend fun read() {
-        val here = view.currentLocation
-        val start = withContext(Dispatchers.Default) { startAt(here) }
-        val made = if (start == null) null else try {
-            newPlayer()
-        } catch (failure: Exception) {
-            // As in EpubMediaPlayer: a platform without a player stack fails here.
-            null
-        }
-        if (start != null && made != null) {
+        var here = view.currentLocation
+        while (true) {
+            val start = withContext(Dispatchers.Default) { startAt(here) } ?: break
+            val made = player ?: try {
+                newPlayer()
+            } catch (failure: Exception) {
+                // As in EpubMediaPlayer: a platform without a player stack fails here.
+                null
+            } ?: break
             player = made
-            readFrom(made, start.first, start.second)
+            here = readUntilMoved(made, start.first, start.second) ?: break
         }
         player?.close()
         player = null
@@ -176,6 +192,35 @@ internal class ReadAloud(
         onClip(null)
         onFinished()
     }
+
+    /**
+     * Reads from [firstClip] of [firstChapter] until the book's narration ends, and returns null,
+     * or until the reader moves the view, and returns where it settled.
+     */
+    private suspend fun readUntilMoved(player: KitePlayer, firstChapter: Int, firstClip: Int): KiteLocation? = coroutineScope {
+        settled = view.currentLocation
+        shownPage = null
+        val moved = async { awaitReaderMove() }
+        val reading = launch { readFrom(player, firstChapter, firstClip) }
+        val to = select<KiteLocation?> {
+            reading.onJoin { null }
+            moved.onAwait { it }
+        }
+        moved.cancel()
+        reading.cancel()
+        if (to != null) {
+            // The clip of the place the reader left stops at once, not when the next one opens.
+            placed = false
+            player.follow(false)
+        }
+        to
+    }
+
+    /** Waits for the view to settle somewhere other than where the reading left it, outside a turn of its own. */
+    private suspend fun awaitReaderMove(): KiteLocation =
+        snapshotFlow { if (view.isScrollInProgress) null else view.currentLocation }
+            .filterNotNull()
+            .first { it != settled && turn?.isActive != true }
 
     /** Reads every clip from [firstClip] of [firstChapter] to the end of the book's narration. */
     private suspend fun readFrom(player: KitePlayer, firstChapter: Int, firstClip: Int) {
@@ -244,10 +289,16 @@ internal class ReadAloud(
         onClip(clip)
         val page = box?.location ?: return
         if (page == shownPage) return
+        // A turn now would take the view from the reader's hand, or end the move they started.
+        // Where they settle restarts the reading, and the next clip looks again if they come back.
+        if (view.isScrollInProgress) return
         shownPage = page
         if (view.currentLocation != page) {
             turn?.cancel()
-            turn = scope.launch { view.scrollTo(page, animate = true) }
+            turn = scope.launch {
+                view.scrollTo(page, animate = true)
+                settled = view.currentLocation
+            }
         }
     }
 

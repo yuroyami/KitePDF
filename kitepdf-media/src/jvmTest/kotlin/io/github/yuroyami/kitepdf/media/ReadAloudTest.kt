@@ -91,10 +91,17 @@ class ReadAloudTest {
         var finished = false
     }
 
-    private fun ComposeUiTest.read(state: KiteDocViewState, playing: MutableState<Boolean>, log: Log) {
+    /** Shows [state] and reads it while [playing] is true. Setting [jump] moves the viewer there, as a reader's link would. */
+    private fun ComposeUiTest.read(
+        state: KiteDocViewState,
+        playing: MutableState<Boolean>,
+        log: Log,
+        jump: MutableState<KiteLocation?> = mutableStateOf(null),
+    ) {
         val start = System.nanoTime()
         setContent {
             KiteDocView(state, Modifier.size(400.dp, 600.dp), layout = KiteDocLayout.Paged())
+            jump.value?.let { to -> LaunchedEffect(to) { state.scrollTo(to) } }
             KiteReadAloud(state, playing.value, newPlayer = ::newPlayer, onClip = { log.clips += it?.id }, onFinished = { log.finished = true })
             LaunchedEffect(state) {
                 snapshotFlow { state.highlights.firstOrNull { it.id == READ_ALOUD_HIGHLIGHT_ID } }
@@ -229,5 +236,57 @@ class ReadAloudTest {
         waitUntil(timeoutMillis = 10_000) { log.finished }
         assertEquals(listOf<String?>(null), log.clips.toList())
         assertTrue(players.isEmpty())
+    }
+
+    /**
+     * Three sentences read two seconds each, then a second chapter of one, so a jump lands well
+     * inside the first clip.
+     */
+    private fun twoChapters(): EpubDocument = book(
+        listOf(
+            Chapter(
+                """<p id="a1">One.</p><p id="a2">Two.</p><p id="a3">Three.</p>""",
+                par(1, "a1", "long.wav", 0.0, 2.0) + par(1, "a2", "long.wav", 2.0, 4.0) + par(1, "a3", "long.wav", 4.0, 6.0),
+            ),
+            Chapter("""<p id="b">Second chapter.</p>""", par(2, "b", "long.wav", 0.0, 2.0)),
+        ),
+        mapOf("long.wav" to NarratedBooks.wav(6)),
+    )
+
+    @Test
+    fun a_jump_by_the_reader_restarts_the_reading_at_the_first_clip_there() = runComposeUiTest {
+        // EPUB Media Overlays 3.3, navigation during playback: the reading goes on from the first
+        // clip at or after the place the reader moves to (#524).
+        val state = KiteDocViewState(twoChapters())
+        val jump = mutableStateOf<KiteLocation?>(null)
+        val log = Log()
+        read(state, mutableStateOf(true), log, jump)
+        waitUntil(timeoutMillis = 30_000) { "a1" in log.clips }
+        jump.value = KiteLocation(1, 0)
+        waitUntil(timeoutMillis = 30_000) { log.finished }
+        waitForIdle()
+        val clips = log.clips.toList()
+        assertEquals("a1", clips.first())
+        assertTrue("a3" !in clips, "the reading went on in the chapter the reader left: $clips")
+        assertEquals(listOf("b", null), clips.takeLast(2), "the reading did not go on where the reader went: $clips")
+        assertEquals(KiteLocation(1, 0), runOnIdle { state.currentLocation }, "the reading took the reader back")
+    }
+
+    @Test
+    fun a_jump_while_paused_moves_the_reading_there() = runComposeUiTest {
+        val state = KiteDocViewState(twoChapters())
+        val playing = mutableStateOf(true)
+        val jump = mutableStateOf<KiteLocation?>(null)
+        val log = Log()
+        read(state, playing, log, jump)
+        waitUntil(timeoutMillis = 30_000) { "a1" in log.clips }
+        playing.value = false
+        jump.value = KiteLocation(1, 0)
+        waitUntil(timeoutMillis = 10_000) { state.currentLocation == KiteLocation(1, 0) }
+        Thread.sleep(2_500)
+        assertTrue(log.clips.none { it == "a2" || it == "a3" }, "the reading moved on while paused: ${log.clips}")
+        playing.value = true
+        waitUntil(timeoutMillis = 30_000) { log.finished }
+        assertEquals(listOf("a1", "b", null), log.clips.toList())
     }
 }
