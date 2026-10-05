@@ -11,6 +11,7 @@ Open work lives in GitHub Issues. There is no private planning file, and there n
 Things a previous change taught the hard way. One line each. Delete a line when it stops being true.
 
 - A target that no gate compiles will silently rot. Non-exhaustive `when` blocks left three canvases uncompilable for weeks and nothing noticed.
+- A Linux host cannot build Apple code, but Kotlin/Native's front end can type-check it: `kotlinc-native -target macos_arm64 -p library -Xmetadata-klib` with `-l` for each platform klib of the macOS distribution and a kitepdf-core klib whose manifest names that target. Only CI runs it (#589).
 - The differential gate averages over synthetic pages, so a slow or blank real document can still pass (#46, #43).
 - A test that returns early instead of calling an assumption reports PASS, not SKIPPED, so a whole feature can be untested and green (#44).
 - The EPUB corpus cannot catch a block nested inside an inline element, because the HTML parser already splits the common case at parse time. The bug that found it came from an FB2 conversion, a shape the corpus does not cover.

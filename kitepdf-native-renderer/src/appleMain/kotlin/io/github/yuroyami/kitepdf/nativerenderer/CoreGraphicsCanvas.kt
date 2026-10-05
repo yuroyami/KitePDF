@@ -21,6 +21,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
+import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.strokePen
@@ -28,20 +29,33 @@ import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
 import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.cValue
+import kotlinx.cinterop.cValuesOf
+import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.set
 import kotlinx.cinterop.useContents
 import kotlinx.cinterop.usePinned
-import kotlinx.cinterop.value
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.sqrt
+import cnames.structs.__CTFont
+import cnames.structs.__CTRun
+import platform.CoreFoundation.CFArrayGetCount
+import platform.CoreFoundation.CFArrayGetValueAtIndex
+import platform.CoreFoundation.CFAttributedStringCreate
 import platform.CoreFoundation.CFDataCreate
+import platform.CoreFoundation.CFDictionaryCreateMutable
+import platform.CoreFoundation.CFDictionaryGetValue
+import platform.CoreFoundation.CFDictionarySetValue
+import platform.CoreFoundation.CFRangeMake
+import platform.CoreFoundation.CFStringCreateWithCharacters
+import platform.CoreFoundation.CFStringRef
+import platform.CoreFoundation.kCFTypeDictionaryKeyCallBacks
+import platform.CoreFoundation.kCFTypeDictionaryValueCallBacks
 import platform.CoreFoundation.CFDataRef
 import platform.CoreFoundation.CFRelease
 import platform.CoreGraphics.CGAffineTransform
@@ -100,18 +114,32 @@ import platform.CoreGraphics.CGPoint
 import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.kCGGradientDrawsAfterEndLocation
 import platform.CoreGraphics.kCGGradientDrawsBeforeStartLocation
-import platform.CoreFoundation.CFStringCreateWithCString
-import platform.CoreFoundation.kCFStringEncodingUTF8
 import platform.CoreGraphics.CGContextAddPath
 import platform.CoreGraphics.CGDataProviderCreateWithCFData
 import platform.CoreGraphics.CGDataProviderRelease
+import platform.CoreGraphics.CGContextGetTextMatrix
+import platform.CoreGraphics.CGContextSetTextMatrix
+import platform.CoreGraphics.CGGlyph
 import platform.CoreGraphics.CGGlyphVar
+import platform.CoreGraphics.CGPathIsEmpty
 import platform.CoreGraphics.CGImageAlphaInfo
 import platform.CoreGraphics.CGImageCreate
 import platform.CoreGraphics.CGPathRelease
 import kotlinx.cinterop.UShortVar
 import platform.CoreGraphics.CGColorRenderingIntent
 import platform.CoreText.CTFontCreatePathForGlyph
+import platform.CoreText.CTFontDrawGlyphs
+import platform.CoreText.CTFontRef
+import platform.CoreText.CTLineCreateWithAttributedString
+import platform.CoreText.CTLineGetGlyphRuns
+import platform.CoreText.CTLineGetTypographicBounds
+import platform.CoreText.CTLineRef
+import platform.CoreText.CTRunGetAttributes
+import platform.CoreText.CTRunGetGlyphCount
+import platform.CoreText.CTRunGetGlyphs
+import platform.CoreText.CTRunGetPositions
+import platform.CoreText.kCTFontAttributeName
+import platform.CoreText.kCTLanguageAttributeName
 import platform.CoreText.CTFontCreateWithName
 import platform.CoreText.CTFontGetGlyphsForCharacters
 import platform.ImageIO.CGImageSourceCreateImageAtIndex
@@ -262,9 +290,14 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
     }
 
     /**
-     * Standard-14 and other non-embedded fonts: fill CoreText glyph paths.
-     * Pen positions use PDF's 1/1000 em advances, so layout matches what the
-     * document assigned rather than the substitute font's own metrics.
+     * Standard-14 and other non-embedded fonts, in the face of [systemFontName]. Pen positions
+     * use PDF's 1/1000 em advances, so layout matches what the document assigned rather than the
+     * substitute face's metrics. The glyphs go as the parts of [hostTextParts] (#588). A glyph
+     * alone fills its outline in that face. A glyph the face lacks, and a part whose letters join
+     * or reorder, draw as a CoreText line, which shapes them and takes each character the face
+     * lacks from a face of its cascade that has it. One character at a time in Times, Helvetica
+     * or Courier drew nothing for every letter those faces lack, such as all of an Arabic page,
+     * and never joined the letters it drew (#589).
      */
     private fun drawTextViaSystemFont(
         glyphs: List<TextGlyph>,
@@ -275,55 +308,148 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         alpha: Double,
         blendMode: KiteBlendMode,
     ) {
-        val fontName = systemFontName(fontSpec)
-        val cfName = CFStringCreateWithCString(null, fontName, kCFStringEncodingUTF8) ?: return
-        val font = CTFontCreateWithName(cfName, fontSize, null)
-        CFRelease(cfName)
-        if (font == null) return
+        if (glyphs.all { it.text.isBlank() }) return
+        val font = createCFString(systemFontName(fontSpec))?.let { name ->
+            CTFontCreateWithName(name, HOST_EM, null).also { CFRelease(name) }
+        } ?: return
+        val language = fontSpec.language?.let { createCFString(it) }
+        CGContextSaveGState(ctx)
         try {
+            CGContextSetBlendMode(ctx, paintBlend(blendMode))
+            CGContextSetRGBFillColor(ctx, color.r, color.g, color.b, alpha)
+            // Text space, y up. The face is laid out at HOST_EM units to the em, em text units each.
+            CGContextConcatCTM(ctx, textToDevice.toCGAffine())
+            val em = fontSize / HOST_EM
             val advanceScale = fontSize / 1000.0
-            var penX = 0.0
-            for (glyph in glyphs) {
-                val ch = glyph.text.firstOrNull()
-                if (ch == null) {
-                    penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
+            for (part in hostTextParts(glyphs, advanceScale, 1.0)) {
+                if (part.shaped) {
+                    drawHostLine(part.text, font, language, part.x, 0.0, em, part.width)
                     continue
                 }
-                val path = memScoped {
-                    val chars = alloc<UShortVar>()
-                    chars.value = ch.code.toUShort()
-                    val ids = alloc<CGGlyphVar>()
-                    if (!CTFontGetGlyphsForCharacters(font, chars.ptr, ids.ptr, 1)) null
-                    else CTFontCreatePathForGlyph(font, ids.value, null)
-                }
-                if (path != null) {
-                    CGContextSaveGState(ctx)
-                    try {
-                        CGContextSetBlendMode(ctx, paintBlend(blendMode))
-                        CGContextSetRGBFillColor(ctx, color.r, color.g, color.b, alpha)
-                        // path (text-size units, y-up) -> +pen (text space) -> textToDevice.
-                        CGContextConcatCTM(ctx, textToDevice.toCGAffine())
-                        CGContextTranslateCTM(ctx, penX + glyph.xOffset * advanceScale, glyph.yOffset * advanceScale)
-                        CGContextBeginPath(ctx)
-                        CGContextAddPath(ctx, path)
-                        CGContextFillPath(ctx)
-                    } finally {
-                        CGContextRestoreGState(ctx)
-                        CGPathRelease(path)
+                var x = part.x
+                for (glyph in part.glyphs) {
+                    val text = glyph.text
+                    if (text.isNotBlank()) {
+                        val gx = x + glyph.xOffset * advanceScale
+                        val gy = glyph.yOffset * advanceScale
+                        if (!fillFaceGlyph(font, text, gx, gy, em)) drawHostLine(text, font, language, gx, gy, em, null)
                     }
+                    x += glyph.advanceWidth * advanceScale
                 }
-                penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
         } finally {
+            CGContextRestoreGState(ctx)
+            if (language != null) CFRelease(language)
             CFRelease(font)
         }
     }
 
     /**
+     * Fills the glyph of [text], one character, from [font], with its origin at ([x], [y]) in
+     * text space and [em] text units to a font unit. False when [font] has no glyph for it, or
+     * [text] is more than one character.
+     */
+    private fun fillFaceGlyph(font: CTFontRef, text: String, x: Double, y: Double, em: Double): Boolean {
+        val n = text.length
+        if (n != 1 && !(n == 2 && text[0].isHighSurrogate() && text[1].isLowSurrogate())) return false
+        val glyph = memScoped {
+            val chars = allocArray<UShortVar>(2)
+            for (i in 0 until n) chars[i] = text[i].code.toUShort()
+            val ids = allocArray<CGGlyphVar>(2)
+            if (CTFontGetGlyphsForCharacters(font, chars, ids, n.toLong())) ids[0] else null
+        } ?: return false
+        fillGlyph(font, glyph, CGAffineTransformMake(em, 0.0, 0.0, em, x, y))
+        return true
+    }
+
+    /**
+     * [text] as a CoreText line in [font], with its origin at ([x], [y]) in text space and [em]
+     * text units to a font unit. CoreText shapes the line and takes each character that [font]
+     * lacks from a face of its cascade that has it, for [language] when the font names one. A
+     * [width] stretches the line to the width the document gives its glyphs.
+     */
+    private fun drawHostLine(
+        text: String, font: CTFontRef, language: CFStringRef?, x: Double, y: Double, em: Double, width: Double?,
+    ) {
+        val line = createHostLine(text, font, language) ?: return
+        try {
+            val natural = CTLineGetTypographicBounds(line, null, null, null) * em
+            val sx = if (width != null && natural > 0.0 && width > 0.0) em * width / natural else em
+            val runs = CTLineGetGlyphRuns(line) ?: return
+            for (r in 0L until CFArrayGetCount(runs)) {
+                val run = CFArrayGetValueAtIndex(runs, r)?.reinterpret<__CTRun>() ?: continue
+                // The face CoreText chose for the run, which is another than [font] for a character it lacks.
+                val runFont = CTRunGetAttributes(run)?.let { CFDictionaryGetValue(it, kCTFontAttributeName) }?.reinterpret<__CTFont>() ?: font
+                val count = CTRunGetGlyphCount(run)
+                if (count <= 0L) continue
+                memScoped {
+                    val ids = allocArray<CGGlyphVar>(count)
+                    val positions = allocArray<CGPoint>(count)
+                    CTRunGetGlyphs(run, CFRangeMake(0, 0), ids)
+                    CTRunGetPositions(run, CFRangeMake(0, 0), positions)
+                    for (k in 0 until count.toInt()) {
+                        val at = positions[k]
+                        fillGlyph(runFont, ids[k], CGAffineTransformMake(sx, 0.0, 0.0, em, x + at.x * sx, y + at.y * em))
+                    }
+                }
+            }
+        } finally {
+            CFRelease(line)
+        }
+    }
+
+    /** A CoreText line of [text] in [font], tagged with [language] when it is not null. The caller releases it. */
+    private fun createHostLine(text: String, font: CTFontRef, language: CFStringRef?): CTLineRef? {
+        val string = createCFString(text) ?: return null
+        val attributes = CFDictionaryCreateMutable(null, 2, kCFTypeDictionaryKeyCallBacks.ptr, kCFTypeDictionaryValueCallBacks.ptr)
+        if (attributes == null) {
+            CFRelease(string)
+            return null
+        }
+        CFDictionarySetValue(attributes, kCTFontAttributeName, font)
+        if (language != null) CFDictionarySetValue(attributes, kCTLanguageAttributeName, language)
+        val attributed = CFAttributedStringCreate(null, string, attributes)
+        CFRelease(attributes)
+        CFRelease(string)
+        if (attributed == null) return null
+        return CTLineCreateWithAttributedString(attributed).also { CFRelease(attributed) }
+    }
+
+    /**
+     * Fills [glyph] of [font], its outline taken through [transform] from font units to text
+     * space. A glyph without an outline, such as the bitmap of a colour emoji, draws through
+     * CoreText under the same transform.
+     */
+    private fun fillGlyph(font: CTFontRef, glyph: CGGlyph, transform: CValue<CGAffineTransform>) {
+        val path = CTFontCreatePathForGlyph(font, glyph, transform)
+        if (path != null) {
+            val outlined = !CGPathIsEmpty(path)
+            if (outlined) {
+                CGContextBeginPath(ctx)
+                CGContextAddPath(ctx, path)
+                CGContextFillPath(ctx)
+            }
+            CGPathRelease(path)
+            if (outlined) return
+        }
+        // CoreText draws a glyph through the text matrix as well, which the graphics state does not hold.
+        val textMatrix = CGContextGetTextMatrix(ctx)
+        CGContextSaveGState(ctx)
+        try {
+            CGContextConcatCTM(ctx, transform)
+            CGContextSetTextMatrix(ctx, CGAffineTransformMake(1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
+            CTFontDrawGlyphs(font, cValuesOf(glyph), cValue<CGPoint>(), 1u, ctx)
+        } finally {
+            CGContextRestoreGState(ctx)
+            CGContextSetTextMatrix(ctx, textMatrix)
+        }
+    }
+
+    /**
      * The PostScript name of the face a non-embedded font draws in. Times, Helvetica and Courier
-     * have no Han, kana or Hangul glyphs, and this path draws one glyph at a time with no font
-     * cascade, so a font of a CJK language takes a face of that language that macOS and iOS ship
-     * (#472).
+     * have no Han, kana or Hangul glyphs, and the face that the cascade takes for a Han character
+     * need not draw it in the form of the font's language, so a font of a CJK language takes a
+     * face of that language that macOS and iOS ship (#472).
      */
     private fun systemFontName(spec: FontSpec): String = cjkFontName(spec) ?: when (spec.family) {
         io.github.yuroyami.kitepdf.core.font.KiteFontFamily.Serif -> when {
@@ -1044,6 +1170,9 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
     }
 
     private companion object {
+        /** The size a host face is laid out at, in units to the em, before the scale to the font size. */
+        const val HOST_EM = 1000.0
+
         /** Pixels one soft mask may use before it drops to a lower resolution, as on AWT. */
         const val MASK_PIXEL_BUDGET = KITE_DEFAULT_MAX_RASTER_PIXELS
 
@@ -1055,6 +1184,14 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
             KiteImageData.Kind.JPEG2000,
         )
     }
+}
+
+/** [text] as a CFString of the same UTF-16 units, which the caller releases. */
+@OptIn(ExperimentalForeignApi::class)
+private fun createCFString(text: String): CFStringRef? = memScoped {
+    val chars = allocArray<UShortVar>(text.length.coerceAtLeast(1))
+    for (i in text.indices) chars[i] = text[i].code.toUShort()
+    CFStringCreateWithCharacters(null, chars, text.length.toLong())
 }
 
 @OptIn(ExperimentalForeignApi::class)

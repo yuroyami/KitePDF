@@ -247,6 +247,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `CoreGraphicsCanvas` draws host-font text through CoreText, so a letter that Times, Helvetica
+  or Courier lacks draws from a face of the cascade that has it, and a run whose letters join or
+  reorder, such as an Arabic word, draws as one shaped line fitted to the width the document
+  gives it, as on the other canvases since #588. The canvas filled one character at a time from
+  one of those faces, so every Arabic, Hebrew, Thai or Devanagari letter of a document without
+  embedded fonts drew nothing on macOS and iOS, as did a letter outside the BMP and an emoji.
+  Latin text keeps a pen per glyph, and a glyph with no outline, such as a colour emoji, draws
+  through CoreText (#589).
 - In a browser, a page draws again once Compose's text has downloaded the font for characters it
   drew as boxes. No face in a browser covers every script, so Compose fetches a fallback face for
   the code points that none of its faces has, and draws its own text again when the face lands,
