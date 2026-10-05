@@ -23,7 +23,8 @@ import kotlin.test.assertTrue
 
 /**
  * On the desktop and the web, Ctrl or Cmd with the wheel zooms, and the keyboard pages and zooms
- * once a press gives the view the focus. The view took only touch gestures (#411).
+ * once a press gives the view the focus. The view took only touch gestures (#411). The plain
+ * wheel turns the page of a horizontal layout, which took only the sideways wheel (#592).
  */
 @OptIn(InternalComposeUiApi::class, ExperimentalComposeUiApi::class)
 class KeyboardAndWheelSceneTest {
@@ -67,6 +68,14 @@ class KeyboardAndWheelSceneTest {
         scene.sendPointerEvent(
             PointerEventType.Scroll, Offset(100f, 150f), scrollDelta = Offset(0f, deltaY), type = PointerType.Mouse,
             keyboardModifiers = PointerKeyboardModifiers(isCtrlPressed = ctrl),
+        )
+    }
+
+    /** A plain wheel event at [time], as a mouse notch or a part of a trackpad flick sends. */
+    private fun plainWheel(scene: ImageComposeScene, deltaY: Float, time: Long) {
+        scene.sendPointerEvent(
+            PointerEventType.Scroll, Offset(100f, 150f), scrollDelta = Offset(0f, deltaY), timeMillis = time,
+            type = PointerType.Mouse,
         )
     }
 
@@ -160,6 +169,83 @@ class KeyboardAndWheelSceneTest {
             driver.pumpUntilState { state.zoom > 1.2f }
             key(scene, Key.Zero, ctrl = true)
             driver.pumpUntilState { state.zoom == 1f }
+        }
+    }
+
+    @Test
+    fun the_wheel_turns_the_page_of_a_horizontal_paged_layout() {
+        withViewer { scene, state, driver ->
+            plainWheel(scene, 1f, time = 1_000)
+            driver.pumpUntilState { state.currentPage == 1 }
+            plainWheel(scene, 1f, time = 2_000)
+            driver.pumpUntilState { state.currentPage == 2 }
+            plainWheel(scene, -1f, time = 3_000)
+            driver.pumpUntilState { state.currentPage == 1 }
+        }
+    }
+
+    @Test
+    fun a_trackpad_flick_turns_one_page() {
+        withViewer { scene, state, driver ->
+            // A flick and the tail of events that follows it, 10 ms apart.
+            for (i in 0 until 40) {
+                plainWheel(scene, 0.4f, time = 1_000L + 10 * i)
+                driver.pumpFrames(1)
+            }
+            driver.pumpUntilState { state.currentPage == 1 }
+            driver.pumpFrames(60)
+            assertEquals(1, state.currentPage, "one flick turned more than one page")
+        }
+    }
+
+    @Test
+    fun the_wheel_down_goes_forward_where_pages_advance_to_the_left() {
+        withViewer(direction = LayoutDirection.Rtl) { scene, state, driver ->
+            plainWheel(scene, 1f, time = 1_000)
+            driver.pumpUntilState { state.currentPage == 1 }
+        }
+    }
+
+    @Test
+    fun the_wheel_turns_a_whole_spread_in_the_spread_layout() {
+        withViewer(layout = KiteDocLayout.Spread()) { scene, state, driver ->
+            driver.pumpUntilState { state.stripSettled }
+            plainWheel(scene, 1f, time = 1_000)
+            driver.pumpUntilState { state.currentPage == 2 }
+        }
+    }
+
+    @Test
+    fun a_sideways_swipe_that_drifts_down_stays_sideways() {
+        withViewer { scene, state, driver ->
+            // A short swipe to the side that the pager takes, then a tail that goes only down.
+            var time = 1_000L
+            repeat(10) {
+                scene.sendPointerEvent(
+                    PointerEventType.Scroll, Offset(100f, 150f), scrollDelta = Offset(0.1f, 0f), timeMillis = time,
+                    type = PointerType.Mouse,
+                )
+                time += 10
+                driver.pumpFrames(1)
+            }
+            repeat(4) {
+                plainWheel(scene, 0.2f, time)
+                time += 10
+                driver.pumpFrames(1)
+            }
+            driver.pumpFrames(60)
+            assertEquals(0, state.currentPage, "the tail of a sideways swipe turned the page")
+        }
+    }
+
+    @Test
+    fun a_zoomed_page_keeps_the_wheel() {
+        withViewer { scene, state, driver ->
+            onTestUiThread { state.setZoom(2f) }
+            driver.pumpFrames(5)
+            plainWheel(scene, 1f, time = 1_000)
+            driver.pumpFrames(60)
+            assertEquals(0, state.currentPage, "the wheel turned a zoomed page")
         }
     }
 }

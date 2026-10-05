@@ -158,8 +158,9 @@ import kotlinx.coroutines.launch
  *   Turn it off for a document shown as a picture, a chart, a scan, a trace,
  *   where a text selection means nothing and a stray long press only gets in
  *   the way of panning.
- * @param userScrollEnabled gesture scrolling/swiping of the layout itself, and the page keys
- *   of a keyboard once a press gives the view the focus.
+ * @param userScrollEnabled gesture scrolling/swiping of the layout itself, the wheel that turns
+ *   the page of a horizontal paged layout, and the page keys of a keyboard once a press gives
+ *   the view the focus.
  *   Disable to drive paging exclusively through [KiteDocViewState] (nav buttons).
  * @param onPageRendered fires whenever a page finishes a FRESH screen raster:
  *   once per page and bitmap size, so again at each settled zoom when crisp zoom
@@ -419,6 +420,7 @@ public fun KiteDocView(
                 true
             }
             .focusable()
+            .kiteWheelPaging(state, layout, enabled = userScrollEnabled, scope = tapScope)
             .pointerInput(keyFocus) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
