@@ -258,7 +258,7 @@ internal class BoxBuilder(
                     if (child.tag == "svg") { // inline SVG: paint as a vector image box
                         val cs = resolver.compute(child, childAncestors, style)
                         // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
-                        if (cs.display != Display.NONE) SvgImage.fromElement(child)?.let {
+                        if (cs.display != Display.NONE) SvgImage.fromElement(child, resolver.svgHostStyle(child))?.let {
                             flush()
                             children.add(ImageBox(cs, "", it).also { box -> box.semantics = svgSemantics(child, sem); box.source = child })
                         }
@@ -738,7 +738,7 @@ internal class BoxBuilder(
                         // An <svg> in inline content is an inline replaced element, like an
                         // <img>: it flows on the line (CSS 2.1, 10.3.2, #275).
                         val cs = resolver.compute(child, childAncestors, style)
-                        if (cs.display != Display.NONE) SvgImage.fromElement(child)?.let { svg ->
+                        if (cs.display != Display.NONE) SvgImage.fromElement(child, resolver.svgHostStyle(child))?.let { svg ->
                             val sem = svgSemantics(child, parentSem)
                             inl.addImage(
                                 "", style, cs.widthPt ?: svgSizePt(child.attrs["width"], cs), cs.heightPt ?: svgSizePt(child.attrs["height"], cs),

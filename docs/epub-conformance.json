@@ -10,7 +10,7 @@
     "cnt-css-fonts_woff2": true,
     "cnt-mathml-support": true,
     "cnt-svg-css": true,
-    "cnt-svg-css-inclusion": false,
+    "cnt-svg-css-inclusion": true,
     "cnt-svg-css-reference": true,
     "cnt-svg-embedded": true,
     "cnt-svg-support": true,

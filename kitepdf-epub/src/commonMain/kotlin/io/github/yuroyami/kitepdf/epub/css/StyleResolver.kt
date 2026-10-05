@@ -148,6 +148,51 @@ internal class StyleResolver(
     }
 
     /**
+     * The rules of the document's own style sheets that declare a property SVG reads, with their
+     * place in the cascade, for an SVG the document includes (#509). The user-agent sheet is
+     * HTML's, and a reader's rules are for the book's text, so neither reaches the SVG.
+     */
+    private val svgRules: List<IndexedValue<StyleRule>> by lazy {
+        rules.withIndex().filter { (_, rule) -> rule.origin == Origin.AUTHOR && rule.declarations.any { it.property in SVG_PROPERTIES } }
+    }
+
+    /**
+     * What the document's style sheets declare for each element of [svg], an SVG it includes, as
+     * a `style` attribute holds it, for the SVG to cascade with its own styles (EPUB 3.3, SVG
+     * embedded by inclusion, #509). Null when no rule reaches it, as in most books. The outermost
+     * `svg` is a box of this document's layout, which already applies its box properties.
+     */
+    fun svgHostStyle(svg: KiteXmlNode.Element): ((KiteXmlNode.Element) -> String?)? {
+        if (svgRules.isEmpty()) return null
+        val out = HashMap<KiteXmlNode.Element, String>()
+        val pending = arrayListOf(svg)
+        while (pending.isNotEmpty()) {
+            val el = pending.removeAt(pending.lastIndex)
+            svgDeclarations(el, root = el === svg)?.let { out[el] = it }
+            for (child in el.children) if (child is KiteXmlNode.Element) pending.add(child)
+        }
+        return if (out.isEmpty()) null else out::get
+    }
+
+    private fun svgDeclarations(el: KiteXmlNode.Element, root: Boolean): String? {
+        val bestWeight = HashMap<String, Long>()
+        val winner = HashMap<String, Declaration>()
+        for ((order, rule) in svgRules) {
+            var spec = -1
+            for (sel in rule.selectors) if (sel.pseudoElement == null && sel.matches(el)) spec = maxOf(spec, sel.specificity)
+            if (spec < 0) continue
+            for (d in rule.declarations) {
+                if (d.property !in SVG_PROPERTIES || (root && d.property in BOX_PROPERTIES)) continue
+                val w = weight(rule.origin, d.important, spec, order)
+                val prev = bestWeight[d.property]
+                if (prev == null || w >= prev) { bestWeight[d.property] = w; winner[d.property] = d }
+            }
+        }
+        if (winner.isEmpty()) return null
+        return winner.values.joinToString("; ") { "${it.property}: ${it.value}" + if (it.important) " !important" else "" }
+    }
+
+    /**
      * How deep in quotations the generated content so far stands: each `open-quote` goes one level
      * in and each `close-quote` one out (CSS Generated Content 3, 2.4). The box builder asks for
      * the generated content of each element once and in document order, and a resolver serves
@@ -913,6 +958,19 @@ internal class StyleResolver(
     }
 
     private companion object {
+        /** The properties an SVG reads from a style sheet, as `SvgStyles` in kitepdf-svg lists them. */
+        val SVG_PROPERTIES = setOf(
+            "color", "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity",
+            "fill-rule", "display", "visibility", "transform", "clip-path", "font-size", "font-family",
+            "font-weight", "font-style", "text-anchor", "stroke-dasharray", "stroke-dashoffset",
+            "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stop-color", "stop-opacity",
+            "mask", "mask-type", "filter", "flood-color", "flood-opacity", "lighting-color",
+            "color-interpolation-filters",
+        )
+
+        /** What the layout applies to the outermost `svg` as a box, so the SVG must not apply it again. */
+        val BOX_PROPERTIES = setOf("display", "visibility", "opacity", "transform", "clip-path", "mask", "filter")
+
         val QUOTE_KEYWORDS = linkedMapOf(
             "open-quote" to ContentPart.OpenQuote, "close-quote" to ContentPart.CloseQuote,
             "no-open-quote" to ContentPart.NoOpenQuote, "no-close-quote" to ContentPart.NoCloseQuote,
