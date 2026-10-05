@@ -247,6 +247,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `SkiaCanvas` draws a character that its host face lacks in a host face that has it, whether
+  or not the font names a language. Only a CJK language took a fallback face, so every letter of
+  a script the Latin faces lack, such as the Arabic of a book without embedded fonts, drew
+  nothing, and such a page showed only its punctuation and digits (#587).
+
 - `PdfEditor.saveIncremental` of a PDF that opened through repair appends a cross-reference
   table that lists every object and names no `/Prev`, and writes out again the objects that
   lived inside an object stream, so the saved file opens without a repair in KitePDF and in

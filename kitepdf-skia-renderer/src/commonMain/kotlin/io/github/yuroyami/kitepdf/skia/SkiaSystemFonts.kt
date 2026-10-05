@@ -1,8 +1,11 @@
 package io.github.yuroyami.kitepdf.skia
 
+import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
+import io.github.yuroyami.kitepdf.core.withLock
 import org.jetbrains.skia.FontMgr
+import org.jetbrains.skia.FontSlant
 import org.jetbrains.skia.FontStyle
 import org.jetbrains.skia.Typeface
 
@@ -59,19 +62,34 @@ internal object SkiaSystemFonts {
     }
 
     /**
-     * A face of [spec]'s CJK language that draws [codePoint], for a character the face of
-     * [resolve] lacks, or null without a language. One CJK face can lack a character another
-     * has, such as the vertical forms of U+FE10 to U+FE19, and Skia would draw glyph 0 for it.
+     * A host face that draws [codePoint], for a character the face of [resolve] lacks, preferring
+     * one of [spec]'s language. Skia would draw glyph 0 for it, which is nothing: the letters of a
+     * script the Latin faces lack, such as Arabic (#587), and the characters one CJK face lacks
+     * and another has, such as the vertical forms of U+FE10 to U+FE19 (#472).
      */
     fun fallback(spec: FontSpec, style: FontStyle, codePoint: Int): Typeface? {
-        val language = spec.language ?: return null
-        if (spec.languageSample == null) return null
-        return try {
-            FontMgr.default.matchFamilyStyleCharacter(genericName(spec.family), style, arrayOf(language), codePoint)
+        // A host lookup takes a fifth of a millisecond, and a page of Arabic asks for each letter in every run.
+        val key = FallbackKey(spec.family, style.weight, style.width, style.slant, spec.language, codePoint)
+        fallbackLock.withLock { if (key in fallbacks) return fallbacks[key] }
+        val face = try {
+            FontMgr.default.matchFamilyStyleCharacter(genericName(spec.family), style, spec.language?.let { arrayOf(it) }, codePoint)
         } catch (t: Throwable) {
             null
         }
+        fallbackLock.withLock {
+            if (fallbacks.size >= FALLBACK_CACHE_SIZE) fallbacks.clear()
+            fallbacks[key] = face
+        }
+        return face
     }
+
+    private data class FallbackKey(
+        val family: KiteFontFamily, val weight: Int, val width: Int, val slant: FontSlant, val language: String?, val codePoint: Int,
+    )
+
+    private val fallbackLock = KiteLock()
+    private val fallbacks = HashMap<FallbackKey, Typeface?>()
+    private const val FALLBACK_CACHE_SIZE = 4096
 
     private fun genericName(family: KiteFontFamily): String = when (family) {
         KiteFontFamily.Serif -> "serif"
