@@ -247,6 +247,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A glyph of an embedded TrueType font that reads past the end of the font draws nothing, as a
+  broken CFF or Type 1 glyph already did, where it used to fail the whole page with
+  `PdfFormatException`, so one damaged glyph cost every other glyph, image and shape on the page
+  (#582).
+
 - A PDF reference to an object that the file does not hold reads as null, as ISO 32000-1 has it,
   where it used to fail the whole call. A page whose image, graphics state, font descriptor,
   embedded font program, ToUnicode map or marked content properties named a missing object drew
