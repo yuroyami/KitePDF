@@ -16,6 +16,7 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.core.render.spacedPieces
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

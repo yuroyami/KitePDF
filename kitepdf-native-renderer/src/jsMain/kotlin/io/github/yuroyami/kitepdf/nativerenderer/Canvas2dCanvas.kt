@@ -20,6 +20,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
+import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.strokePen
@@ -215,15 +216,30 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             ctx.font = systemFontFor(fontSpec, renderedSize)
             // Position each glyph by the PDF's OWN advance widths (1/1000 em),
             // not the substitute font's natural metrics, otherwise spacing
-            // drifts and glyphs crowd together / overlap.
-            var penX = 0.0
+            // drifts and glyphs crowd together / overlap. A part whose letters
+            // join or reorder draws as one string, fitted to its width (#588).
             val advScale = renderedSize / 1000.0
-            for (glyph in glyphs) {
-                val t = glyph.text
-                if (t.isNotEmpty() && t != " ") paint(blendMode) { ctx.fillText(t, penX, 0.0) }
-                // advScale already carries sy (renderedSize), so the text-space
-                // spacing adjust needs the same factor to stay in step.
-                penX += glyph.advanceWidth * advScale + glyph.advanceAdjust * sy
+            // advScale already carries sy (renderedSize), so the text-space
+            // spacing adjust needs the same factor to stay in step.
+            for (part in hostTextParts(glyphs, advScale, sy)) {
+                if (part.shaped) {
+                    val natural = ctx.measureText(part.text).width
+                    ctx.save()
+                    try {
+                        ctx.translate(part.x, 0.0)
+                        if (natural > 0.0 && part.width > 0.0) ctx.scale(part.width / natural, 1.0)
+                        paint(blendMode) { ctx.fillText(part.text, 0.0, 0.0) }
+                    } finally {
+                        ctx.restore()
+                    }
+                    continue
+                }
+                var penX = part.x
+                for (glyph in part.glyphs) {
+                    val t = glyph.text
+                    if (t.isNotEmpty() && t != " ") paint(blendMode) { ctx.fillText(t, penX, 0.0) }
+                    penX += glyph.advanceWidth * advScale
+                }
             }
         } finally {
             ctx.restore()
