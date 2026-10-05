@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB chapters read `word-break` and `-epub-word-break`. With `break-all` a line may end between
+  any two letters of a word, so each line fills to its edge, with no hyphen and never just before
+  a comma, a stop or a closing quote. With `keep-all` Chinese, Japanese and Korean letters stay
+  together as a word does, so Korean breaks only at its spaces and Japanese after a closing mark
+  or before an opening one. The value inherits (#508).
+
 - EPUB chapters read `text-align-last` and `-epub-text-align-last`: the last line of a block,
   and each line that a `<br>` ends, align as it says, and with `auto` as `text-align` does but at
   the start when that justifies. `start` and `end` follow the text's direction, the value

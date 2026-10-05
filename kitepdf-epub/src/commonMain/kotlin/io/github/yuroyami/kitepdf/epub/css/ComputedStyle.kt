@@ -17,6 +17,9 @@ internal enum class CssFloat { NONE, LEFT, RIGHT }
 internal enum class CssClear { NONE, LEFT, RIGHT, BOTH }
 internal enum class TextTransform { NONE, UPPERCASE, LOWERCASE, CAPITALIZE }
 
+/** `word-break` (CSS Text 3, 5.2). BREAK_WORD is the legacy keyword that acts as `overflow-wrap: anywhere`. */
+internal enum class WordBreak { NORMAL, BREAK_ALL, KEEP_ALL, BREAK_WORD }
+
 /**
  * The `border-style` of one edge. Where two collapsed table borders of the same width
  * meet, the visible style listed first wins (CSS 2.1, 17.6.2.1).
@@ -176,10 +179,12 @@ internal data class ComputedStyle(
     val textAlignLast: TextAlign? = null,
     /**
      * True when a word that cannot fit a line of its own may break between any two characters:
-     * `overflow-wrap` (or `word-wrap`) `break-word` or `anywhere`, or `word-break: break-word`
-     * (CSS Text 3, 5.5, #574). Inherited.
+     * `overflow-wrap` (or `word-wrap`) `break-word` or `anywhere` (CSS Text 3, 5.5, #574).
+     * Inherited. `word-break: break-word` has the same effect, through [wordBreak].
      */
     val overflowWrap: Boolean = false,
+    /** `word-break` or `-epub-word-break` (CSS Text 3, 5.2, #508). Inherited. */
+    val wordBreak: WordBreak = WordBreak.NORMAL,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

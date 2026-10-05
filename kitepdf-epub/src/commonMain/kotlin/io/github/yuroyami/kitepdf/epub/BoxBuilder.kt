@@ -22,6 +22,7 @@ import io.github.yuroyami.kitepdf.epub.css.PseudoSide
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.TextTransform
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
+import io.github.yuroyami.kitepdf.epub.css.WordBreak
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
@@ -1017,7 +1018,9 @@ internal class BoxBuilder(
             element = element,
             letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
             smallCaps = style.smallCaps,
-            overflowWrap = style.overflowWrap,
+            overflowWrap = style.overflowWrap || style.wordBreak == WordBreak.BREAK_WORD,
+            breakAll = style.wordBreak == WordBreak.BREAK_ALL,
+            keepAll = style.wordBreak == WordBreak.KEEP_ALL,
             lineThrough = style.lineThrough,
             backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
                 ?: backgroundColor,

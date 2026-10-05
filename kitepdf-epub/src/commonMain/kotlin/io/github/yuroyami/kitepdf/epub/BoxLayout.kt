@@ -1958,22 +1958,35 @@ internal class BoxLayout(
     }
 
     /**
-     * How many of [cells] to keep on a line [budget] wide when the word breaks anywhere (#574): the
-     * most that fit, ending between two characters that a combining mark, a joiner or a variation
-     * selector does not tie, and one character at least. Zero when the word has no such place.
+     * How many of [cells] to keep on a line [budget] wide when the word breaks between its
+     * characters (#574): the most that fit, ending between two characters that [joined] does not
+     * hold together, and, when [atLeastOne], one character at least. Zero when nothing fits or
+     * the word has no such place.
      */
-    private fun longestFit(cells: List<Cell>, budget: Double): Int {
+    private fun longestFit(
+        cells: List<Cell>,
+        budget: Double,
+        atLeastOne: Boolean = true,
+        joined: (Int, Int) -> Boolean = ::tiedToPrevious,
+    ): Int {
         var best = 0
         var width = 0.0
         for (k in 1 until cells.size) {
             width += cells[k - 1].width + cells[k - 1].padBefore + cells[k - 1].padAfter
-            if (tiedToPrevious(cells[k - 1].cp, cells[k].cp)) continue
-            if (width > budget && best > 0) break
+            if (joined(cells[k - 1].cp, cells[k].cp)) continue
+            if (width > budget) return if (best == 0 && atLeastOne) k else best
             best = k
-            if (width > budget) break
         }
         return best
     }
+
+    /**
+     * True when `word-break: break-all` may not break between [prev] and [cp] (#508): one grapheme
+     * cluster, a closing or joining mark that must not start a line, or an opening one that must
+     * not end it (UAX 14, LB 13, 16, 19 and 21).
+     */
+    private fun heldTogether(prev: Int, cp: Int): Boolean =
+        tiedToPrevious(prev, cp) || isCloser(cp) || isOpener(prev) || cp in NO_BREAK_BEFORE || prev in NO_BREAK_AFTER
 
     /** True when no break may fall between [prev] and [cp]: they make one grapheme cluster. */
     private fun tiedToPrevious(prev: Int, cp: Int): Boolean =
@@ -2063,12 +2076,17 @@ internal class BoxLayout(
     )
 
     private sealed class Token {
-        /** [overflowWrap]: the word may break between two characters when it cannot fit a line of its own (#574). */
+        /**
+         * [overflowWrap]: the word may break between two characters when it cannot fit a line of
+         * its own (#574). [breakAll]: a line may break between two of its letters wherever it
+         * ends, `word-break: break-all` (#508).
+         */
         class Word(
             val cells: List<Cell>,
             val width: Double,
             val hyphenPoints: List<Int> = emptyList(),
             val overflowWrap: Boolean = false,
+            val breakAll: Boolean = false,
         ) : Token()
         class Space(val cell: Cell) : Token() {
             val width: Double get() = cell.width
@@ -2101,6 +2119,8 @@ internal class BoxLayout(
         var softHyphens = ArrayList<Int>()
         // Whether a run that the word's characters come from lets it break anywhere (#574).
         var wordWraps = false
+        // Whether a run that the word's characters come from lets a line break between its letters (#508).
+        var wordBreaksAll = false
         // The next character's place in the block's text; it counts what draws nothing too.
         var srcAt = 0
         fun endWord() {
@@ -2112,7 +2132,8 @@ internal class BoxLayout(
                 // + the reconstructed word text would no longer line up), and for ruby
                 // bases (a hyphen inside a ruby-annotated base is never wanted).
                 val isRuby = word.first().rubyGroup >= 0
-                val pts = if (ligated || isRuby) emptyList() else {
+                // break-all applies no hyphenation (CSS Text 3, 5.2).
+                val pts = if (ligated || isRuby || wordBreaksAll) emptyList() else {
                     val s = LinkedHashSet(softHyphens)
                     // Hyphenation points index chars, so a word outside the BMP is not hyphenated.
                     if (hyphensAuto && word.size >= 5 && word.all { it.cp < 0x10000 && it.cp.toChar().isLetter() }) {
@@ -2142,11 +2163,14 @@ internal class BoxLayout(
                 // opener prefix.
                 if (last is Token.Word && last.cells.isNotEmpty() && isOpener(last.cells.last().cp)) {
                     tokens[tokens.lastIndex] =
-                        Token.Word(last.cells + word, last.width + w, pts.map { it + last.cells.size }, last.overflowWrap || wordWraps)
+                        Token.Word(
+                            last.cells + word, last.width + w, pts.map { it + last.cells.size },
+                            last.overflowWrap || wordWraps, last.breakAll || wordBreaksAll,
+                        )
                 } else {
-                    tokens.add(Token.Word(word, w, pts, wordWraps))
+                    tokens.add(Token.Word(word, w, pts, wordWraps, wordBreaksAll))
                 }
-                word = ArrayList(); wordW = 0.0; softHyphens = ArrayList(); wordWraps = false
+                word = ArrayList(); wordW = 0.0; softHyphens = ArrayList(); wordWraps = false; wordBreaksAll = false
             }
         }
         for ((r, run) in runs.withIndex()) {
@@ -2293,6 +2317,14 @@ internal class BoxLayout(
                             lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level,
                         )))
                     }
+                    // keep-all: CJK letters join the word like Latin ones. A break may still come
+                    // before an opener and after a closer (#508).
+                    FontMetrics.isWide(cp) && run.rubyGroup < 0 && run.keepAll -> {
+                        if (isOpener(cp)) endWord()
+                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width
+                        wordWraps = wordWraps || run.overflowWrap
+                        if (isCloser(cp)) endWord()
+                    }
                     // Ruby bases do not split per CJK char: the whole base is one token.
                     FontMetrics.isWide(cp) && run.rubyGroup < 0 -> {
                         // CJK ideographs break per character; kinsoku merges: a closer
@@ -2310,7 +2342,11 @@ internal class BoxLayout(
                             tokens.add(Token.Word(listOf(cell), cell.width))
                         }
                     }
-                    else -> { val c = cellFor(cp, level, src); word.add(c); wordW += c.width; wordWraps = wordWraps || run.overflowWrap }
+                    else -> {
+                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width
+                        wordWraps = wordWraps || run.overflowWrap
+                        wordBreaksAll = wordBreaksAll || run.breakAll
+                    }
                 }
             }
         }
@@ -2512,10 +2548,25 @@ internal class BoxLayout(
                 while (true) {
                     val leading = if (line.isNotEmpty()) space else 0.0
                     val w = cells.sumOf { it.width + it.padBefore + it.padAfter }
-                    if (lineW + leading + w <= lineAvail() || (line.isEmpty() && points.isEmpty() && !tok.overflowWrap)) {
+                    if (lineW + leading + w <= lineAvail() || (line.isEmpty() && points.isEmpty() && !tok.overflowWrap && !tok.breakAll)) {
                         if (line.isNotEmpty() && space > 0.0) { line.addAll(spaces); lineW += space }
                         line.addAll(cells); lineW += w
                         break
+                    }
+                    // break-all: as many letters as fit the rest of the line, or, on a line of its own,
+                    // one letter at least; a closing mark stays with the letter before it (#508).
+                    if (tok.breakAll) {
+                        val cut = longestFit(cells, lineAvail() - lineW - leading, line.isEmpty(), ::heldTogether)
+                        if (cut > 0) {
+                            if (line.isNotEmpty() && space > 0.0) { line.addAll(spaces); lineW += space }
+                            val prefix = cells.subList(0, cut)
+                            line.addAll(prefix); lineW += prefix.sumOf { it.width + it.padBefore + it.padAfter }
+                            commit(KiteLineEnd.NONE)
+                            cells = cells.subList(cut, cells.size)
+                            points = points.mapNotNull { if (it > cut) it - cut else null }
+                            space = 0.0
+                            continue
+                        }
                     }
                     // Largest hyphenation point whose prefix + hyphen still fits the current line.
                     var split = -1
@@ -2771,6 +2822,17 @@ internal class BoxLayout(
         const val SMALL_CAPS_SCALE = 0.8
         /** The bidi classes that can move a character in a left-to-right paragraph. */
         val REORDERING = setOf(Bidi.R, Bidi.AL, Bidi.AN, Bidi.RLE, Bidi.RLO, Bidi.RLI, Bidi.FSI)
+        /** Marks a line does not start with: closing, stops, quotes and hyphens (UAX 14, LB 13, 16, 19, 21). */
+        val NO_BREAK_BEFORE = setOf(
+            '.'.code, ','.code, ';'.code, ':'.code, '!'.code, '?'.code, ')'.code, ']'.code, '}'.code, '%'.code,
+            '\''.code, '"'.code, '-'.code, 0x2019, 0x201D, 0x2018, 0x201C, 0x00BB, 0x00AB, 0x2010, 0x2013, 0x2026,
+        )
+
+        /** Marks a line does not end with: openings and quotes (UAX 14, LB 14, 19). */
+        val NO_BREAK_AFTER = setOf(
+            '('.code, '['.code, '{'.code, '\''.code, '"'.code, 0x2018, 0x201C, 0x2019, 0x201D, 0x00AB, 0x00BB, '$'.code,
+        )
+
         // JIS X 4051 no-break-before set (matching MuPDF's kinsoku table):
         // closing punctuation, plus the small kana and sound/iteration marks
         // that bind to the preceding character.
