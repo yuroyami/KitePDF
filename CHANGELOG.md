@@ -247,6 +247,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An embedded Type 1 font decrypts each of its subroutines before a glyph calls it, as it already
+  decrypted each charstring. A subroutine ran still encrypted, so every letter that called one drew
+  noise, and every flex drew its points as moves: 69 of the 132 glyphs of a pdfTeX CMR10 came out
+  wrong, among them i, n, l, T, A and R, and all 132 now match fontTools (#596).
 - `CoreGraphicsCanvas` draws host-font text through CoreText, so a letter that Times, Helvetica
   or Courier lacks draws from a face of the cascade that has it, and a run whose letters join or
   reorder, such as an Arabic word, draws as one shaped line fitted to the width the document
