@@ -177,6 +177,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A right-to-left page progression no longer turns a book's text right to left. The spine's
+  `page-progression-direction` set the base direction of every chapter, so the English pages of
+  a right-to-left book came out right-aligned with their periods at the front. A chapter that
+  declares no direction now reads in its language's, from its own `lang` or `xml:lang` or the
+  book's. And a book in a right-to-left language, Arabic, Hebrew or Persian among them, whose
+  spine sets no direction now progresses right to left (#512).
 - Hebrew and Arabic in a host font read the right way round in the Compose viewer. The layout
   hands the canvas each run in the order it draws, and the text engine ran the bidi algorithm on
   it again, so every right-to-left word showed its letters reversed, and Arabic letters took

@@ -10,6 +10,7 @@ import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssParser
+import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
@@ -255,7 +256,7 @@ public class EpubDocument internal constructor(
         val sp = parsed.layoutSpine(chapter)
         val (width, height) = scriptViewportOf(chapter)
         val resolver = StyleResolver(
-            sp.rules, settings.fontSize, width, parsed.baseDir, height,
+            sp.rules, settings.fontSize, width, directionFor(chapter), height,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
         // The parser's root holds the document, and is no element of it.
@@ -444,7 +445,7 @@ public class EpubDocument internal constructor(
         val (layoutWidth, layoutHeight) =
             if (parsed.isFixed(chapter)) viewportOf(chapter) else contentWidth to pageContentHeight
         val resolver = StyleResolver(
-            sp.rules, settings.fontSize, layoutWidth, parsed.baseDir, layoutHeight,
+            sp.rules, settings.fontSize, layoutWidth, directionFor(chapter), layoutHeight,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
         return BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, parsed.tracksElements(chapter)) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
@@ -454,8 +455,8 @@ public class EpubDocument internal constructor(
      * One chapter's box tree under a fresh root. Layout starts each chapter at
      * y = 0, so a chapter's geometry never depends on the chapters before it.
      */
-    private fun chapterRoot(docRoot: BlockBox): BlockBox =
-        BlockBox(ComputedStyle.initial(settings.fontSize, direction = parsed.baseDir), listOf(docRoot))
+    private fun chapterRoot(chapter: Int, docRoot: BlockBox): BlockBox =
+        BlockBox(ComputedStyle.initial(settings.fontSize, direction = directionFor(chapter)), listOf(docRoot))
 
     /**
      * Vertical writing: the writing mode the first spine root resolves, if it
@@ -525,9 +526,18 @@ public class EpubDocument internal constructor(
         val body = html?.children?.filterIsInstance<KiteXmlNode.Element>()
             ?.firstOrNull { it.tag == "body" }
         return html?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
+            ?: html?.attrs?.get("xml:lang")?.takeIf { it.isNotBlank() }
             ?: body?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
+            ?: body?.attrs?.get("xml:lang")?.takeIf { it.isNotBlank() }
             ?: parsed.metadata.language?.takeIf { it.isNotBlank() }
     }
+
+    /**
+     * The direction [chapter] reads in where it declares none, by `dir` or CSS: its language's,
+     * else the book's. The spine's page progression orders the pages and has no say (#512).
+     */
+    private fun directionFor(chapter: Int): Direction =
+        if (isRightToLeftLanguage(languageFor(chapter))) Direction.RTL else Direction.LTR
 
     /**
      * The faces [chapter] lays out with: the book's embedded fonts, plus any
@@ -614,7 +624,7 @@ public class EpubDocument internal constructor(
                     val inlineBudget = if (isVertical) pageContentHeight else contentWidth
                     val blockBudget = if (isVertical) contentWidth else pageContentHeight
                     val built = checkNotNull(checkNotNull(build).box)
-                    val chapterRoot = chapterRoot(built)
+                    val chapterRoot = chapterRoot(chapter, built)
                     build = null
                     docRoot = built
                     root = chapterRoot

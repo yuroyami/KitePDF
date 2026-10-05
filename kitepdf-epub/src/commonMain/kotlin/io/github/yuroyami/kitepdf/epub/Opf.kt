@@ -89,7 +89,11 @@ public class EpubMetadata internal constructor(
     public val language: String?,
     public val identifier: String?,
     public val coverImagePath: String?,
-    /** True for `page-progression-direction="rtl"` books (Arabic/Hebrew/vertical CJK). */
+    /**
+     * True when the pages progress right to left: the spine says `rtl`, or it says nothing or
+     * `default` and the book is vertical-rl or in a right-to-left language (#512). It orders the
+     * pages only; each chapter's text reads in its own direction.
+     */
     public val rightToLeft: Boolean,
     /** How the whole book asks to be shown. [EpubDocument.renditionOf] gives the values of one chapter (#37). */
     public val rendition: EpubRendition = EpubRendition.DEFAULT,

@@ -157,7 +157,7 @@
     "pkg-spine-nonlinear-activation": true,
     "pkg-spine-order": true,
     "pkg-spine-order-svg": true,
-    "pkg-spine-progression-default": false,
+    "pkg-spine-progression-default": true,
     "pkg-spine-progression-pre-paginated": true,
     "pkg-spine-progression_ltr": true,
     "pkg-spine-progression_rtl": true,

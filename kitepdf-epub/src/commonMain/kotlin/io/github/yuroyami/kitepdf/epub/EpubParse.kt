@@ -12,7 +12,6 @@ import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.render.KiteImageIdentity
 import io.github.yuroyami.kitepdf.epub.css.CssParser
-import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.FontFaceRule
 import io.github.yuroyami.kitepdf.epub.css.Origin
 import kotlinx.coroutines.flow.update
@@ -85,7 +84,6 @@ internal class ParsedEpub(
     val spinePaths: List<String>,
     val metadata: EpubMetadata,
     val toc: TableOfContents,
-    val baseDir: Direction,
     /** How each spine document asks to be shown, parallel to [spinePaths] (#37). */
     val renditions: List<EpubRendition>,
     /** Whether the manifest marks each spine document `scripted`, parallel to [spinePaths] (#40). */
@@ -529,7 +527,6 @@ internal class ParsedEpub(
                 spinePaths = present.map { it.first },
                 metadata = buildMetadata(opf),
                 toc = TocParser.parse(zip, opf, contentPaths) { base, href -> EpubDocument.resolvePath(base, href) },
-                baseDir = if (opf.direction?.lowercase() == "rtl") Direction.RTL else Direction.LTR,
                 renditions = present.map { opf.renditionAt(it.second) },
                 manifestScripted = present.map { opf.contentDocument(opf.spineIdrefs[it.second])?.hasProperty("scripted") == true },
                 manifestRemote = present.map { opf.contentDocument(opf.spineIdrefs[it.second])?.hasProperty("remote-resources") == true },
@@ -550,10 +547,13 @@ internal class ParsedEpub(
                 language = opf.language,
                 identifier = opf.uniqueId,
                 coverImagePath = coverHref?.let { EpubDocument.resolvePath(opf.baseDir, it) },
-                // A vertical-rl book implies rtl progression when the spine
-                // declares no direction of its own.
-                rightToLeft = opf.direction?.lowercase() == "rtl" ||
-                    (opf.direction == null && opf.primaryWritingMode?.lowercase() == "vertical-rl"),
+                // A spine without a direction of its own, or with "default", progresses as a
+                // vertical-rl book or a book in a right-to-left language reads (#512).
+                rightToLeft = when (opf.direction?.trim()?.lowercase()) {
+                    "rtl" -> true
+                    "ltr" -> false
+                    else -> opf.primaryWritingMode?.lowercase() == "vertical-rl" || isRightToLeftLanguage(opf.language)
+                },
                 rendition = opf.rendition,
                 pronunciationLexicons = opf.items.filter { it.mediaType?.lowercase() == "application/pls+xml" }
                     .map { EpubDocument.resolvePath(opf.baseDir, it.href) },
