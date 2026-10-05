@@ -180,6 +180,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A media overlay that several chapters of an EPUB share gives each chapter only the clips whose
+  text is in it, so read-aloud reads each clip once, in the order of the book, instead of reading
+  the whole overlay again for every chapter. Three W3C tests that need it now pass (#522).
+
 - An EPUB image that is a block or floats, and has no `width` or `height`, takes its intrinsic
   size as an inline one does, 0.75 pt a pixel, or a user unit of an SVG that gives its own size,
   instead of the width of its column. A small ornament under `img { display: block }` no longer

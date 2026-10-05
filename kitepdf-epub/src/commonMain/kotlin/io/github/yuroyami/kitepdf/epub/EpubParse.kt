@@ -111,11 +111,20 @@ internal class ParsedEpub(
     private val overlayLock = KiteLock()
     private val overlayCache = arrayOfNulls<EpubMediaOverlay>(spinePaths.size)
 
-    /** [chapter]'s media overlay, parsed on first use and kept, or null when it has none (#36). */
+    /**
+     * [chapter]'s media overlay, parsed on first use and kept, or null when it has none (#36). An
+     * overlay that several chapters share holds the clips of each, so a chapter keeps those whose
+     * text is in no other chapter (EPUB Media Overlays 3.3, 3.1, #522).
+     */
     fun mediaOverlay(chapter: Int): EpubMediaOverlay? {
         val (path, duration) = overlays[chapter] ?: return null
         overlayLock.withLock { overlayCache[chapter] }?.let { return it }
-        val overlay = EpubMediaOverlay(SmilParser.clips(zip.readText(path).orEmpty(), path), duration)
+        val clips = SmilParser.clips(zip.readText(path).orEmpty(), path)
+        val shared = overlays.count { it?.first == path } > 1
+        val own = if (!shared) clips else clips.filter { clip ->
+            spinePaths.indexOf(clip.textHref.substringBefore('#')).let { it < 0 || it == chapter }
+        }
+        val overlay = EpubMediaOverlay(own, duration)
         return overlayLock.withLock { overlayCache[chapter] ?: overlay.also { overlayCache[chapter] = it } }
     }
 
