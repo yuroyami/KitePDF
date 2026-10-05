@@ -414,6 +414,68 @@ internal suspend fun KiteDocViewState.turn(forward: Boolean, spread: Boolean) {
     spreads.neighbourSpreadPage(forward)?.let { animateScrollToPage(it) }
 }
 
+/**
+ * The plain wheel turns the page of a horizontal [KiteDocLayout.Paged] or [KiteDocLayout.Spread]
+ * layout, whose pager takes only the sideways wheel (#592). Down goes forward in reading order
+ * and up goes back, whichever way the pages advance. One wheel gesture turns one page: the
+ * events of a spun wheel or of a trackpad flick and its slowing tail come close together, so
+ * the next turn waits for a pause of [WHEEL_TURN_PAUSE_MILLIS]. A gesture that goes more
+ * sideways than down is the pager's, and a zoomed page keeps the wheel. [enabled] turns it off.
+ */
+internal fun Modifier.kiteWheelPaging(
+    state: KiteDocViewState,
+    layout: KiteDocLayout,
+    enabled: Boolean,
+    scope: CoroutineScope,
+): Modifier {
+    val spread = when (layout) {
+        is KiteDocLayout.Paged -> false.takeIf { layout.orientation == Orientation.Horizontal }
+        is KiteDocLayout.Spread -> true.takeIf { layout.orientation == Orientation.Horizontal }
+        else -> null
+    }
+    if (!enabled || spread == null) return this
+    return pointerInput(state, spread) {
+        var last = -1L
+        var armed = true
+        var sumX = 0f
+        var sumY = 0f
+        awaitPointerEventScope {
+            while (true) {
+                // Main pass: after the pages and the pager, so the wheel goes on reaching whatever takes it.
+                val event = awaitPointerEvent()
+                if (event.type != PointerEventType.Scroll) continue
+                val change = event.changes.firstOrNull() ?: continue
+                val time = change.uptimeMillis
+                if (last < 0 || time < last || time - last > WHEEL_TURN_PAUSE_MILLIS) {
+                    armed = true
+                    sumX = 0f
+                    sumY = 0f
+                }
+                last = time
+                if (change.isConsumed || state.isZoomed) continue
+                if (event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed) continue
+                sumX += change.scrollDelta.x
+                sumY += change.scrollDelta.y
+                if (abs(sumY) <= abs(sumX)) continue
+                change.consume()
+                if (!armed || abs(sumY) < WHEEL_TURN_DELTA) continue
+                armed = false
+                val forward = sumY > 0f
+                scope.launch { state.turn(forward, spread) }
+            }
+        }
+    }
+}
+
+/** The quiet time after which the wheel can turn the next page. */
+private const val WHEEL_TURN_PAUSE_MILLIS = 150L
+
+/**
+ * How far down or up a wheel gesture goes to turn the page: half a notch on the desktop, where a
+ * trackpad sends parts of a notch. A browser reports pixels, about 100 to a notch.
+ */
+private const val WHEEL_TURN_DELTA = 0.5f
+
 /** The zoom factor of one wheel notch with Ctrl or Cmd held. A trackpad sends parts of a notch. */
 private const val WHEEL_ZOOM_STEP = 1.1f
 

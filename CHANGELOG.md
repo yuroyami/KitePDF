@@ -247,6 +247,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The mouse wheel turns the page of a horizontal `KiteDocLayout.Paged` or `Spread` layout on the
+  desktop and the web. Its pager took only the sideways wheel, so a reader with a mouse could
+  not page a book without the keyboard. Down goes forward and up goes back, one page or spread
+  for each wheel gesture, so a trackpad flick and its slowing tail turn one page. A zoomed page
+  keeps the wheel, and `userScrollEnabled` turns it off (#592).
 - `AndroidNativeCanvas` keeps an off-centre radial shading where it is below API 31. Android
   draws a gradient between two circles from API 31 on, and below it the canvas drew one around
   the end circle only, so the highlight of a sphere moved to the end circle's centre on API 29
