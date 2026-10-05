@@ -14,10 +14,17 @@ import io.github.yuroyami.kitepdf.core.render.RgbColor
  * Draws nothing and notes where the links of an SVG are (#433): the box of what each `<a>` with
  * an `href` draws, and the box of what each element with an `id` draws, cut by the clips open at
  * the time. The walk opens and closes each such element around its content.
+ *
+ * It also keeps the text the SVG draws, each run with the ids of the elements around it (#523).
+ * A run that a clip hides is not kept, nor one inside a pattern tile, which repeats it as paint.
  */
 internal class SvgLinkCanvas : KiteCanvas {
     val links = ArrayList<Pair<String, KiteRectangle>>()
     val ids = HashMap<String, KiteRectangle>()
+    val texts = ArrayList<SvgTextRun>()
+
+    /** How many pattern tiles the walk is inside. */
+    var tiles = 0
 
     private class Marked(val href: String?, val id: String?) {
         var linkBox: KiteRectangle? = null
@@ -37,10 +44,15 @@ internal class SvgLinkCanvas : KiteCanvas {
         m.id?.let { id -> m.idBox?.let { ids.getOrPut(id) { it } } }
     }
 
+    /** [box] cut by the open clips, or null when they hide all of it. */
+    private fun shown(box: KiteRectangle?): KiteRectangle? {
+        box ?: return null
+        return if (clips.isEmpty()) box else clips.last()?.let { cut(box, it) }
+    }
+
     /** Adds [box] to the innermost open link and to every open element with an id. */
     private fun mark(box: KiteRectangle?) {
-        box ?: return
-        val shown = if (clips.isEmpty()) box else clips.last()?.let { cut(box, it) } ?: return
+        val shown = shown(box) ?: return
         var linked = false
         for (i in marked.indices.reversed()) {
             val m = marked[i]
@@ -79,7 +91,11 @@ internal class SvgLinkCanvas : KiteCanvas {
     ) {
         var advance = 0.0
         for (g in glyphs) advance += g.advanceWidth * fontSize / 1000.0 + g.advanceAdjust
-        mark(rectangle(0.0, -fontSize * 0.2, advance, fontSize * 0.8).bounds(textToDevice))
+        val box = rectangle(0.0, -fontSize * 0.2, advance, fontSize * 0.8).bounds(textToDevice)
+        mark(box)
+        if (tiles == 0 && box != null && shown(box) != null) {
+            texts += SvgTextRun(glyphs, fontSize, textToDevice, box, marked.mapNotNull { it.id })
+        }
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) = mark(rectangle(0.0, 0.0, 1.0, 1.0).bounds(ctm))

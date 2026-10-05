@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.KiteRole
 
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
@@ -10,7 +11,7 @@ import kotlin.test.assertTrue
 /** A spine item that is an SVG document, which EPUB 3.3 requires a reading system to render (#26). */
 class SvgSpineTest {
 
-    private fun book(svg: String, fixedLayout: Boolean = false): ByteArray {
+    private fun book(svg: String, fixedLayout: Boolean = false, extra: List<Pair<String, String>> = emptyList()): ByteArray {
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">""" +
             """<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val opf = """<?xml version="1.0"?>
@@ -34,7 +35,7 @@ class SvgSpineTest {
                 "OEBPS/one.xhtml" to xhtml("Chapter one").encodeToByteArray(),
                 "OEBPS/plate.svg" to svg.encodeToByteArray(),
                 "OEBPS/three.xhtml" to xhtml("Chapter three").encodeToByteArray(),
-            ),
+            ) + extra.map { (path, text) -> path to text.encodeToByteArray() },
         )
     }
 
@@ -93,6 +94,64 @@ class SvgSpineTest {
         assertEquals(450.0, page.width, 1e-9)
         assertEquals(600.0, page.height, 1e-9)
         assertEquals(1, greenFills(doc)[1])
+    }
+
+    private val captioned = """<?xml version="1.0" encoding="UTF-8"?>
+        <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="600" height="800" viewBox="0 0 600 800">
+          <rect x="0" y="0" width="600" height="800" fill="#00ff00"/>
+          <g id="caption" transform="translate(50,100)">
+            <text x="0" y="0" font-size="40">Plate one shows</text>
+            <text x="0" y="50" font-size="40">a green field</text>
+          </g>
+          <text id="credit" x="50" y="700" font-size="20">Drawn <tspan font-weight="bold">by hand</tspan></text>
+        </svg>"""
+
+    @Test
+    fun the_text_of_an_svg_spine_item_is_its_page_text() {
+        val doc = EpubDocument.open(book(captioned))
+        val page = doc.pages[1]
+        val text = page.textContent()
+        assertEquals("Plate one shows\na green field\n\nDrawn by hand", text.plainText)
+        // A search finds the words where they are drawn, across the line break of their group.
+        val hit = text.search("shows a green").single()
+        assertEquals(2, hit.quads.size)
+        val drawn = RecordingCanvas().also { page.renderTo(it, page.displayToDeviceBase()) }.calls
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        for ((quad, words) in hit.quads.zip(listOf("Plate one shows", "a green field"))) {
+            val m = drawn.single { it.text == words }.textToDevice
+            val width = drawn.single { it.text == words }.let { run -> run.glyphs.sumOf { it.advanceWidth } * run.fontSize / 1000.0 * m.a }
+            assertTrue(quad.left >= m.e - 1e-6 && quad.right <= m.e + width + 1e-6, "the hit stays on the line of '$words': $quad, from ${m.e} for $width")
+            assertTrue(quad.bottom < m.f && quad.top > m.f, "the hit crosses the baseline of '$words' at ${m.f}: $quad")
+        }
+        assertTrue(hit.quads[0].left > drawn.single { it.text == "Plate one shows" }.textToDevice.e + 1.0, "the hit starts at 'shows', not at the start of the line")
+    }
+
+    @Test
+    fun an_element_of_the_svg_chapter_is_a_fragment() {
+        val doc = EpubDocument.open(book(captioned))
+        val caption = doc.locateFragment("OEBPS/plate.svg#caption")
+        assertEquals(KiteLocation(1, 0), caption?.location)
+        assertEquals(2, caption?.rects?.size, "one rectangle per line of the group: ${caption?.rects}")
+        assertEquals(1, doc.locateFragment("OEBPS/plate.svg#credit")?.rects?.size)
+        assertEquals(1, doc.pageOf("OEBPS/plate.svg#credit"))
+    }
+
+    @Test
+    fun a_style_sheet_the_svg_imports_applies() {
+        fun sizes(svg: String, extra: List<Pair<String, String>> = emptyList()) =
+            EpubDocument.open(book(svg, extra = extra)).pages[1].let { page ->
+                RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
+                    .map { it.fontSize * it.textToDevice.d }
+            }
+        val unsized = captioned.replace(" font-size=\"40\"", "").replace(" font-size=\"20\"", "")
+        val inline = sizes(unsized.replace("<rect ", "<style>text { font-size: 30px }</style><rect "))
+        val imported = sizes(
+            unsized.replace("<rect ", "<style>@import url(plate.css);</style><rect "),
+            extra = listOf("OEBPS/plate.css" to "text { font-size: 30px }"),
+        )
+        assertEquals(sizes(unsized).size, inline.size)
+        assertTrue(inline.zip(sizes(unsized)).all { (a, b) -> kotlin.math.abs(a) > kotlin.math.abs(b) * 1.5 }, "the inline rule sizes the text: $inline")
+        assertEquals(inline, imported)
     }
 
     private companion object {

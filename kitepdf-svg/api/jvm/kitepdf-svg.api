@@ -31,6 +31,7 @@ public final class io/github/yuroyami/kitepdf/svg/SvgImage {
 	public final fun getWidth ()D
 	public final fun render (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun render$default (Lio/github/yuroyami/kitepdf/svg/SvgImage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public final fun textContent (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)Lio/github/yuroyami/kitepdf/svg/SvgTextContent;
 }
 
 public final class io/github/yuroyami/kitepdf/svg/SvgImage$Companion {
@@ -52,5 +53,10 @@ public final class io/github/yuroyami/kitepdf/svg/SvgPage : io/github/yuroyami/k
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/KiteCancellation;)V
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
+}
+
+public final class io/github/yuroyami/kitepdf/svg/SvgTextContent {
+	public final fun getText ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
+	public final fun rectsOf (Ljava/lang/String;)Ljava/util/List;
 }
 

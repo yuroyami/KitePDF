@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 118 | 18 | 4 |
+| must | 140 | 120 | 16 | 4 |
 | should | 38 | 27 | 10 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 170 | 30 | 6 |
+| all | 206 | 172 | 28 | 6 |
 
 ## How the results are known
 
@@ -299,7 +299,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`mol-timing-synchronization_fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_fxl) | must | Passes | Checked: The overlay that three pages share gives each page its one clip. |
 | [`mol-timing-synchronization_multiple_audio`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_multiple_audio) | must | Passes | Judged: From the code of `KiteReadAloud`: the clips of both audio files read in order, the second file opening in the same player. |
 | [`mol-timing-synchronization_multiple_audio-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_multiple_audio-fxl) | must | Passes | Judged: From the code of `KiteReadAloud`: on the fixed page too, the reading goes from the first audio file to the second in clip order. |
-| [`mol-timing-synchronization_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_svg) | must | Fails ([#523](https://github.com/yuroyami/KitePDF/issues/523)) | Checked: A clip's text inside the SVG chapter has a place on its page; today `locateFragment` finds none. |
-| [`mol-timing-synchronization_svg-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_svg-fxl) | must | Fails ([#523](https://github.com/yuroyami/KitePDF/issues/523)) | Checked: A clip's text inside the SVG page has a place on it; today `locateFragment` finds none. |
+| [`mol-timing-synchronization_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_svg) | must | Passes | Checked: Each clip's text inside the SVG chapter has a place on its page, one rectangle per line it draws. |
+| [`mol-timing-synchronization_svg-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_svg-fxl) | must | Passes | Checked: Each clip's text inside the SVG page has a place on it, one rectangle per line it draws. |
 | [`mol-tts_multi`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-tts_multi) | should | Fails ([#525](https://github.com/yuroyami/KitePDF/issues/525)) | Judged: Clips without audio are skipped, and there is no text-to-speech fallback, so nothing is read. |
 | [`mol-tts_single`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-tts_single) | should | Fails ([#525](https://github.com/yuroyami/KitePDF/issues/525)) | Judged: The clip without audio is skipped, and there is no text-to-speech fallback, so nothing is read. |

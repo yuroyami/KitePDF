@@ -247,6 +247,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The text that an SVG draws is part of its page text, in an SVG spine item of an EPUB, in an
+  `<svg>` written in a chapter and in a standalone SVG document, so search and selection find it.
+  The runs of glyphs along one baseline make a line, with a space where a `<tspan>` or a new run
+  leaves a gap, and lines set one under another make a block, as a paragraph written as one
+  `<text>` per line is. An element with an id inside such an SVG, a `<tspan>` included, is a
+  fragment that a link or a media overlay reaches, at one rectangle per line of its text, or at
+  the box of what it draws when it draws no text, where `locateFragment` used to answer null and
+  a link went to the top of the chapter. An SVG file that an `<img>` shows stays a picture, and
+  its text stays out of the page text, as in a browser. `SvgImage.textContent` gives the text of
+  an SVG drawn under any matrix (#523).
+
 - EPUB style sheets get the CSS-wide keywords `inherit`, `initial` and `unset` on every property,
   where only a few properties used to read them. `color: initial` no longer keeps the parent's
   colour, `margin-left: inherit` no longer leaves the margin at 0, `border-top: inherit` no
