@@ -89,6 +89,18 @@ class BoxLayoutTest {
     }
 
     @Test
+    fun a_justified_line_that_a_break_ends_is_not_stretched() {
+        // CSS Text 3: a line that a forced break ends aligns as the last line does (#573).
+        val css = "p{text-align:justify}"
+        val html = "<p>alpha beta<br/>gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi</p>"
+        val lines = layout(html, css, width = 200.0).child(0).firstText().lines
+        val rights = lines.map { line -> line.runs.maxOf { run -> run.x + run.glyphs.sumOf { it.advanceWidth * run.fontSize / 1000.0 } } }
+        assertTrue(lines.size >= 3, "the break and the wrap make three lines or more")
+        assertTrue(rights[0] < 100.0, "the line that the break ends keeps its natural width (${rights[0]})")
+        assertTrue(rights[1] > 195.0, "a line that the layout wraps still fills the width (${rights[1]})")
+    }
+
+    @Test
     fun auto_margins_center_a_width_constrained_block() {
         val div = layout("""<div style="width:100px;margin:0 auto">x</div>""", width = 300.0).child(0)
         assertEquals(75.0, div.borderBoxWidth, 1e-6)
