@@ -174,6 +174,12 @@ internal data class ComputedStyle(
      * start (CSS Text 3, 7.2, #508). Inherited.
      */
     val textAlignLast: TextAlign? = null,
+    /**
+     * True when a word that cannot fit a line of its own may break between any two characters:
+     * `overflow-wrap` (or `word-wrap`) `break-word` or `anywhere`, or `word-break: break-word`
+     * (CSS Text 3, 5.5, #574). Inherited.
+     */
+    val overflowWrap: Boolean = false,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

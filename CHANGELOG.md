@@ -195,6 +195,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A word wider than the line, such as a long link, breaks after as many characters as fit and
+  goes on at the next line, where it used to run off the right edge of the page and lose its end.
+  The reader's style sheet sets `overflow-wrap: break-word` on the root, so a book need not ask
+  for it, and a book's own `overflow-wrap`, `word-wrap` or `word-break: break-word` now takes
+  effect, `normal` included. The break never parts a letter from its combining marks, and copied text joins the
+  pieces with nothing between them (#574).
+
 - A justified paragraph no longer stretches a line that a `<br>` ends, so a short line of verse
   or of an address keeps its natural width at the start of its line, as CSS asks of the last
   line and of every line before a forced break (#573).

@@ -1017,6 +1017,7 @@ internal class BoxBuilder(
             element = element,
             letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
             smallCaps = style.smallCaps,
+            overflowWrap = style.overflowWrap,
             lineThrough = style.lineThrough,
             backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
                 ?: backgroundColor,

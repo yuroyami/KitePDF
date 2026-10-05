@@ -48,6 +48,8 @@ internal data class InlineRun(
     val wordSpacingPt: Double = 0.0,
     /** `font-variant: small-caps`. */
     val smallCaps: Boolean = false,
+    /** A word of this run that cannot fit a line of its own may break between two characters (#574). */
+    val overflowWrap: Boolean = false,
     /**
      * Inline `<img>`: the resolved zip path of the image this run stands for
      * ([text] is then a single U+FFFC object-replacement char). Sized at

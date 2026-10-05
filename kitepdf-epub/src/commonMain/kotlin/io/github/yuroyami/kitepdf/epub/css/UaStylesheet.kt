@@ -47,7 +47,7 @@ internal object UaStylesheet {
         head{display:none}
         [hidden]{display:none}
         hr{border-style:solid;border-width:1px;display:block;margin:0.5em 0;text-align:center}
-        html{display:block}
+        html{display:block;overflow-wrap:break-word}
         ins,u{text-decoration:underline}
         li{display:list-item}
         mark{background-color:yellow}
