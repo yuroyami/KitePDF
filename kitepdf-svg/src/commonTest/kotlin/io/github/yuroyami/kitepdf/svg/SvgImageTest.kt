@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -95,6 +96,18 @@ class SvgImageTest {
         assertEquals(30.0 to 150.0, size("""width="30""""), "with no ratio the height is the default")
         assertEquals(20.0 to 40.0, size("""viewBox="0 0 20 40""""), "with no size the view box's extent stands for one")
         assertEquals(20.0 to 40.0, size("""width="100%" viewBox="0 0 20 40""""), "a percentage is no size")
+    }
+
+    @Test
+    fun only_a_view_box_without_a_size_gives_no_intrinsic_size() {
+        // CSS 2.1, 10.3.2: an image with a ratio and no size takes the width of its box (#569).
+        fun sized(attrs: String) = assertNotNull(SvgImage.parse("<svg $attrs/>".encodeToByteArray())).hasIntrinsicSize
+        assertTrue(sized("""width="30" height="60""""))
+        assertTrue(sized("""width="30" viewBox="0 0 20 40""""), "one side and a ratio make a size")
+        assertTrue(sized("""height="60" viewBox="0 0 20 40""""))
+        assertFalse(sized("""viewBox="0 0 20 40""""), "a view box alone is a ratio")
+        assertFalse(sized("""width="100%" height="100%" viewBox="0 0 20 40""""), "a percentage is no size")
+        assertTrue(sized(""), "without a ratio either, the default 300 by 150 is the size")
     }
 
     @Test

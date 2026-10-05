@@ -71,6 +71,12 @@ public class SvgImage private constructor(
      */
     public val width: Double,
     public val height: Double,
+    /**
+     * False when the root gives neither a width nor a height, only a viewBox: the image then has
+     * an intrinsic ratio and no intrinsic size, and a layout gives it the width of its box (CSS
+     * 2.1, 10.3.2, #569). True when [width] and [height] are a size of its own.
+     */
+    public val hasIntrinsicSize: Boolean,
     private val viewBox: DoubleArray?, // minX, minY, w, h
     /** What the style sheets of the document that includes this SVG declare for each element (#509). */
     private val hostStyle: ((KiteXmlNode.Element) -> String?)? = null,
@@ -1719,7 +1725,7 @@ public class SvgImage private constructor(
             val w = givenW ?: givenH?.let { h -> ratio?.let { h / it } } ?: vb?.get(2) ?: 300.0
             val h = givenH ?: givenW?.let { w -> ratio?.let { w * it } } ?: vb?.get(3) ?: 150.0
             if (!w.isFinite() || !h.isFinite() || w <= 0 || h <= 0) return null
-            return SvgImage(svg, w, h, vb, hostStyle)
+            return SvgImage(svg, w, h, givenW != null || givenH != null || ratio == null, vb, hostStyle)
         }
 
         private fun findSvg(el: KiteXmlNode.Element): KiteXmlNode.Element? {

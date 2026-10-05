@@ -524,7 +524,7 @@ internal class BoxLayout(
         val aspect = intrinsicH / intrinsicW
         // Honour explicit CSS width/height (then the HTML width/height attributes),
         // deriving the missing dimension from the intrinsic aspect ratio; fall back
-        // to full content width. Scale down proportionally past max-width / content /
+        // to the intrinsic size. Scale down proportionally past max-width / content /
         // max-height so the image never overflows its column.
         val st = box.style
         // Fixed margins narrow the room; auto ones only place the image (CSS 2.1, 10.3.3).
@@ -539,7 +539,16 @@ internal class BoxLayout(
         val physicalRoomW = if (vertical) blockRoom else room
         val physicalRoomH = if (vertical) room else blockRoom
         // object-fit fits the picture into this box when it paints, and leaves the box as it is (CSS Images 3, 4.5, #490).
-        var w = ew ?: (eh?.let { it / aspect } ?: if (box.embed != null) intrinsicW else physicalRoomW)
+        // Without a size of its own, a picture takes its intrinsic size, a CSS pixel (0.75 pt) for
+        // each of its pixels or an SVG's user units, block or floated as inline (CSS 2.1, 10.3.2).
+        // An SVG with a ratio and no size, and a media element, fill the room (#569).
+        val natural = when {
+            box.embed != null -> intrinsicW
+            svg != null -> if (svg.hasIntrinsicSize) svg.width * 0.75 else null
+            media == null && box.image != null -> intrinsicW * 0.75
+            else -> null
+        }
+        var w = ew ?: (eh?.let { it / aspect } ?: natural ?: physicalRoomW)
         var h = eh ?: (w * aspect)
         val cap = minOf(box.style.maxWidthPt ?: Double.MAX_VALUE, physicalRoomW)
         if (w > cap) { val s = cap / w; w = cap; h *= s }
@@ -924,7 +933,7 @@ internal class BoxLayout(
             val s = b.style
             val sized = s.widthPt != null || s.heightPt != null || b.attrWidth != null || b.attrHeight != null
             // Without a size of its own, an image's content is its natural size, a CSS pixel (0.75 pt)
-            // for an image pixel, where a block image alone would fill its column (#35).
+            // for an image pixel, where an SVG with only a viewBox would fill its column (#35, #569).
             val natural = if (sized) null else (b.svg?.width ?: b.image?.width?.toDouble())?.times(0.75)
             if (natural == null) b.borderBoxWidth else minOf(b.borderBoxWidth, natural + horizontalInsets(b))
         }

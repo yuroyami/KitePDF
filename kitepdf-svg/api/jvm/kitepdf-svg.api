@@ -26,6 +26,7 @@ public final class io/github/yuroyami/kitepdf/svg/SvgDocument$Companion {
 
 public final class io/github/yuroyami/kitepdf/svg/SvgImage {
 	public static final field Companion Lio/github/yuroyami/kitepdf/svg/SvgImage$Companion;
+	public final fun getHasIntrinsicSize ()Z
 	public final fun getHeight ()D
 	public final fun getWidth ()D
 	public final fun render (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function1;)V

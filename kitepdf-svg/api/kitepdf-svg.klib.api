@@ -19,6 +19,8 @@ final class io.github.yuroyami.kitepdf.svg/SvgDocument : io.github.yuroyami.kite
 }
 
 final class io.github.yuroyami.kitepdf.svg/SvgImage { // io.github.yuroyami.kitepdf.svg/SvgImage|null[0]
+    final val hasIntrinsicSize // io.github.yuroyami.kitepdf.svg/SvgImage.hasIntrinsicSize|{}hasIntrinsicSize[0]
+        final fun <get-hasIntrinsicSize>(): kotlin/Boolean // io.github.yuroyami.kitepdf.svg/SvgImage.hasIntrinsicSize.<get-hasIntrinsicSize>|<get-hasIntrinsicSize>(){}[0]
     final val height // io.github.yuroyami.kitepdf.svg/SvgImage.height|{}height[0]
         final fun <get-height>(): kotlin/Double // io.github.yuroyami.kitepdf.svg/SvgImage.height.<get-height>|<get-height>(){}[0]
     final val width // io.github.yuroyami.kitepdf.svg/SvgImage.width|{}width[0]
