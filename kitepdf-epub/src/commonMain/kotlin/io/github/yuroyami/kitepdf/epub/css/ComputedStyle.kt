@@ -185,6 +185,8 @@ internal data class ComputedStyle(
     val overflowWrap: Boolean = false,
     /** `word-break` or `-epub-word-break` (CSS Text 3, 5.2, #508). Inherited. */
     val wordBreak: WordBreak = WordBreak.NORMAL,
+    /** `full-width` (or EPUB's `-epub-fullwidth`) in `text-transform`, beside its case (CSS Text 3, 2.1, #508). Inherited. */
+    val fullWidth: Boolean = false,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
