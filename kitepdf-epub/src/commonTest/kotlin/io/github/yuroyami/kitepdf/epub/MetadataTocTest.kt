@@ -127,6 +127,33 @@ class MetadataTocTest {
         assertEquals("top", toc.entries[1].fragment)
     }
 
+    /**
+     * A spine file that the zip does not hold leaves the spine, so the chapters after it move up
+     * one. Each entry's spine index counts the chapters the book has, not the itemrefs.
+     */
+    @Test
+    fun a_missing_spine_file_does_not_shift_the_entries_after_it() {
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">x</dc:identifier></metadata>
+              <manifest>
+                <item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>
+                <item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+                <item id="ghost" href="ghost.xhtml" media-type="application/xhtml+xml"/>
+                <item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="c1"/><itemref idref="ghost"/><itemref idref="c2"/></spine>
+            </package>"""
+        val nav = bytes("""<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body>
+            <nav epub:type="toc"><ol>
+              <li><a href="ch1.xhtml">One</a></li><li><a href="ghost.xhtml">Ghost</a></li><li><a href="ch2.xhtml">Two</a></li>
+            </ol></nav>
+            </body></html>""")
+        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/nav.xhtml" to nav, "OEBPS/ch1.xhtml" to chapter("a"), "OEBPS/ch2.xhtml" to chapter("b"))))
+        assertEquals(2, doc.chapterCount)
+        assertEquals(listOf(0, -1, 1), doc.tableOfContents.entries.map { it.spineIndex })
+    }
+
     @Test
     fun a_nav_label_takes_the_text_alternative_of_its_images() {
         // EPUB Reading Systems 3.3, 7: non-text content in a label reads as its alternative text,

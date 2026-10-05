@@ -522,17 +522,18 @@ internal class ParsedEpub(
                     ?: return@mapNotNull null
                 SpineDocument(pathOf(item), index, item)
             }
-            val contentPaths = spine.map { it.path }
-
             val present = spine.filter { it.path in zip.names }
             if (present.isEmpty()) throw EpubFormatException("spine has no readable documents")
+            // The table of contents counts the chapters the book keeps, so an entry after a
+            // missing file still finds its chapter (#563).
+            val spinePaths = present.map { it.path }
 
             return ParsedEpub(
                 zip = zip,
                 opf = opf,
-                spinePaths = present.map { it.path },
+                spinePaths = spinePaths,
                 metadata = buildMetadata(opf),
-                toc = TocParser.parse(zip, opf, contentPaths) { base, href -> EpubDocument.resolvePath(base, href) },
+                toc = TocParser.parse(zip, opf, spinePaths) { base, href -> EpubDocument.resolvePath(base, href) },
                 renditions = present.map { opf.renditionAt(it.index) },
                 manifestScripted = present.map { it.item.hasProperty("scripted") },
                 manifestRemote = present.map { it.item.hasProperty("remote-resources") },
