@@ -952,7 +952,12 @@ public class PdfDocument private constructor(
     /**
      * Recursively flatten the page tree. Guarded against cyclic and pathologically
      * deep `/Kids` graphs (malformed/adversarial input) by a visited-ref set and a
-     * depth cap; bad kids are skipped rather than aborting the whole document.
+     * depth cap.
+     *
+     * Every kid that is not a page tree node is a page, as MuPDF reads it: a dictionary
+     * without `/Type /Page` is read as one, and a kid that is no dictionary is a blank
+     * page that keeps the kid's reference. So one broken kid does not move every page
+     * after it to the index, label and destinations of the page before (#585).
      */
     private fun walkPageTree(
         node: PdfDictionary,
@@ -966,27 +971,29 @@ public class PdfDocument private constructor(
         val merged = inherited.merge(node, this)
         val type = node.getName("Type")
         when {
-            type == "Page" -> {
-                val index = out.size
-                out.add(PdfPage(this, node, merged, index, sourceRef))
-                if (sourceRef != null) pageRefToIndex[sourceRef.objectNumber] = index
-            }
-            type == "Pages" || (type == null && node["Kids"] != null) -> {
+            type == "Pages" || (type != "Page" && node["Kids"] != null) -> {
                 val kids = node.getArray("Kids", this) ?: return
                 for (kidObj in kids) {
                     val kidRef = kidObj as? PdfReference
                     if (kidRef != null && !visited.add(kidRef.objectNumber)) continue  // cycle guard
                     val kidDict = (if (kidRef != null) resolve(kidRef) else kidObj) as? PdfDictionary
                     if (kidDict == null) {
-                        // Skip unresolvable / non-dict kids leniently, but say so.
-                        kiteWarn { "pages: kid ${kidRef?.objectNumber ?: "inline"} skipped: unresolvable or not a dictionary" }
+                        kiteWarn { "pages: kid ${kidRef?.objectNumber ?: "inline"} is not a dictionary, kept as a blank page" }
+                        addPage(BLANK_PAGE, merged, out, kidRef)
                         continue
                     }
                     walkPageTree(kidDict, merged, out, visited, depth + 1, kidRef)
                 }
             }
-            // Unknown / typeless leaf with no /Kids: skip leniently.
+            // The root of the tree is a page only when it says so; a kid is one unless it is a node.
+            type == "Page" || depth > 0 -> addPage(node, merged, out, sourceRef)
         }
+    }
+
+    private fun addPage(node: PdfDictionary, inherited: PageInheritable, out: MutableList<PdfPage>, ref: PdfReference?) {
+        val index = out.size
+        out.add(PdfPage(this, node, inherited, index, ref))
+        if (ref != null) pageRefToIndex[ref.objectNumber] = index
     }
 
     /* ─── Companion: open() ──────────────────────────────────────────────── */
@@ -1235,6 +1242,9 @@ public class PdfDocument private constructor(
 
         /** Bound on page-tree recursion depth. The bound guards against adversarial or cyclic /Kids. */
         private const val MAX_PAGE_TREE_DEPTH = 50
+
+        /** The page a kid that is no dictionary stands for: nothing but what its parent gives it (#585). */
+        private val BLANK_PAGE = PdfDictionary(mapOf("Type" to PdfName("Page")))
 
         private fun parseHeader(reader: ByteReader): String {
             // The header may have up to 1024 leading bytes of garbage before %PDF-.
