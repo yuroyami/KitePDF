@@ -179,7 +179,11 @@ internal object EpubConformanceChecks {
             val frames = (0 until pages(0)).flatMap { page(0, it).embeds }.filter { it.kind == EpubEmbedKind.FRAME }
             frames.size == 3 && frames.all { it.href.startsWith("file:") && doc.resource(it.href) == null }
         }
-        check("pub-xml-external-id") { "fails" !in chapterText(0) }
+        check("pub-xml-external-id") {
+            // The DOCTYPE's internal subset ends at its ]>, and the external entity it declares stands for nothing (#571).
+            val text = chapterText(0)
+            "fails" !in text && "]>" !in text && "&xxe;" !in text
+        }
         check("pub-xml-non-validating_comment") { (0 until chapters).map { doc.chapterPath(it) } == listOf("EPUB/content_001.xhtml", "EPUB/content_002.xhtml") }
         check("sec-untrusted-consent_network") {
             // A book opened with the default settings fetches nothing.

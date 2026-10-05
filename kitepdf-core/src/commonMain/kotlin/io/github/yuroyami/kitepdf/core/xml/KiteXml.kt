@@ -50,6 +50,8 @@ public object KiteXml {
         var rawText: String? = null
         // Where an end tag of each raw text element was last looked for in vain: none follows from there on.
         val noEndTagFrom = HashMap<String, Int>()
+        // The entities that the DOCTYPE's internal subset declares.
+        var declared: DeclaredEntities? = null
         while (i < n) {
             val c = xml[i]
             if (c == '<' && (rawText == null || opensInRawText(xml, i, rawText))) {
@@ -67,11 +69,21 @@ public object KiteXml {
                         i = if (end < 0) n else end + 3
                     }
                     xml.startsWith("<?", i) -> { i = xml.indexOf("?>", i).let { if (it < 0) n else it + 2 } }
+                    xml.startsWith("<!DOCTYPE", i, ignoreCase = true) -> {
+                        // One whose subset never closes ends at its first > as before, so the rest still reads.
+                        val doctype = readDoctype(xml, i + 9)
+                        if (doctype == null) {
+                            i = xml.indexOf('>', i).let { if (it < 0) n else it + 1 }
+                        } else {
+                            if (declared == null) declared = doctype.entities
+                            i = doctype.end
+                        }
+                    }
                     xml.startsWith("<!", i) -> { i = xml.indexOf('>', i).let { if (it < 0) n else it + 1 } }
                     else -> {
                         val end = tagEnd(xml, i + 1)
                         if (end < 0) { i = n } else {
-                            val token = parseTag(xml.substring(i + 1, end), keepNames)
+                            val token = parseTag(xml.substring(i + 1, end), keepNames, declared)
                             if (token != null) {
                                 out.add(token)
                                 // Only an element that closes is read raw, so one left open does not take the rest as text.
@@ -93,7 +105,7 @@ public object KiteXml {
                     while (end < n && !opensInRawText(xml, end, rawText)) end = xml.indexOf('<', end + 1).let { if (it < 0) n else it }
                 }
                 val raw = xml.substring(i, end)
-                if (raw.isNotEmpty()) out.add(KiteXmlToken.Text(decodeEntities(raw)))
+                if (raw.isNotEmpty()) out.add(KiteXmlToken.Text(decodeEntities(raw, declared)))
                 i = end
             }
         }
@@ -148,7 +160,7 @@ public object KiteXml {
         return xml.indexOf('>', from)
     }
 
-    private fun parseTag(body: String, keepNames: Boolean): KiteXmlToken? {
+    private fun parseTag(body: String, keepNames: Boolean, declared: DeclaredEntities?): KiteXmlToken? {
         val t = body.trim()
         if (t.isEmpty()) return null
         if (t.startsWith("/")) return KiteXmlToken.Close(localName(t.substring(1).trim()))
@@ -156,11 +168,11 @@ public object KiteXml {
         val core = if (selfClose) t.dropLast(1).trim() else t
         val sp = core.indexOfFirst { it == ' ' || it == '\t' || it == '\n' || it == '\r' }
         val name = localName(if (sp < 0) core else core.substring(0, sp))
-        val attrs = if (sp < 0) emptyMap() else parseAttrs(core.substring(sp + 1), keepNames)
+        val attrs = if (sp < 0) emptyMap() else parseAttrs(core.substring(sp + 1), keepNames, declared)
         return KiteXmlToken.Open(name, attrs, selfClose)
     }
 
-    private fun parseAttrs(s: String, keepNames: Boolean): Map<String, String> {
+    private fun parseAttrs(s: String, keepNames: Boolean, declared: DeclaredEntities?): Map<String, String> {
         val attrs = LinkedHashMap<String, String>()
         var i = 0
         val n = s.length
@@ -181,12 +193,12 @@ public object KiteXml {
                     val q = s[i]; i++
                     val vStart = i
                     while (i < n && s[i] != q) i++
-                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i))
+                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i), declared)
                     if (i < n) i++
                 } else {
                     val vStart = i
                     while (i < n && !s[i].isWhitespace()) i++
-                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i))
+                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i), declared)
                 }
             } else if (keep) {
                 attrs[key] = ""
@@ -202,10 +214,11 @@ public object KiteXml {
     /**
      * [s] with its character references replaced: XML's five, numeric ones, and the names of
      * HTML's table (HTML, 13.5), which hold the entities the XHTML DTDs declare, so a chapter
-     * may write `&mdash;` as its DOCTYPE allows (#570). A name that ends in no semicolon, or that
-     * no table has, stays as text.
+     * may write `&mdash;` as its DOCTYPE allows (#570). A name the DOCTYPE's internal subset
+     * declares takes its replacement text, before HTML's table (#571). A name that ends in no
+     * semicolon, or that no table has, stays as text. [depth] counts the entities being expanded.
      */
-    private fun decodeEntities(s: String): String {
+    private fun decodeEntities(s: String, declared: DeclaredEntities? = null, depth: Int = 0): String {
         if ('&' !in s) return s
         val sb = StringBuilder(s.length)
         var i = 0
@@ -225,7 +238,7 @@ public object KiteXml {
                             ent.substring(2).toIntOrNull(16)?.let { cp -> charsFor(cp) }
                         ent.startsWith("#") ->
                             ent.substring(1).toIntOrNull()?.let { cp -> charsFor(cp) }
-                        else -> HtmlEntities.lookup(ent)
+                        else -> declared?.expand(ent, depth) ?: HtmlEntities.lookup(ent)
                     }
                     if (rep != null) { sb.append(rep); i = semi + 1; continue }
                 }
@@ -253,6 +266,95 @@ public object KiteXml {
         }
         return -1
     }
+
+    /** A DOCTYPE read to its end: the index just past its `>`, and the entities its internal subset declares. */
+    private class Doctype(val end: Int, val entities: DeclaredEntities?)
+
+    /**
+     * The DOCTYPE whose body starts at [from], just past `<!DOCTYPE`, or null when it never ends.
+     * A quoted literal, and an internal subset in brackets with its declarations, comments and
+     * literals, may hold a `>` that ends nothing (XML 1.0, 2.8).
+     */
+    private fun readDoctype(xml: String, from: Int): Doctype? {
+        var i = from
+        var entities: DeclaredEntities? = null
+        while (i < xml.length) {
+            when (val c = xml[i]) {
+                '"', '\'' -> i = xml.indexOf(c, i + 1).takeIf { it >= 0 } ?: return null
+                '[' -> {
+                    val close = subsetEnd(xml, i + 1) ?: return null
+                    entities = declaredEntities(xml.substring(i + 1, close))
+                    i = close
+                }
+                '>' -> return Doctype(i + 1, entities)
+            }
+            i++
+        }
+        return null
+    }
+
+    /** The index of the `]` that ends the internal subset starting at [from], past its comments, instructions and literals, or null. */
+    private fun subsetEnd(xml: String, from: Int): Int? {
+        var i = from
+        while (i < xml.length) {
+            val c = xml[i]
+            i = when {
+                xml.startsWith("<!--", i) -> xml.indexOf("-->", i + 4).takeIf { it >= 0 }?.plus(3) ?: return null
+                xml.startsWith("<?", i) -> xml.indexOf("?>", i + 2).takeIf { it >= 0 }?.plus(2) ?: return null
+                c == '"' || c == '\'' -> xml.indexOf(c, i + 1).takeIf { it >= 0 }?.plus(1) ?: return null
+                c == ']' -> return i
+                else -> i + 1
+            }
+        }
+        return null
+    }
+
+    /**
+     * The general entities that [subset] declares, the first declaration of a name binding, or
+     * null for none (XML 1.0, 4.2). A parameter entity is left out, and an external one is only
+     * named, since a book's DTD never fetches a file.
+     */
+    private fun declaredEntities(subset: String): DeclaredEntities? {
+        val internal = HashMap<String, String>()
+        val external = HashSet<String>()
+        for (m in ENTITY_DECLARATION.findAll(COMMENT.replace(subset, ""))) {
+            val name = m.groupValues[1]
+            if (name in internal || name in external) continue
+            val literal = m.groups[2]?.value ?: m.groups[3]?.value
+            if (literal != null) internal[name] = literal else external += name
+        }
+        return if (internal.isEmpty() && external.isEmpty()) null else DeclaredEntities(internal, external)
+    }
+
+    private val COMMENT = Regex("<!--[\\s\\S]*?-->")
+
+    /** `<!ENTITY name`, then a quoted replacement text, or the keyword of an external identifier. */
+    private val ENTITY_DECLARATION = Regex("""<!ENTITY\s+([^\s%"'>]+)\s+(?:"([^"]*)"|'([^']*)'|(?:SYSTEM|PUBLIC)\b)""")
+
+    /**
+     * The general entities of a DOCTYPE's internal subset: the replacement text of each internal
+     * one, and the names of the external ones, which stand for nothing. A replacement text is read
+     * as text, its references expanded where it is used, and markup in it stays as text. The
+     * expansion stops at a depth and spends a budget of characters for the whole document, so
+     * entities that nest cannot grow a page of markup into gigabytes.
+     */
+    private class DeclaredEntities(private val internal: Map<String, String>, private val external: Set<String>) {
+        private var budget = EXPANSION_BUDGET
+
+        /** What `&name;` stands for, or null when the subset does not declare it or it may expand no further. */
+        fun expand(name: String, depth: Int): String? {
+            if (name in external) return ""
+            val text = internal[name] ?: return null
+            if (depth >= MAX_EXPANSION_DEPTH || budget <= 0) return null
+            return decodeEntities(text, this, depth + 1).also { budget -= it.length }
+        }
+    }
+
+    /** How deep entities may nest in one another. */
+    private const val MAX_EXPANSION_DEPTH = 16
+
+    /** How many characters the entities of one document may expand to, counted at each level of nesting. */
+    private const val EXPANSION_BUDGET = 1_000_000
 
     private fun charsFor(cp: Int): String =
         if (cp in 0..0x10FFFF) buildString { appendCodePointCompat(cp) } else ""

@@ -109,6 +109,51 @@ class KiteXmlTest {
     }
 
     @Test
+    fun a_doctype_ends_after_its_internal_subset_and_its_entities_decode() {
+        // XML 1.0, 2.8: a > inside the subset, in a literal or a comment, ends nothing. 4.4 and 5.1:
+        // a reader that does not validate still expands the internal entities the subset declares (#571).
+        val xml = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd" [
+            <!ENTITY me "Kite">
+            <!ENTITY whole "&me;PDF &#169;">
+            <!-- a > in a comment -->
+            <!ENTITY q 'a "quoted" > value'>
+            <!ENTITY me "declared twice, and the first one binds">
+        ]><html><body><p title="&me;">&me; &whole; &q;</p></body></html>"""
+        val first = KiteXml.tokenize(xml).first()
+        assertEquals(KiteXmlToken.Open("html", emptyMap(), false), first, "the doctype left something before the root")
+        val p = KiteXml.parse(xml).first("p")!!
+        assertEquals("Kite KitePDF \u00a9 a \"quoted\" > value", p.text())
+        assertEquals("Kite", p.attrs["title"])
+    }
+
+    @Test
+    fun an_external_entity_is_never_read_and_leaves_nothing() {
+        // EPUB 3.3 and the W3C test pub-xml-external-id: a book's DTD never fetches a file.
+        val root = KiteXml.parse("""<!DOCTYPE p [ <!ENTITY xxe SYSTEM "foo.xhtml"> <!ENTITY pub PUBLIC "-//X//Y" "y.xml"> ]><p>a&xxe;b&pub;c</p>""")
+        assertEquals("abc", root.first("p")!!.text())
+    }
+
+    @Test
+    fun nested_entities_stop_expanding_at_a_limit() {
+        // Ten references at each of nine levels would make a billion characters of a page of markup.
+        val laughs = buildString {
+            append("""<!ENTITY l0 "lol">""")
+            for (k in 1..9) append("""<!ENTITY l$k "${"&l${k - 1};".repeat(10)}">""")
+        }
+        val text = KiteXml.parse("<!DOCTYPE b [$laughs]><b>&l9;</b>").first("b")!!.text()
+        assertTrue(text.length <= 2_000_000, "expanded to ${text.length} characters")
+        assertTrue(text.startsWith("lollol"), "nothing expanded: ${text.take(40)}")
+        val self = KiteXml.parse("""<!DOCTYPE b [<!ENTITY a "x&a;">]><b>&a;</b>""").first("b")!!.text()
+        assertTrue(self.startsWith("xx") && self.length < 100, "a self reference: ${self.take(40)}")
+    }
+
+    @Test
+    fun a_doctype_whose_subset_never_ends_leaves_the_document_as_before() {
+        val root = KiteXml.parse("""<!DOCTYPE html [ <!ENTITY me "Kite"> <p>text</p>""")
+        assertEquals("text", root.first("p")!!.text())
+    }
+
+    @Test
     fun a_name_html_does_not_have_stays_as_text() {
         // Names are case-sensitive, and only a name that ends in a semicolon decodes.
         val root = KiteXml.parse("<a>&unknown; &Mdash; &mdash &amp;</a>")

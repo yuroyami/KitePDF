@@ -5,7 +5,8 @@ import kotlin.test.assertEquals
 
 /**
  * A chapter's character references reach its page text: HTML's named ones, which an XHTML 1.1
- * book may use since its DTD declares them (#570).
+ * book may use since its DTD declares them (#570), and the ones its DOCTYPE's internal subset
+ * declares, which leaves nothing of itself on the page (#571).
  */
 class EntityDecodingTest {
 
@@ -20,5 +21,16 @@ class EntityDecodingTest {
             <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
             <html xmlns="http://www.w3.org/1999/xhtml"><body><p>Wait&mdash;it&rsquo;s a caf&eacute;&hellip;</p></body></html>"""
         assertEquals("Wait—it’s a café…", pageText(chapter))
+    }
+
+    @Test
+    fun an_internal_subset_leaves_nothing_on_the_page_and_its_entities_decode() {
+        val chapter = """<?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE html [
+              <!ENTITY series "The Kite Books">
+              <!ENTITY xxe SYSTEM "elsewhere.xhtml">
+            ]>
+            <html xmlns="http://www.w3.org/1999/xhtml"><body><p>&series;&xxe;, volume one</p></body></html>"""
+        assertEquals("The Kite Books, volume one", pageText(chapter))
     }
 }
