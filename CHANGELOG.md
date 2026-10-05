@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `SvgImage.hasIntrinsicSize` is false for an SVG whose root gives only a viewBox, which has a
+  ratio and no size of its own, so a layout can give it the width of its box (#569).
+
 - `EpubScriptSession.unloadChapters()` closes the engine of every chapter and keeps the session
   open, as a reading system unloads chapters: each starts over from its markup when next used.
   `EpubScriptRunner` calls it to make room for another runner where engines share one thread (#553).
@@ -176,6 +179,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a rebuild (#472).
 
 ### Fixed
+
+- An EPUB image that is a block or floats, and has no `width` or `height`, takes its intrinsic
+  size as an inline one does, 0.75 pt a pixel, or a user unit of an SVG that gives its own size,
+  instead of the width of its column. A small ornament under `img { display: block }` no longer
+  blows up to the column, and a floated one leaves the text room beside it. A larger picture still
+  scales down to its column, and an SVG with only a viewBox still fills it (#569).
 
 - Every layer of an EPUB `background-image` paints, the first on top, each with its own
   `background-size`, `background-position` and `background-repeat` from the comma lists of the
