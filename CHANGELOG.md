@@ -177,6 +177,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An EPUB spine item whose fallback chain holds no XHTML or SVG document, and whose bytes are not
+  markup, leaves the spine. Its bytes were laid out as text, so a disk image in the spine became
+  23 pages of noise, and a book of nothing else now refuses to open with `EpubFormatException`.
+  A document under the wrong media type still renders (#518).
 - Each EPUB chapter lays out in its own writing mode. The book took the mode of its first
   chapter, so a vertical chapter after a horizontal one laid out horizontally, and a horizontal
   chapter after a vertical one laid out in columns (#507).

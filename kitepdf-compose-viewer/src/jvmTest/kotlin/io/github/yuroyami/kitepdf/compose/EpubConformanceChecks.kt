@@ -187,7 +187,8 @@ internal object EpubConformanceChecks {
 
     private fun manifestFallbacks() {
         // Nothing to show: the item is dropped or stays empty, and its bytes never lay out as text.
-        check("pub-foreign_bad-fallback") { chapters == 0 || chapterText(0).isBlank() }
+        // The test allows an error when the book is taken in, so refusing it passes, as does a spine item that shows nothing.
+        check("pub-foreign_bad-fallback") { opened.exceptionOrNull() is EpubFormatException || chapterText(0).isBlank() }
         check("pub-foreign_image") { images(0).any { it.image.width == 512 && it.image.height == 512 } }
         for (id in listOf("pub-foreign_json-spine", "pub-foreign_xml-spine", "pub-foreign_xml-suffix-spine")) {
             check(id) { doc.chapterPath(0) == "EPUB/content_001.xhtml" && "Test passes if you see this text." in text(0) }

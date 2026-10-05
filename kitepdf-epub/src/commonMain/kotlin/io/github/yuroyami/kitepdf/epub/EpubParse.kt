@@ -509,33 +509,74 @@ internal class ParsedEpub(
                 ?: throw EpubFormatException("META-INF/container.xml missing or unreadable")
             val opf = Opf.parse(zip, opfPath)
                 ?: throw EpubFormatException("OPF not found at $opfPath")
+            fun pathOf(item: OpfItem) = EpubDocument.resolvePath(opf.baseDir, item.href)
             // A spine item of a type this engine does not render shows its fallback document (#27).
+            // A chain without one shows its first file that is markup, which is a document under
+            // the wrong media type, and else nothing: its bytes are not a document (#518).
             // Each document keeps the index of its spine entry, whose properties it takes (#37).
-            val spine = opf.spineIdrefs.indices.mapNotNull { index ->
-                val href = opf.contentDocument(opf.spineIdrefs[index])?.href ?: return@mapNotNull null
-                EpubDocument.resolvePath(opf.baseDir, href) to index
+            val chains = opf.spineIdrefs.map { opf.fallbackChain(it) }
+            if (chains.all { it.isEmpty() }) throw EpubFormatException("spine is empty in $opfPath")
+            val spine = chains.indices.mapNotNull { index ->
+                val item = opf.contentDocument(opf.spineIdrefs[index])
+                    ?: chains[index].firstOrNull { looksLikeMarkup(zip.readPrefix(pathOf(it), MARKUP_SNIFF_BYTES)) }
+                    ?: return@mapNotNull null
+                SpineDocument(pathOf(item), index, item)
             }
-            val contentPaths = spine.map { it.first }
-            if (contentPaths.isEmpty()) throw EpubFormatException("spine is empty in $opfPath")
+            val contentPaths = spine.map { it.path }
 
-            val present = spine.filter { it.first in zip.names }
+            val present = spine.filter { it.path in zip.names }
             if (present.isEmpty()) throw EpubFormatException("spine has no readable documents")
 
             return ParsedEpub(
                 zip = zip,
                 opf = opf,
-                spinePaths = present.map { it.first },
+                spinePaths = present.map { it.path },
                 metadata = buildMetadata(opf),
                 toc = TocParser.parse(zip, opf, contentPaths) { base, href -> EpubDocument.resolvePath(base, href) },
-                renditions = present.map { opf.renditionAt(it.second) },
-                manifestScripted = present.map { opf.contentDocument(opf.spineIdrefs[it.second])?.hasProperty("scripted") == true },
-                manifestRemote = present.map { opf.contentDocument(opf.spineIdrefs[it.second])?.hasProperty("remote-resources") == true },
-                overlays = present.map { (_, index) ->
-                    val overlayId = opf.contentDocument(opf.spineIdrefs[index])?.mediaOverlay ?: return@map null
+                renditions = present.map { opf.renditionAt(it.index) },
+                manifestScripted = present.map { it.item.hasProperty("scripted") },
+                manifestRemote = present.map { it.item.hasProperty("remote-resources") },
+                overlays = present.map { document ->
+                    val overlayId = document.item.mediaOverlay ?: return@map null
                     val item = opf.itemsById[overlayId] ?: return@map null
                     EpubDocument.resolvePath(opf.baseDir, item.href) to opf.overlayDurations[overlayId]
                 },
             )
+        }
+
+        /** The file a spine entry shows: its zip [path], the [index] of the entry, and the manifest [item]. */
+        private class SpineDocument(val path: String, val index: Int, val item: OpfItem)
+
+        /** How far into a spine file without a document type [looksLikeMarkup] reads. */
+        private const val MARKUP_SNIFF_BYTES = 512
+
+        /**
+         * Whether [bytes] begin as markup does: past a byte order mark and white space, a `<`, in
+         * UTF-8 or in UTF-16 of either byte order. A file of another kind, an image or a disk image,
+         * does not, so it is not laid out as text (#518).
+         */
+        internal fun looksLikeMarkup(bytes: ByteArray?): Boolean {
+            if (bytes == null) return false
+            fun at(i: Int) = if (i < bytes.size) bytes[i].toInt() and 0xFF else -1
+            var i = 0
+            var width = 1
+            // In UTF-16 a character of ASCII sits in one byte of its two and the other is zero.
+            var low = 0
+            when {
+                at(0) == 0xEF && at(1) == 0xBB && at(2) == 0xBF -> i = 3
+                at(0) == 0xFE && at(1) == 0xFF -> { i = 2; width = 2; low = 1 }
+                at(0) == 0xFF && at(1) == 0xFE -> { i = 2; width = 2 }
+                at(0) == 0 && at(1) > 0 -> { width = 2; low = 1 }
+                at(0) > 0 && at(1) == 0 -> width = 2
+            }
+            while (i + width <= bytes.size) {
+                if (width == 2 && at(i + 1 - low) != 0) return false
+                when (at(i + low)) {
+                    0x20, 0x09, 0x0A, 0x0D, 0x0C -> i += width
+                    else -> return at(i + low) == '<'.code
+                }
+            }
+            return false
         }
 
         private fun buildMetadata(opf: OpfPackage): EpubMetadata {

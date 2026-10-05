@@ -64,13 +64,10 @@ internal class OpfPackage(
 
     /**
      * The document that the spine item [id] renders: the item itself when it is XHTML or SVG,
-     * else the first item of its fallback chain that is (#27). A chain without one keeps the
-     * item, which renders what it can.
+     * else the first item of its fallback chain that is (#27), else null.
      */
-    fun contentDocument(id: String): OpfItem? {
-        val chain = fallbackChain(id)
-        return chain.firstOrNull { it.mediaType?.lowercase() in CONTENT_TYPES } ?: chain.firstOrNull()
-    }
+    fun contentDocument(id: String): OpfItem? =
+        fallbackChain(id).firstOrNull { it.mediaType?.lowercase() in CONTENT_TYPES }
 
     /** How the whole book asks to be shown (#37). */
     val rendition: EpubRendition = EpubRendition.ofBook(renditionValues)
