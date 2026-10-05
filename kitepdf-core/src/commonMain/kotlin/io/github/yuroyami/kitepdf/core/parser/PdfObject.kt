@@ -1,7 +1,5 @@
 package io.github.yuroyami.kitepdf.core.parser
 
-import io.github.yuroyami.kitepdf.core.PdfFormatException
-
 /**
  * Sealed hierarchy of PDF value types (ISO 32000-1 §7.3).
  *
@@ -138,8 +136,12 @@ public data class PdfStream(
 /** "N G R": an indirect object reference. Use [resolve] with the document's resolver. */
 public data class PdfReference(val objectNumber: Long, val generation: Int) : PdfObject() {
 
-    override fun resolve(refs: IndirectResolver): PdfObject =
-        refs.resolve(this) ?: throw PdfFormatException("Dangling reference $objectNumber $generation R")
+    /**
+     * The object, or [PdfNull] when the file has none by that number: ISO 32000-1, 7.3.10
+     * reads a reference to a missing object as null, so one missing entry is skipped and
+     * the page around it still draws (#581).
+     */
+    override fun resolve(refs: IndirectResolver): PdfObject = refs.resolve(this) ?: PdfNull
 
     override fun toString(): String = "$objectNumber $generation R"
 }

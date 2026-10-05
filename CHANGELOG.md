@@ -247,6 +247,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A PDF reference to an object that the file does not hold reads as null, as ISO 32000-1 has it,
+  where it used to fail the whole call. A page whose image, graphics state, font descriptor,
+  embedded font program, ToUnicode map or marked content properties named a missing object drew
+  nothing and had no text, and a missing outline, attachment tree or form field list failed
+  `outline`, `attachments` and `acroForm`. Now the missing entry is skipped and the rest of the
+  page draws (#581).
+
 - An `<svg>` written in a sentence of an EPUB chapter flows on its line as an `<img>` does, where
   it used to break the paragraph, ending the line before it and starting a new one after it. An
   `<svg>` is inline unless a style sheet makes it a block or floats it, and one alone in its block
