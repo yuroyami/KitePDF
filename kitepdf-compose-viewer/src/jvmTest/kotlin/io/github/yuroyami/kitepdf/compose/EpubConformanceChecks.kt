@@ -288,6 +288,8 @@ internal object EpubConformanceChecks {
         check("lay-fxl-orientation-default") { (0 until chapters).all { doc.renditionOf(it).orientation == EpubOrientation.AUTO } }
         check("lay-fxl-page-spread-combined") { spreadChapters() == listOf(listOf(0), listOf(1, 2), listOf(3)) }
         check("lay-fxl-page-spread-left") { spreadChapters() == listOf(listOf(0), listOf(1, 2), listOf(3)) }
+        check("lay-fxl-page-spread-right") { spreadChapters() == listOf(listOf(0), listOf(1, 2), listOf(3)) && spreadSides().first() == SpreadSide.RIGHT }
+        check("lay-page-layout-both-spread") { spreads().last() == listOf(4 to 0) && spreadSides().last() == SpreadSide.LEFT }
         check("lay-fxl-spread-auto") { doc.epubMetadata.rendition.spread == EpubSpread.AUTO && spreadChapters() == listOf(listOf(0, 1), listOf(2, 3)) }
         check("lay-fxl-spread-both") {
             doc.renditionOf(0).spread == EpubSpread.BOTH && spreadChapters(true) == listOf(listOf(0, 1), listOf(2, 3)) &&
@@ -331,6 +333,7 @@ internal object EpubConformanceChecks {
         check("lay-pp-layout-pre-paginated-spreads") { spreadChapters(true) == listOf(listOf(0, 1), listOf(2, 3)) && spreadChapters(false) == listOf(listOf(0, 1), listOf(2, 3)) }
         check("lay-pp-page-spread-combined") { spreadChapters() == listOf(listOf(0), listOf(1, 2), listOf(3)) }
         check("lay-pp-page-spread-left") { spreadChapters() == listOf(listOf(0), listOf(1, 2), listOf(3)) }
+        check("lay-pp-page-spread-right") { spreadChapters() == listOf(listOf(0), listOf(1, 2), listOf(3)) && spreadSides().first() == SpreadSide.RIGHT }
         check("lay-pp-spine-overrides_behave-as-global") {
             doc.renditionOf(0).layout == EpubLayout.PRE_PAGINATED && pages(0) == 1 && sizeIs(0, 750.0, 450.0) &&
                 doc.renditionOf(1).layout == EpubLayout.REFLOWABLE && pages(1) > 1

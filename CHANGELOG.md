@@ -180,6 +180,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In `KiteDocLayout.Spread`, a page that asks for one side of a spread and has no partner sits in
+  that half with the other half empty, such as an EPUB's `page-spread-right` first page or a
+  `page-spread-left` last page, or the first page of a PDF whose `/PageLayout` puts it on the
+  right. Only a page that asks for no side, or to be centred, shows in the middle (#504).
+
 - A media overlay that several chapters of an EPUB share gives each chapter only the clips whose
   text is in it, so read-aloud reads each clip once, in the order of the book, instead of reading
   the whole overlay again for every chapter. Three W3C tests that need it now pass (#522).

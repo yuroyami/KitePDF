@@ -49,6 +49,11 @@ class SpreadPairingSceneTest {
         val plan = pairSpreads(5, false) { sides[it] }
         assertEquals(listOf(0, 1, 1, 2, 2), (0 until 5).map(plan::spreadOf))
         assertEquals(listOf(0, 1, 3), (0 until 3).map(plan::firstPageOf))
+        // A lone page keeps the side it asked for; one that asked for none, or to be alone, sits in the middle (#504).
+        val lone = pairSpreads(4, false) { if (it == 0) SpreadSide.RIGHT else if (it == 3) SpreadSide.LEFT else null }
+        assertEquals(listOf(SpreadSide.RIGHT, null, SpreadSide.LEFT), (0 until lone.size).map(lone::sideOf))
+        assertEquals(listOf(null, null, null), (0 until 3).map(pairSpreads(5, false) { null }::sideOf))
+        assertEquals(null, plan.sideOf(0), "a page alone by request is centred")
     }
 
     /** A fixed-layout book of one 100 x 200 pixel page per entry of [properties], with [metadata]. */
@@ -147,6 +152,30 @@ class SpreadPairingSceneTest {
     fun a_centred_cover_shows_alone_and_the_pages_after_it_pair_as_declared() {
         val book = fixedBook(listOf("rendition:page-spread-center", "page-spread-left", "page-spread-right", "page-spread-left", "page-spread-right"))
         assertSpreads(listOf(listOf(0), listOf(1, 2), listOf(3, 4)), book)
+    }
+
+    @Test
+    fun a_page_that_asks_for_a_side_and_has_no_partner_sits_on_that_side() = forBothEffectOrders { queued ->
+        // Each page is 100 by 200 in a 400 by 200 view, so a half holds one page in its middle:
+        // the left half from 50 to 150, the right one from 250 to 350, and a centred page from
+        // 150 to 250. Only a centred page sits in the middle (EPUB 3.3, page-spread-right, #504).
+        val book = fixedBook(listOf("page-spread-right", "page-spread-left", "page-spread-right", "page-spread-left"))
+        lateinit var state: KiteDocViewState
+        var target by mutableIntStateOf(0)
+        val (scene, driver) = drivenScene(400, 200, queued) {
+            state = rememberKiteDocViewState(book)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Spread())
+            LaunchedEffect(target) { if (target > 0) state.scrollToPage(target) }
+        }
+        scene.use {
+            driver.pumpUntilState { state.stripSettled && state.pageGeometry.keys.toSet() == setOf(0) }
+            val first = state.pageGeometry.getValue(0)
+            assertEquals(250f, first.left, 1f, "the first page, on the right, opens the book in the right half")
+            target = 3
+            driver.pumpUntilState { state.currentPage == 3 && state.pageGeometry.keys.toSet() == setOf(3) }
+            val last = state.pageGeometry.getValue(3)
+            assertEquals(50f, last.left, 1f, "the last page, on the left, closes it in the left half")
+        }
     }
 
     @Test
