@@ -29,6 +29,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.fail
+import kotlin.time.Duration
 
 /**
  * [KiteReadAloud] reads a book's media overlays with a real player and follows the text in a real
@@ -44,6 +46,23 @@ class ReadAloudTest {
     fun closePlayers() = runBlocking { players.toList().forEach { it.closeAndAwait() } }
 
     private fun newPlayer(): KitePlayer = SilentPlayers.realTime().also { players += it }
+
+    /**
+     * The position of [player] once it stops moving. A render that the device had started when
+     * the pause came is counted just after the status says Paused, so the position moves one
+     * period after that (#568). A player that goes on moving while paused never settles.
+     */
+    private fun settledPosition(player: KitePlayer): Duration {
+        val until = System.nanoTime() + 2_000_000_000L
+        var last = player.position()
+        while (System.nanoTime() < until) {
+            Thread.sleep(100)
+            val now = player.position()
+            if (now == last) return now
+            last = now
+        }
+        fail("the position of a paused player never settled: $last")
+    }
 
     private val audio = mapOf("narration.wav" to NarratedBooks.wav(3))
 
@@ -143,7 +162,7 @@ class ReadAloudTest {
         waitForIdle()
         val player = players.single()
         waitUntil(timeoutMillis = 10_000) { !player.state.value.status.isActive }
-        val at = player.position()
+        val at = settledPosition(player)
         Thread.sleep(1_500)
         assertEquals(at, player.position(), "the position moved while paused")
         assertEquals(listOf("s1"), log.clips.toList(), "the reading moved on while paused")
