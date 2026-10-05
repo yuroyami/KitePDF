@@ -14,8 +14,7 @@ package io.github.yuroyami.kitepdf.epub.css
  * difftest oracle, so the two agree on what a book should look like.
  *
  * Not covered yet, so the rules or properties are ignored rather than honoured:
- * `@page`, `content` (`q:before`), `unicode-bidi`, and detailed border
- * painting.
+ * `@page`, `unicode-bidi`, and detailed border painting.
  */
 internal object UaStylesheet {
 
@@ -55,6 +54,8 @@ internal object UaStylesheet {
         ol{display:block;list-style-type:decimal;margin:1em 0;padding:0 0 0 30pt}
         p{display:block;margin:1em 0}
         pre{display:block;font-family:monospace;margin:1em 0;white-space:pre}
+        q::before{content:open-quote}
+        q::after{content:close-quote}
         rp{display:none}
         rt{display:none}
         script{display:none}

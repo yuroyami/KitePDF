@@ -177,6 +177,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The EPUB `q` element draws quotation marks, chosen by the language its chapter declares, with
+  the marks of each language from CLDR 48.2.0: “ ” for English, « » for French, „ “ for German,
+  「 」 for Japanese, and the inner pair for a quotation inside one. `content` takes
+  `open-quote`, `close-quote`, `no-open-quote` and `no-close-quote`, and the `quotes` property
+  sets the marks. The package's `dc:language` picks none, as EPUB Reading Systems 3.3, 3.7
+  requires (#511).
 - `TocEntry.spineIndex` counts the chapters an EPUB keeps. It counted the spine's itemrefs, so an
   entry after a spine file missing from the zip pointed one chapter too far, and the last one past
   the end of the book (#563).

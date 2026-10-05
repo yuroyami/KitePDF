@@ -160,6 +160,11 @@ internal data class ComputedStyle(
     val grid: GridStyle = GridStyle(),
     /** The multi-column properties (#34). Not inherited. */
     val columns: Columns = Columns(),
+    /**
+     * `quotes`: the opening and closing mark of each level of quotation, an empty list for
+     * `none`, or null for `auto`, which takes the marks of the content language (#511). Inherited.
+     */
+    val quotes: List<String>? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

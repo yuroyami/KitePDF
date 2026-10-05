@@ -145,7 +145,7 @@
     "pkg-dir_rtl-root-unset": false,
     "pkg-dir_unset-root-rtl": false,
     "pkg-dir_unset-root-unset": false,
-    "pkg-lang_but_not_content": false,
+    "pkg-lang_but_not_content": true,
     "pkg-linked-records": "n/a",
     "pkg-manifest-unknown": true,
     "pkg-manifest-unlisted-resource": false,
