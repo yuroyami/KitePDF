@@ -266,7 +266,16 @@ internal object EpubConformanceChecks {
     }
 
     private fun internationalization() {
+        // A title or creator reads right to left by its own dir, else the package's, else by its
+        // first strong character, which is the Latin C of "CSS:" in the titles (#510).
+        check("pkg-dir-auto_root-rtl") { doc.epubMetadata.title!!.startsWith("CSS:") && !doc.epubMetadata.titleRightToLeft }
+        check("pkg-dir-auto_root-unset") { doc.epubMetadata.title!!.startsWith("CSS:") && !doc.epubMetadata.titleRightToLeft }
         check("pkg-dir_but_not_content") { "Test passes if the following list is not rendered right-to-left" in text(0) }
+        check("pkg-dir_creator-rtl") { doc.epubMetadata.creators == listOf("Dave Cramer") && doc.epubMetadata.creatorsRightToLeft == listOf(true) }
+        check("pkg-dir_rtl-root-ltr") { doc.epubMetadata.title!!.startsWith("CSS:") && doc.epubMetadata.titleRightToLeft }
+        check("pkg-dir_rtl-root-unset") { doc.epubMetadata.title!!.startsWith("CSS:") && doc.epubMetadata.titleRightToLeft }
+        check("pkg-dir_unset-root-rtl") { doc.epubMetadata.title!!.startsWith("CSS:") && doc.epubMetadata.titleRightToLeft }
+        check("pkg-dir_unset-root-unset") { doc.epubMetadata.title!!.startsWith("CSS:") && !doc.epubMetadata.titleRightToLeft }
         check("pkg-lang_but_not_content") { "“Le mieux est l’ennemi du bien”" in text(0) || "“Le mieux est l'ennemi du bien”" in text(0) }
         check("pkg-spine-progression-default") { doc.epubMetadata.rightToLeft }
         check("pkg-spine-progression-pre-paginated") { !doc.epubMetadata.rightToLeft && spreadChapters() == listOf(listOf(0, 1), listOf(2, 3)) && allFixedPages(675.0, 450.0) }

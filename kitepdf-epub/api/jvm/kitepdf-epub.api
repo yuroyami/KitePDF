@@ -165,6 +165,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMetadata {
 	public static final field Companion Lio/github/yuroyami/kitepdf/epub/EpubMetadata$Companion;
 	public final fun getCoverImagePath ()Ljava/lang/String;
 	public final fun getCreators ()Ljava/util/List;
+	public final fun getCreatorsRightToLeft ()Ljava/util/List;
 	public final fun getIdentifier ()Ljava/lang/String;
 	public final fun getLanguage ()Ljava/lang/String;
 	public final fun getNarration ()Lio/github/yuroyami/kitepdf/epub/EpubNarration;
@@ -172,6 +173,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMetadata {
 	public final fun getRendition ()Lio/github/yuroyami/kitepdf/epub/EpubRendition;
 	public final fun getRightToLeft ()Z
 	public final fun getTitle ()Ljava/lang/String;
+	public final fun getTitleRightToLeft ()Z
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubMetadata$Companion {

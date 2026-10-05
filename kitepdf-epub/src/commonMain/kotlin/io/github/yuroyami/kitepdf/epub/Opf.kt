@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.text.Bidi
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
 
@@ -43,6 +44,10 @@ internal class OpfPackage(
     val narration: EpubNarration = EpubNarration.NONE,
     /** The `media:duration` of each media overlay item, by item id, in seconds (#36). */
     val overlayDurations: Map<String, Double> = emptyMap(),
+    /** The `dir` of the package, of the title and of each creator, parallel to [creators] (#510). */
+    val packageDir: String? = null,
+    val titleDir: String? = null,
+    val creatorDirs: List<String?> = emptyList(),
 ) {
     val itemsById: Map<String, OpfItem> = items.associateBy { it.id }
 
@@ -101,6 +106,15 @@ public class EpubMetadata internal constructor(
     public val pronunciationLexicons: List<String> = emptyList(),
     /** The media overlay metadata of the book: duration, narrators and active classes (#36). */
     public val narration: EpubNarration = EpubNarration.NONE,
+    /**
+     * True when [title] reads right to left, for a host to show it in its own run of text with that
+     * base direction (#510). The title's `dir` decides when it says `ltr` or `rtl`, else the
+     * package's does, and with `auto` or no direction at all its first strong character does
+     * (EPUB 3.3, the `dir` attribute). False when there is no title.
+     */
+    public val titleRightToLeft: Boolean = false,
+    /** Whether each of [creators] reads right to left, in the same order and decided as [titleRightToLeft] is (#510). */
+    public val creatorsRightToLeft: List<Boolean> = List(creators.size) { false },
 ) {
     public companion object {
         internal val EMPTY = EpubMetadata(null, emptyList(), null, null, null, false)
@@ -121,6 +135,9 @@ internal object Opf {
         var uniqueId: String? = null
         var title: String? = null
         val creators = ArrayList<String>()
+        var packageDir: String? = null
+        var titleDir: String? = null
+        val creatorDirs = ArrayList<String?>()
         var language: String? = null
         val identifiers = ArrayList<String>()
         var metaCover: String? = null
@@ -130,6 +147,8 @@ internal object Opf {
 
         var capture: String? = null
         var captureIdIsUnique = false
+        // The dir of the title or creator being captured (#510).
+        var captureDir: String? = null
         // Media overlay metadata: the whole book's, and the durations that refine one item (#36).
         var captureRefines: String? = null
         val media = HashMap<String, MutableList<String>>()
@@ -144,8 +163,8 @@ internal object Opf {
             captured.clear()
             if (value.isEmpty()) return
             when (name) {
-                "title" -> if (title == null) title = value
-                "creator" -> creators.add(value)
+                "title" -> if (title == null) { title = value; titleDir = captureDir }
+                "creator" -> { creators.add(value); creatorDirs.add(captureDir) }
                 "language" -> if (language == null) language = value
                 "identifier" -> { identifiers.add(value); if (captureIdIsUnique && uniqueId == null) uniqueId = value }
                 "primaryWritingMode" -> if (primaryWritingMode == null) primaryWritingMode = value
@@ -166,7 +185,7 @@ internal object Opf {
             is KiteXmlToken.Open -> {
                 commit()
                 when (t.name) {
-                    "package" -> uidRef = t.attrs["unique-identifier"]
+                    "package" -> { uidRef = t.attrs["unique-identifier"]; packageDir = t.attrs["dir"] }
                     "item" -> {
                         val id = t.attrs["id"]; val href = t.attrs["href"]
                         if (id != null && href != null) {
@@ -194,8 +213,8 @@ internal object Opf {
                         if (t.attrs["property"] == "primary-writing-mode") capture = "primaryWritingMode"
                         if (t.attrs["name"] == "primary-writing-mode") primaryWritingMode = t.attrs["content"]?.let(::metadataValue)
                     }
-                    "title" -> capture = "title"
-                    "creator" -> capture = "creator"
+                    "title" -> { capture = "title"; captureDir = t.attrs["dir"] }
+                    "creator" -> { capture = "creator"; captureDir = t.attrs["dir"] }
                     "language" -> capture = "language"
                     "identifier" -> { capture = "identifier"; captureIdIsUnique = t.attrs["id"] == uidRef }
                 }
@@ -219,6 +238,9 @@ internal object Opf {
                 playbackActiveClass = media["media:playback-active-class"]?.firstOrNull(),
             ),
             overlayDurations = overlayDurations,
+            packageDir = packageDir,
+            titleDir = titleDir,
+            creatorDirs = creatorDirs,
         )
     }
 }
@@ -229,6 +251,23 @@ internal object Opf {
  */
 internal fun metadataValue(raw: CharSequence): String =
     raw.split(' ', '\t', '\n', '\u000C', '\r').filter { it.isNotEmpty() }.joinToString(" ")
+
+/**
+ * Whether the metadata [value] reads right to left (EPUB 3.3, the `dir` attribute, #510): by its
+ * own [dir] when that says `ltr` or `rtl`, else by the package's [packageDir] when that does, and
+ * else by its first strong character, rule P2 of the Unicode Bidi Algorithm. A value whose own
+ * `dir` is `auto` goes by its characters even in a package that says `rtl`, and a `dir` that names
+ * no direction is no `dir`.
+ */
+internal fun readsRightToLeft(value: String, dir: String?, packageDir: String?): Boolean {
+    val own = dir?.trim()?.lowercase()
+    val direction = if (own == "ltr" || own == "rtl" || own == "auto") own else packageDir?.trim()?.lowercase()
+    return when (direction) {
+        "rtl" -> true
+        "ltr" -> false
+        else -> Bidi.baseLevel(codePointsOf(value)) == 1
+    }
+}
 
 /** The longest `fallback` chain followed; a longer one is a mistake or a trap. */
 internal const val MAX_FALLBACK_HOPS = 16

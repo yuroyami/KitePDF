@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `EpubMetadata.titleRightToLeft` and `creatorsRightToLeft` give the base direction of the title
+  and of each creator, so a host can show a right-to-left title or name in its own run of text the
+  right way round. A value's own `dir` decides when it says `ltr` or `rtl`, else the package's
+  does, and with `auto` or no direction at all its first strong character does, as EPUB 3.3 asks.
+  Seven more W3C EPUB tests pass (#510).
+
 - `KiteDocViewState.isScrollInProgress` says whether the view is scrolling or turning a page,
   by a gesture or an animation, and reads observe it, so a `snapshotFlow` can wait for the view to
   settle before it counts `currentLocation` as a place the reader went to (#524).
