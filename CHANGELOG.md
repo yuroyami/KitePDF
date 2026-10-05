@@ -177,6 +177,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `TocEntry.spineIndex` counts the chapters an EPUB keeps. It counted the spine's itemrefs, so an
+  entry after a spine file missing from the zip pointed one chapter too far, and the last one past
+  the end of the book (#563).
 - An EPUB spine item whose fallback chain holds no XHTML or SVG document, and whose bytes are not
   markup, leaves the spine. Its bytes were laid out as text, so a disk image in the spine became
   23 pages of noise, and a book of nothing else now refuses to open with `EpubFormatException`.
