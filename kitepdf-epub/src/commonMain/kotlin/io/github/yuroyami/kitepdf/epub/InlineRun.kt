@@ -50,6 +50,10 @@ internal data class InlineRun(
     val smallCaps: Boolean = false,
     /** A word of this run that cannot fit a line of its own may break between two characters (#574). */
     val overflowWrap: Boolean = false,
+    /** `word-break: break-all`: a line may break between any two letters of a word (#508). */
+    val breakAll: Boolean = false,
+    /** `word-break: keep-all`: CJK letters join into words, as Latin ones do (#508). */
+    val keepAll: Boolean = false,
     /**
      * Inline `<img>`: the resolved zip path of the image this run stands for
      * ([text] is then a single U+FFFC object-replacement char). Sized at

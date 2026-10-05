@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
+import io.github.yuroyami.kitepdf.core.KiteLineEnd
 import io.github.yuroyami.kitepdf.core.KiteTextLine
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.epub.EpubDocument
@@ -248,6 +249,24 @@ internal object EpubConformanceChecks {
             starts.all { it > 0 } && (0..3).all { near(last[it].left, left) } && near(last[4].right, right) &&
                 near((last[5].left + last[5].right) / 2, (left + right) / 2) && near(last[6].left, left) && near(last[6].right, right) &&
                 (0..5).all { last[it].right - last[it].left < right - left - 1 }
+        }
+        // Three samples with a margin, so their lines are those indented from the page's: `normal`
+        // and `keep-all` keep every word of English text whole, and `break-all` breaks inside words
+        // and fills each line to its edge (#508).
+        check("css-epub-word-break") {
+            val lines = textLines(0)
+            val pageLeft = lines.minOf { it.bounds.left }
+            val marks = (1..3).map { n -> lines.indexOfFirst { it.text.trimStart().startsWith("$n. This test passes") } }
+            val samples = (0..2).map { n ->
+                if (marks.any { it < 0 }) emptyList()
+                else lines.subList(marks[n], if (n < 2) marks[n + 1] else lines.size).filter { it.bounds.left > pageLeft + 1 }
+            }
+            val inWord = samples.map { s -> s.count { it.end == KiteLineEnd.NONE || it.end == KiteLineEnd.HYPHEN } }
+            val all = samples[2]
+            val left = all.minOfOrNull { it.bounds.left } ?: 0.0
+            val right = all.maxOfOrNull { it.bounds.right } ?: 0.0
+            samples.all { it.size >= 3 } && inWord[1] == 0 && samples[0].none { it.end == KiteLineEnd.NONE } &&
+                all.count { it.end == KiteLineEnd.NONE } > 0 && all.dropLast(1).all { it.bounds.right > right - (right - left) * 0.05 }
         }
         check("css-epub-writing-mode") { verticalChapter(1) && verticalChapter(2) && !verticalChapter(0) }
         // Paragraph 2 asks for upright English and paragraph 3 for sideways Japanese.
