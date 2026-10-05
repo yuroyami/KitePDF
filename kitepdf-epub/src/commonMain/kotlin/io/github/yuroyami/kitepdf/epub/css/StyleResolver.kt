@@ -141,46 +141,117 @@ internal class StyleResolver(
             for (d in rule.declarations) offer(d.property, d.value, weight(rule.origin, d.important, spec, order))
         }
         val raw = value.remove("content") ?: return null
-        val content = parseContentValue(raw, el)?.takeIf { it.isNotEmpty() } ?: return null
-        return PseudoContent(build(elementStyle, value), content)
+        val parts = parseContentValue(raw) ?: return null
+        val style = build(elementStyle, value)
+        val content = generate(parts, el, ancestors, style.quotes).takeIf { it.isNotEmpty() } ?: return null
+        return PseudoContent(style, content)
     }
 
     /**
-     * `content:` value → text: quoted strings (CSS escapes decoded) and
-     * `attr(name)` concatenate; `none`/`normal` and anything with
-     * `counter()`/`counters()`/`url()` return null (rule inert).
+     * How deep in quotations the generated content so far stands: each `open-quote` goes one level
+     * in and each `close-quote` one out (CSS Generated Content 3, 2.4). The box builder asks for
+     * the generated content of each element once and in document order, and a resolver serves
+     * one build, so the count runs through the document as the spec counts it (#511).
      */
-    private fun parseContentValue(v: String, el: KiteXmlNode.Element): String? {
+    private var quoteDepth = 0
+
+    /** The text of [parts], for [el] with the `quotes` value [quotes], moving [quoteDepth] as its quote marks do. */
+    private fun generate(parts: List<ContentPart>, el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, quotes: List<String>?): String {
+        val marks by lazy { quotes ?: quoteMarks(contentLanguage(el, ancestors)) }
+        fun mark(level: Int, close: Boolean): String {
+            if (marks.size < 2) return ""
+            return marks[2 * minOf(level, marks.size / 2 - 1) + if (close) 1 else 0]
+        }
+        val sb = StringBuilder()
+        for (part in parts) when (part) {
+            is ContentPart.Text -> sb.append(part.text)
+            is ContentPart.Attr -> el.attrs[part.name]?.let(sb::append)
+            ContentPart.OpenQuote -> sb.append(mark(quoteDepth++, close = false))
+            ContentPart.NoOpenQuote -> quoteDepth++
+            ContentPart.CloseQuote -> if (quoteDepth > 0) sb.append(mark(--quoteDepth, close = true))
+            ContentPart.NoCloseQuote -> if (quoteDepth > 0) quoteDepth--
+        }
+        return sb.toString()
+    }
+
+    /** One component of a `content` value. */
+    private sealed class ContentPart {
+        class Text(val text: String) : ContentPart()
+        class Attr(val name: String) : ContentPart()
+        object OpenQuote : ContentPart()
+        object CloseQuote : ContentPart()
+        object NoOpenQuote : ContentPart()
+        object NoCloseQuote : ContentPart()
+    }
+
+    /**
+     * `content:` value → its components: quoted strings (CSS escapes decoded), `attr(name)` and
+     * the quote keywords; `none`/`normal` and anything with `counter()`/`counters()`/`url()`
+     * return null (rule inert).
+     */
+    private fun parseContentValue(v: String): List<ContentPart>? {
         val s = v.trim()
         val lower = s.lowercase()
         if (lower == "none" || lower == "normal") return null
         if ("counter(" in lower || "counters(" in lower || "url(" in lower) return null
-        val sb = StringBuilder()
-        var any = false
+        val parts = ArrayList<ContentPart>()
         var i = 0
         while (i < s.length) {
             val c = s[i]
+            val keyword = QUOTE_KEYWORDS.entries.firstOrNull { (word, _) ->
+                lower.startsWith(word, i) && (i + word.length == s.length || !isNameChar(s[i + word.length]))
+            }
             when {
                 c.isWhitespace() -> i++
                 c == '"' || c == '\'' -> {
                     var j = i + 1
                     while (j < s.length && s[j] != c) { if (s[j] == '\\' && j + 1 < s.length) j++; j++ }
                     if (j >= s.length) return null // unterminated string
-                    sb.append(cssUnescape(s.substring(i + 1, j))); any = true
+                    parts += ContentPart.Text(cssUnescape(s.substring(i + 1, j)))
                     i = j + 1
                 }
                 lower.startsWith("attr(", i) -> {
                     val close = s.indexOf(')', i)
                     if (close < 0) return null
-                    val name = s.substring(i + 5, close).trim().trim('"', '\'').lowercase()
-                    el.attrs[name]?.let(sb::append)
-                    any = true
+                    parts += ContentPart.Attr(s.substring(i + 5, close).trim().trim('"', '\'').lowercase())
                     i = close + 1
                 }
+                keyword != null -> { parts += keyword.value; i += keyword.key.length }
                 else -> return null // unknown component: whole value inert
             }
         }
-        return if (any) sb.toString() else null
+        return parts.ifEmpty { null }
+    }
+
+    private fun isNameChar(c: Char) = c.isLetterOrDigit() || c == '-' || c == '_'
+
+    /**
+     * A `quotes` value: `none`, `auto`, or pairs of strings, open then close for each level
+     * (CSS Generated Content 3, 2.4). Anything else keeps [current].
+     */
+    private fun quotesValue(v: String, current: List<String>?): List<String>? {
+        when (v.lowercase()) {
+            "none" -> return emptyList()
+            "auto", "initial" -> return null
+            "inherit" -> return current
+        }
+        val marks = ArrayList<String>()
+        var i = 0
+        while (i < v.length) {
+            val c = v[i]
+            when {
+                c.isWhitespace() -> i++
+                c == '"' || c == '\'' -> {
+                    var j = i + 1
+                    while (j < v.length && v[j] != c) { if (v[j] == '\\' && j + 1 < v.length) j++; j++ }
+                    if (j >= v.length) return current
+                    marks += cssUnescape(v.substring(i + 1, j))
+                    i = j + 1
+                }
+                else -> return current
+            }
+        }
+        return if (marks.isNotEmpty() && marks.size % 2 == 0) marks else current
     }
 
     /** Decode CSS string escapes: `\HHHHHH` (optional trailing space) and `\c` literals. */
@@ -469,6 +540,7 @@ internal class StyleResolver(
                 "vertical-lr" -> WritingMode.VERTICAL_LR
                 else -> WritingMode.HORIZONTAL
             }
+            "quotes" -> b.quotes = quotesValue(v.trim(), b.quotes)
             "text-transform" -> b.textTransform = when (v.trim().lowercase()) {
                 "uppercase" -> TextTransform.UPPERCASE
                 "lowercase" -> TextTransform.LOWERCASE
@@ -781,6 +853,7 @@ internal class StyleResolver(
         var ruleStyle = BorderStyle.NONE // not inherited
         var ruleColor: io.github.yuroyami.kitepdf.core.render.RgbColor? = null // currentColor; not inherited
         var columnSpanAll = false // not inherited
+        var quotes = parent.quotes // inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
@@ -834,11 +907,16 @@ internal class StyleResolver(
                     rule = Edge(ruleWidth, ruleColor ?: color, ruleStyle).takeIf { it.visible && ruleWidth > 0.0 },
                     spanAll = columnSpanAll,
                 ),
+                quotes = quotes,
             )
         }
     }
 
     private companion object {
+        val QUOTE_KEYWORDS = linkedMapOf(
+            "open-quote" to ContentPart.OpenQuote, "close-quote" to ContentPart.CloseQuote,
+            "no-open-quote" to ContentPart.NoOpenQuote, "no-close-quote" to ContentPart.NoCloseQuote,
+        )
         val POSITION_WORDS = setOf("left", "right", "top", "bottom", "center")
         const val INLINE_SPEC = 0xFFFFFF
         val WHITESPACE = Regex("\\s+")
