@@ -467,6 +467,25 @@ internal fun Modifier.kiteWheelPaging(
     }
 }
 
+/**
+ * Keeps [KiteDocViewState.mousePointer] on the kind of the last pointer over the view: a mouse
+ * that moves or presses there, or a finger or a pen that presses. A selection holds the strip's
+ * scrolling only against a finger or a pen, so a mouse keeps the wheel (#594). It reads the
+ * events on the Initial pass, before the strip sees them, and consumes nothing.
+ */
+internal fun Modifier.kitePointerKind(state: KiteDocViewState): Modifier =
+    pointerInput(state) {
+        awaitPointerEventScope {
+            while (true) {
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull() ?: continue
+                when (change.type) {
+                    PointerType.Mouse -> state.mousePointer = true
+                    PointerType.Touch, PointerType.Stylus, PointerType.Eraser -> if (change.pressed) state.mousePointer = false
+                }
+            }
+        }
+    }
+
 /** The quiet time after which the wheel can turn the next page. */
 private const val WHEEL_TURN_PAUSE_MILLIS = 150L
 
