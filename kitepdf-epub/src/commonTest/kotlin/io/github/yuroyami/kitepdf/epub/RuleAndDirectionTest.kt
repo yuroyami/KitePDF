@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** The horizontal rule, and alignment and list markers in right-to-left text. */
+/** The horizontal rule, and alignment, indent and list markers in right-to-left text. */
 class RuleAndDirectionTest {
 
     private fun open(body: String) =
@@ -63,5 +63,39 @@ class RuleAndDirectionTest {
             .pages[0].textContent().blocks
         assertEquals(48.0, blocks[0].lines[0].bounds.left, 1.0, "text-align:left stays at the left edge")
         assertEquals(352.0, blocks[1].lines[0].bounds.right, 1.0, "no alignment set: right-to-left text starts at the right")
+    }
+
+    @Test
+    fun a_right_to_left_paragraph_indents_and_ends_its_justified_text_at_the_right() {
+        // The content box runs from 48 to 352. A line starts at the right edge in right-to-left
+        // text, so the indent sits there, and so does a justified paragraph's last line (#572).
+        val words = "word ".repeat(40)
+        val blocks = open(
+            """<div dir="rtl"><p style="text-align:justify">${words}end</p><p style="text-indent:30pt">${words}end</p>""" +
+                """<p style="text-align:justify;text-indent:30pt">${words}end</p><p style="text-indent:-20pt;padding-right:20pt">${words}end</p></div>""" +
+                """<p style="text-align:justify;text-indent:30pt">${words}end</p>""",
+        ).pages[0].textContent().blocks
+        val justified = blocks[0].lines
+        assertTrue(justified.size > 2)
+        for (line in justified) assertEquals(352.0, line.bounds.right, 1.0, "every justified line ends at the right edge")
+        assertTrue(justified.last().bounds.left > 100.0, "the last line is short and stays at the right (${justified.last().bounds})")
+
+        val indented = blocks[1].lines
+        assertEquals(322.0, indented[0].bounds.right, 1.0, "the first line starts 30 points in from the right")
+        assertEquals(352.0, indented[1].bounds.right, 1.0, "the next line starts at the right edge")
+
+        val both = blocks[2].lines
+        assertEquals(48.0, both[0].bounds.left, 1.0, "a justified first line still reaches the left edge")
+        assertEquals(322.0, both[0].bounds.right, 1.0, "and leaves its indent at the right")
+        assertEquals(352.0, both.last().bounds.right, 1.0)
+
+        val hanging = blocks[3].lines
+        assertEquals(352.0, hanging[0].bounds.right, 1.0, "a negative indent hangs out past the right padding")
+        assertEquals(332.0, hanging[1].bounds.right, 1.0)
+
+        val leftToRight = blocks[4].lines
+        assertEquals(78.0, leftToRight[0].bounds.left, 1.0, "left-to-right text keeps its indent at the left")
+        assertEquals(352.0, leftToRight[0].bounds.right, 1.0)
+        assertEquals(48.0, leftToRight.last().bounds.left, 1.0, "and its last line at the left")
     }
 }

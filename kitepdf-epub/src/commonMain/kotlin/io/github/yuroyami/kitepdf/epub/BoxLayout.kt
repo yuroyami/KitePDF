@@ -1769,6 +1769,7 @@ internal class BoxLayout(
     ): List<PositionedLine> {
         val preserve = style.whiteSpace != WhiteSpaceMode.NORMAL && style.whiteSpace != WhiteSpaceMode.NOWRAP
         val baseLevel = if (style.direction == Direction.RTL) 1 else 0
+        val rtl = baseLevel == 1
         val align = resolvedAlign(style)
         // Float exclusions: per-line widths use an estimated constant line
         // height (the authored one, without ruby/image growth), so the widths
@@ -1831,22 +1832,25 @@ internal class BoxLayout(
             // spaces to stretch, the slack spreads across the inter-cell gaps
             // (JIS-style inter-character expansion). Latin-only spaceless lines
             // (one long word) are left ragged, as every real reader does.
-            if (align == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces == 0) {
-                justifyCjk(cells, slack)
-            }
+            val stretched = justify ||
+                align == TextAlign.JUSTIFY && i != cellLines.lastIndex && interiorSpaces == 0 && justifyCjk(cells, slack)
+            // A justified paragraph sets a line it does not stretch, its last one among them, at the
+            // start edge, as text-align-last: auto asks: the right one in right-to-left text (#572).
             val alignOffset = when {
-                justify -> 0.0
+                stretched -> 0.0
                 align == TextAlign.RIGHT -> slack
                 align == TextAlign.CENTER -> slack / 2
+                align == TextAlign.JUSTIFY && rtl -> slack
                 else -> 0.0
             }
-            val xStart = contentLeft + leftInset + firstIndent + alignOffset
+            // The first line's indent sits at its start edge, which is the right one in right-to-left
+            // text, where the slack before the line already leaves it room (#572).
+            val xStart = contentLeft + leftInset + (if (rtl) 0.0 else firstIndent) + alignOffset
 
             val placed = ArrayList<PlacedRun>()
             val images = ArrayList<PlacedImage>()
             val maths = ArrayList<PlacedMath>()
             if (i == 0 && marker != null) {
-                val rtl = style.direction == Direction.RTL
                 markerRun(marker, style.fontSizePt, contentLeft, contentLeft + contentW, rtl, markerColor)?.let(placed::add)
             }
             placed.addAll(placeRuns(cells, xStart, extraPerSpace, images, maths))
@@ -1926,13 +1930,14 @@ internal class BoxLayout(
      * CJK cells: distribute [slack] evenly over the gaps between content
      * cells by folding it into each cell's advance, exactly the mechanism
      * letter-spacing and kerning use, so wrap width and drawn pen agree.
+     * True when the line now fills its width.
      */
-    private fun justifyCjk(cells: List<Cell>, slack: Double) {
-        if (slack <= 0.0) return
+    private fun justifyCjk(cells: List<Cell>, slack: Double): Boolean {
+        if (slack <= 0.0) return true
         var last = cells.size - 1
         while (last >= 0 && cells[last].cp == ' '.code) last--
-        if (last < 1) return
-        if (cells.subList(0, last + 1).count { FontMetrics.isWide(it.cp) } < 2) return
+        if (last < 1) return false
+        if (cells.subList(0, last + 1).count { FontMetrics.isWide(it.cp) } < 2) return false
         val extra = slack / last // `last` = gap count between content cells
         for (k in 0 until last) {
             val c = cells[k]
@@ -1941,6 +1946,7 @@ internal class BoxLayout(
             c.kernAfter1000 += e1000
             c.width += e1000 * c.fontSize / 1000.0
         }
+        return true
     }
 
     /** Line content width (trailing spaces excluded) + interior space count (for justify). */

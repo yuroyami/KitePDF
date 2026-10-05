@@ -190,6 +190,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A right-to-left paragraph indents its first line from the right edge, where its lines start,
+  and a justified one sets its last line, and any other line it does not stretch, at the right
+  edge too. The indent used to sit at the left end of the first line, so an Arabic or Hebrew
+  paragraph showed none, and the last line of justified text sat against the left edge (#572).
+
 - A DOCTYPE with an internal subset ends after it, so a chapter whose DOCTYPE declares entities
   no longer shows `]>` at the top of its first page, and an SVG that Illustrator exported reads
   as it should. `KiteXml` reads the subset's general entities and expands a reference to one in
