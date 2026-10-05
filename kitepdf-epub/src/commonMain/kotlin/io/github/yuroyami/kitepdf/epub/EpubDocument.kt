@@ -3032,10 +3032,17 @@ public class EpubPage internal constructor(
         for (run in runs) {
             formulasBefore(run.x)
             var x = page.margin + run.x
-            // Words are separate runs with a pen gap where the collapsed space
-            // was; restore it as one space char spanning the gap. The smaller of
-            // the two sizes judges the gap, since either side may hold the space (#259).
-            if (!penEnd.isNaN() && x - penEnd > minOf(run.fontSize, penSize) * SPACE_GAP_EM && sb.isNotEmpty() && sb.last() != ' ') {
+            // Spaces the layout kept, two or more in preserved white space or the ones a line
+            // starts with, are each a space char spanning its share of their room (#576).
+            val n = run.spacesBefore
+            val leading = penEnd.isNaN() && sb.isEmpty() && only === line.runs
+            if (n >= 2 && !penEnd.isNaN() || n >= 1 && leading) {
+                val from = if (penEnd.isNaN()) x - run.spacesWidth else penEnd
+                for (k in 0 until n) { edges.add(from + (x - from) * k / n); sb.append(' ') }
+            } else if (!penEnd.isNaN() && x - penEnd > minOf(run.fontSize, penSize) * SPACE_GAP_EM && sb.isNotEmpty() && sb.last() != ' ') {
+                // Words are separate runs with a pen gap where the collapsed space
+                // was; restore it as one space char spanning the gap. The smaller of
+                // the two sizes judges the gap, since either side may hold the space (#259).
                 edges.add(penEnd); sb.append(' ')
             }
             for (g in run.glyphs) {

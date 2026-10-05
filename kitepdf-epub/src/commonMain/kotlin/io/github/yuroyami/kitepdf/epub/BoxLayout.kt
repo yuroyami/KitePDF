@@ -2699,6 +2699,9 @@ internal class BoxLayout(
         var openGroup = -1
         var groupStart = 0.0
         var groupCell: Cell? = null
+        // The spaces since the last run, a formula or an image, for the line's text (#576).
+        var spaces = 0
+        var spacesWidth = 0.0
         fun closeGroup(end: Double) {
             val gc = groupCell
             if (openGroup >= 0 && gc?.rubyText != null) out.add(rubyRun(gc, groupStart, end))
@@ -2715,6 +2718,7 @@ internal class BoxLayout(
                         lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, paintWidth = width, element = c.element,
                     ))
                 }
+                spaces++; spacesWidth += width
                 x += width; i++; continue
             }
             // A formula cell: emit a PlacedMath and advance the pen (#32).
@@ -2722,6 +2726,7 @@ internal class BoxLayout(
                 closeGroup(x)
                 mathSink?.add(PlacedMath(x + c.padBefore, c.math, c.color, c.mathText))
                 x += c.padBefore + c.width + c.padAfter
+                spaces = 0; spacesWidth = 0.0
                 i++
                 continue
             }
@@ -2732,6 +2737,7 @@ internal class BoxLayout(
                     PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt, c.imageObjectFit, c.imageZipPath, c.element),
                 )
                 x += c.padBefore + c.width + c.padAfter
+                spaces = 0; spacesWidth = 0.0
                 i++
                 continue
             }
@@ -2752,8 +2758,9 @@ internal class BoxLayout(
                 glyphs, startX, fs, spec, col, sh, ul,
                 hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000,
                 href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor,
-                paintWidth = x - startX, element = c.element,
+                paintWidth = x - startX, element = c.element, spacesBefore = spaces, spacesWidth = spacesWidth,
             ))
+            spaces = 0; spacesWidth = 0.0
         }
         closeGroup(x)
         return out

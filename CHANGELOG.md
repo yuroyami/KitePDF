@@ -207,6 +207,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Text copied or searched from a `<pre>` block, or any element with `white-space: pre` or
+  `pre-wrap`, keeps the spaces its layout kept: a run of spaces used to read as one and the
+  indentation at the start of a line was lost, so a code listing came out flat. The line text now
+  holds each space and the ones a line starts with, each spanning its share of their room, and
+  this holds for the no-break spaces that indent a paragraph as well (#576).
+
 - A no-break space no longer collapses into the space beside it or lets a line break there, so
   the run of them that a book converted from a word processor puts before a paragraph indents
   it, and a number stays on the line of its unit in `10&nbsp;km`, as it does with a narrow
