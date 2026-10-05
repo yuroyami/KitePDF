@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
+import io.github.yuroyami.kitepdf.core.KiteTextLine
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubEmbedKind
@@ -232,6 +233,22 @@ internal object EpubConformanceChecks {
         check("cnt-svg-embedded") { fills(0).count { it.isRgb(1.0, 0.0, 0.0) } >= 2 }
         check("cnt-svg-support") { fills(0).count { it.isRgb(1.0, 0.0, 0.0) } >= 2 && "Testpasses" in drawnText(0).replace(" ", "") }
         check("cnt-xhtml-support") { "Test passes if you see this." in text(0) }
+        // The last line of each of the seven samples, which is the line before the next numbered
+        // sentence, sits where its -epub-text-align-last puts it: auto, start, end in right-to-left
+        // text and left at the left edge, then right, center and justify (#508). The samples have a
+        // margin, so their edges are those of the lines indented from the page's.
+        check("css-epub-text-align-last") {
+            val lines = textLines(0)
+            val starts = (2..7).map { n -> lines.indexOfFirst { it.text.trimStart().startsWith("$n. This test passes") } }
+            val last = starts.map { lines[it - 1].bounds } + lines.last().bounds
+            val pageLeft = lines.minOf { it.bounds.left }
+            val samples = lines.filter { it.bounds.left > pageLeft + 1 }
+            val left = samples.minOf { it.bounds.left }
+            val right = samples.maxOf { it.bounds.right }
+            starts.all { it > 0 } && (0..3).all { near(last[it].left, left) } && near(last[4].right, right) &&
+                near((last[5].left + last[5].right) / 2, (left + right) / 2) && near(last[6].left, left) && near(last[6].right, right) &&
+                (0..5).all { last[it].right - last[it].left < right - left - 1 }
+        }
         check("css-epub-writing-mode") { verticalChapter(1) && verticalChapter(2) && !verticalChapter(0) }
         // Paragraph 2 asks for upright English and paragraph 3 for sideways Japanese.
         check("css-epub-text-orientation") {
@@ -253,6 +270,10 @@ internal object EpubConformanceChecks {
             val letters = run.text.filter { it.isLetter() }
             letters.isNotEmpty() && letters.all { (it.code < 0x2E80) == latin } && (abs(run.textToDevice.b) > 1e-9) == turned
         }
+
+    /** Every line of [chapter], page after page. */
+    private fun W3cTestBook.textLines(chapter: Int): List<KiteTextLine> =
+        (0 until pages(chapter)).flatMap { p -> page(chapter, p).textContent().blocks.flatMap { it.lines } }
 
     private fun W3cTestBook.verticalChapter(chapter: Int): Boolean {
         var down = 0

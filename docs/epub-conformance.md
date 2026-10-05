@@ -9,10 +9,10 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
 | must | 140 | 118 | 18 | 4 |
-| should | 38 | 19 | 18 | 1 |
+| should | 38 | 20 | 17 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 162 | 38 | 6 |
+| all | 206 | 163 | 37 | 6 |
 
 ## How the results are known
 
@@ -130,7 +130,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`cnt-xhtml-support`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-xhtml-support) | must | Passes | Checked: The XHTML chapter shows its pass sentence. |
 | [`css-epub-hyphens`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-hyphens) | should | Passes | Judged: `-epub-hyphens` is read: `none` never hyphenates, `manual` breaks at soft hyphens and `auto` hyphenates by the language's patterns. At the test's page width no line happens to end on a break point, so this is judged from the code and narrower pages. |
 | [`css-epub-line-break`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-line-break) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: The Japanese text wraps at the page edge, but `-epub-line-break` is not read, so its four values lay out alike. |
-| [`css-epub-text-align-last`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-align-last) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: `-epub-text-align-last` is not read: the last lines of the right and centre blocks are left-aligned. |
+| [`css-epub-text-align-last`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-align-last) | should | Passes | Checked: The last line of each sample sits where its `-epub-text-align-last` puts it: at the left edge for `auto`, `start`, `left` and `end` in right-to-left text, at the right edge for `right`, centred for `center`, and across the line for `justify`. |
 | [`css-epub-text-combine-horizontal`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-combine-horizontal) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: `-epub-text-combine-horizontal` is not read: the digits stay one sideways run in the vertical column. |
 | [`css-epub-text-emphasis`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-emphasis) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: The `-epub-text-emphasis` properties are not read: no emphasis marks draw. |
 | [`css-epub-text-orientation`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-orientation) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Checked: The test's second chapter lays out vertically, but `text-orientation` is not read: no English letter stands upright and no Japanese one turns sideways. |

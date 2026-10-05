@@ -17,7 +17,7 @@
     "cnt-xhtml-support": true,
     "css-epub-hyphens": true,
     "css-epub-line-break": false,
-    "css-epub-text-align-last": false,
+    "css-epub-text-align-last": true,
     "css-epub-text-combine-horizontal": false,
     "css-epub-text-emphasis": false,
     "css-epub-text-orientation": false,

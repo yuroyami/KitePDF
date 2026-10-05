@@ -1493,10 +1493,12 @@ internal class BoxLayout(
     }
 
     /** `start` and `end` resolve against the text direction; `left` and `right` never flip (#169). */
-    private fun resolvedAlign(style: ComputedStyle): TextAlign = when (style.textAlign) {
-        TextAlign.START -> if (style.direction == Direction.RTL) TextAlign.RIGHT else TextAlign.LEFT
-        TextAlign.END -> if (style.direction == Direction.RTL) TextAlign.LEFT else TextAlign.RIGHT
-        else -> style.textAlign
+    private fun resolvedAlign(style: ComputedStyle): TextAlign = resolvedAlign(style.textAlign, style.direction)
+
+    private fun resolvedAlign(align: TextAlign, direction: Direction): TextAlign = when (align) {
+        TextAlign.START -> if (direction == Direction.RTL) TextAlign.RIGHT else TextAlign.LEFT
+        TextAlign.END -> if (direction == Direction.RTL) TextAlign.LEFT else TextAlign.RIGHT
+        else -> align
     }
 
     // ---- tables --------------------------------------------------------------
@@ -1771,6 +1773,10 @@ internal class BoxLayout(
         val baseLevel = if (style.direction == Direction.RTL) 1 else 0
         val rtl = baseLevel == 1
         val align = resolvedAlign(style)
+        // The last line, and a line that a forced break ends, align as text-align-last says, and
+        // with its auto as text-align does, but at the start where that justifies (#508, #573).
+        val lastAlign = style.textAlignLast?.let { resolvedAlign(it, style.direction) }
+            ?: if (align == TextAlign.JUSTIFY) resolvedAlign(TextAlign.START, style.direction) else align
         // Float exclusions: per-line widths use an estimated constant line
         // height (the authored one, without ruby/image growth), so the widths
         // the wrapper saw and the x-offsets painted below stay consistent.
@@ -1826,24 +1832,23 @@ internal class BoxLayout(
             val (lineWidth, interiorSpaces) = measure(cells)
             val firstIndent = if (i == 0) style.textIndentPt else 0.0
             val slack = (lineAvail - lineWidth - firstIndent).coerceAtLeast(0.0)
-            // The last line, and a line that a forced break ends, are not stretched (CSS Text 3,
-            // text-align-last, #573).
             val lastOfRun = i == cellLines.lastIndex || ends.getOrNull(i) == KiteLineEnd.HARD
-            val justify = align == TextAlign.JUSTIFY && !lastOfRun && interiorSpaces > 0
+            val lineAlign = if (lastOfRun) lastAlign else align
+            val justify = lineAlign == TextAlign.JUSTIFY && interiorSpaces > 0
             val extraPerSpace = if (justify) slack / interiorSpaces else 0.0
             // Spaceless CJK lines justify between characters: with no interior
             // spaces to stretch, the slack spreads across the inter-cell gaps
             // (JIS-style inter-character expansion). Latin-only spaceless lines
             // (one long word) are left ragged, as every real reader does.
             val stretched = justify ||
-                align == TextAlign.JUSTIFY && !lastOfRun && interiorSpaces == 0 && justifyCjk(cells, slack)
-            // A justified paragraph sets a line it does not stretch, its last one among them, at the
-            // start edge, as text-align-last: auto asks: the right one in right-to-left text (#572).
+                lineAlign == TextAlign.JUSTIFY && interiorSpaces == 0 && justifyCjk(cells, slack)
+            // A justified line that cannot stretch sits at the start edge, the right one in
+            // right-to-left text (#572).
             val alignOffset = when {
                 stretched -> 0.0
-                align == TextAlign.RIGHT -> slack
-                align == TextAlign.CENTER -> slack / 2
-                align == TextAlign.JUSTIFY && rtl -> slack
+                lineAlign == TextAlign.RIGHT -> slack
+                lineAlign == TextAlign.CENTER -> slack / 2
+                lineAlign == TextAlign.JUSTIFY && rtl -> slack
                 else -> 0.0
             }
             // The first line's indent sits at its start edge, which is the right one in right-to-left
