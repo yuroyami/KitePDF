@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 111 | 25 | 4 |
+| must | 140 | 118 | 18 | 4 |
 | should | 38 | 19 | 18 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 155 | 45 | 6 |
+| all | 206 | 162 | 38 | 6 |
 
 ## How the results are known
 
@@ -143,14 +143,14 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 
 | Test | Level | Result | How it is known |
 |---|---|---|---|
-| [`pkg-dir-auto_root-rtl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir-auto_root-rtl) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The title is a plain string with no direction, so a host cannot show it with the direction its `dir` gives. |
-| [`pkg-dir-auto_root-unset`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir-auto_root-unset) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The title is a plain string with no direction, so a host cannot show it with the direction its `dir` gives. |
+| [`pkg-dir-auto_root-rtl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir-auto_root-rtl) | must | Passes | Checked: `epubMetadata.titleRightToLeft` is false, since the title's own `auto` goes by its first strong character, the Latin C of "CSS:", over the package's `rtl`, so the title displays incorrectly as the test expects. |
+| [`pkg-dir-auto_root-unset`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir-auto_root-unset) | must | Passes | Checked: `epubMetadata.titleRightToLeft` is false, since the title's `auto` goes by its first strong character, the Latin C of "CSS:", so the title displays incorrectly as the test expects. |
 | [`pkg-dir_but_not_content`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_but_not_content) | must | Passes | Checked: The list reads left to right: the package's `dir` does not reach the content. |
-| [`pkg-dir_creator-rtl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_creator-rtl) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The creator is a plain string with no direction, so a host cannot show it right to left. |
-| [`pkg-dir_rtl-root-ltr`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_rtl-root-ltr) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The title is a plain string with no direction, so a host cannot show it with the direction its `dir` gives. |
-| [`pkg-dir_rtl-root-unset`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_rtl-root-unset) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The title is a plain string with no direction, so a host cannot show it with the direction its `dir` gives. |
-| [`pkg-dir_unset-root-rtl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_unset-root-rtl) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The title is a plain string with no direction, so a host cannot show it with the direction the package's `dir` gives. |
-| [`pkg-dir_unset-root-unset`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_unset-root-unset) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The title is a plain string with no direction, so a host cannot show it with the direction its `dir` gives. |
+| [`pkg-dir_creator-rtl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_creator-rtl) | must | Passes | Checked: `epubMetadata.creatorsRightToLeft` says the one creator reads right to left by its own `dir`. |
+| [`pkg-dir_rtl-root-ltr`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_rtl-root-ltr) | must | Passes | Checked: `epubMetadata.titleRightToLeft` is true, since the title's own `rtl` wins over the package's `ltr`. |
+| [`pkg-dir_rtl-root-unset`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_rtl-root-unset) | must | Passes | Checked: `epubMetadata.titleRightToLeft` is true by the title's own `rtl`. |
+| [`pkg-dir_unset-root-rtl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_unset-root-rtl) | must | Passes | Checked: `epubMetadata.titleRightToLeft` is true by the package's `rtl`, which the title inherits. |
+| [`pkg-dir_unset-root-unset`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_unset-root-unset) | must | Passes | Checked: `epubMetadata.titleRightToLeft` is false, since with no `dir` anywhere the title goes by its first strong character, the Latin C of "CSS:", so it displays incorrectly as the test expects. |
 | [`pkg-lang_but_not_content`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-lang_but_not_content) | must | Passes | Checked: The `q` element shows English quotation marks, not the French ones of the package language. |
 | [`pkg-spine-progression-default`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-progression-default) | must | Passes | Checked: The book of Arabic language with a default spine progresses right to left. |
 | [`pkg-spine-progression-pre-paginated`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-progression-pre-paginated) | must | Passes | Checked: The pages progress left to right and pair into spreads with the first page on the left. |

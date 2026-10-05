@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** OPF metadata + EPUB 3 nav.xhtml / EPUB 2 toc.ncx navigation. */
@@ -79,6 +80,61 @@ class MetadataTocTest {
         assertEquals("urn:uuid:one", m.identifier)
         assertEquals(EpubLayout.PRE_PAGINATED, m.rendition.layout)
         assertEquals(EpubSpread.NONE, m.rendition.spread)
+    }
+
+    /** The metadata of a book whose package carries [packageDir] and whose metadata is [metadata]. */
+    private fun directed(packageDir: String?, metadata: String): EpubMetadata {
+        val dir = packageDir?.let { " dir=\"$it\"" }.orEmpty()
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id"$dir>
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                <dc:identifier id="pub-id">urn:uuid:dir</dc:identifier>
+                $metadata
+              </metadata>
+              <manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
+              <spine><itemref idref="c1"/></spine>
+            </package>"""
+        return EpubDocument.open(pkg(opf, listOf("OEBPS/ch1.xhtml" to chapter("hi")))).epubMetadata
+    }
+
+    @Test
+    fun a_title_takes_its_own_dir_else_the_package_dir_else_its_first_strong_character() {
+        // EPUB 3.3, the dir attribute: ltr or rtl sets the base direction, and anything else leaves
+        // it to the first strong character, rule P2 of the Unicode Bidi Algorithm (#510).
+        val arabicAfterLatin = "<dc:title xml:lang=\"ar\"%s>CSS: مغامرة جديدة!</dc:title>"
+        fun title(packageDir: String?, titleDir: String?): Boolean {
+            val m = directed(packageDir, arabicAfterLatin.replace("%s", titleDir?.let { " dir=\"$it\"" }.orEmpty()))
+            assertEquals("CSS: مغامرة جديدة!", m.title)
+            return m.titleRightToLeft
+        }
+        assertTrue(title(packageDir = null, titleDir = "rtl"), "the title's rtl")
+        assertTrue(title(packageDir = "ltr", titleDir = "rtl"), "the title's rtl over the package's ltr")
+        assertTrue(title(packageDir = "rtl", titleDir = null), "the package's rtl, which the title inherits")
+        assertTrue(title(packageDir = "rtl", titleDir = "sideways"), "a dir that is not a direction is no dir")
+        assertFalse(title(packageDir = "rtl", titleDir = "ltr"), "the title's ltr over the package's rtl")
+        assertFalse(title(packageDir = "rtl", titleDir = "auto"), "auto goes by the first strong character, the Latin C")
+        assertFalse(title(packageDir = null, titleDir = "auto"), "auto goes by the first strong character, the Latin C")
+        assertFalse(title(packageDir = null, titleDir = null), "no dir goes by the first strong character, the Latin C")
+        assertFalse(title(packageDir = "auto", titleDir = null), "the package's auto goes by the first strong character")
+
+        val hebrewFirst = directed(null, "<dc:title dir=\"auto\">הרפתקה CSS</dc:title>")
+        assertTrue(hebrewFirst.titleRightToLeft, "auto goes by the first strong character, the Hebrew he")
+        assertFalse(directed("rtl", "").titleRightToLeft, "no title reads left to right")
+    }
+
+    @Test
+    fun each_creator_takes_its_own_base_direction() {
+        val m = directed(
+            "rtl",
+            """<dc:title>t</dc:title>
+               <dc:creator dir="ltr">Dave Cramer</dc:creator>
+               <dc:creator>   </dc:creator>
+               <dc:creator dir="auto">Ivan Herman</dc:creator>
+               <dc:creator>Wendy Reid</dc:creator>
+               <dc:creator dir="auto">  علي  </dc:creator>""",
+        )
+        assertEquals(listOf("Dave Cramer", "Ivan Herman", "Wendy Reid", "علي"), m.creators)
+        assertEquals(listOf(false, false, true, true), m.creatorsRightToLeft, "parallel to the creators, without the empty one")
     }
 
     @Test

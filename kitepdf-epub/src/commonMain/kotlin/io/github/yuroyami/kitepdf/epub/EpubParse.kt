@@ -609,6 +609,8 @@ internal class ParsedEpub(
                 pronunciationLexicons = opf.items.filter { it.mediaType?.lowercase() == "application/pls+xml" }
                     .map { EpubDocument.resolvePath(opf.baseDir, it.href) },
                 narration = opf.narration,
+                titleRightToLeft = opf.title?.let { readsRightToLeft(it, opf.titleDir, opf.packageDir) } == true,
+                creatorsRightToLeft = opf.creators.mapIndexed { i, name -> readsRightToLeft(name, opf.creatorDirs.getOrNull(i), opf.packageDir) },
             )
         }
 

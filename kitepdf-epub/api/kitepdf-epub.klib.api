@@ -309,6 +309,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubMetadata { // io.github.yuroyami
         final fun <get-coverImagePath>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.coverImagePath.<get-coverImagePath>|<get-coverImagePath>(){}[0]
     final val creators // io.github.yuroyami.kitepdf.epub/EpubMetadata.creators|{}creators[0]
         final fun <get-creators>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.epub/EpubMetadata.creators.<get-creators>|<get-creators>(){}[0]
+    final val creatorsRightToLeft // io.github.yuroyami.kitepdf.epub/EpubMetadata.creatorsRightToLeft|{}creatorsRightToLeft[0]
+        final fun <get-creatorsRightToLeft>(): kotlin.collections/List<kotlin/Boolean> // io.github.yuroyami.kitepdf.epub/EpubMetadata.creatorsRightToLeft.<get-creatorsRightToLeft>|<get-creatorsRightToLeft>(){}[0]
     final val identifier // io.github.yuroyami.kitepdf.epub/EpubMetadata.identifier|{}identifier[0]
         final fun <get-identifier>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.identifier.<get-identifier>|<get-identifier>(){}[0]
     final val language // io.github.yuroyami.kitepdf.epub/EpubMetadata.language|{}language[0]
@@ -323,6 +325,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubMetadata { // io.github.yuroyami
         final fun <get-rightToLeft>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubMetadata.rightToLeft.<get-rightToLeft>|<get-rightToLeft>(){}[0]
     final val title // io.github.yuroyami.kitepdf.epub/EpubMetadata.title|{}title[0]
         final fun <get-title>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMetadata.title.<get-title>|<get-title>(){}[0]
+    final val titleRightToLeft // io.github.yuroyami.kitepdf.epub/EpubMetadata.titleRightToLeft|{}titleRightToLeft[0]
+        final fun <get-titleRightToLeft>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubMetadata.titleRightToLeft.<get-titleRightToLeft>|<get-titleRightToLeft>(){}[0]
 
     final object Companion // io.github.yuroyami.kitepdf.epub/EpubMetadata.Companion|null[0]
 }
