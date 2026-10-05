@@ -58,7 +58,8 @@ import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
-import io.github.yuroyami.kitepdf.core.text.Bidi
+import io.github.yuroyami.kitepdf.core.render.drawOrderParts
+import io.github.yuroyami.kitepdf.core.render.spacedPieces
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.sqrt
@@ -1265,91 +1266,6 @@ internal fun systemFontMetricScale(
     val scale = targetWidthPx / measuredWidthPx
     val floatScale = scale.toFloat()
     return if (floatScale.isFinite() && floatScale > 0f) floatScale else 1f
-}
-
-/**
- * [glyphs] cut into pieces that each shape as one unit. A glyph that the document
- * spaces after, by character or word spacing, ends its piece, and a spaced blank
- * glyph is a piece of its own. A run without spacing stays one piece, which keeps
- * its ligatures and combining marks.
- */
-internal fun spacedPieces(glyphs: List<TextGlyph>): List<List<TextGlyph>> {
-    val pieces = ArrayList<List<TextGlyph>>()
-    var start = 0
-    for (i in glyphs.indices) {
-        val glyph = glyphs[i]
-        if (glyph.advanceAdjust == 0.0) continue
-        if (glyph.text.isBlank() && start < i) {
-            pieces += glyphs.subList(start, i)
-            start = i
-        }
-        pieces += glyphs.subList(start, i + 1)
-        start = i + 1
-    }
-    if (start < glyphs.size) pieces += glyphs.subList(start, glyphs.size)
-    return pieces
-}
-
-/** Glyphs of a piece that a text engine draws as one string, [offset] advance units from the piece's start. */
-internal class DrawOrderPart(val glyphs: List<TextGlyph>, val text: String, val offset: Double)
-
-/**
- * [piece], which is in the order it draws, left to right, as the strings a text engine draws in
- * that order (#486). A text engine runs the bidi algorithm, so it would reverse right-to-left
- * letters the layout already reversed. A piece without them stays one part, as it was. Otherwise
- * it is cut where the strong direction changes, and a right-to-left part goes back to logical
- * order inside a right-to-left override, so the engine joins Arabic letters with their logical
- * neighbours and lays them out right to left, which is the order they came in. A left-to-right
- * part beside it takes a left-to-right override, so that its digits and punctuation stay put.
- */
-internal fun drawOrderParts(piece: List<TextGlyph>): List<DrawOrderPart> {
-    val directions = IntArray(piece.size) { strongDirection(piece[it].text) }
-    if (directions.none { it == RIGHT_TO_LEFT }) {
-        return listOf(DrawOrderPart(piece, piece.joinToString("") { it.text }, 0.0))
-    }
-    val parts = ArrayList<DrawOrderPart>()
-    var start = 0
-    var offset = 0.0
-    var direction = directions.first { it != NEUTRAL }
-    fun close(end: Int) {
-        val glyphs = piece.subList(start, end)
-        val text = if (direction == RIGHT_TO_LEFT) {
-            glyphs.asReversed().joinToString("", prefix = "\u202E", postfix = "\u202C") { it.text }
-        } else {
-            glyphs.joinToString("", prefix = "\u202D", postfix = "\u202C") { it.text }
-        }
-        parts += DrawOrderPart(glyphs, text, offset)
-        offset += glyphs.sumOf { it.advanceWidth }
-        start = end
-    }
-    for (i in piece.indices) {
-        val d = directions[i]
-        if (d == NEUTRAL || d == direction) continue
-        close(i)
-        direction = d
-    }
-    close(piece.size)
-    return parts
-}
-
-private const val NEUTRAL = -1
-private const val LEFT_TO_RIGHT = 0
-private const val RIGHT_TO_LEFT = 1
-
-/** The direction of the first strong character of [text], or [NEUTRAL] when it has none. */
-private fun strongDirection(text: String): Int {
-    var i = 0
-    while (i < text.length) {
-        val high = text[i]
-        val pair = high.isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()
-        val cp = if (pair) 0x10000 + ((high.code - 0xD800) shl 10) + (text[i + 1].code - 0xDC00) else high.code
-        when (Bidi.classify(cp)) {
-            Bidi.L -> return LEFT_TO_RIGHT
-            Bidi.R, Bidi.AL -> return RIGHT_TO_LEFT
-        }
-        i += if (pair) 2 else 1
-    }
-    return NEUTRAL
 }
 
 /**

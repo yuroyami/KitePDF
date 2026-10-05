@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.render.HostTextPart
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
@@ -19,11 +20,13 @@ import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
+import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
+import io.github.yuroyami.kitepdf.core.text.Bidi
 import org.jetbrains.skia.BlendMode as SkiaBlendMode
 import org.jetbrains.skia.Canvas as SkCanvas
 import org.jetbrains.skia.Color
@@ -45,6 +48,15 @@ import org.jetbrains.skia.PathVerb
 import org.jetbrains.skia.Shader
 import org.jetbrains.skia.TextBlob
 import org.jetbrains.skia.TextBlobBuilder
+import org.jetbrains.skia.Point
+import org.jetbrains.skia.shaper.FontRun
+import org.jetbrains.skia.shaper.HbIcuScriptRunIterator
+import org.jetbrains.skia.shaper.RunHandler
+import org.jetbrains.skia.shaper.RunInfo
+import org.jetbrains.skia.shaper.Shaper
+import org.jetbrains.skia.shaper.ShapingOptions
+import org.jetbrains.skia.shaper.TrivialBidiRunIterator
+import org.jetbrains.skia.shaper.TrivialLanguageRunIterator
 import org.jetbrains.skia.Gradient
 import org.jetbrains.skia.Color4f
 import org.jetbrains.skia.FilterTileMode
@@ -269,17 +281,106 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         // instead and leave the warning trail a blank page never gives.
         val typeface = systemTypeface(fontSpec) ?: return
         val skFont = Font(typeface, renderedSize)
-        // renderedSize already carries sy, so the text-space adjustment needs it too.
-        val run = placedRun(glyphs, skFont, renderedSize / 1000.0, sy, fontSpec) ?: return
+        val advanceScale = renderedSize / 1000.0
         canvas.save()
         try {
             canvas.translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
             if (rotationDeg != 0f) canvas.rotate(rotationDeg)
             if (sx != sy && sy != 0.0) canvas.scale((sx / sy).toFloat(), 1f)
-            canvas.drawTextBlob(run, 0f, 0f, paint)
+            // renderedSize already carries sy, so the text-space adjustment needs it too.
+            for (part in hostTextParts(glyphs, advanceScale, sy)) {
+                if (part.shaped) {
+                    drawShapedPart(part, skFont, paint, fontSpec)
+                    continue
+                }
+                val run = placedRun(part.glyphs, skFont, advanceScale, sy, fontSpec) ?: continue
+                canvas.drawTextBlob(run, part.x.toFloat(), 0f, paint)
+            }
         } finally {
             canvas.restore()
         }
+    }
+
+    /**
+     * [part] as one line that Skia's shaper shapes, so Arabic letters join (#588), in [font] or,
+     * for the characters it lacks, a host face that has them, fitted to the width the document
+     * gives its glyphs. The part's direction, script and language go to the shaper as runs of
+     * their own: shaping a line with Skia's own bidi and font fallback costs some 4 ms a word.
+     */
+    private fun drawShapedPart(part: HostTextPart, font: Font, paint: Paint, spec: FontSpec) {
+        val text = (if (part.rightToLeft) part.glyphs.asReversed() else part.glyphs).joinToString("") { it.text }
+        val shaper = shaper ?: Shaper.makeShapeThenWrap().also { shaper = it }
+        val handler = BlobRunHandler()
+        val scripts = HbIcuScriptRunIterator(text)
+        try {
+            shaper.shape(
+                text, fontRuns(text, font, spec).iterator(), TrivialBidiRunIterator(text, if (part.rightToLeft) 1 else 0),
+                scripts, TrivialLanguageRunIterator(text, spec.language ?: ""), ShapingOptions.DEFAULT,
+                Float.POSITIVE_INFINITY, handler,
+            )
+        } finally {
+            scripts.close()
+        }
+        val blob = handler.builder.build() ?: return
+        canvas.save()
+        try {
+            canvas.translate(part.x.toFloat(), 0f)
+            if (handler.width > 0f && part.width > 0.0) canvas.scale((part.width / handler.width).toFloat(), 1f)
+            canvas.drawTextBlob(blob, 0f, 0f, paint)
+        } finally {
+            canvas.restore()
+        }
+    }
+
+    /** The shaper of [drawShapedPart], made when this canvas first shapes text. */
+    private var shaper: Shaper? = null
+
+    /**
+     * [text] cut into runs by the face that draws them: the face of the run before where it has
+     * the character, else [font], else a host face that has it (#587). A format character, such
+     * as a joiner, stays in the run before, since the shaper draws it as nothing.
+     */
+    private fun fontRuns(text: String, font: Font, spec: FontSpec): List<FontRun> {
+        val style = font.typeface?.fontStyle ?: FontStyle.NORMAL
+        val runs = ArrayList<FontRun>()
+        var current = font
+        var i = 0
+        while (i < text.length) {
+            val pair = text[i].isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()
+            val cp = if (pair) 0x10000 + ((text[i].code - 0xD800) shl 10) + (text[i + 1].code - 0xDC00) else text[i].code
+            val face = when {
+                current.getUTF32Glyph(cp) != 0.toShort() || Bidi.classify(cp) == Bidi.BN -> current
+                font.getUTF32Glyph(cp) != 0.toShort() -> font
+                else -> SkiaSystemFonts.fallback(spec, style, cp)?.let { Font(it, font.size) } ?: current
+            }
+            if (face !== current) {
+                if (i > 0) runs += FontRun(i, current)
+                current = face
+            }
+            i += if (pair) 2 else 1
+        }
+        runs += FontRun(text.length, current)
+        return runs
+    }
+
+    /** What Skia's shaper places on a line, as a text blob, and the line's [width]. */
+    private class BlobRunHandler : RunHandler {
+        val builder = TextBlobBuilder()
+        var width = 0f
+            private set
+
+        override fun beginLine() {}
+        override fun runInfo(info: RunInfo?) {}
+        override fun commitRunInfo() {}
+        override fun runOffset(info: RunInfo?): Point = Point(width, 0f)
+        override fun commitRun(info: RunInfo?, glyphs: ShortArray?, positions: Array<Point?>?, clusters: IntArray?) {
+            if (info == null) return
+            if (glyphs != null && positions != null && glyphs.isNotEmpty()) {
+                builder.appendRunPos(info.font, glyphs, Array(positions.size) { positions[it] ?: Point(0f, 0f) })
+            }
+            width += info.advanceX
+        }
+        override fun commitLine() {}
     }
 
     /**

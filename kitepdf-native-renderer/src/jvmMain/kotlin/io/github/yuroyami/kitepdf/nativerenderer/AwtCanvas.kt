@@ -20,7 +20,9 @@ import io.github.yuroyami.kitepdf.core.render.KiteRasterStep
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.HostTextPart
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
+import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
@@ -37,6 +39,7 @@ import java.awt.Graphics2D
 import java.awt.LinearGradientPaint
 import java.awt.MultipleGradientPaint
 import java.awt.RenderingHints
+import java.awt.font.TextLayout
 import java.awt.geom.AffineTransform
 import java.awt.geom.Path2D
 import java.awt.geom.Point2D
@@ -333,20 +336,42 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
                 val logical = if (face == null) font else systemFontFor(fontSpec, renderedSize.toFloat(), null)
                 // Position each glyph by the PDF's OWN advance widths (1/1000 em),
                 // not the substitute font's natural metrics, otherwise spacing
-                // drifts and glyphs crowd together / overlap.
-                var penX = 0.0
+                // drifts and glyphs crowd together / overlap. advScale already carries
+                // sy (renderedSize), so the text-space spacing adjust needs it too.
                 val advScale = renderedSize / 1000.0
-                for (glyph in glyphs) {
-                    val t = glyph.text
-                    if (t.isNotEmpty() && t != " ") {
-                        g.font = displayFont(font, logical, t)
-                        g.drawString(t, penX.toFloat(), 0f)
+                for (part in hostTextParts(glyphs, advScale, sy)) {
+                    if (part.shaped) {
+                        drawShapedPart(part, font, logical)
+                        continue
                     }
-                    // advScale already carries sy (renderedSize), so the text-space
-                    // spacing adjust needs the same factor to stay in step.
-                    penX += glyph.advanceWidth * advScale + glyph.advanceAdjust * sy
+                    var x = part.x
+                    for (glyph in part.glyphs) {
+                        val t = glyph.text
+                        if (t.isNotEmpty() && t != " ") {
+                            g.font = displayFont(font, logical, t)
+                            g.drawString(t, x.toFloat(), 0f)
+                        }
+                        x += glyph.advanceWidth * advScale
+                    }
                 }
             }
+        } finally {
+            g.transform = saved
+        }
+    }
+
+    /**
+     * [part] as one string, which Java2D shapes and orders, so Arabic letters join (#588), fitted
+     * to the width the document gives its glyphs.
+     */
+    private fun drawShapedPart(part: HostTextPart, font: Font, logical: Font) {
+        g.font = displayFont(font, logical, part.glyphs.joinToString("") { it.text })
+        val natural = TextLayout(part.text, g.font, g.fontRenderContext).advance
+        val saved = g.transform
+        try {
+            g.translate(part.x, 0.0)
+            if (natural > 0f && part.width > 0.0) g.scale(part.width / natural, 1.0)
+            g.drawString(part.text, 0f, 0f)
         } finally {
             g.transform = saved
         }

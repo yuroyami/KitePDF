@@ -29,6 +29,8 @@ kotlin {
         // BlendMode (Paint.setBlendMode) requires API 29. Below that, blend
         // modes silently fall back to SRC_OVER.
         minSdk = 29
+        // AndroidNativeCanvas draws with Android's own Skia under Robolectric's native graphics.
+        withHostTest { isIncludeAndroidResources = true }
     }
 
     jvm()
@@ -76,6 +78,10 @@ kotlin {
 
         commonTest.dependencies {
             implementation(kotlin("test"))
+        }
+
+        getByName("androidHostTest").dependencies {
+            implementation(libs.robolectric)
         }
 
         // The EPUB handler is a test-only dependency: it lets the JVM difftest

@@ -1250,6 +1250,15 @@ public final class io/github/yuroyami/kitepdf/core/parser/Token$StringLiteral : 
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/yuroyami/kitepdf/core/render/DrawOrderPart {
+	public fun <init> (Ljava/util/List;Ljava/lang/String;DZ)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;DZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getGlyphs ()Ljava/util/List;
+	public final fun getOffset ()D
+	public final fun getRightToLeft ()Z
+	public final fun getText ()Ljava/lang/String;
+}
+
 public final class io/github/yuroyami/kitepdf/core/render/ExtGState {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/render/ExtGState$Companion;
 	public fun <init> ()V
@@ -1379,6 +1388,24 @@ public final class io/github/yuroyami/kitepdf/core/render/GraphicsState {
 public final class io/github/yuroyami/kitepdf/core/render/GraphicsStateKt {
 	public static final fun applyExtGState (Lio/github/yuroyami/kitepdf/core/render/GraphicsState;Lio/github/yuroyami/kitepdf/core/render/ExtGState;)Lio/github/yuroyami/kitepdf/core/render/GraphicsState;
 	public static final fun withColorRendering (Lio/github/yuroyami/kitepdf/core/render/GraphicsState;Lio/github/yuroyami/kitepdf/core/render/KiteRenderingIntent;Z)Lio/github/yuroyami/kitepdf/core/render/GraphicsState;
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/HostTextPart {
+	public fun <init> (Ljava/util/List;Ljava/lang/String;DDZZ)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;DDZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getGlyphs ()Ljava/util/List;
+	public final fun getRightToLeft ()Z
+	public final fun getShaped ()Z
+	public final fun getText ()Ljava/lang/String;
+	public final fun getWidth ()D
+	public final fun getX ()D
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/HostTextPartsKt {
+	public static final fun drawOrderParts (Ljava/util/List;)Ljava/util/List;
+	public static final fun hostTextParts (Ljava/util/List;DD)Ljava/util/List;
+	public static final fun needsShaping (Ljava/lang/String;)Z
+	public static final fun spacedPieces (Ljava/util/List;)Ljava/util/List;
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/IccProfile {

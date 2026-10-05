@@ -247,6 +247,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `AwtCanvas`, `AndroidNativeCanvas`, `SkiaCanvas` and `Canvas2dCanvas` draw a run of host-font
+  text whose letters join or reorder, such as an Arabic word or a Devanagari syllable, as one
+  string that the platform's text engine shapes, fitted to the width the document gives it. Each
+  letter used to draw alone at its own pen, so Arabic came out in isolated forms that never
+  joined, while the Compose canvas already joined them. Latin, Greek, Cyrillic and CJK text keeps
+  a pen per glyph. The cutting into parts is shared in `hostTextParts` of `kitepdf-core`, and the
+  Android canvas is now tested under Robolectric's native graphics (#588).
+
 - `SkiaCanvas` draws a character that its host face lacks in a host face that has it, whether
   or not the font names a language. Only a CJK language took a fallback face, so every letter of
   a script the Latin faces lack, such as the Arabic of a book without embedded fonts, drew

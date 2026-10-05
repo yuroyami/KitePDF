@@ -24,6 +24,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteImageSampling
 import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
+import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.strokePen
@@ -230,15 +231,27 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
             }
             // Position each glyph by the PDF's OWN advance widths (1/1000 em),
             // not the substitute font's natural metrics, otherwise spacing
-            // drifts and glyphs crowd together / overlap.
-            var penX = 0.0
+            // drifts and glyphs crowd together / overlap. advScale already carries
+            // sy (renderedSize), so the text-space spacing adjust needs it too.
             val advScale = renderedSize / 1000.0
-            for (glyph in glyphs) {
-                val t = glyph.text
-                if (t.isNotEmpty() && t != " ") canvas.drawText(t, penX.toFloat(), 0f, paint)
-                // advScale already carries sy (renderedSize), so the text-space
-                // spacing adjust needs the same factor to stay in step.
-                penX += glyph.advanceWidth * advScale + glyph.advanceAdjust * sy
+            for (part in hostTextParts(glyphs, advScale, sy)) {
+                if (part.shaped) {
+                    // One string, which Android shapes and orders, so Arabic letters join (#588),
+                    // fitted to the width the document gives its glyphs.
+                    val natural = paint.measureText(part.text)
+                    canvas.save()
+                    canvas.translate(part.x.toFloat(), 0f)
+                    if (natural > 0f && part.width > 0.0) canvas.scale((part.width / natural).toFloat(), 1f)
+                    canvas.drawText(part.text, 0f, 0f, paint)
+                    canvas.restore()
+                    continue
+                }
+                var x = part.x
+                for (glyph in part.glyphs) {
+                    val t = glyph.text
+                    if (t.isNotEmpty() && t != " ") canvas.drawText(t, x.toFloat(), 0f, paint)
+                    x += glyph.advanceWidth * advScale
+                }
             }
         } finally {
             canvas.restore()
