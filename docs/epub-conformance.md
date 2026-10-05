@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 100 | 36 | 4 |
+| must | 140 | 101 | 35 | 4 |
 | should | 38 | 16 | 21 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 20 | 6 | 1 |
-| all | 206 | 136 | 64 | 6 |
+| all | 206 | 137 | 63 | 6 |
 
 ## How the results are known
 
@@ -152,7 +152,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`pkg-dir_unset-root-rtl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_unset-root-rtl) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The title is a plain string with no direction, so a host cannot show it with the direction the package's `dir` gives. |
 | [`pkg-dir_unset-root-unset`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-dir_unset-root-unset) | must | Fails ([#510](https://github.com/yuroyami/KitePDF/issues/510)) | Judged: The title is a plain string with no direction, so a host cannot show it with the direction its `dir` gives. |
 | [`pkg-lang_but_not_content`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-lang_but_not_content) | must | Fails ([#511](https://github.com/yuroyami/KitePDF/issues/511)) | Checked: The `q` element shows English quotation marks; today it shows none. |
-| [`pkg-spine-progression-default`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-progression-default) | must | Fails ([#512](https://github.com/yuroyami/KitePDF/issues/512)) | Checked: The book of Arabic language with a default spine progresses right to left; today it progresses left to right. |
+| [`pkg-spine-progression-default`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-progression-default) | must | Passes | Checked: The book of Arabic language with a default spine progresses right to left. |
 | [`pkg-spine-progression-pre-paginated`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-progression-pre-paginated) | must | Passes | Checked: The pages progress left to right and pair into spreads with the first page on the left. |
 | [`pkg-spine-progression_ltr`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-progression_ltr) | must | Passes | Checked: The pages progress left to right, paired with the first page on the left. |
 | [`pkg-spine-progression_rtl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-progression_rtl) | must | Passes | Checked: The book progresses right to left, and the viewer pairs its pages that way. |
