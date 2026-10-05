@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.core.font
 
 import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.PdfFormatException
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.withLock
 import kotlin.math.absoluteValue
@@ -139,7 +141,7 @@ public class TrueTypeFont private constructor(
     /** Get the outline for [glyphId], or null if the glyph slot is empty (zero-length). */
     public fun outline(glyphId: Int): GlyphOutline? {
         glyphLock.withLock { if (cache.containsKey(glyphId)) return cache[glyphId] }
-        val parsed = parseGlyph(glyphId, depth = 0, active = HashSet())
+        val parsed = parseOrEmpty(glyphId)
         return glyphLock.withLock {
             if (cache.containsKey(glyphId)) {
                 cache[glyphId]
@@ -162,7 +164,7 @@ public class TrueTypeFont private constructor(
      */
     public fun outlinePath(glyphId: Int): KitePath? {
         glyphLock.withLock { if (pathCache.containsKey(glyphId)) return pathCache[glyphId] }
-        val outline = glyphLock.withLock { cache[glyphId] } ?: parseGlyph(glyphId, depth = 0, active = HashSet())
+        val outline = glyphLock.withLock { cache[glyphId] } ?: parseOrEmpty(glyphId)
         val p = outline?.toKitePath()
         return glyphLock.withLock {
             if (pathCache.containsKey(glyphId)) {
@@ -172,6 +174,17 @@ public class TrueTypeFont private constructor(
                 p
             }
         }
+    }
+
+    /**
+     * The glyph, or null when it reads past the end of the font: one broken glyph draws
+     * nothing, as a broken CFF or Type 1 glyph does, and the page around it still draws (#582).
+     */
+    private fun parseOrEmpty(glyphId: Int): GlyphOutline? = try {
+        parseGlyph(glyphId, depth = 0, active = HashSet())
+    } catch (e: PdfFormatException) {
+        kiteWarn { "font: glyph $glyphId cannot be read: ${e.message}" }
+        null
     }
 
     private fun parseGlyph(glyphId: Int, depth: Int, active: HashSet<Int>): GlyphOutline? {

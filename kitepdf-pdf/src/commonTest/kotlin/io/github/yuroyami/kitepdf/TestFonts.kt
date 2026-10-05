@@ -3,8 +3,12 @@ package io.github.yuroyami.kitepdf
 /** Small TrueType fonts built in code, so no test needs a font file from outside the repo. */
 internal object TestFonts {
 
-    /** `A` is glyph 1, a square of [side] units. Space is glyph 2, which has no contours at all. */
-    fun squareAndSpaceTtf(side: Int = 500): ByteArray {
+    /**
+     * `A` is glyph 1, a square of [side] units. Space is glyph 2, which has no contours at all.
+     * [instructions] is the instruction length that `A` declares: one longer than the font
+     * makes a broken glyph.
+     */
+    fun squareAndSpaceTtf(side: Int = 500, instructions: Int = 0): ByteArray {
         fun u16(v: Int) = byteArrayOf((v shr 8).toByte(), v.toByte())
         fun s16(v: Int) = u16(v and 0xFFFF)
         fun u32(v: Long) = byteArrayOf((v shr 24).toByte(), (v shr 16).toByte(), (v shr 8).toByte(), v.toByte())
@@ -16,7 +20,7 @@ internal object TestFonts {
             u16(0) + u16(0) + u16(0)
         val cmap = u16(0) + u16(1) + u16(3) + u16(1) + u32(12) + format4
         // Glyph 1: one contour of four on-curve points. Glyphs 0 and 2 are empty.
-        val glyf = s16(1) + s16(0) + s16(0) + s16(side) + s16(side) + u16(3) + u16(0) +
+        val glyf = s16(1) + s16(0) + s16(0) + s16(side) + s16(side) + u16(3) + u16(instructions) +
             byteArrayOf(1, 1, 1, 1) +
             s16(0) + s16(side) + s16(0) + s16(-side) +
             s16(0) + s16(0) + s16(side) + s16(0)
