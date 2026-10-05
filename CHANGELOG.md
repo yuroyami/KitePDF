@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KiteDocViewState.isScrollInProgress` says whether the view is scrolling or turning a page,
+  by a gesture or an animation, and reads observe it, so a `snapshotFlow` can wait for the view to
+  settle before it counts `currentLocation` as a place the reader went to (#524).
+
 - `SvgImage.hasIntrinsicSize` is false for an SVG whose root gives only a viewBox, which has a
   ratio and no size of its own, so a layout can give it the width of its box (#569).
 
@@ -180,11 +184,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `KiteReadAloud` follows the reader to another place in the book. When the reader moves the
+  viewer by a link, the table of contents, a page turn or a scroll, the reading goes on from the
+  first clip at or after that place once the view settles, also while it is paused, as Media
+  Overlays 3.3 asks for navigation during playback. Before, it read the rest of the chapter the
+  reader had left, and turned the view back to it. The page turns the reading makes to follow its
+  text do not count, and it turns no page while the reader moves the view (#524).
+
 - A `<video>` without `controls` in `KiteMediaOverlay` can be paused: a tap pauses and plays it
   again, and shows the transport bar while it stays paused and for three seconds once it plays.
   Before, nothing on such a video took a tap once it played, so a looping one played until its
   page left the screen, and an `autoplay` one stayed muted for good. Its first tap now turns on
   the sound that autoplay muted, as the first touch of a video with controls does (#480).
+
 - In `KiteDocLayout.Spread`, a page that asks for one side of a spread and has no partner sits in
   that half with the other half empty, such as an EPUB's `page-spread-right` first page or a
   `page-spread-left` last page, or the first page of a PDF whose `/PageLayout` puts it on the

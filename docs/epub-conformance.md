@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 110 | 26 | 4 |
+| must | 140 | 111 | 25 | 4 |
 | should | 38 | 19 | 18 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 154 | 46 | 6 |
+| all | 206 | 155 | 45 | 6 |
 
 ## How the results are known
 
@@ -288,7 +288,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`mol-audio-no-clipend`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-audio-no-clipend) | must | Passes | Checked: A clip with no `clipEnd` plays to the end of its file. |
 | [`mol-css`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-css) | should | Fails ([#525](https://github.com/yuroyami/KitePDF/issues/525)) | Judged: `KiteReadAloud` marks the clip being read with a highlight of its own and never applies the book's active classes, by design. |
 | [`mol-ignore`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-ignore) | must | Not applicable | Judged: The test is for reading systems without media overlays, and says one with them should skip it. |
-| [`mol-navigation`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-navigation) | must | Fails ([#524](https://github.com/yuroyami/KitePDF/issues/524)) | Judged: From the code of `KiteReadAloud`: after a jump through the table of contents, it reads the rest of the old chapter first. |
+| [`mol-navigation`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-navigation) | must | Passes | Judged: After a jump through the table of contents, `KiteReadAloud` goes on from the first clip of the chapter the reader went to, as `ReadAloudTest` checks on a book of its own. |
 | [`mol-support_xhtml`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml) | must | Passes | Judged: From the code of `KiteReadAloud`: it reads the overlay clip by clip, highlights each piece of text and turns the page with the reading. |
 | [`mol-support_xhtml-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-fxl) | must | Passes | Judged: From the code of `KiteReadAloud`: it reads the fixed page's overlay as it does a reflowable one. |
 | [`mol-support_xhtml-load`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-load) | must | Passes | Checked: The overlay that two chapters share gives each only the clips of its own text. |

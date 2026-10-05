@@ -339,6 +339,15 @@ public class KiteDocViewState(
         }
 
     /**
+     * True while the view scrolls or turns a page, by a gesture or by an animation, and false
+     * with no viewer. Reads observe scroll state, so a `snapshotFlow` can wait for the view to
+     * settle before it counts [currentLocation] as a place the reader went to, and something
+     * that turns pages for the reader can hold off while the reader moves the view.
+     */
+    public val isScrollInProgress: Boolean
+        get() = adapter?.isScrollInProgress == true
+
+    /**
      * A position to save now and reopen with later. Survives a font size, page
      * size or margin change: hand it to [rememberKiteDocViewState].
      *

@@ -95,7 +95,7 @@
     "mol-audio-no-clipend": true,
     "mol-css": false,
     "mol-ignore": "n/a",
-    "mol-navigation": false,
+    "mol-navigation": true,
     "mol-support_xhtml": true,
     "mol-support_xhtml-fxl": true,
     "mol-support_xhtml-load": true,
