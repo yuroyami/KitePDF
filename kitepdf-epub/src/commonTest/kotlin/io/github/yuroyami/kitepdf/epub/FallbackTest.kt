@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -53,6 +54,82 @@ class FallbackTest {
             files = listOf("page.bin" to ByteArray(16) { 7 }, "page.xhtml" to xhtml("<p>The fallback text.</p>")),
         )
         assertEquals("The fallback text.", doc.page(KiteLocation(0, 0)).textContent().plainText.trim())
+    }
+
+    /** A disk image that starts with a zeroed sector, as `pub-foreign_bad-fallback`'s does. */
+    private val diskImage = ByteArray(4096) { if (it < 1024) 0 else (it * 31 + 7).toByte() }
+
+    /** The first bytes of a Photoshop file. */
+    private val photoshop = "8BPS".encodeToByteArray() + ByteArray(60) { 1 }
+
+    @Test
+    fun a_spine_item_whose_chain_holds_no_content_document_leaves_the_spine() {
+        // EPUB 3.3, manifest fallbacks: the chain has nothing to show, so the reader skips the
+        // item rather than laying out its bytes as text (#518).
+        val doc = book(
+            manifest = """<item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>
+                <item id="dmg" href="foo.dmg" media-type="application/octet-stream" fallback="psd"/>
+                <item id="psd" href="bar.psd" media-type="image/psd"/>
+                <item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>""",
+            spine = listOf("c1", "dmg", "c2"),
+            files = listOf(
+                "c1.xhtml" to xhtml("<p>One.</p>"), "foo.dmg" to diskImage, "bar.psd" to photoshop,
+                "c2.xhtml" to xhtml("<p>Two.</p>"),
+            ),
+        )
+        assertEquals(2, doc.chapterCount)
+        assertEquals(listOf("One.", "Two."), (0 until doc.chapterCount).map { doc.page(KiteLocation(it, 0)).textContent().plainText.trim() })
+    }
+
+    @Test
+    fun a_book_of_foreign_bytes_alone_does_not_open() {
+        assertFailsWith<EpubFormatException> {
+            book(
+                manifest = """<item id="dmg" href="foo.dmg" media-type="application/octet-stream" fallback="psd"/>
+                    <item id="psd" href="bar.psd" media-type="image/psd"/>""",
+                spine = listOf("dmg"),
+                files = listOf("foo.dmg" to diskImage, "bar.psd" to photoshop),
+            )
+        }
+    }
+
+    @Test
+    fun a_mislabelled_xhtml_file_in_the_spine_still_renders() {
+        val utf16 = "\uFEFF<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>Sixteen.</p></body></html>"
+        val doc = book(
+            manifest = """<item id="a" href="a.bin" media-type="application/octet-stream"/>
+                <item id="b" href="b.xml" media-type="application/xml"/>
+                <item id="c" href="c.htm"/>""",
+            spine = listOf("a", "b", "c"),
+            files = listOf(
+                "a.bin" to xhtml("<p>Eight.</p>"),
+                "b.xml" to byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + "\n  ".encodeToByteArray() + xhtml("<p>Marked.</p>"),
+                "c.htm" to utf16.flatMap { listOf((it.code shr 8).toByte(), it.code.toByte()) }.toByteArray(),
+            ),
+        )
+        assertEquals(listOf("Eight.", "Marked.", "Sixteen."), (0 until doc.chapterCount).map { doc.page(KiteLocation(it, 0)).textContent().plainText.trim() })
+    }
+
+    @Test
+    fun markup_is_told_from_other_bytes_by_its_first_character() {
+        fun utf16(s: String, bigEndian: Boolean) = s.flatMap {
+            val hi = (it.code shr 8).toByte()
+            val lo = it.code.toByte()
+            if (bigEndian) listOf(hi, lo) else listOf(lo, hi)
+        }.toByteArray()
+        val markup = " \r\n\t<html/>"
+        assertTrue(ParsedEpub.looksLikeMarkup(markup.encodeToByteArray()))
+        assertTrue(ParsedEpub.looksLikeMarkup(utf16(markup, bigEndian = true)), "UTF-16BE")
+        assertTrue(ParsedEpub.looksLikeMarkup(utf16(markup, bigEndian = false)), "UTF-16LE")
+        assertTrue(ParsedEpub.looksLikeMarkup(utf16("\uFEFF" + markup, bigEndian = false)), "UTF-16LE with a byte order mark")
+        assertFalse(ParsedEpub.looksLikeMarkup(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())), "JPEG")
+        assertFalse(ParsedEpub.looksLikeMarkup(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)), "PNG")
+        assertFalse(ParsedEpub.looksLikeMarkup(diskImage), "a zeroed sector")
+        assertFalse(ParsedEpub.looksLikeMarkup(photoshop), "Photoshop")
+        assertFalse(ParsedEpub.looksLikeMarkup("plain words".encodeToByteArray()))
+        assertFalse(ParsedEpub.looksLikeMarkup("   ".encodeToByteArray()))
+        assertFalse(ParsedEpub.looksLikeMarkup(ByteArray(0)))
+        assertFalse(ParsedEpub.looksLikeMarkup(null))
     }
 
     @Test

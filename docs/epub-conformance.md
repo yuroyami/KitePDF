@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 101 | 35 | 4 |
+| must | 140 | 102 | 34 | 4 |
 | should | 38 | 17 | 20 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 20 | 6 | 1 |
-| all | 206 | 138 | 62 | 6 |
+| all | 206 | 139 | 61 | 6 |
 
 ## How the results are known
 
@@ -107,7 +107,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 
 | Test | Level | Result | How it is known |
 |---|---|---|---|
-| [`pub-foreign_bad-fallback`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-foreign_bad-fallback) | must | Fails ([#518](https://github.com/yuroyami/KitePDF/issues/518)) | Checked: The spine item with no content document in its fallback chain shows nothing; today its bytes lay out as text. |
+| [`pub-foreign_bad-fallback`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-foreign_bad-fallback) | must | Passes | Checked: The book, whose only spine item has no content document in its fallback chain and no markup in its bytes, is refused with a format error, as the test allows. |
 | [`pub-foreign_image`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-foreign_image) | must | Passes | Checked: The PSD image falls back to its PNG, which draws. |
 | [`pub-foreign_json-spine`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-foreign_json-spine) | must | Passes | Checked: The JSON spine item falls back to its XHTML document, which shows the pass sentence. |
 | [`pub-foreign_xml-spine`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-foreign_xml-spine) | must | Passes | Checked: The XML spine item falls back to its XHTML document, which shows the pass sentence. |

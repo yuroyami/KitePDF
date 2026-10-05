@@ -183,7 +183,7 @@
     "pub-external-links": false,
     "pub-external-links_consent": false,
     "pub-file-urls": true,
-    "pub-foreign_bad-fallback": false,
+    "pub-foreign_bad-fallback": true,
     "pub-foreign_image": true,
     "pub-foreign_json-spine": true,
     "pub-foreign_xml-spine": true,
