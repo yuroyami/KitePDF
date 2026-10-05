@@ -69,9 +69,11 @@ public class SvgImage private constructor(
     public val width: Double,
     public val height: Double,
     private val viewBox: DoubleArray?, // minX, minY, w, h
+    /** What the style sheets of the document that includes this SVG declare for each element (#509). */
+    private val hostStyle: ((KiteXmlNode.Element) -> String?)? = null,
 ) {
 
-    private val styles: SvgStyles by lazy { SvgStyles(root) }
+    private val styles: SvgStyles by lazy { SvgStyles(root, hostStyle) }
 
     /** Every element carrying an `id`, for `<use>`, gradients and `clip-path`. */
     private val byId: Map<String, KiteXmlNode.Element> by lazy {
@@ -1685,7 +1687,16 @@ public class SvgImage private constructor(
         }
 
         /** Build from an already-parsed `<svg>` element (inline SVG in XHTML). */
-        public fun fromElement(svg: KiteXmlNode.Element): SvgImage? {
+        public fun fromElement(svg: KiteXmlNode.Element): SvgImage? = fromElement(svg, null)
+
+        /**
+         * Build from an `<svg>` element that a host document includes, such as an inline SVG in
+         * XHTML, whose style sheets style its elements too (#509). [hostStyle] gives what the
+         * host's style sheets declare for an element, as a `style` attribute holds it, or null for
+         * nothing. Those declarations outrank presentation attributes and yield to the SVG's own
+         * `<style>` rules, which come later in the document, unless they are important.
+         */
+        public fun fromElement(svg: KiteXmlNode.Element, hostStyle: ((KiteXmlNode.Element) -> String?)?): SvgImage? {
             if (!svg.tag.equals("svg", true)) return null
             // The XHTML parser lower-cases attribute names, so camelCase SVG
             // attributes (viewBox) arrive as "viewbox".
@@ -1700,7 +1711,7 @@ public class SvgImage private constructor(
             val w = svg.attrs["width"]?.let { lenOrNull(it) } ?: vb?.get(2) ?: 300.0
             val h = svg.attrs["height"]?.let { lenOrNull(it) } ?: vb?.get(3) ?: 150.0
             if (!w.isFinite() || !h.isFinite() || w <= 0 || h <= 0) return null
-            return SvgImage(svg, w, h, vb)
+            return SvgImage(svg, w, h, vb, hostStyle)
         }
 
         private fun findSvg(el: KiteXmlNode.Element): KiteXmlNode.Element? {

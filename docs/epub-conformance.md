@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 103 | 33 | 4 |
+| must | 140 | 104 | 32 | 4 |
 | should | 38 | 17 | 20 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 20 | 6 | 1 |
-| all | 206 | 140 | 60 | 6 |
+| all | 206 | 141 | 59 | 6 |
 
 ## How the results are known
 
@@ -123,7 +123,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`cnt-css-fonts_woff2`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-css-fonts_woff2) | must | Passes | Checked: The item draws in the WOFF2 font of its `@font-face`, with glyph outlines from the book. |
 | [`cnt-mathml-support`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-mathml-support) | must | Passes | Checked: The equation draws as MathML: the exponent 2 is smaller than the base and raised above it. |
 | [`cnt-svg-css`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-svg-css) | must | Passes | Checked: The SVG chapter fills its shapes with the star pattern of its CSS. |
-| [`cnt-svg-css-inclusion`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-svg-css-inclusion) | must | Fails ([#509](https://github.com/yuroyami/KitePDF/issues/509)) | Checked: The inline SVG fills with the star pattern of the document's CSS; today it paints plain black. |
+| [`cnt-svg-css-inclusion`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-svg-css-inclusion) | must | Passes | Checked: The inline SVG fills with the star pattern of the document's CSS. |
 | [`cnt-svg-css-reference`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-svg-css-reference) | must | Passes | Checked: The SVG referenced by `img` stays solid green: the document's CSS does not reach it. |
 | [`cnt-svg-embedded`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-svg-embedded) | must | Passes | Checked: The inline SVG draws its red heart. |
 | [`cnt-svg-support`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/cnt-svg-support) | must | Passes | Checked: The SVG chapter draws its red heart and its text. |

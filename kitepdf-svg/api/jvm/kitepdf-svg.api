@@ -34,6 +34,7 @@ public final class io/github/yuroyami/kitepdf/svg/SvgImage {
 
 public final class io/github/yuroyami/kitepdf/svg/SvgImage$Companion {
 	public final fun fromElement (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;)Lio/github/yuroyami/kitepdf/svg/SvgImage;
+	public final fun fromElement (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;Lkotlin/jvm/functions/Function1;)Lio/github/yuroyami/kitepdf/svg/SvgImage;
 	public final fun isSvg ([B)Z
 	public final fun parse ([B)Lio/github/yuroyami/kitepdf/svg/SvgImage;
 }

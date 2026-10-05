@@ -11,8 +11,14 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
  * Selectors cover types, *, classes, IDs and their compounds. A selector list
  * containing unsupported syntax is ignored as a whole, never shortened into
  * a selector that could match a different element (CSS 2.2, 4.1.7 and 5.2).
+ *
+ * [host] gives what the style sheets of a document that includes the SVG declare
+ * for an element (#509). The host matched its own selectors, so they may be any
+ * it supports. Its declarations come before this SVG's own rules in the document,
+ * so they rank above presentation hints and below those rules of any specificity,
+ * unless they are important.
  */
-internal class SvgStyles(root: KiteXmlNode.Element) {
+internal class SvgStyles(root: KiteXmlNode.Element, host: ((KiteXmlNode.Element) -> String?)? = null) {
     private val values: Map<KiteXmlNode.Element, Map<String, String>>
 
     init {
@@ -36,10 +42,13 @@ internal class SvgStyles(root: KiteXmlNode.Element) {
             val text = el.children.filterIsInstance<KiteXmlNode.Text>().joinToString("") { it.text }
             rules.addAll(parseRules(text))
         }
+        val hosted = if (host == null) emptyMap() else elements.mapNotNull { el ->
+            host(el)?.let(::declarations)?.takeIf { it.isNotEmpty() }?.let { el to it }
+        }.toMap()
         // Most SVGs only carry presentation attributes. Keep that common path
         // as direct map reads, without copying each element's attribute map.
-        values = (if (rules.isEmpty()) elements.filter { "style" in it.attrs } else elements)
-            .associateWith { cascade(it, rules) }
+        values = (if (rules.isEmpty()) elements.filter { "style" in it.attrs || it in hosted } else elements)
+            .associateWith { cascade(it, rules, hosted[it].orEmpty()) }
     }
 
     fun value(el: KiteXmlNode.Element, name: String): String? {
@@ -70,7 +79,7 @@ internal class SvgStyles(root: KiteXmlNode.Element) {
         }
     }
 
-    private fun cascade(el: KiteXmlNode.Element, rules: List<Rule>): Map<String, String> {
+    private fun cascade(el: KiteXmlNode.Element, rules: List<Rule>, hosted: List<Declaration>): Map<String, String> {
         val out = LinkedHashMap<String, Winner>()
         val zero = Specificity(0, 0, 0)
         // Geometry and other XML attributes remain attributes, not CSS properties.
@@ -82,6 +91,7 @@ internal class SvgStyles(root: KiteXmlNode.Element) {
             val old = out[declaration.name]
             if (old == null || next.replaces(old)) out[declaration.name] = next
         }
+        for (declaration in hosted) offer(declaration, false, zero)
         val classes = el.attrs["class"].orEmpty().split(CSS_SPACE).filter { it.isNotEmpty() }.toSet()
         for (rule in rules) {
             val specificity = rule.selectors.filter { it.matches(el, classes) }.maxOfOrNull { it.specificity } ?: continue

@@ -177,6 +177,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An SVG written inline in an EPUB chapter takes the chapter's style sheets, as in a browser: a
+  class rule of the document fills its paths, a selector reaches into it from its host, and a rule
+  outranks a presentation attribute. The SVG's own `style` element, a `style` attribute and an
+  `!important` keep the precedence of the cascade, and an SVG an `img` points at keeps only its
+  own style. Paths styled by a document class painted plain black. `SvgImage.fromElement` takes
+  the declarations a host document gives each element for it (#509).
 - The EPUB `q` element draws quotation marks, chosen by the language its chapter declares, with
   the marks of each language from CLDR 48.2.0: “ ” for English, « » for French, „ “ for German,
   「 」 for Japanese, and the inner pair for a quotation inside one. `content` takes

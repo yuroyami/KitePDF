@@ -28,6 +28,7 @@ final class io.github.yuroyami.kitepdf.svg/SvgImage { // io.github.yuroyami.kite
 
     final object Companion { // io.github.yuroyami.kitepdf.svg/SvgImage.Companion|null[0]
         final fun fromElement(io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element): io.github.yuroyami.kitepdf.svg/SvgImage? // io.github.yuroyami.kitepdf.svg/SvgImage.Companion.fromElement|fromElement(io.github.yuroyami.kitepdf.core.xml.KiteXmlNode.Element){}[0]
+        final fun fromElement(io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element, kotlin/Function1<io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element, kotlin/String?>?): io.github.yuroyami.kitepdf.svg/SvgImage? // io.github.yuroyami.kitepdf.svg/SvgImage.Companion.fromElement|fromElement(io.github.yuroyami.kitepdf.core.xml.KiteXmlNode.Element;kotlin.Function1<io.github.yuroyami.kitepdf.core.xml.KiteXmlNode.Element,kotlin.String?>?){}[0]
         final fun isSvg(kotlin/ByteArray): kotlin/Boolean // io.github.yuroyami.kitepdf.svg/SvgImage.Companion.isSvg|isSvg(kotlin.ByteArray){}[0]
         final fun parse(kotlin/ByteArray): io.github.yuroyami.kitepdf.svg/SvgImage? // io.github.yuroyami.kitepdf.svg/SvgImage.Companion.parse|parse(kotlin.ByteArray){}[0]
     }
