@@ -119,6 +119,8 @@ internal class ImageBox(
     var media: MediaInfo? = null
     /** When the picture itself paints, after the background and border (#172). */
     var contentRank: Int = 0
+    /** The ids inside an `<svg>` written in the chapter, which a link or an overlay can name (#523). */
+    val anchors = ArrayList<String>()
     /** Physical image dimensions; the border box uses the layout's logical axes. */
     var drawWidth: Double = 0.0
     var drawHeight: Double = 0.0

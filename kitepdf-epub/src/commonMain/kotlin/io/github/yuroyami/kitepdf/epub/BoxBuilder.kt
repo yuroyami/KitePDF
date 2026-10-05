@@ -268,6 +268,7 @@ internal class BoxBuilder(
                                 cs, "", it,
                                 attrWidth = svgSizePt(child.attrs["width"], cs), attrHeight = svgSizePt(child.attrs["height"], cs),
                             )
+                            image.anchors += svgIds(child)
                             children.add(image.also { box -> box.semantics = svgSemantics(child, sem); box.source = child })
                         }
                         return null
@@ -389,6 +390,18 @@ internal class BoxBuilder(
             epubType = base?.epubType,
             hidden = base?.hidden == true || alt?.isEmpty() == true,
         )
+    }
+
+    /** The ids in [svg], its own first, in document order (#523). */
+    private fun svgIds(svg: KiteXmlNode.Element): List<String> {
+        val out = ArrayList<String>()
+        val pending = arrayListOf(svg)
+        while (pending.isNotEmpty()) {
+            val el = pending.removeAt(pending.lastIndex)
+            el.attrs["id"]?.takeIf { it.isNotBlank() }?.let(out::add)
+            for (i in el.children.indices.reversed()) (el.children[i] as? KiteXmlNode.Element)?.let(pending::add)
+        }
+        return out
     }
 
     /**
@@ -750,6 +763,8 @@ internal class BoxBuilder(
                         // <img>: it flows on the line (CSS 2.1, 10.3.2, #275).
                         val cs = resolver.compute(child, childAncestors, style)
                         if (cs.display != Display.NONE) SvgImage.fromElement(child, resolver.svgHostStyle(child))?.let { svg ->
+                            // Its ids are an inline element's: the block that holds the line claims them (#523).
+                            anchorSink += svgIds(child)
                             val sem = svgSemantics(child, parentSem)
                             inl.addImage(
                                 "", style, cs.widthPt ?: svgSizePt(child.attrs["width"], cs), cs.heightPt ?: svgSizePt(child.attrs["height"], cs),

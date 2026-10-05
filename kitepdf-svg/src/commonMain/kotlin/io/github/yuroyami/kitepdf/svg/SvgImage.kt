@@ -142,6 +142,13 @@ public class SvgImage private constructor(
      */
     internal fun links(ctm: KiteMatrix): SvgLinkCanvas = SvgLinkCanvas().also { render(it, ctm, loadResource = null, stop = null) }
 
+    /**
+     * The text this image draws, where [render] with [ctm] draws it (#523): its lines for search
+     * and selection, and where the text of each element with an `id` is. Text inside a pattern
+     * tile, a mask or a clip path is not the image's text, and text that a clip hides is left out.
+     */
+    public fun textContent(ctm: KiteMatrix): SvgTextContent = SvgTextContent.of(links(ctm))
+
     private class Fit(val matrix: KiteMatrix, val slice: Boolean)
 
     /**
@@ -397,11 +404,11 @@ public class SvgImage private constructor(
     /**
      * One laid-out run of `<text>`: its characters, paint and where it starts. [rotate]
      * turns the run about its start, in degrees clockwise, and only a single-character
-     * run has one.
+     * run has one. [ids] are those of the tspans it is inside, outermost first (#523).
      */
     private class TextRun(
         val paint: Paint, val x: Double, val y: Double, val glyphs: List<TextGlyph>, val width: Double,
-        val rotate: Double = 0.0,
+        val rotate: Double = 0.0, val ids: List<String> = emptyList(),
     )
 
     /**
@@ -416,7 +423,7 @@ public class SvgImage private constructor(
      * piece (10.9.1). A nested tspan is laid out as a run of its own.
      */
     private fun layoutText(el: KiteXmlNode.Element, paint: Paint, depth: Int): List<TextRun> {
-        class Ch(val char: Char, val paint: Paint) {
+        class Ch(val char: Char, val paint: Paint, val ids: List<String>) {
             var x: Double? = null
             var y: Double? = null
             var dx: Double? = null
@@ -428,19 +435,20 @@ public class SvgImage private constructor(
         }
         val chars = ArrayList<Ch>()
         var afterSpace = true
-        fun collect(node: KiteXmlNode.Element, p: Paint, d: Int) {
+        fun collect(node: KiteXmlNode.Element, p: Paint, d: Int, ids: List<String>) {
             if (d > MAX_DEPTH) return
             val first = chars.size
             for (child in node.children) when (child) {
                 is KiteXmlNode.Comment -> Unit
                 is KiteXmlNode.Text -> for (raw in child.text) {
                     val ch = if (raw == '\n' || raw == '\r' || raw == '\t') ' ' else raw
-                    if (ch != ' ') { chars.add(Ch(ch, p)); afterSpace = false }
-                    else if (!afterSpace) { chars.add(Ch(' ', p)); afterSpace = true }
+                    if (ch != ' ') { chars.add(Ch(ch, p, ids)); afterSpace = false }
+                    else if (!afterSpace) { chars.add(Ch(' ', p, ids)); afterSpace = true }
                 }
                 is KiteXmlNode.Element -> {
                     if (child.tag.lowercase() != "tspan" || isDisplayNone(child)) continue
-                    collect(child, resolvePaint(child, p), d + 1)
+                    val id = child.attrs["id"]?.takeIf { it.isNotEmpty() }
+                    collect(child, resolvePaint(child, p), d + 1, if (id == null) ids else ids + id)
                 }
             }
             // The children ran first and hold the nearer values, so only gaps are filled.
@@ -456,7 +464,7 @@ public class SvgImage private constructor(
                 fill(List(own.size) { angles[minOf(it, angles.lastIndex)] }, { it.rotate }) { c, v -> c.rotate = v }
             }
         }
-        collect(el, paint, depth)
+        collect(el, paint, depth, emptyList())
         if (chars.lastOrNull()?.char == ' ') chars.removeAt(chars.lastIndex)
 
         var penX = 0.0
@@ -489,14 +497,14 @@ public class SvgImage private constructor(
             val rotate = c.rotate ?: 0.0
             var j = i + 1
             // A run goes on while nothing moves its next character away from the pen.
-            while (j < chars.size && rotate == 0.0 && chars[j].paint === c.paint &&
+            while (j < chars.size && rotate == 0.0 && chars[j].paint === c.paint && chars[j].ids == c.ids &&
                 chars[j].x == null && chars[j].y == null && (chars[j].dx ?: 0.0) == 0.0 &&
                 (chars[j].dy ?: 0.0) == 0.0 && (chars[j].rotate ?: 0.0) == 0.0
             ) j++
             val text = buildString { for (k in i until j) append(chars[k].char) }
             if (text.isNotBlank()) {
                 val glyphs = SvgText.glyphs(text, c.paint.fontSpec)
-                runs.add(TextRun(c.paint, c.penX, c.penY, glyphs, SvgText.width(glyphs, c.paint.fontSize), rotate))
+                runs.add(TextRun(c.paint, c.penX, c.penY, glyphs, SvgText.width(glyphs, c.paint.fontSize), rotate, c.ids))
             }
             i = j
         }
@@ -519,8 +527,11 @@ public class SvgImage private constructor(
         depth: Int,
     ) {
         if (depth > MAX_DEPTH) return
+        // A link pass notes the tspans with an id around the runs they hold, as it does elements (#523).
+        val links = canvas as? SvgLinkCanvas
         for (run in layoutText(el, paint, depth)) {
             if (!run.paint.visible) continue
+            if (links != null) for (id in run.ids) links.open(null, id)
             // Text space is y-up; SVG is y-down, so the run is flipped in place.
             canvas.drawGlyphs(
                 run.glyphs, run.paint.fontSize, unitsPerEm = 1000, hasOutlines = false,
@@ -528,6 +539,7 @@ public class SvgImage private constructor(
                 textToDevice = compose(ctm, compose(turnOf(run), KiteMatrix(1.0, 0.0, 0.0, -1.0, run.x, run.y))),
                 color = run.paint.fill ?: RgbColor.BLACK, alpha = run.paint.opacity * run.paint.fillOpacity,
             )
+            if (links != null) repeat(run.ids.size) { links.close() }
         }
     }
 
@@ -830,6 +842,9 @@ public class SvgImage private constructor(
         // The content inherits from the pattern's own ancestors, as a clip path's does.
         val contentPaint = clipPaintOf(t.content, paint).copy(patternDepth = paint.patternDepth + 1, maskDepth = paint.maskDepth, filterDepth = paint.filterDepth)
         canvas.pushClip(region, ctm, evenOdd)
+        // The text of a tile is paint, so a text pass leaves it out (#523).
+        val marks = canvas as? SvgLinkCanvas
+        marks?.let { it.tiles++ }
         try {
             if (alpha < 1.0) {
                 canvas.beginTransparencyGroup(
@@ -854,6 +869,7 @@ public class SvgImage private constructor(
                 if (alpha < 1.0) canvas.endTransparencyGroup()
             }
         } finally {
+            marks?.let { it.tiles-- }
             canvas.popClip()
         }
     }

@@ -27,6 +27,7 @@ final class io.github.yuroyami.kitepdf.svg/SvgImage { // io.github.yuroyami.kite
         final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.svg/SvgImage.width.<get-width>|<get-width>(){}[0]
 
     final fun render(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, kotlin/Function1<kotlin/String, kotlin/ByteArray?>? = ...) // io.github.yuroyami.kitepdf.svg/SvgImage.render|render(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;kotlin.Function1<kotlin.String,kotlin.ByteArray?>?){}[0]
+    final fun textContent(io.github.yuroyami.kitepdf.core.render/KiteMatrix): io.github.yuroyami.kitepdf.svg/SvgTextContent // io.github.yuroyami.kitepdf.svg/SvgImage.textContent|textContent(io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.svg/SvgImage.Companion|null[0]
         final fun fromElement(io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element): io.github.yuroyami.kitepdf.svg/SvgImage? // io.github.yuroyami.kitepdf.svg/SvgImage.Companion.fromElement|fromElement(io.github.yuroyami.kitepdf.core.xml.KiteXmlNode.Element){}[0]
@@ -47,4 +48,12 @@ final class io.github.yuroyami.kitepdf.svg/SvgPage : io.github.yuroyami.kitepdf.
     final fun displayToDeviceBase(): io.github.yuroyami.kitepdf.core.render/KiteMatrix // io.github.yuroyami.kitepdf.svg/SvgPage.displayToDeviceBase|displayToDeviceBase(){}[0]
     final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix) // io.github.yuroyami.kitepdf.svg/SvgPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix){}[0]
     final fun renderTo(io.github.yuroyami.kitepdf.core.render/KiteCanvas, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core/KiteCancellation) // io.github.yuroyami.kitepdf.svg/SvgPage.renderTo|renderTo(io.github.yuroyami.kitepdf.core.render.KiteCanvas;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.KiteCancellation){}[0]
+    final fun textContent(): io.github.yuroyami.kitepdf.core/KiteStructuredText // io.github.yuroyami.kitepdf.svg/SvgPage.textContent|textContent(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.svg/SvgTextContent { // io.github.yuroyami.kitepdf.svg/SvgTextContent|null[0]
+    final val text // io.github.yuroyami.kitepdf.svg/SvgTextContent.text|{}text[0]
+        final fun <get-text>(): io.github.yuroyami.kitepdf.core/KiteStructuredText // io.github.yuroyami.kitepdf.svg/SvgTextContent.text.<get-text>|<get-text>(){}[0]
+
+    final fun rectsOf(kotlin/String): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle> // io.github.yuroyami.kitepdf.svg/SvgTextContent.rectsOf|rectsOf(kotlin.String){}[0]
 }

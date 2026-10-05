@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.KiteLink
 import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 
@@ -15,7 +16,8 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
  *
  * The page is the SVG's own viewport, 1 px = 1 pt; a viewer scales to fit.
  * Everything is drawn as vectors, so zooming stays sharp. The page gives each
- * `<a>` with an `href` as a link in [KitePage.hyperlinks].
+ * `<a>` with an `href` as a link in [KitePage.hyperlinks], and the text it
+ * draws in [KitePage.textContent].
  *
  * ```kotlin
  * val doc = SvgDocument.open(bytes)
@@ -81,6 +83,11 @@ public class SvgPage internal constructor(
     }
 
     private val linkPass: SvgLinkCanvas by lazy { image.links(KiteMatrix.IDENTITY) }
+
+    private val text: KiteStructuredText by lazy { SvgTextContent.of(linkPass).text }
+
+    /** The text the image draws, for search and selection (#523). */
+    override fun textContent(): KiteStructuredText = text
 
     /**
      * Each `<a>` with an `href`, over the box of what it draws. A link to `#id` brings the

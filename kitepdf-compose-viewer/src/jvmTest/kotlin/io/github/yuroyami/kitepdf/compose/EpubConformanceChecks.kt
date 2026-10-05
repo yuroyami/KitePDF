@@ -709,9 +709,12 @@ internal object EpubConformanceChecks {
         check("mol-support_xhtml-load") { doc.mediaOverlayOf(2)?.clips?.size == 2 }
         check("mol-support_xhtml-load-fxl") { doc.mediaOverlayOf(2)?.clips?.size == 2 }
         check("mol-timing-synchronization_fxl") { (1..3).all { doc.mediaOverlayOf(it)?.clips?.size == 1 } }
-        // A clip's text inside a spine-level SVG document has a place on the page.
-        check("mol-timing-synchronization_svg") { doc.locateFragment("EPUB/mobydick.svg#first") != null }
-        check("mol-timing-synchronization_svg-fxl") { doc.locateFragment("EPUB/mobydick.svg#first") != null }
+        // A clip's text inside a spine-level SVG document has a place on the page: a rectangle per line it draws (#523).
+        fun W3cTestBook.svgClips() = listOf("first" to 3, "second" to 1, "third" to 6).all { (id, lines) ->
+            doc.locateFragment("EPUB/mobydick.svg#$id")?.rects?.size == lines
+        }
+        check("mol-timing-synchronization_svg") { svgClips() }
+        check("mol-timing-synchronization_svg-fxl") { svgClips() }
         check("mol-audio") {
             val clip = doc.mediaOverlayOf(1)?.clips?.singleOrNull()
             clip != null && clip.audioHref == "EPUB/audio/mobydick_1.mp3" && near(clip.clipBegin, 29.268, 0.001) && near(clip.clipEnd ?: 0.0, 44.783, 0.001)

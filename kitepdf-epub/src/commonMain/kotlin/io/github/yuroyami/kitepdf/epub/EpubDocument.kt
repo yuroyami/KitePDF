@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.svg.SvgImage
+import io.github.yuroyami.kitepdf.svg.SvgTextContent
 
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
@@ -46,6 +47,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
+import io.github.yuroyami.kitepdf.core.render.NoopCanvas
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.render.RgbColor
@@ -1223,6 +1225,7 @@ public class EpubDocument internal constructor(
                 for (c in box.children) collectAnchors(c, sink)
             }
             is TableBox -> for (r in box.rows) for (cell in r.cells) collectAnchors(cell, sink)
+            is ImageBox -> for (id in box.anchors) sink(id, box.y)
             else -> {}
         }
     }
@@ -1462,6 +1465,11 @@ public class EpubDocument internal constructor(
 
 /** One fixed-layout spine: its box tree plus the declared viewport it renders at. */
 internal class FixedSpine(val root: BlockBox, val width: Double, val height: Double)
+
+/** Draws nothing and keeps each SVG that a page paints, with the matrix it paints it under (#523). */
+private class SvgPlacements : KiteCanvas by NoopCanvas {
+    val placed = ArrayList<Pair<SvgImage, KiteMatrix>>()
+}
 
 /**
  * A tappable link region on an [EpubPage]. [rect] is in display space (y-down;
@@ -1738,6 +1746,9 @@ public class EpubPage internal constructor(
                 )
             }
         }
+        // An element inside an SVG on the page, by the lines of its text or the box of what it draws (#523).
+        // An id is unique, so one the page's own lines hold is in no SVG, and the page is not painted again.
+        if (out.isEmpty()) for (svg in svgTexts(page)) out += svg.rectsOf(id)
         return out
     }
 
@@ -2228,7 +2239,8 @@ public class EpubPage internal constructor(
         try {
             if (svg != null) {
                 val m = KiteMatrix(dw / intrinsicW, 0.0, 0.0, -dh / intrinsicH, x, y + dh)
-                svg.render(canvas, deviceCtm.concat(m), svgLoader(baseDir))
+                if (canvas is SvgPlacements) canvas.placed += svg to deviceCtm.concat(m)
+                else svg.render(canvas, deviceCtm.concat(m), svgLoader(baseDir))
             } else if (image != null) {
                 val m = KiteMatrix(dw, 0.0, 0.0, dh, x, y)
                 canvas.drawImage(image, deviceCtm.concat(m))
@@ -3050,7 +3062,31 @@ public class EpubPage internal constructor(
             extractLine(page, line)?.let { curLines += movedLine(it, displayTransformAt(page, line.paintRank)) }
         }
         flush()
+        // The text an SVG draws reads where the SVG stands, before the first block below its own (#523).
+        for (svg in svgTexts(page)) for (block in svg.text.blocks) {
+            val top = block.lines.first().bounds.bottom
+            val at = if (page.vertical) blocks.size else blocks.indexOfFirst { it.lines.first().bounds.bottom > top }.takeIf { it >= 0 } ?: blocks.size
+            blocks.add(at, block)
+        }
         return KiteStructuredText(blocks)
+    }
+
+    /**
+     * The text of each `<svg>` element that [page] paints, in display space (#523): one written in
+     * the chapter, or the root of an SVG spine item. An SVG file that an `<img>` shows is a picture,
+     * and its text is not the page's, as in a browser. The page paints itself into a canvas that
+     * keeps each SVG with its matrix, so the text lands where the picture does, moved by any
+     * transform around it. A page without such an element costs nothing.
+     */
+    private fun svgTexts(page: PageRender): List<SvgTextContent> {
+        val elements = HashSet<SvgImage>()
+        for (box in page.images) if (box.zipPath.isEmpty()) box.svg?.let(elements::add)
+        for (line in page.lines) for (im in line.images) if (im.zipPath.isEmpty()) im.svg?.let(elements::add)
+        if (elements.isEmpty()) return emptyList()
+        val placements = SvgPlacements()
+        // Painting maps the page's y-up space to the device. This flip makes the device the display space.
+        render(placements, displayToDeviceBase(), null)
+        return placements.placed.filter { it.first in elements }.map { (svg, m) -> svg.textContent(m) }
     }
 
     /**
