@@ -207,6 +207,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A CSS declaration whose value KitePDF cannot read no longer undoes the one before it: the
+  style resolver used to keep only the last value of each property and drop it when it could not
+  read it, so `width: 90%; width: calc(...)` or a vendor keyword after a standard one lost both,
+  and the property fell back to its inherited or initial value. Every declaration now applies in
+  cascade order, which also puts a shorthand such as `background` or `columns` and its longhands
+  in that order, where they met in the order of a hash map (#575).
+
 - A word wider than the line, such as a long link, breaks after as many characters as fit and
   goes on at the next line, where it used to run off the right edge of the page and lose its end.
   The reader's style sheet sets `overflow-wrap: break-word` on the root, so a book need not ask
