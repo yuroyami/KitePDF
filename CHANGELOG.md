@@ -177,6 +177,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Every layer of an EPUB `background-image` paints, the first on top, each with its own
+  `background-size`, `background-position` and `background-repeat` from the comma lists of the
+  longhands or the `background` shorthand. A `linear-gradient` tiles by its `background-size`,
+  a stop may be `currentColor`, and stops that differ in alpha paint, blending in premultiplied
+  space so a fade to `transparent` keeps its colour. Only the first layer painted, a gradient
+  filled the whole box, and one with `currentColor` or a stop of another alpha painted nothing,
+  so the grid idiom of two layered gradients left a page blank. A repeated layer now tiles only
+  the part of its box on the page, so a long box past the tile budget still paints. Seven W3C
+  EPUB tests of the viewport's grid now pass (#503).
 - `EpubDocument.fetchRemoteResources` returns only once `remoteArrivals` counts what it waited
   for. A call that asked for a URL just as its bytes landed could find them and return while the
   count still lacked them (#567).

@@ -1111,7 +1111,7 @@ internal class BoxLayout(
     /** True for a block that moves into a column whole: one that paints a box, keeps together or lays out its own items. */
     private fun keptTogether(b: BlockBox): Boolean {
         val s = b.style
-        val painted = s.backgroundColor != null || s.backgroundLayer != null || s.shadows.isNotEmpty() ||
+        val painted = s.backgroundColor != null || s.backgroundLayers.isNotEmpty() || s.shadows.isNotEmpty() ||
             s.borderTop.effective > 0 || s.borderRight.effective > 0 || s.borderBottom.effective > 0 || s.borderLeft.effective > 0
         return painted || s.breakInsideAvoid || b.hasEffects || b.linkHref != null || b.embed != null || b.inColumns ||
             s.display == Display.FLEX || s.display == Display.GRID

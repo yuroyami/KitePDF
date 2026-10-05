@@ -54,6 +54,22 @@ internal object EpubConformanceChecks {
     private fun RecordingCanvas.Call.Fill.isRgb(r: Double, g: Double, b: Double) =
         near(color.r, r, 0.02) && near(color.g, g, 0.02) && near(color.b, b, 0.02)
 
+    /**
+     * Whether [chapter] paints the grid of the `lay-*-xhtml-icb` tests over their red box: a 900
+     * by 600 pixel box of two layered gradients in 50 pixel cells, so 18 by 12 lines of one pixel
+     * across and as many down, in the text's black, on a white background that covers the red
+     * box under it (#503).
+     */
+    private fun W3cTestBook.gridPaints(chapter: Int): Boolean {
+        val fills = fills(chapter)
+        val lines = fills.filter { it.isRgb(0.0, 0.0, 0.0) }.mapNotNull { it.path.bounds(it.ctm) }
+        val across = lines.count { near(it.height, 0.75, 0.01) && near(it.width, 37.5, 0.01) }
+        val down = lines.count { near(it.width, 0.75, 0.01) && near(it.height, 37.5, 0.01) }
+        val red = fills.indexOfLast { it.isRgb(1.0, 0.0, 0.0) }
+        val white = fills.indexOfLast { fill -> fill.isRgb(1.0, 1.0, 1.0) && fill.path.bounds(fill.ctm)?.let { near(it.width, 675.0) && near(it.height, 450.0) } == true }
+        return across == 18 * 12 && down == 18 * 12 && red in 0 until white
+    }
+
     /** The spreads the viewer pairs, as the chapter of each page, for books of one page per chapter. */
     private fun W3cTestBook.spreadChapters(landscape: Boolean = true): List<List<Int>> = spreads(landscape).map { s -> s.map { it.first } }
 
@@ -286,6 +302,10 @@ internal object EpubConformanceChecks {
             doc.renditionOf(0).spread == EpubSpread.NONE && spreadChapters(true) == listOf(listOf(0), listOf(1), listOf(2), listOf(3))
         }
         check("lay-fxl-svg-icb_multi") { sizeIs(1, 675.0, 450.0) && sizeIs(2, 900.0, 450.0) }
+        check("lay-fxl-xhtml-icb") { sizeIs(0, 675.0, 450.0) && gridPaints(0) }
+        check("lay-fxl-xhtml-icb_device_sizes") { gridPaints(0) }
+        check("lay-fxl-xhtml-icb_invalid_meta") { sizeIs(1, 675.0, 450.0) && gridPaints(0) && gridPaints(1) }
+        check("lay-fxl-xhtml-icb_multi") { sizeIs(0, 675.0, 450.0) && sizeIs(1, 1050.0, 450.0) && gridPaints(0) && gridPaints(1) }
         check("lay-fxl-xhtml-icb_multi_declarations") { sizeIs(1, 750.0, 450.0) }
         check("lay-fxl-xhtml-icb_repeated-in-meta") { sizeIs(1, 675.0, 450.0) }
         check("lay-fxl-xhtml-icb_units") { sizeIs(1, 750.0, 450.0) }
@@ -339,6 +359,9 @@ internal object EpubConformanceChecks {
             doc.renditionOf(0).spread == EpubSpread.NONE && spreadChapters(true) == listOf(listOf(0), listOf(1), listOf(2), listOf(3))
         }
         check("lay-pp-svg-icb_multi") { sizeIs(1, 675.0, 450.0) && sizeIs(2, 900.0, 450.0) }
+        check("lay-pp-xhtml-icb") { sizeIs(0, 675.0, 450.0) && gridPaints(0) }
+        check("lay-pp-xhtml-icb_invalid_meta") { sizeIs(1, 675.0, 450.0) && gridPaints(0) && gridPaints(1) }
+        check("lay-pp-xhtml-icb_multi") { sizeIs(0, 675.0, 450.0) && sizeIs(1, 1050.0, 450.0) && gridPaints(0) && gridPaints(1) }
         check("lay-pp-xhtml-icb_multi_declarations") { sizeIs(1, 750.0, 450.0) }
         check("lay-pp-xhtml-icb_repeated-in-meta") { sizeIs(1, 675.0, 450.0) }
         check("lay-pp-xhtml-icb_units") { sizeIs(1, 750.0, 450.0) }

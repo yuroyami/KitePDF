@@ -36,13 +36,16 @@ internal sealed class CssBackgroundImage {
     }
 }
 
-/** One colour stop of a gradient, its position along the line, or null to space it out. */
-internal class GradientStop(val color: RgbColor, val alpha: Double, val position: CssOffset?)
+/**
+ * One colour stop of a gradient: its colour, or null for `currentColor`, which takes the colour
+ * of the box it paints (#503); its alpha; and its position along the line, or null to space it out.
+ */
+internal class GradientStop(val color: RgbColor?, val alpha: Double, val position: CssOffset?)
 
 /** `background-size`: `cover`, `contain`, or a width and a height, each null for `auto`. */
 internal class CssBackgroundSize(val cover: Boolean = false, val contain: Boolean = false, val width: CssOffset? = null, val height: CssOffset? = null)
 
-/** The background layer the style paints: its image, size, position and repeat (CSS Backgrounds 3, 3). */
+/** One background layer the style paints: its image, size, position and repeat (CSS Backgrounds 3, 3). */
 internal class CssBackgroundLayer(
     val image: CssBackgroundImage,
     val size: CssBackgroundSize = CssBackgroundSize(),
@@ -63,16 +66,37 @@ internal class CssBackgroundLayer(
 /** Reads the background values. Lengths go through [length], which knows the element's font. */
 internal class BackgroundParser(private val length: (String) -> Double?) {
 
-    /** The first layer of a `background-image` list, or null for `none` and for images this engine does not paint. */
-    fun image(value: String): CssBackgroundImage? {
-        val first = CssParser.splitTopLevel(value, ',').firstOrNull()?.trim() ?: return null
-        val lower = first.lowercase()
+    /**
+     * Each layer of a `background-image` list, the first on top: null for `none` and for an
+     * image this engine does not paint, which keeps its place in the list (#503).
+     */
+    fun images(value: String): List<CssBackgroundImage?> = layers(value).map(::image)
+
+    /** One image of a `background-image` list, or null for `none` and for images this engine does not paint. */
+    fun image(layer: String): CssBackgroundImage? {
+        val token = layer.trim()
+        val lower = token.lowercase()
         return when {
-            lower.startsWith("url(") -> urlOf(first)?.let { CssBackgroundImage.Url(it) }
-            lower.startsWith("linear-gradient(") -> gradient(first.substring(first.indexOf('(') + 1, first.lastIndexOf(')').coerceAtLeast(first.indexOf('(') + 1)))
+            lower.startsWith("url(") -> urlOf(token)?.let { CssBackgroundImage.Url(it) }
+            lower.startsWith("linear-gradient(") -> gradient(token.substring(token.indexOf('(') + 1, token.lastIndexOf(')').coerceAtLeast(token.indexOf('(') + 1)))
             else -> null
         }
     }
+
+    /** The `background-size` of each layer, or null when one does not read. */
+    fun sizes(value: String): List<CssBackgroundSize>? = layers(value).map { size(it) ?: return null }.ifEmpty { null }
+
+    /** The `background-position` of each layer, or null when one does not read. */
+    fun positions(value: String): List<Pair<CssOffset, CssOffset>>? = layers(value).map { position(it) ?: return null }.ifEmpty { null }
+
+    /** The `background-position-x` or `-y` of each layer, or null when one does not read. */
+    fun offsets(value: String): List<CssOffset>? = layers(value).map { offset(it) ?: return null }.ifEmpty { null }
+
+    /** The `background-repeat` of each layer, or null when one does not read. */
+    fun repeats(value: String): List<Pair<Boolean, Boolean>>? = layers(value).map { repeat(it) ?: return null }.ifEmpty { null }
+
+    /** The comma-separated layers of a background value. A list of none reads as no value. */
+    private fun layers(value: String): List<String> = CssParser.splitTopLevel(value, ',').map { it.trim() }
 
     private fun urlOf(token: String): String? {
         val inner = token.substring(token.indexOf('(') + 1, token.lastIndexOf(')').takeIf { it > 0 } ?: return null).trim()
@@ -111,9 +135,10 @@ internal class BackgroundParser(private val length: (String) -> Double?) {
         val stops = ArrayList<GradientStop>()
         for (part in parts.drop(from)) {
             val tokens = CssParser.splitTopLevel(part, ' ').map { it.trim() }.filter { it.isNotEmpty() }
-            val colorToken = tokens.firstOrNull { CssValues.alpha(it) != null } ?: return null
-            val color = CssValues.color(colorToken) ?: RgbColor(0.0, 0.0, 0.0)
-            val alpha = CssValues.alpha(colorToken) ?: 1.0
+            val colorToken = tokens.firstOrNull { it.equals("currentcolor", ignoreCase = true) || CssValues.alpha(it) != null } ?: return null
+            val current = colorToken.equals("currentcolor", ignoreCase = true)
+            val color = if (current) null else CssValues.color(colorToken) ?: RgbColor(0.0, 0.0, 0.0)
+            val alpha = if (current) 1.0 else CssValues.alpha(colorToken) ?: 1.0
             val positions = tokens.filter { it !== colorToken }.map { offset(it) ?: return null }
             // A stop with two positions is two stops of one colour.
             if (positions.isEmpty()) stops += GradientStop(color, alpha, null)
