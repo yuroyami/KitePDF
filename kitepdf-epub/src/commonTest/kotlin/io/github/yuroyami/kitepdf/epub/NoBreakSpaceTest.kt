@@ -16,10 +16,15 @@ class NoBreakSpaceTest {
         EpubDocument.open(EpubFixtures.epub(body), EpubSettings(pageWidth = width, pageHeight = 2000.0, margin = 10.0))
             .pages[0].textContent().blocks.map { it.lines }
 
+    /** Where the line's first letter starts: its text holds the spaces before it (#576). */
+    private val KiteTextLine.letters: Double get() = charEdges[text.indexOfFirst { it != ' ' }]
+
     @Test
     fun no_break_spaces_at_the_start_of_a_line_indent_it() {
-        val (indented, plain) = blocks("<p>&#160;&#160;&#160;&#160;Indented line</p><p>Plain line</p>").map { it.first().bounds.left }
+        val (indentedLine, plainLine) = blocks("<p>&#160;&#160;&#160;&#160;Indented line</p><p>Plain line</p>").map { it.first() }
+        val (indented, plain) = listOf(indentedLine.letters, plainLine.letters)
         assertTrue(indented - plain > 8.0, "the indented line starts at $indented, a plain one at $plain")
+        assertEquals("    Indented line", indentedLine.text)
     }
 
     @Test
@@ -48,12 +53,14 @@ class NoBreakSpaceTest {
 
     @Test
     fun an_ideographic_space_indents_a_japanese_paragraph_and_starts_no_later_line() {
-        val (indented, plain) = blocks("<p>\u3000\u672C\u6587\u3067\u3059\u3002</p><p>\u672C\u6587\u3067\u3059\u3002</p>").map { it.first().bounds.left }
+        val (indented, plain) = blocks("<p>\u3000\u672C\u6587\u3067\u3059\u3002</p><p>\u672C\u6587\u3067\u3059\u3002</p>").map { it.first().letters }
         assertTrue(indented - plain > 10.0, "the indented paragraph starts at $indented, a plain one at $plain")
         val sentences = blocks("<p>" + "\u65E5\u672C\u8A9E\u306E\u6587\u3002\u3000".repeat(20) + "</p>", 150.0).single()
         assertTrue(sentences.size > 3)
-        val left = sentences.first().bounds.left
-        for (line in sentences.drop(1)) assertTrue(line.bounds.left < left + 1.0, "'${line.text}' starts at ${line.bounds.left}, past $left")
+        val left = sentences.first().letters
+        for (line in sentences.drop(1)) {
+            assertTrue(!line.text.startsWith(" ") && line.letters < left + 1.0, "'${line.text}' starts at ${line.letters}, past $left")
+        }
     }
 
     @Test

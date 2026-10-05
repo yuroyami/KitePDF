@@ -181,6 +181,12 @@ internal class PlacedRun(
     val ids: List<String> = emptyList(),
     /** The innermost element the run's text belongs to (see [InlineRun.element]). */
     val element: KiteXmlNode.Element? = null,
+    /**
+     * How many spaces the line has right before the run, and how wide they are together, so its
+     * text can hold every space of preserved white space and the ones a line starts with (#576).
+     */
+    val spacesBefore: Int = 0,
+    val spacesWidth: Double = 0.0,
 )
 
 /**
