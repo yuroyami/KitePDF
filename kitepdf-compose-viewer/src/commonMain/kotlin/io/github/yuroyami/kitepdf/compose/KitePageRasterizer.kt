@@ -138,7 +138,7 @@ public class KitePageRasterizer(
         theme: ReaderTheme? = null,
         canvasDecorator: KiteCanvasDecorator?,
     ): ImageBitmap = rasterGate.withPermit({ RasterPriority.VISIBLE }) {
-        rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, canvasDecorator = canvasDecorator)
+        rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, canvasDecorator = canvasDecorator).bitmap
     }
 
     /**
@@ -166,7 +166,7 @@ public class KitePageRasterizer(
             rasterizeOffMainLocked(
                 page, widthPx, heightPx, background, hairlineWidthPx, theme,
                 canvasDecorator = canvasDecorator, formState = snapshot,
-            )
+            ).bitmap
         }
     }
 
@@ -176,7 +176,8 @@ public class KitePageRasterizer(
      * on the raster pool (#131). Elsewhere it probes on the pool with system-font
      * text skipped; if the page needed such text, it discards the probe and
      * re-renders fully on Main so Compose's text stack is only touched from the
-     * host UI thread.
+     * host UI thread. With [watchFonts], the page comes with the watch on the fonts of the text
+     * it drew through Compose's text (#595).
      */
     private suspend fun rasterizeOffMainLocked(
         page: KitePage,
@@ -189,14 +190,15 @@ public class KitePageRasterizer(
         canvasDecorator: KiteCanvasDecorator? = null,
         region: IntRect? = null,
         formState: io.github.yuroyami.kitepdf.PdfFormState? = null,
-    ): ImageBitmap {
+        watchFonts: Boolean = false,
+    ): Drawn {
         // A page the viewer no longer needs stops between operators when its coroutine is cancelled (#188).
         val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
         val cancellation = job?.let { KiteCancellation { !it.isActive } }
         if (textOffMain) {
             // Host-font text needs no UI thread here, so the page draws once, on the pool (#131).
             return kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
-                rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region, formState = formState).first
+                rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region, formState = formState, watchFonts = watchFonts)
             }.also { kotlinx.coroutines.currentCoroutineContext().ensureActive() }
         }
         val probe = if (!probesOffMain) null else kotlinx.coroutines.withContext(kitepdfRasterDispatcher()) {
@@ -207,18 +209,19 @@ public class KitePageRasterizer(
             else rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = true, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region, formState = formState)
         }
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
-        if (probe != null && !probe.second) return probe.first
+        if (probe != null && !probe.usedSystemFont) return probe
         hostFontPage = page
         return onHostTextThread {
-            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region, formState = formState).first
+            rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, skipWidgets = skipWidgets, canvasDecorator = canvasDecorator, cancellation = cancellation, region = region, formState = formState, watchFonts = watchFonts)
         }.also { kotlinx.coroutines.currentCoroutineContext().ensureActive() }
     }
 
     /**
      * [rasterizeOffMain] through [cache]: a hit returns the cached bitmap at once, a miss
-     * waits for a slot of [rasterGate] at [priority], then rasterizes and inserts. Second value
-     * of the pair: true when this call actually rasterized (drives `onPageRendered`, which must
-     * not re-fire on cache hits).
+     * waits for a slot of [rasterGate] at [priority], then rasterizes and inserts.
+     * [PageRaster.fresh] is true when this call actually rasterized (drives `onPageRendered`,
+     * which must not re-fire on cache hits). [PageRaster.fonts] goes stale when a font lands for
+     * the page's host text, and the cache then gives the page up (#595).
      */
     internal suspend fun rasterizeCachedOffMain(
         cache: PageBitmapCache?,
@@ -233,7 +236,7 @@ public class KitePageRasterizer(
         priority: () -> Int = { RasterPriority.VISIBLE },
         region: IntRect? = null,
         contentVersion: Int = 0,
-    ): Pair<ImageBitmap, Boolean> {
+    ): PageRaster {
         val key = cache?.let {
             PageBitmapCache.Key(
                 pageIdentity = page,
@@ -249,16 +252,16 @@ public class KitePageRasterizer(
                 contentVersion = contentVersion,
             )
         }
-        if (cache != null && key != null) cache.get(key)?.let { return it to false }
+        if (cache != null && key != null) cache.get(key)?.let { return PageRaster(it.bitmap, fresh = false, it.fonts) }
         return rasterGate.withPermit(priority) {
             // Another raster of the same page may have filled the cache while this one waited.
             val hit = if (cache != null && key != null) cache.get(key) else null
             if (hit != null) {
-                hit to false
+                PageRaster(hit.bitmap, fresh = false, hit.fonts)
             } else {
-                val bmp = rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, region)
-                if (cache != null && key != null) cache.put(key, bmp)
-                bmp to true
+                val drawn = rasterizeOffMainLocked(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, region, watchFonts = true)
+                if (cache != null && key != null) cache.put(key, drawn.bitmap, drawn.fonts)
+                PageRaster(drawn.bitmap, fresh = true, drawn.fonts)
             }
         }
     }
@@ -293,7 +296,7 @@ public class KitePageRasterizer(
         priority: () -> Int = { RasterPriority.VISIBLE },
         region: IntRect? = null,
         contentVersion: Int = 0,
-    ): Pair<ImageBitmap, Boolean>? {
+    ): PageRaster? {
         for (attempt in 0 until 2) {
             try {
                 return rasterizeCachedOffMain(cache, page, widthPx, heightPx, background, hairlineWidthPx, theme, skipWidgets, canvasDecorator, priority, region, contentVersion)
@@ -349,7 +352,7 @@ public class KitePageRasterizer(
         canvasDecorator: KiteCanvasDecorator?,
     ): ImageBitmap {
         requireHostTextThread()
-        return rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, canvasDecorator = canvasDecorator).first
+        return rasterizeInternal(page, widthPx, heightPx, background, hairlineWidthPx, theme, skipSystemFontText = false, canvasDecorator = canvasDecorator).bitmap
     }
 
     /**
@@ -379,13 +382,14 @@ public class KitePageRasterizer(
         return rasterizeInternal(
             page, widthPx, heightPx, background, hairlineWidthPx, theme,
             skipSystemFontText = false, canvasDecorator = canvasDecorator, formState = formState,
-        ).first
+        ).bitmap
     }
 
     /**
-     * [rasterize] plus the system-font probe flag: second value is true when
+     * [rasterize] plus the system-font probe flag: [Drawn.usedSystemFont] is true when
      * the page hit the system-font fallback while [skipSystemFontText] was set
-     * (those runs were left undrawn and the bitmap is incomplete).
+     * (those runs were left undrawn and the bitmap is incomplete). With [watchFonts],
+     * [Drawn.fonts] watches the fonts of the text the page drew through Compose's text (#595).
      */
     private fun rasterizeInternal(
         page: KitePage,
@@ -401,7 +405,8 @@ public class KitePageRasterizer(
         formState: io.github.yuroyami.kitepdf.PdfFormState? = null,
         /** The part of the page drawn [widthPx] × [heightPx] that the bitmap holds, or null for all of it (#375). */
         region: IntRect? = null,
-    ): Pair<ImageBitmap, Boolean> {
+        watchFonts: Boolean = false,
+    ): Drawn {
         require(widthPx > 0 && heightPx > 0) { "bitmap dimensions must be > 0" }
         require(region == null || (region.width > 0 && region.height > 0)) { "a region must not be empty" }
         val bitmapW = region?.width ?: widthPx
@@ -437,6 +442,7 @@ public class KitePageRasterizer(
         val bg = paperColor(background, theme)
         val bitmap = ImageBitmap(bitmapW, bitmapH)
         var usedSystemFont = false
+        var fonts: HostFontWatch? = null
         CanvasDrawScope().draw(density, layoutDirection, Canvas(bitmap), Size(bitmapW.toFloat(), bitmapH.toFloat())) {
             drawRect(bg, size = size)
             // concat(b) applies b FIRST, so displayToDeviceBase() runs before the scale, and a
@@ -462,10 +468,24 @@ public class KitePageRasterizer(
                 else -> page.renderTo(canvas, deviceCtm)
             }
             usedSystemFont = base.usedSystemFontText
+            if (watchFonts) fonts = base.hostFontWatch()
         }
-        return bitmap to usedSystemFont
+        return Drawn(bitmap, usedSystemFont, fonts)
     }
+
+    /**
+     * A page drawn into [bitmap]. [usedSystemFont] is true when a probe left its system-font text
+     * out, and [fonts] watches the fonts of the text it drew through Compose's text (#595).
+     */
+    private class Drawn(val bitmap: ImageBitmap, val usedSystemFont: Boolean, val fonts: HostFontWatch?)
 }
+
+/**
+ * A page's bitmap from the viewer's cached raster. [fresh] is true when the call drew it rather
+ * than finding it in the cache. [fonts] goes stale when a font lands for characters that the
+ * page's host text drew as boxes, and the page then draws again (#595).
+ */
+internal data class PageRaster(val bitmap: ImageBitmap, val fresh: Boolean, val fonts: HostFontWatch? = null)
 
 /** [KitePageRasterizer] wired to the composition's density, layout direction and font resolver. */
 @Composable

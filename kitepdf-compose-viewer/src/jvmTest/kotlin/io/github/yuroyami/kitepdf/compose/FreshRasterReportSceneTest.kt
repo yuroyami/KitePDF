@@ -27,11 +27,11 @@ class FreshRasterReportSceneTest {
     @Test
     fun a_raster_that_lands_as_its_report_starts_is_reported_once() {
         val bitmap = ImageBitmap(1, 1)
-        val raster = mutableStateOf<Pair<ImageBitmap, Boolean>?>(null)
+        val raster = mutableStateOf<PageRaster?>(null)
         var reports = 0
         ImageComposeScene(width = 10, height = 10) {
             val rastered by raster
-            remember { LandOnRemember { raster.value = bitmap to true } }
+            remember { LandOnRemember { raster.value = PageRaster(bitmap, fresh = true) } }
             ReportFreshRaster(rastered) { reports++ }
         }.use { scene -> repeat(5) { scene.render(it * 16_000_000L) } }
         assertEquals(1, reports)

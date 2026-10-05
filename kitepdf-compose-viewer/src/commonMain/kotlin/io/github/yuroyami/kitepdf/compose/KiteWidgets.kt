@@ -33,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -180,7 +179,7 @@ public fun KiteThumbnailStrip(
     selectedBorderColor: Color = Color(0xFF4A90D9),
     pageBackground: Color = Color.White,
 ) {
-    val rasterizer = rememberKitePageRasterizer()
+    val rasterizer = rememberKitePageRasterizer().also { it.textOffMain = state.hostTextOffMain }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val heightPx = with(density) { thumbnailHeight.roundToPx() }.coerceAtLeast(1)
@@ -205,7 +204,7 @@ public fun KiteThumbnailStrip(
             val paper = paperColor(pageBackground, theme)
             // A remote picture that lands in the page draws the thumbnail again (#38).
             val contentVersion = page?.let { state.contentVersionOf(it) } ?: 0
-            val bitmap by produceState<ImageBitmap?>(null, page, heightPx, paper, theme, decorator, contentVersion) {
+            val raster by produceState<PageRaster?>(null, page, heightPx, paper, theme, decorator, contentVersion) {
                 // Same mandatory guard as KitePageRaster: an exception escaping
                 // produceState aborts the host app, so a failed thumbnail must
                 // degrade to its placeholder instead. A chapter still laying out
@@ -215,7 +214,7 @@ public fun KiteThumbnailStrip(
                     rasterizer.rasterizeCachedOrNull(
                         thumbnails, it, widthPx, heightPx, paper, 1f, theme, index, canvasDecorator = decorator,
                         priority = { RasterPriority.THUMBNAIL }, contentVersion = contentVersion,
-                    )?.first
+                    )
                 }
                 backOnComposeThread()
                 value = when {
@@ -224,6 +223,9 @@ public fun KiteThumbnailStrip(
                     else -> null
                 }
             }
+            val bitmap = raster?.bitmap
+            // A font that lands for characters the thumbnail drew as boxes draws it again (#595).
+            if (page != null) WatchHostFonts(raster?.fonts, state, page)
             val selected = index == state.currentPage
             val shape = RoundedCornerShape(4.dp)
             val label = strings.page(index + 1, if (state.isComplete) state.knownPageCount else null)

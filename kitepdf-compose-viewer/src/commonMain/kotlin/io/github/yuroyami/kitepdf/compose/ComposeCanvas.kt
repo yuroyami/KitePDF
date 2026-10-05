@@ -140,6 +140,8 @@ public class ComposeCanvas internal constructor(
      * standard faces (#593). A test can take the faces away, as a browser has none.
      */
     private val hostFace: (FontSpec) -> Boolean = ::hostHasFace,
+    /** The code points this canvas draws through Compose's text, shared with the canvases of its soft masks (#595). */
+    private val hostText: HostFontWatch.Log = HostFontWatch.Log(),
 ) : KiteCanvas {
 
     /**
@@ -166,6 +168,14 @@ public class ComposeCanvas internal constructor(
     /** True once a system-font run was skipped because of [skipSystemFontText]. */
     internal var usedSystemFontText: Boolean = false
         private set
+
+    /**
+     * A watch that goes stale when a font lands for the text this canvas drew through Compose's
+     * text, or null when it drew none that way. Call it once the page is drawn, on the thread it
+     * drew on. A browser draws boxes for characters until their font lands, and a page drawn before
+     * then draws again when this goes stale (#595).
+     */
+    internal fun hostFontWatch(): HostFontWatch? = hostText.watch(textMeasurer)
 
     /**
      * What each open save on the canvas holds, oldest first: a clip, or the layer of a
@@ -464,6 +474,7 @@ public class ComposeCanvas internal constructor(
             // The locale picks the CJK fallback face of the font's language (#472).
             localeList = fontSpec.language?.let { LocaleList(it) },
         )
+        hostText.note(style, text)
         drawScope.withTransform({ transform(rest.toComposeMatrix()) }) {
             // Each piece starts where the document's own advances put it (ISO 32000-1, 9.4.4),
             // character and word spacing included (#121). A piece of one glyph keeps the host
@@ -855,7 +866,7 @@ public class ComposeCanvas internal constructor(
             scale(1f / pixelSize.toFloat(), pivot = Offset.Zero) {
                 val canvas = ComposeCanvas(
                     this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables, bitmaps,
-                    inSceneDrawPass, hostLines = hostLines,
+                    inSceneDrawPass, hostLines = hostLines, hostText = hostText,
                 )
                 nested = canvas
                 renderMask(canvas)

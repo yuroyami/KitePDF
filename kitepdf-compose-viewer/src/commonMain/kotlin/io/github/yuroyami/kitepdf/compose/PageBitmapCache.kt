@@ -42,9 +42,15 @@ internal class PageBitmapCache(private val maxBytes: Long) {
         val contentVersion: Int = 0,
     )
 
+    /**
+     * A cached page: its bitmap, and the watch on the fonts of the text it drew through Compose's
+     * text, if it drew any that way (#595).
+     */
+    internal class Entry(val bitmap: ImageBitmap, val fonts: HostFontWatch?)
+
     // Access-ordered behaviour done manually: Kotlin common LinkedHashMap has
     // no accessOrder constructor, so a hit re-inserts to refresh recency.
-    private val entries = LinkedHashMap<Key, ImageBitmap>()
+    private val entries = LinkedHashMap<Key, Entry>()
     private val lock = io.github.yuroyami.kitepdf.core.KiteLock()
 
     private var bytes = 0L
@@ -70,22 +76,29 @@ internal class PageBitmapCache(private val maxBytes: Long) {
      */
     fun getOrPut(key: Key, produce: () -> ImageBitmap): ImageBitmap {
         if (maxBytes <= 0L) return produce()
-        get(key)?.let { return it }
+        get(key)?.let { return it.bitmap }
         return produce().also { put(key, it) }
     }
 
-    /** The cached bitmap for [key] refreshed as most recently used, or null. */
-    fun get(key: Key): ImageBitmap? {
+    /**
+     * The cached page for [key] refreshed as most recently used, or null. A page whose text met a
+     * font that landed after it drew leaves the cache, so it draws again with that font (#595).
+     */
+    fun get(key: Key): Entry? {
         if (maxBytes <= 0L) return null
         return lock.withLock {
             val hit = entries.remove(key) ?: return@withLock null
+            if (hit.fonts?.stale == true) {
+                bytes -= bytesOf(key)
+                return@withLock null
+            }
             entries[key] = hit // re-insert: most recently used
             hit
         }
     }
 
-    /** Inserts [bitmap] under [key] and evicts eldest entries over budget. */
-    fun put(key: Key, bitmap: ImageBitmap) {
+    /** Inserts [bitmap] under [key], with the watch on its fonts, and evicts eldest entries over budget. */
+    fun put(key: Key, bitmap: ImageBitmap, fonts: HostFontWatch? = null) {
         if (maxBytes <= 0L) return
         lock.withLock {
             if (entries.remove(key) != null) bytes -= bytesOf(key)
@@ -93,7 +106,7 @@ internal class PageBitmapCache(private val maxBytes: Long) {
             // The caller still receives an oversized freshly-rendered bitmap, but
             // retaining it would make the advertised cache budget meaningless.
             if (cost == Long.MAX_VALUE || cost > maxBytes) return
-            entries[key] = bitmap
+            entries[key] = Entry(bitmap, fonts)
             bytes += cost
             val it = entries.keys.iterator()
             while (bytes > maxBytes && it.hasNext()) {
