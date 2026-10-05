@@ -1052,11 +1052,20 @@ public class PdfDocument private constructor(
             }.getOrNull()
             if (normal != null) return finish(normal)
 
-            // Recovery path: rebuild the xref by scanning the raw bytes.
+            // Recovery path: rebuild the xref by scanning the raw bytes, and take the first
+            // catalog that leads to a page tree. A file with none is no document, so it fails
+            // here instead of at its first use (#584).
             kiteWarn { "open: xref chain unusable, rebuilding by byte scan" }
             val repaired = PdfRepair.rebuild(reader)
             val sec = buildSecurityHandler(repaired.entries, repaired.trailer, bytes, password)
-            return finish(PdfDocument(version, bytes, repaired.entries, repaired.trailer, sec))
+            val candidates = repaired.roots.asSequence().map { root ->
+                finish(PdfDocument(version, bytes, repaired.entries, repaired.trailerWith(root), sec))
+            }
+            return candidates.firstOrNull { isStructurallyUsable(it) }
+                // Without its password an encrypted file reads its objects as ciphertext, so
+                // its catalog cannot be checked; it opens read-only, as the caller asked.
+                ?: candidates.first().takeIf { it.isEncrypted && !it.isAuthenticated }
+                ?: throw PdfFormatException("Repair found no catalog that leads to a page tree")
         }
 
         /**
