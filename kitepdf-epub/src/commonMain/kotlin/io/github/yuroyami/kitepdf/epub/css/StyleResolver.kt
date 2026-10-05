@@ -274,8 +274,7 @@ internal class StyleResolver(
     private fun quotesValue(v: String, current: List<String>?): List<String>? {
         when (v.lowercase()) {
             "none" -> return emptyList()
-            "auto", "initial" -> return null
-            "inherit" -> return current
+            "auto" -> return null
         }
         val marks = ArrayList<String>()
         var i = 0
@@ -485,6 +484,15 @@ internal class StyleResolver(
     }
 
     private fun apply(b: Builder, prop: String, v: String) {
+        // The CSS-wide keywords mean the same on every property, so they are read here (CSS Cascade 4, 7.3, #579).
+        when (val keyword = v.trim().lowercase()) {
+            "inherit", "initial", "unset" -> {
+                val name = prop.removePrefix("-webkit-").removePrefix("-epub-")
+                val inherit = keyword == "inherit" || keyword == "unset" && name in INHERITED
+                takeValue(b, name, if (inherit) Builder(b.parent).takeAll(b.parent) else Builder(initial()))
+                return
+            }
+        }
         fun len(ref: Double) = CssValues.length(v, b.fontSizePt, rootFontSizePt, ref)
         when (prop) {
             "display" -> parseDisplay(v)?.let { b.display = it }
@@ -494,10 +502,7 @@ internal class StyleResolver(
                 "normal" -> false
                 else -> b.italic
             }
-            // `inherit` keeps the parent's family, which the builder already holds.
-            "font-family" -> if (v.trim().lowercase() != "inherit") {
-                b.fontFamily = parseFamily(v); b.fontFamilyNames = specificFamilies(v)
-            }
+            "font-family" -> { b.fontFamily = parseFamily(v); b.fontFamilyNames = specificFamilies(v) }
             "color" -> CssValues.color(v)?.let { b.color = it }
             "background-color" -> b.backgroundColor = background(v)
             "background" -> {
@@ -515,17 +520,17 @@ internal class StyleResolver(
             "background-repeat" -> backgrounds(b).repeats(v)?.let { b.bgRepeats = it }
             "text-align" -> parseAlign(v)?.let { b.textAlign = it }
             "overflow-wrap", "word-wrap" -> when (v.trim().lowercase()) {
-                "normal", "initial", "unset" -> b.overflowWrap = false
+                "normal" -> b.overflowWrap = false
                 "break-word", "anywhere" -> b.overflowWrap = true
             }
             "word-break", "-epub-word-break" -> when (v.trim().lowercase()) {
-                "normal", "initial", "unset" -> b.wordBreak = WordBreak.NORMAL
+                "normal" -> b.wordBreak = WordBreak.NORMAL
                 "break-all" -> b.wordBreak = WordBreak.BREAK_ALL
                 "keep-all" -> b.wordBreak = WordBreak.KEEP_ALL
                 "break-word" -> b.wordBreak = WordBreak.BREAK_WORD
             }
             "line-break", "-epub-line-break", "-webkit-line-break" -> when (v.trim().lowercase()) {
-                "auto", "initial", "unset" -> b.lineBreak = LineBreak.AUTO
+                "auto" -> b.lineBreak = LineBreak.AUTO
                 "loose" -> b.lineBreak = LineBreak.LOOSE
                 "normal" -> b.lineBreak = LineBreak.NORMAL
                 "strict" -> b.lineBreak = LineBreak.STRICT
@@ -533,51 +538,39 @@ internal class StyleResolver(
             }
             // EPUB 3's own names: vertical-right and use-glyph-orientation for mixed, sideways-right for sideways.
             "text-orientation", "-epub-text-orientation", "-webkit-text-orientation" -> when (v.trim().lowercase()) {
-                "mixed", "vertical-right", "use-glyph-orientation", "initial", "unset" -> b.textOrientation = TextOrientation.MIXED
+                "mixed", "vertical-right", "use-glyph-orientation" -> b.textOrientation = TextOrientation.MIXED
                 "upright" -> b.textOrientation = TextOrientation.UPRIGHT
                 "sideways", "sideways-right" -> b.textOrientation = TextOrientation.SIDEWAYS
             }
-            "text-underline-position", "-epub-text-underline-position", "-webkit-text-underline-position" -> when (v.trim().lowercase()) {
-                "inherit", "unset" -> b.underlinePosition = b.parent.underlinePosition
-                else -> parseUnderlinePosition(v)?.let { b.underlinePosition = it }
-            }
+            "text-underline-position", "-epub-text-underline-position", "-webkit-text-underline-position" ->
+                parseUnderlinePosition(v)?.let { b.underlinePosition = it }
             "text-emphasis-style", "-epub-text-emphasis-style", "-webkit-text-emphasis-style" -> when (v.trim().lowercase()) {
-                "inherit", "unset" -> b.emphasisStyle = b.parent.emphasisStyle
-                "none", "initial" -> b.emphasisStyle = null
+                "none" -> b.emphasisStyle = null
                 else -> parseEmphasisStyle(words(v))?.let { b.emphasisStyle = it }
             }
             "text-emphasis-color", "-epub-text-emphasis-color", "-webkit-text-emphasis-color" -> when (v.trim().lowercase()) {
-                "inherit", "unset" -> b.emphasisColor = b.parent.emphasisColor
-                "currentcolor", "initial" -> b.emphasisColor = null
+                "currentcolor" -> b.emphasisColor = null
                 else -> CssValues.color(v)?.let { b.emphasisColor = it }
             }
             // The shorthand sets the style and the colour and leaves the position (3.4).
-            "text-emphasis", "-epub-text-emphasis", "-webkit-text-emphasis" -> when (v.trim().lowercase()) {
-                "inherit", "unset" -> { b.emphasisStyle = b.parent.emphasisStyle; b.emphasisColor = b.parent.emphasisColor }
-                "initial" -> { b.emphasisStyle = null; b.emphasisColor = null }
-                else -> parseEmphasis(v)?.let { (style, color) -> b.emphasisStyle = style; b.emphasisColor = color }
-            }
-            "text-emphasis-position", "-epub-text-emphasis-position", "-webkit-text-emphasis-position" -> when (v.trim().lowercase()) {
-                "inherit", "unset" -> b.emphasisPosition = b.parent.emphasisPosition
-                "initial" -> b.emphasisPosition = EmphasisPosition()
-                else -> parseEmphasisPosition(v)?.let { b.emphasisPosition = it }
-            }
+            "text-emphasis", "-epub-text-emphasis", "-webkit-text-emphasis" ->
+                parseEmphasis(v)?.let { (style, color) -> b.emphasisStyle = style; b.emphasisColor = color }
+            "text-emphasis-position", "-epub-text-emphasis-position", "-webkit-text-emphasis-position" ->
+                parseEmphasisPosition(v)?.let { b.emphasisPosition = it }
             "text-combine-upright", "-epub-text-combine-horizontal", "-webkit-text-combine-upright" -> when (v.trim().lowercase()) {
-                "inherit", "unset" -> b.textCombineUpright = b.parent.textCombineUpright
-                "none", "initial" -> b.textCombineUpright = false
+                "none" -> b.textCombineUpright = false
                 "all" -> b.textCombineUpright = true
             }
             // EPUB 3.0's name, from an older draft: `horizontal`, with a count of characters that is not read.
             "-epub-text-combine", "-webkit-text-combine" -> {
                 val w = words(v.lowercase())
                 when {
-                    w == listOf("inherit") || w == listOf("unset") -> b.textCombineUpright = b.parent.textCombineUpright
-                    w == listOf("none") || w == listOf("initial") -> b.textCombineUpright = false
+                    w == listOf("none") -> b.textCombineUpright = false
                     w.firstOrNull() == "horizontal" && (w.size == 1 || w.size == 2 && (w[1].toIntOrNull() ?: 0) > 0) -> b.textCombineUpright = true
                 }
             }
             "text-align-last", "-epub-text-align-last" -> when (v.trim().lowercase()) {
-                "auto", "initial", "unset" -> b.textAlignLast = null
+                "auto" -> b.textAlignLast = null
                 else -> parseAlign(v)?.let { b.textAlignLast = it }
             }
             "text-indent" -> len(refWidthPt)?.let { b.textIndentPt = it }
@@ -700,6 +693,159 @@ internal class StyleResolver(
         }
     }
 
+    /**
+     * Sets on [dst] what property [name], without a prefix, sets, to its value in [src]: the parent's
+     * style for `inherit` and the initial style for `initial` (#579). A shorthand sets each of its
+     * longhands, and a name this resolver does not read changes nothing.
+     */
+    private fun takeValue(dst: Builder, name: String, src: Builder) {
+        when (name) {
+            "display" -> dst.display = src.display
+            "font-weight" -> dst.bold = src.bold
+            "font-style" -> dst.italic = src.italic
+            "font-family" -> { dst.fontFamily = src.fontFamily; dst.fontFamilyNames = src.fontFamilyNames }
+            "font-variant", "font-variant-caps" -> dst.smallCaps = src.smallCaps
+            "color" -> dst.color = src.color
+            "background-color" -> dst.backgroundColor = src.backgroundColor
+            "background" -> {
+                dst.backgroundColor = src.backgroundColor; dst.bgImages = src.bgImages; dst.bgSizes = src.bgSizes
+                dst.bgXs = src.bgXs; dst.bgYs = src.bgYs; dst.bgRepeats = src.bgRepeats
+            }
+            "background-image" -> dst.bgImages = src.bgImages
+            "background-size" -> dst.bgSizes = src.bgSizes
+            "background-position" -> { dst.bgXs = src.bgXs; dst.bgYs = src.bgYs }
+            "background-position-x" -> dst.bgXs = src.bgXs
+            "background-position-y" -> dst.bgYs = src.bgYs
+            "background-repeat" -> dst.bgRepeats = src.bgRepeats
+            "transform" -> dst.transform = src.transform
+            "transform-origin" -> dst.transformOrigin = src.transformOrigin
+            "text-align" -> dst.textAlign = src.textAlign
+            "text-align-last" -> dst.textAlignLast = src.textAlignLast
+            "text-indent" -> dst.textIndentPt = src.textIndentPt
+            "line-height" -> dst.lineHeightPt = src.lineHeightPt
+            "white-space" -> dst.whiteSpace = src.whiteSpace
+            "overflow-wrap", "word-wrap" -> dst.overflowWrap = src.overflowWrap
+            "word-break" -> dst.wordBreak = src.wordBreak
+            "line-break" -> dst.lineBreak = src.lineBreak
+            "text-transform" -> { dst.textTransform = src.textTransform; dst.fullWidth = src.fullWidth }
+            "letter-spacing" -> dst.letterSpacingPt = src.letterSpacingPt
+            "word-spacing" -> dst.wordSpacingPt = src.wordSpacingPt
+            "hyphens" -> dst.hyphensAuto = src.hyphensAuto
+            "direction" -> dst.direction = src.direction
+            "writing-mode" -> dst.writingMode = src.writingMode
+            "text-orientation" -> dst.textOrientation = src.textOrientation
+            "text-combine-upright", "text-combine-horizontal", "text-combine" -> dst.textCombineUpright = src.textCombineUpright
+            "text-underline-position" -> dst.underlinePosition = src.underlinePosition
+            "text-emphasis" -> { dst.emphasisStyle = src.emphasisStyle; dst.emphasisColor = src.emphasisColor }
+            "text-emphasis-style" -> dst.emphasisStyle = src.emphasisStyle
+            "text-emphasis-color" -> dst.emphasisColor = src.emphasisColor
+            "text-emphasis-position" -> dst.emphasisPosition = src.emphasisPosition
+            "text-decoration", "text-decoration-line" -> {
+                dst.ownUnderline = src.ownUnderline; dst.ownLineThrough = src.ownLineThrough; dst.ownOverline = src.ownOverline
+            }
+            "text-decoration-color" -> dst.decorationColor = src.decorationColor
+            "quotes" -> dst.quotes = src.quotes
+            "visibility" -> dst.visible = src.visible
+            "list-style-type", "list-style" -> dst.listType = src.listType
+            "vertical-align" -> dst.verticalAlign = src.verticalAlign
+            "margin-top" -> dst.marginTop = src.marginTop
+            "margin-right" -> { dst.marginRight = src.marginRight; dst.marginRightAuto = src.marginRightAuto }
+            "margin-bottom" -> dst.marginBottom = src.marginBottom
+            "margin-left" -> { dst.marginLeft = src.marginLeft; dst.marginLeftAuto = src.marginLeftAuto }
+            "padding-top" -> dst.paddingTop = src.paddingTop
+            "padding-right" -> dst.paddingRight = src.paddingRight
+            "padding-bottom" -> dst.paddingBottom = src.paddingBottom
+            "padding-left" -> dst.paddingLeft = src.paddingLeft
+            "border-top-width" -> dst.borderTopW = src.borderTopW
+            "border-right-width" -> dst.borderRightW = src.borderRightW
+            "border-bottom-width" -> dst.borderBottomW = src.borderBottomW
+            "border-left-width" -> dst.borderLeftW = src.borderLeftW
+            "border-top-style" -> dst.borderTopStyle = src.borderTopStyle
+            "border-right-style" -> dst.borderRightStyle = src.borderRightStyle
+            "border-bottom-style" -> dst.borderBottomStyle = src.borderBottomStyle
+            "border-left-style" -> dst.borderLeftStyle = src.borderLeftStyle
+            "border-top-color" -> dst.borderTopColor = src.borderTopColor
+            "border-right-color" -> dst.borderRightColor = src.borderRightColor
+            "border-bottom-color" -> dst.borderBottomColor = src.borderBottomColor
+            "border-left-color" -> dst.borderLeftColor = src.borderLeftColor
+            "border-radius" -> dst.radii = src.radii
+            "border-top-left-radius" -> dst.radii = corner(dst.radii, src.radii, 0)
+            "border-top-right-radius" -> dst.radii = corner(dst.radii, src.radii, 1)
+            "border-bottom-right-radius" -> dst.radii = corner(dst.radii, src.radii, 2)
+            "border-bottom-left-radius" -> dst.radii = corner(dst.radii, src.radii, 3)
+            "border-collapse" -> dst.borderCollapse = src.borderCollapse
+            "border-spacing" -> dst.borderSpacingPt = src.borderSpacingPt
+            "box-shadow" -> dst.shadows = src.shadows
+            "width" -> dst.widthPt = src.widthPt
+            "min-width" -> dst.minWidthPt = src.minWidthPt
+            "max-width" -> dst.maxWidthPt = src.maxWidthPt
+            "height" -> dst.heightPt = src.heightPt
+            "min-height" -> dst.minHeightPt = src.minHeightPt
+            "max-height" -> dst.maxHeightPt = src.maxHeightPt
+            "break-before", "page-break-before" -> dst.breakBefore = src.breakBefore
+            "break-after", "page-break-after" -> dst.breakAfter = src.breakAfter
+            "break-inside", "page-break-inside" -> dst.breakInsideAvoid = src.breakInsideAvoid
+            "float" -> dst.cssFloat = src.cssFloat
+            "clear" -> dst.clear = src.clear
+            "position" -> dst.position = src.position
+            "left" -> dst.leftPt = src.leftPt
+            "top" -> dst.topPt = src.topPt
+            "right" -> dst.rightPt = src.rightPt
+            "bottom" -> dst.bottomPt = src.bottomPt
+            "z-index" -> dst.zIndex = src.zIndex
+            "opacity" -> dst.opacity = src.opacity
+            "overflow", "overflow-x", "overflow-y" -> dst.clipsOverflow = src.clipsOverflow
+            "object-fit" -> dst.objectFit = src.objectFit
+            "table-layout" -> dst.tableLayoutFixed = src.tableLayoutFixed
+            "flex-direction" -> dst.flex = dst.flex.copy(direction = src.flex.direction)
+            "flex-wrap" -> dst.flex = dst.flex.copy(wrap = src.flex.wrap)
+            "flex-flow" -> dst.flex = dst.flex.copy(direction = src.flex.direction, wrap = src.flex.wrap)
+            "justify-content" -> dst.flex = dst.flex.copy(justify = src.flex.justify)
+            "align-items" -> dst.flex = dst.flex.copy(alignItems = src.flex.alignItems)
+            "align-self" -> dst.flex = dst.flex.copy(alignSelf = src.flex.alignSelf)
+            "align-content" -> dst.flex = dst.flex.copy(alignContent = src.flex.alignContent)
+            "gap", "grid-gap" -> dst.flex = dst.flex.copy(
+                rowGap = src.flex.rowGap, columnGap = src.flex.columnGap, columnGapNormal = src.flex.columnGapNormal,
+            )
+            "row-gap", "grid-row-gap" -> dst.flex = dst.flex.copy(rowGap = src.flex.rowGap)
+            "column-gap", "grid-column-gap" -> dst.flex = dst.flex.copy(columnGap = src.flex.columnGap, columnGapNormal = src.flex.columnGapNormal)
+            "order" -> dst.flex = dst.flex.copy(order = src.flex.order)
+            "flex-grow" -> dst.flex = dst.flex.copy(grow = src.flex.grow)
+            "flex-shrink" -> dst.flex = dst.flex.copy(shrink = src.flex.shrink)
+            "flex-basis" -> dst.flex = dst.flex.copy(basis = src.flex.basis)
+            "flex" -> dst.flex = dst.flex.copy(grow = src.flex.grow, shrink = src.flex.shrink, basis = src.flex.basis)
+            "grid-template-columns" -> dst.grid = dst.grid.copy(columns = src.grid.columns)
+            "grid-template-rows" -> dst.grid = dst.grid.copy(rows = src.grid.rows)
+            "grid-auto-columns" -> dst.grid = dst.grid.copy(autoColumns = src.grid.autoColumns)
+            "grid-auto-rows" -> dst.grid = dst.grid.copy(autoRows = src.grid.autoRows)
+            "justify-items" -> dst.grid = dst.grid.copy(justifyItems = src.grid.justifyItems)
+            "justify-self" -> dst.grid = dst.grid.copy(justifySelf = src.grid.justifySelf)
+            "grid-column-start" -> dst.grid = dst.grid.copy(columnStart = src.grid.columnStart)
+            "grid-column-end" -> dst.grid = dst.grid.copy(columnEnd = src.grid.columnEnd)
+            "grid-row-start" -> dst.grid = dst.grid.copy(rowStart = src.grid.rowStart)
+            "grid-row-end" -> dst.grid = dst.grid.copy(rowEnd = src.grid.rowEnd)
+            "grid-column" -> dst.grid = dst.grid.copy(columnStart = src.grid.columnStart, columnEnd = src.grid.columnEnd)
+            "grid-row" -> dst.grid = dst.grid.copy(rowStart = src.grid.rowStart, rowEnd = src.grid.rowEnd)
+            "grid-area" -> dst.grid = dst.grid.copy(
+                columnStart = src.grid.columnStart, columnEnd = src.grid.columnEnd, rowStart = src.grid.rowStart, rowEnd = src.grid.rowEnd,
+            )
+            "column-count" -> dst.columnCount = src.columnCount
+            "column-width" -> dst.columnWidth = src.columnWidth
+            "columns" -> { dst.columnCount = src.columnCount; dst.columnWidth = src.columnWidth }
+            "column-rule" -> { dst.ruleWidth = src.ruleWidth; dst.ruleStyle = src.ruleStyle; dst.ruleColor = src.ruleColor }
+            "column-rule-width" -> dst.ruleWidth = src.ruleWidth
+            "column-rule-style" -> dst.ruleStyle = src.ruleStyle
+            "column-rule-color" -> dst.ruleColor = src.ruleColor
+            "column-span" -> dst.columnSpanAll = src.columnSpanAll
+        }
+    }
+
+    /** [into] with corner [k], 0 top-left to 3 bottom-left, as [from] has it. */
+    private fun corner(into: CornerRadii?, from: CornerRadii?, k: Int): CornerRadii {
+        val f = from ?: CornerRadii.ZERO
+        return (into ?: CornerRadii.ZERO).with(k, f.x[k], f.y[k])
+    }
+
     private fun forcesBreak(v: String): Boolean =
         v.trim().lowercase() in setOf("always", "page", "left", "right", "recto", "verso")
 
@@ -712,8 +858,7 @@ internal class StyleResolver(
 
     /** A `border-style` value, or null for one that is not a style, which leaves the declaration out. */
     private fun borderStyle(v: String): BorderStyle? = when (v.trim().lowercase()) {
-        // `border-style` is not inherited, so `unset` means the initial value.
-        "none", "initial", "unset" -> BorderStyle.NONE
+        "none" -> BorderStyle.NONE
         "hidden" -> BorderStyle.HIDDEN
         "solid" -> BorderStyle.SOLID
         "double" -> BorderStyle.DOUBLE
@@ -767,7 +912,7 @@ internal class StyleResolver(
     }
 
     private fun sizeValue(b: Builder, v: String, ref: Double): Double? = when (v.trim().lowercase()) {
-        "auto", "none", "inherit" -> null
+        "auto", "none" -> null
         else -> CssValues.length(v, b.fontSizePt, rootFontSizePt, ref)
     }
 
@@ -784,7 +929,8 @@ internal class StyleResolver(
     /** The size [v] gives, or null for a value this resolver cannot read. */
     private fun resolveFontSize(v: String, parentPt: Double): Double? {
         val s = v.trim().lowercase()
-        if (s == "inherit") return parentPt
+        if (s == "inherit" || s == "unset") return parentPt
+        if (s == "initial") return rootFontSizePt
         CssValues.fontSizeKeyword(s, parentPt, rootFontSizePt)?.let { return it }
         return CssValues.length(s, parentPt, rootFontSizePt, parentPt)
     }
@@ -962,7 +1108,7 @@ internal class StyleResolver(
      */
     private fun parseUnderlinePosition(v: String): UnderlinePosition? {
         val words = v.trim().lowercase().split(' ', '\t', '\n').filter { it.isNotEmpty() }
-        if (words.singleOrNull() in setOf("auto", "from-font", "initial")) return UnderlinePosition.AUTO
+        if (words.singleOrNull() in setOf("auto", "from-font")) return UnderlinePosition.AUTO
         var under = false
         var side: UnderlineSide? = null
         for (w in words) when (w) {
@@ -980,7 +1126,7 @@ internal class StyleResolver(
      */
     private fun parseTextTransform(v: String): Pair<TextTransform, Boolean>? {
         val words = v.trim().lowercase().split(' ', '\t', '\n').filter { it.isNotEmpty() }
-        if (words.singleOrNull() in setOf("none", "initial", "unset")) return TextTransform.NONE to false
+        if (words.singleOrNull() == "none") return TextTransform.NONE to false
         var case: TextTransform? = null
         var wide = false
         var kana = false
@@ -1101,6 +1247,39 @@ internal class StyleResolver(
         var emphasisPosition = parent.emphasisPosition // inherited
         var textCombineUpright = parent.textCombineUpright // inherited
 
+        /**
+         * This builder with every value of [s], those that do not inherit too, as `inherit` reads
+         * them on any property (#579). A line [s] draws counts as its own.
+         */
+        fun takeAll(s: ComputedStyle): Builder = apply {
+            display = s.display; backgroundColor = s.backgroundColor
+            ownUnderline = s.underline != null; ownLineThrough = s.lineThrough != null; ownOverline = s.overline != null
+            decorationColor = (s.underline ?: s.lineThrough ?: s.overline)?.color
+            marginTop = s.marginTopPt; marginRight = s.marginRightPt; marginBottom = s.marginBottomPt; marginLeft = s.marginLeftPt
+            marginLeftAuto = s.marginLeftAuto; marginRightAuto = s.marginRightAuto
+            paddingTop = s.paddingTopPt; paddingRight = s.paddingRightPt; paddingBottom = s.paddingBottomPt; paddingLeft = s.paddingLeftPt
+            verticalAlign = s.verticalAlign
+            borderTopW = s.borderTop.width; borderTopStyle = s.borderTop.style; borderTopColor = s.borderTop.color
+            borderRightW = s.borderRight.width; borderRightStyle = s.borderRight.style; borderRightColor = s.borderRight.color
+            borderBottomW = s.borderBottom.width; borderBottomStyle = s.borderBottom.style; borderBottomColor = s.borderBottom.color
+            borderLeftW = s.borderLeft.width; borderLeftStyle = s.borderLeft.style; borderLeftColor = s.borderLeft.color
+            widthPt = s.widthPt; heightPt = s.heightPt; maxWidthPt = s.maxWidthPt
+            minWidthPt = s.minWidthPt; minHeightPt = s.minHeightPt; maxHeightPt = s.maxHeightPt
+            breakBefore = s.breakBefore; breakAfter = s.breakAfter; breakInsideAvoid = s.breakInsideAvoid
+            position = s.position; leftPt = s.leftPt; topPt = s.topPt; rightPt = s.rightPt; bottomPt = s.bottomPt
+            objectFit = s.objectFit; cssFloat = s.cssFloat; clear = s.clear; tableLayoutFixed = s.tableLayoutFixed
+            zIndex = s.zIndex; opacity = s.opacity; clipsOverflow = s.clipsOverflow; radii = s.radii; shadows = s.shadows
+            val layers = s.backgroundLayers
+            bgImages = layers.map { it.image }
+            if (layers.isNotEmpty()) {
+                bgSizes = layers.map { it.size }; bgXs = layers.map { it.x }; bgYs = layers.map { it.y }
+                bgRepeats = layers.map { it.repeatX to it.repeatY }
+            }
+            transform = s.transform; transformOrigin = s.transformOrigin; flex = s.flex; grid = s.grid
+            columnCount = s.columns.count; columnWidth = s.columns.width; columnSpanAll = s.columns.spanAll
+            s.columns.rule?.let { ruleWidth = it.width; ruleStyle = it.style; ruleColor = it.color }
+        }
+
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
             // blockified, and float does not apply to it (#33). A grid item is the same (CSS Grid 1, 6, #35).
@@ -1200,6 +1379,16 @@ internal class StyleResolver(
         val WHITESPACE = Regex("\\s+")
 
         /** The multi-column properties, read with or without the `-webkit-` prefix (#34). */
+        /** The properties that inherit, without a prefix, which `unset` inherits (#579). */
+        val INHERITED = setOf(
+            "color", "font-family", "font-size", "font-style", "font-weight", "font-variant", "font-variant-caps",
+            "text-align", "text-align-last", "text-indent", "line-height", "white-space", "overflow-wrap", "word-wrap",
+            "word-break", "line-break", "text-transform", "letter-spacing", "word-spacing", "hyphens", "direction",
+            "writing-mode", "text-orientation", "text-combine-upright", "text-combine-horizontal", "text-combine",
+            "text-underline-position", "text-emphasis", "text-emphasis-style", "text-emphasis-color", "text-emphasis-position",
+            "quotes", "visibility", "list-style-type", "list-style", "border-collapse", "border-spacing",
+        )
+
         val COLUMN_PROPERTIES = setOf(
             "column-count", "column-width", "columns", "column-rule", "column-rule-width", "column-rule-style",
             "column-rule-color", "column-span",

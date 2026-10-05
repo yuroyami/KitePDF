@@ -168,6 +168,11 @@ internal object CssParser {
 
     private fun expandShorthand(prop: String, value: String, important: Boolean, out: ArrayList<Declaration>) {
         fun emit(p: String, v: String) = out.add(Declaration(p, v, important))
+        // A CSS-wide keyword on a shorthand sets each of its longhands (CSS Cascade 4, 7.3, #579).
+        val keyword = value.lowercase()
+        if (keyword == "inherit" || keyword == "initial" || keyword == "unset") {
+            LONGHANDS[prop]?.let { names -> for (n in names) emit(n, keyword); return }
+        }
         when (prop) {
             "margin", "padding" -> {
                 val v = splitWords(value)
@@ -322,6 +327,19 @@ internal object CssParser {
     )
 
     private val SIDES = listOf("top", "right", "bottom", "left")
+
+    /** The longhands of each shorthand this parser expands, which a CSS-wide keyword on it sets (#579). */
+    private val LONGHANDS: Map<String, List<String>> = buildMap {
+        val parts = listOf("width", "style", "color")
+        put("margin", SIDES.map { "margin-$it" })
+        put("padding", SIDES.map { "padding-$it" })
+        put("border", SIDES.flatMap { side -> parts.map { "border-$side-$it" } })
+        for (side in SIDES) put("border-$side", parts.map { "border-$side-$it" })
+        for (part in parts) put("border-$part", SIDES.map { "border-$it-$part" })
+        put("list-style", listOf("list-style-type"))
+        put("text-decoration", listOf("text-decoration-line", "text-decoration-color"))
+        put("font", listOf("font-style", "font-variant", "font-weight", "font-size", "line-height", "font-family"))
+    }
     private val FONT_SYSTEM_KEYWORDS = setOf("caption", "icon", "menu", "message-box", "small-caption", "status-bar")
     private val FONT_SIZE_KEYWORDS = setOf(
         "xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "smaller", "larger",
