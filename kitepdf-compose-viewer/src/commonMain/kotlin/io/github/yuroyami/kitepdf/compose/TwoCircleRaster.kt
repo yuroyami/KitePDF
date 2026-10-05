@@ -3,9 +3,8 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
-import kotlin.math.abs
+import io.github.yuroyami.kitepdf.core.render.twoCircleParameter
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
 /**
  * The pixels of a gradient between two circles, for a platform that has no such gradient:
@@ -13,10 +12,9 @@ import kotlin.math.sqrt
  * (0, 0) starts at the device point ([left], [top]). One pixel spans [pixelSize] device
  * units. [toShading] maps a device point back to shading space, where the circles are.
  *
- * Each pixel takes the colour at the largest s whose circle passes through the pixel with a
- * radius of at least 0, as the platform gradient does (ISO 32000-1, 8.7.4.5.4). An s before
- * 0 or after 1 takes the colour of the first or the last of [stops]. A pixel that no circle
- * passes through stays transparent.
+ * Each pixel takes the colour at the [twoCircleParameter] of its centre. An s before 0 or after
+ * 1 takes the colour of the first or the last of [stops]. A pixel that no circle passes through
+ * stays transparent.
  */
 internal fun twoCircleImage(
     x0: Double, y0: Double, r0: Double,
@@ -26,22 +24,14 @@ internal fun twoCircleImage(
     left: Double, top: Double, width: Int, height: Int, pixelSize: Double = 1.0,
 ): ImageBitmap? {
     if (width <= 0 || height <= 0 || stops.isEmpty()) return null
-    val dx = x1 - x0
-    val dy = y1 - y0
-    val dr = r1 - r0
-    // The point p lies on the circle of s when |p - c(s)| = r(s), which is
-    // a s^2 - 2 b s + c = 0 with the terms below.
-    val a = dx * dx + dy * dy - dr * dr
     val rgba = ByteArray(width * height * 4)
     for (row in 0 until height) {
         val deviceY = top + (row + 0.5) * pixelSize
         for (col in 0 until width) {
             val deviceX = left + (col + 0.5) * pixelSize
-            val px = toShading.transformX(deviceX, deviceY) - x0
-            val py = toShading.transformY(deviceX, deviceY) - y0
-            val b = px * dx + py * dy + r0 * dr
-            val c = px * px + py * py - r0 * r0
-            val s = largestParameter(a, b, c, r0, dr) ?: continue
+            val x = toShading.transformX(deviceX, deviceY)
+            val y = toShading.transformY(deviceX, deviceY)
+            val s = twoCircleParameter(x, y, x0, y0, r0, x1, y1, r1) ?: continue
             val color = colorAt(stops, s)
             val i = (row * width + col) * 4
             rgba[i] = channel(color.red)
@@ -55,26 +45,6 @@ internal fun twoCircleImage(
 
 /** The most pixels a [twoCircleImage] for a canvas has: 4 MB of pixels, a small share of a phone's heap. */
 internal const val TWO_CIRCLE_MAX_PIXELS: Double = 1_048_576.0
-
-/** The largest root of a s^2 - 2 b s + c = 0 whose radius r0 + s dr is at least 0, or null. */
-private fun largestParameter(a: Double, b: Double, c: Double, r0: Double, dr: Double): Double? {
-    fun fits(s: Double) = s.isFinite() && r0 + s * dr >= 0.0
-    if (abs(a) < 1e-9) {
-        // The circles grow along a line as fast as they move: one root.
-        if (b == 0.0) return null
-        return (c / (2 * b)).takeIf(::fits)
-    }
-    val discriminant = b * b - a * c
-    if (discriminant < 0.0) return null
-    val root = sqrt(discriminant)
-    val high = maxOf((b + root) / a, (b - root) / a)
-    val low = minOf((b + root) / a, (b - root) / a)
-    return when {
-        fits(high) -> high
-        fits(low) -> low
-        else -> null
-    }
-}
 
 /** The colour of [stops] at [s], each end held past it. At an offset two stops share, the later one wins. */
 private fun colorAt(stops: Array<Pair<Float, Color>>, s: Double): Color {

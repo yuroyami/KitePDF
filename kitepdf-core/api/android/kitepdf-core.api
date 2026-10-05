@@ -2496,6 +2496,10 @@ public final class io/github/yuroyami/kitepdf/core/render/TextState {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/yuroyami/kitepdf/core/render/TwoCircleParameterKt {
+	public static final fun twoCircleParameter (DDDDDDDD)Ljava/lang/Double;
+}
+
 public abstract interface class io/github/yuroyami/kitepdf/core/script/KiteScriptEngine : java/lang/AutoCloseable {
 	public abstract fun defineFunction (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public abstract fun defineValue (Ljava/lang/String;Ljava/lang/Object;)V

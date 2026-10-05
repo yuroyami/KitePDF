@@ -247,6 +247,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `AndroidNativeCanvas` keeps an off-centre radial shading where it is below API 31. Android
+  draws a gradient between two circles from API 31 on, and below it the canvas drew one around
+  the end circle only, so the highlight of a sphere moved to the end circle's centre on API 29
+  and 30, in `AndroidPdfBitmapRenderer` as well. It now draws the pixels of the shading there,
+  as the Compose canvas has since #413, and both share the solver in `twoCircleParameter`
+  (#591).
 - `SkiaCanvas` looks up the host face of a font once and keeps it. It asked the host again on
   every run of host text, walking the candidate families with a fontconfig match for each one the
   host lacks, 1.7 ms a run for serif and 5 ms for sans-serif on Linux, so eight pages of an Arabic

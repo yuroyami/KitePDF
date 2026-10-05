@@ -40,6 +40,7 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.twoCircleParameter
 
 /**
  * [KiteCanvas] backed by [android.graphics.Canvas].
@@ -361,8 +362,13 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
                     c[0].toFloat(), c[1].toFloat(), r0.toFloat(), c[3].toFloat(), c[4].toFloat(), r1.toFloat(),
                     LongArray(colors.size) { Color.pack(colors[it]) }, positions, Shader.TileMode.CLAMP,
                 )
+            } else if (c[0] == c[3] && c[1] == c[4]) {
+                concentricGradient(c, r0, r1, colors, positions)
             } else {
-                oneCircleGradient(c, r0, r1, colors, positions)
+                // One gradient around the end circle would move an off-centre shading, so draw
+                // its pixels (#591).
+                drawTwoCircles(c, r0, r1, colors, positions, ctm, clipPath, blendMode)
+                return
             }
         }
         shader.setLocalMatrix(pdfMatrixToAndroid(ctm))
@@ -380,20 +386,91 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         }
     }
 
-    /**
-     * One circle standing in for a radial shading between two circles, below API 31.
-     * It is exact when the circles share a centre. Otherwise it keeps only the end circle.
-     */
-    private fun oneCircleGradient(c: DoubleArray, r0: Double, r1: Double, colors: IntArray, positions: FloatArray): Shader {
-        if (c[0] != c[3] || c[1] != c[4]) {
-            return RadialGradient(c[3].toFloat(), c[4].toFloat(), r1.toFloat(), colors, positions, Shader.TileMode.CLAMP)
-        }
+    /** One circle standing in for a radial shading between two circles that share a centre, below API 31. */
+    private fun concentricGradient(c: DoubleArray, r0: Double, r1: Double, colors: IntArray, positions: FloatArray): Shader {
         // Offset s lies on the circle of radius r0 + s (r1 - r0), as a fraction of the larger radius.
         val outer = maxOf(r0, r1)
         val mapped = FloatArray(positions.size) { ((r0 + positions[it] * (r1 - r0)) / outer).toFloat() }
         val ordered = colors.copyOf()
         if (r1 < r0) { mapped.reverse(); ordered.reverse() }
         return RadialGradient(c[3].toFloat(), c[4].toFloat(), outer.toFloat(), ordered, mapped, Shader.TileMode.CLAMP)
+    }
+
+    /**
+     * A radial shading between two circles drawn as an image of the pixels of the region it
+     * fills, [clipPath] or the whole canvas, below API 31, where Android has no such gradient
+     * (#591). Each pixel takes the colour at the [twoCircleParameter] of its centre, from
+     * [colors] at [positions], each end held past it. A large region is drawn at a lower
+     * resolution and scaled up, which a smooth gradient hides.
+     */
+    private fun drawTwoCircles(
+        c: DoubleArray, r0: Double, r1: Double, colors: IntArray, positions: FloatArray,
+        ctm: KiteMatrix, clipPath: KitePath?, blendMode: KiteBlendMode,
+    ) {
+        val toShading = ctm.invert() ?: return
+        val bounds = android.graphics.Rect()
+        if (!canvas.getClipBounds(bounds)) return
+        val region = clipPath?.let { toAndroidPath(it, ctm, scratchPath).apply { fillType = Path.FillType.WINDING } }
+        if (region != null) {
+            val r = android.graphics.RectF().also { region.computeBounds(it, true) }
+            val left = kotlin.math.floor(r.left).toInt()
+            val top = kotlin.math.floor(r.top).toInt()
+            if (!bounds.intersect(left, top, kotlin.math.ceil(r.right).toInt(), kotlin.math.ceil(r.bottom).toInt())) return
+        }
+        if (bounds.isEmpty) return
+        val area = bounds.width().toDouble() * bounds.height()
+        val pixelSize = if (area <= TWO_CIRCLE_MAX_PIXELS) 1.0 else kotlin.math.sqrt(area / TWO_CIRCLE_MAX_PIXELS)
+        val width = kotlin.math.ceil(bounds.width() / pixelSize).toInt()
+        val height = kotlin.math.ceil(bounds.height() / pixelSize).toInt()
+        val pixels = IntArray(width * height)
+        for (row in 0 until height) {
+            val y = bounds.top + (row + 0.5) * pixelSize
+            for (col in 0 until width) {
+                val x = bounds.left + (col + 0.5) * pixelSize
+                val s = twoCircleParameter(
+                    toShading.transformX(x, y), toShading.transformY(x, y), c[0], c[1], r0, c[3], c[4], r1,
+                ) ?: continue
+                pixels[row * width + col] = argbAt(colors, positions, s)
+            }
+        }
+        val image = android.graphics.Bitmap.createBitmap(pixels, width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val paint = Paint().apply {
+            isFilterBitmap = true
+            applyPaintBlend(blendMode)
+        }
+        val left = bounds.left.toFloat()
+        val top = bounds.top.toFloat()
+        val dst = android.graphics.RectF(left, top, left + (width * pixelSize).toFloat(), top + (height * pixelSize).toFloat())
+        canvas.save()
+        if (region != null) canvas.clipPath(region)
+        canvas.drawBitmap(image, null, dst, paint)
+        canvas.restore()
+        image.recycle()
+    }
+
+    /** The colour of [colors] at [positions] at [s], each end held past it. At an offset two share, the later one wins. */
+    private fun argbAt(colors: IntArray, positions: FloatArray, s: Double): Int {
+        val t = s.toFloat()
+        if (t <= positions.first()) return colors.first()
+        if (t >= positions.last()) return colors.last()
+        // The first position past t, which there is, since t is before the last.
+        var lo = 1
+        var hi = positions.lastIndex
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (positions[mid] > t) hi = mid else lo = mid + 1
+        }
+        val start = positions[lo - 1]
+        val end = positions[lo]
+        val f = if (end > start) (t - start) / (end - start) else 1f
+        val from = colors[lo - 1]
+        val to = colors[lo]
+        fun mix(shift: Int): Int {
+            val a = (from ushr shift) and 0xFF
+            val b = (to ushr shift) and 0xFF
+            return kotlin.math.round(a + (b - a) * f).toInt() shl shift
+        }
+        return mix(24) or mix(16) or mix(8) or mix(0)
     }
 
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
@@ -831,6 +908,9 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
 
 /** The most pixels the bitmap of a mask group has when the canvas gates by pixels: 4 MB of them. */
 private const val MASK_MAX_PIXELS = 1_048_576.0
+
+/** The most pixels a radial shading between two circles draws below API 31: 4 MB of them, scaled up past it. */
+private const val TWO_CIRCLE_MAX_PIXELS = 1_048_576.0
 
 /** The most pixels a raster step works on before it drops to a lower resolution: 16 MB of them. */
 private const val STEP_MAX_PIXELS = 4_194_304.0
