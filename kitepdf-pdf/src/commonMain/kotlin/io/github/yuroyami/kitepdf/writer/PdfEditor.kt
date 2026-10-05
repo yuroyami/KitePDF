@@ -20,6 +20,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
+import io.github.yuroyami.kitepdf.parser.XrefEntry
 import io.github.yuroyami.kitepdf.parser.XrefParser
 import kotlin.math.abs
 
@@ -978,6 +979,11 @@ public class PdfEditor internal constructor(
      * Produce the updated document bytes: original + appended objects + new
      * xref section + trailer. When nothing was staged or overridden this is a
      * verbatim copy of the original.
+     *
+     * When the document opened through repair, its own table is the broken part, so
+     * the appended table stands alone: it lists every object at the offset repair found
+     * and names no `/Prev`, and the objects that lived inside an object stream, which a
+     * classic table cannot point into, are written out again (#586).
      */
     public fun saveIncremental(): ByteArray {
         check(!redactionStaged) {
@@ -995,19 +1001,36 @@ public class PdfEditor internal constructor(
             out.append('\n'.code.toByte())
         }
 
-        val offsets = LinkedHashMap<Long, Int>()
-        for ((num, s) in staged.entries.sortedBy { it.key }) {
-            offsets[num] = out.size()
-            out.append("$num ${s.generation} obj\n".encodeToByteArray())
-            // Staged objects live in plain text; an encrypted base document
-            // needs them encrypted with its own parameters on the way out.
-            val value = encryptor?.encryptIndirect(num, s.generation, s.value) ?: s.value
+        val entries = ArrayList<ClassicXrefWriter.Entry>()
+        fun append(num: Long, generation: Int, value: PdfObject) {
+            entries.add(ClassicXrefWriter.Entry(num, out.size(), generation))
+            out.append("$num $generation obj\n".encodeToByteArray())
             PdfObjectWriter.writeObject(value, out)
             out.append("\nendobj\n".encodeToByteArray())
         }
+        for ((num, s) in staged.entries.sortedBy { it.key }) {
+            // Staged objects live in plain text; an encrypted base document
+            // needs them encrypted with its own parameters on the way out.
+            append(num, s.generation, encryptor?.encryptIndirect(num, s.generation, s.value) ?: s.value)
+        }
+        if (base.isRepaired) {
+            // The encryption dictionary is never encrypted, wherever a broken file keeps it.
+            val encryptNum = (base.trailer["Encrypt"] as? PdfReference)?.objectNumber
+            for ((num, entry) in base.xref.entries.sortedBy { it.key }) {
+                if (num <= 0L || num in staged) continue
+                when (entry) {
+                    is XrefEntry.InUse -> entries.add(ClassicXrefWriter.Entry(num, entry.byteOffset, entry.generation))
+                    is XrefEntry.Compressed -> {
+                        val value = base.resolve(PdfReference(num, 0)) ?: continue
+                        append(num, 0, if (num == encryptNum) value else encryptor?.encryptIndirect(num, 0, value) ?: value)
+                    }
+                    is XrefEntry.Free -> Unit
+                }
+            }
+        }
 
         val xrefOffset = out.size()
-        writeClassicXref(out, offsets)
+        ClassicXrefWriter.write(out, entries)
         writeTrailer(out, xrefOffset)
         return out.toByteArray()
     }
@@ -1015,19 +1038,12 @@ public class PdfEditor internal constructor(
     /* ─── xref + trailer ─────────────────────────────────────────────────── */
 
     /**
-     * A classic cross-reference section listing only the changed objects (plus
-     * the free-list head). The incremental section need not enumerate untouched
-     * objects. The reader fills those from the `/Prev` chain.
+     * The trailer of an incremental section. Its `/Prev` names the file's last table, which
+     * fills in the objects this section does not list; a repaired file's section lists them
+     * all and names none.
      */
-    private fun writeClassicXref(out: ByteArrayBuilder, offsets: Map<Long, Int>) {
-        val entries = offsets.map { (num, off) ->
-            ClassicXrefWriter.Entry(num, off, staged.getValue(num).generation)
-        }
-        ClassicXrefWriter.write(out, entries)
-    }
-
     private fun writeTrailer(out: ByteArrayBuilder, xrefOffset: Int) {
-        val prevXref = XrefParser.findStartXref(ByteReader(base.rawBytes))
+        val prevXref = if (base.isRepaired) null else XrefParser.findStartXref(ByteReader(base.rawBytes))
         val maxNum = maxOf(
             base.xref.keys.maxOrNull() ?: 0L,
             staged.keys.maxOrNull() ?: 0L,
@@ -1040,7 +1056,7 @@ public class PdfEditor internal constructor(
         base.trailer["Encrypt"]?.let { dict["Encrypt"] = it }
         // Preserve the original /ID (signing/encryption invariant) or synthesize one.
         dict["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.rawBytes)
-        dict["Prev"] = PdfInt(prevXref.toLong())
+        prevXref?.let { dict["Prev"] = PdfInt(it.toLong()) }
         for ((k, v) in trailerOverrides) dict[k] = v
 
         out.append("trailer\n".encodeToByteArray())

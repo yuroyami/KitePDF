@@ -247,6 +247,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `PdfEditor.saveIncremental` of a PDF that opened through repair appends a cross-reference
+  table that lists every object and names no `/Prev`, and writes out again the objects that
+  lived inside an object stream, so the saved file opens without a repair in KitePDF and in
+  mutool. It used to throw `PdfFormatException` when the file had no `startxref`, which also
+  failed `PdfSigner`, and otherwise named the broken table as `/Prev` (#586).
+
 - A kid of a PDF page tree that is no dictionary, such as a missing object or `null`, is a blank
   page, and a kid dictionary without `/Type /Page` is read as a page, as MuPDF reads both, where
   both used to drop out of the page list and move every later page to the index, label and
