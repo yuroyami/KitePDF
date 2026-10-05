@@ -98,6 +98,24 @@ class KiteXmlTest {
     }
 
     @Test
+    fun html_named_references_decode_in_text_and_attributes() {
+        // HTML, 13.5. The XHTML DTDs declare these, and publishing tools write them for typography (#570).
+        val root = KiteXml.parse(
+            """<a title="&ldquo;Q&rdquo;">A&mdash;B &rsquo;&hellip; caf&eacute; &copy; &fjlig; &Afr; &NotEqualTilde; &CounterClockwiseContourIntegral;</a>""",
+        )
+        val a = root.first("a")!!
+        assertEquals("A\u2014B \u2019\u2026 caf\u00e9 \u00a9 fj \ud835\udd04 \u2242\u0338 \u2233", a.text())
+        assertEquals("\u201cQ\u201d", a.attrs["title"])
+    }
+
+    @Test
+    fun a_name_html_does_not_have_stays_as_text() {
+        // Names are case-sensitive, and only a name that ends in a semicolon decodes.
+        val root = KiteXml.parse("<a>&unknown; &Mdash; &mdash &amp;</a>")
+        assertEquals("&unknown; &Mdash; &mdash &", root.first("a")!!.text())
+    }
+
+    @Test
     fun an_unclosed_element_still_yields_its_content() {
         val root = KiteXml.parse("<a><b>text")
         assertTrue("text" in root.first("b")!!.text())

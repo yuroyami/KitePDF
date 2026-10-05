@@ -199,6 +199,12 @@ public object KiteXml {
     private fun localName(name: String): String =
         name.substringAfterLast(':').lowercase()
 
+    /**
+     * [s] with its character references replaced: XML's five, numeric ones, and the names of
+     * HTML's table (HTML, 13.5), which hold the entities the XHTML DTDs declare, so a chapter
+     * may write `&mdash;` as its DOCTYPE allows (#570). A name that ends in no semicolon, or that
+     * no table has, stays as text.
+     */
     private fun decodeEntities(s: String): String {
         if ('&' !in s) return s
         val sb = StringBuilder(s.length)
@@ -206,8 +212,8 @@ public object KiteXml {
         while (i < s.length) {
             val c = s[i]
             if (c == '&') {
-                val semi = s.indexOf(';', i)
-                if (semi in (i + 1)..(i + 10)) {
+                val semi = referenceEnd(s, i + 1)
+                if (semi > i + 1) {
                     val ent = s.substring(i + 1, semi)
                     val rep = when {
                         ent == "amp" -> "&"
@@ -215,12 +221,11 @@ public object KiteXml {
                         ent == "gt" -> ">"
                         ent == "quot" -> "\""
                         ent == "apos" -> "'"
-                        ent == "nbsp" -> " "
                         ent.startsWith("#x") || ent.startsWith("#X") ->
                             ent.substring(2).toIntOrNull(16)?.let { cp -> charsFor(cp) }
                         ent.startsWith("#") ->
                             ent.substring(1).toIntOrNull()?.let { cp -> charsFor(cp) }
-                        else -> null
+                        else -> HtmlEntities.lookup(ent)
                     }
                     if (rep != null) { sb.append(rep); i = semi + 1; continue }
                 }
@@ -228,6 +233,25 @@ public object KiteXml {
             sb.append(c); i++
         }
         return sb.toString()
+    }
+
+    /**
+     * The index of the `;` that ends a reference whose name starts at [from], or -1. A name is
+     * letters and digits, or `#` and a number, no longer than the longest of HTML's names, so a
+     * lone `&` costs a short look and never a scan of the rest of the text.
+     */
+    private fun referenceEnd(s: String, from: Int): Int {
+        val stop = minOf(s.length, from + HtmlEntities.LONGEST + 1)
+        var i = from
+        while (i < stop) {
+            val c = s[i]
+            when {
+                c == ';' -> return i
+                c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || (c == '#' && i == from) -> i++
+                else -> return -1
+            }
+        }
+        return -1
     }
 
     private fun charsFor(cp: Int): String =
