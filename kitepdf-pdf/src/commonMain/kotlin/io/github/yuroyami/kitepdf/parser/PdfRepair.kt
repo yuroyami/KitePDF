@@ -23,6 +23,8 @@ import io.github.yuroyami.kitepdf.core.filters.FilterChain
  * decoded so their compressed members are recovered too, and the trailer's
  * `/Root` (plus `/Encrypt`, `/ID`, `/Info`) is recovered from any `trailer`
  * dictionary, `/Type /XRef` stream dict, or `/Type /Catalog` object found.
+ * Every catalog it finds is kept, the likeliest first, because the one a trailer
+ * names can be the broken one (#584).
  *
  * This is a best-effort, last-resort path: it never throws for a recoverable
  * file and degrades to whatever it can find.
@@ -34,18 +36,20 @@ internal object PdfRepair {
     private const val MAX_OBJ_NUM = 50_000_000L
     private const val MAX_GEN = 65_535
 
-    fun rebuild(reader: ByteReader): XrefAndTrailer {
+    fun rebuild(reader: ByteReader): RepairedFile {
         val bytes = reader.bytes
         val entries = HashMap<Long, XrefEntry>()
         val objStreamNums = LinkedHashSet<Long>()
 
         // Trailer fields recovered along the way. Later finds overwrite earlier
-        // ones (file order ≈ revision order for incremental updates).
-        var root: PdfObject? = null
+        // ones (file order ≈ revision order for incremental updates); every
+        // /Root and every catalog is kept, in file order.
+        val trailerRoots = ArrayList<PdfObject>()
+        val xrefStreamRoots = ArrayList<PdfObject>()
+        val catalogs = ArrayList<PdfObject>()
         var encrypt: PdfObject? = null
         var id: PdfObject? = null
         var info: PdfObject? = null
-        var lastCatalog: Long? = null
 
         // ── Pass 1: find every "N G obj" header. ───────────────────────────
         var search = 0
@@ -71,10 +75,10 @@ internal object PdfRepair {
             } ?: continue
 
             when (dict.getName("Type")) {
-                "Catalog" -> lastCatalog = num
+                "Catalog" -> catalogs.add(PdfReference(num, gen))
                 "ObjStm" -> objStreamNums.add(num)
                 "XRef" -> {
-                    dict["Root"]?.let { root = it }
+                    dict["Root"]?.let { xrefStreamRoots.add(it) }
                     dict["Encrypt"]?.let { encrypt = it }
                     dict["ID"]?.let { id = it }
                     dict["Info"]?.let { info = it }
@@ -94,7 +98,7 @@ internal object PdfRepair {
                 r.seek(t + TRAILER.size)
                 Parser(Lexer(r)).readObject() as? PdfDictionary
             }.getOrNull() ?: continue
-            dict["Root"]?.let { root = it }
+            dict["Root"]?.let { trailerRoots.add(it) }
             dict["Encrypt"]?.let { encrypt = it }
             dict["ID"]?.let { id = it }
             dict["Info"]?.let { info = it }
@@ -112,19 +116,22 @@ internal object PdfRepair {
         }
 
         // ── Assemble the trailer. ───────────────────────────────────────────
-        if (root == null) {
-            val cat = lastCatalog ?: scanForCatalog(entries, bytes)
-            if (cat != null) root = PdfReference(cat, 0)
-        }
-        if (root == null) {
+        // A classic trailer is the most authoritative, then an xref stream, then a
+        // catalog that nothing names; the newest of each comes first.
+        val roots = LinkedHashSet<PdfObject>().apply {
+            addAll(trailerRoots.asReversed())
+            addAll(xrefStreamRoots.asReversed())
+            addAll(catalogs.asReversed())
+        }.toList()
+        if (roots.isEmpty()) {
             throw PdfFormatException("Repair failed: no /Root catalog found in file")
         }
         val trailerMap = LinkedHashMap<String, PdfObject>()
-        trailerMap["Root"] = root
+        trailerMap["Root"] = roots.first()
         encrypt?.let { trailerMap["Encrypt"] = it }
         id?.let { trailerMap["ID"] = it }
         info?.let { trailerMap["Info"] = it }
-        return XrefAndTrailer(entries, PdfDictionary(trailerMap))
+        return RepairedFile(entries, PdfDictionary(trailerMap), roots)
     }
 
     /** Decode an /ObjStm at [offset]; returns (indexInStream → objectNumber). */
@@ -142,19 +149,6 @@ internal object PdfRepair {
             out.add(i to objNum)
         }
         return out
-    }
-
-    /** Last-ditch /Root: any in-use object whose body is a /Type /Catalog dict. */
-    private fun scanForCatalog(entries: Map<Long, XrefEntry>, bytes: ByteArray): Long? {
-        for ((num, e) in entries) {
-            if (e !is XrefEntry.InUse) continue
-            val dict = runCatching {
-                val r = ByteReader(bytes); r.seek(e.byteOffset)
-                (Parser(Lexer(r)).readIndirectObject().value as? PdfDictionary)
-            }.getOrNull() ?: continue
-            if (dict.getName("Type") == "Catalog") return num
-        }
-        return null
     }
 
     /**
@@ -224,4 +218,17 @@ internal object PdfRepair {
         while (p >= 0 && Lexer.isWhitespace(bytes[p].toInt() and 0xFF)) p--
         return p
     }
+}
+
+/**
+ * What [PdfRepair.rebuild] recovered: the entries, a trailer that names the first of [roots],
+ * and every catalog the file names or holds, the likeliest first.
+ */
+internal class RepairedFile(
+    val entries: Map<Long, XrefEntry>,
+    val trailer: PdfDictionary,
+    val roots: List<PdfObject>,
+) {
+    /** [trailer] with [root] as its catalog. */
+    fun trailerWith(root: PdfObject): PdfDictionary = PdfDictionary(trailer.map + ("Root" to root))
 }

@@ -15,8 +15,8 @@ internal object TestPdf {
 
     fun stream(data: String, dict: String = ""): Stream = Stream(dict, data.encodeToByteArray())
 
-    /** Every object of [objects], numbered from 1. Object 1 must be the catalog. */
-    fun build(objects: List<Any>): ByteArray {
+    /** Every object of [objects], numbered from 1. The trailer names [root] as the catalog. */
+    fun build(objects: List<Any>, root: String = "1 0 R"): ByteArray {
         val buf = ByteArrayBuilder()
         val offsets = IntArray(objects.size)
         fun w(s: String) = buf.append(s.encodeToByteArray())
@@ -36,7 +36,7 @@ internal object TestPdf {
         val xref = buf.size()
         w("xref\n0 ${objects.size + 1}\n0000000000 65535 f \n")
         for (off in offsets) w("${off.toString().padStart(10, '0')} 00000 n \n")
-        w("trailer\n<< /Size ${objects.size + 1} /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        w("trailer\n<< /Size ${objects.size + 1} /Root $root >>\nstartxref\n$xref\n%%EOF\n")
         return buf.toByteArray()
     }
 

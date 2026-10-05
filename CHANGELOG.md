@@ -247,6 +247,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `PdfDocument.open` throws `PdfFormatException`, and `openOrNull` returns null, for a damaged
+  file in which no catalog leads to a page tree, as mutool refuses it, where it used to return a
+  document whose `pageCount`, `pages`, `outline` and every other catalog read threw on first use.
+  When the trailer names a broken catalog and the file holds another, repair takes the other, as
+  pdf.js does (#584).
+
 - A PDF page whose `/Contents` is null, as a file that `saveRewritten` wrote from a damaged source
   can have it, or of a type that no content can have is an empty page that still draws its
   annotations, where `renderTo`, `textContent()` and `contentBytes` used to throw (#583).
