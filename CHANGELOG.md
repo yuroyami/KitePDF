@@ -247,6 +247,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- EPUB style sheets get the CSS-wide keywords `inherit`, `initial` and `unset` on every property,
+  where only a few properties used to read them. `color: initial` no longer keeps the parent's
+  colour, `margin-left: inherit` no longer leaves the margin at 0, `border-top: inherit` no
+  longer draws a medium border of its own, and `unset` on an inherited property such as
+  `word-break` or `text-transform` inherits instead of resetting it. On a shorthand such as
+  `margin`, `border` or `font` the keyword sets each of its longhands (#579).
+
 - EPUB chapters draw `text-decoration: overline`, which the style resolver used to drop, so an
   overline drew nothing and `underline overline` drew the underline alone. The line runs just over
   the text, with the colour and size of the element that draws it, and in vertical text it runs
