@@ -247,6 +247,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An `<svg>` written in a sentence of an EPUB chapter flows on its line as an `<img>` does, where
+  it used to break the paragraph, ending the line before it and starting a new one after it. An
+  `<svg>` is inline unless a style sheet makes it a block or floats it, and one alone in its block
+  keeps a box of its own, as a cover page has it (#580).
+
 - The text that an SVG draws is part of its page text, in an SVG spine item of an EPUB, in an
   `<svg>` written in a chapter and in a standalone SVG document, so search and selection find it.
   The runs of glyphs along one baseline make a line, with a space where a `<tspan>` or a new run

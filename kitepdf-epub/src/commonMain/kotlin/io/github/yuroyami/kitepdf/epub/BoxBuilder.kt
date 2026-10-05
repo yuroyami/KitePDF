@@ -260,6 +260,22 @@ internal class BoxBuilder(
                     }
                     if (child.tag == "svg") { // inline SVG: paint as a vector image box
                         val cs = resolver.compute(child, childAncestors, style)
+                        // An svg is inline, as an img is (CSS 2.1, 10.3.2), so one with text beside it flows on
+                        // the line (#580). One alone in its block keeps a box of its own, as a cover page has it.
+                        if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) && cs.cssFloat == CssFloat.NONE &&
+                            hasTextBeside(child)
+                        ) {
+                            SvgImage.fromElement(child, resolver.svgHostStyle(child))?.let { svg ->
+                                pendingAnchors += svgIds(child)
+                                val svgSem = svgSemantics(child, sem)
+                                inl.addImage(
+                                    "", style, cs.widthPt ?: svgSizePt(child.attrs["width"], cs), cs.heightPt ?: svgSizePt(child.attrs["height"], cs),
+                                    alt = if (svgSem.hidden) "" else svgSem.label, objectFit = cs.objectFit, svg = svg,
+                                    element = child.takeIf { tracksElements },
+                                )
+                            }
+                            return null
+                        }
                         // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
                         if (cs.display != Display.NONE) SvgImage.fromElement(child, resolver.svgHostStyle(child))?.let {
                             flush()
@@ -285,6 +301,28 @@ internal class BoxBuilder(
                 }
             }
             return null
+        }
+
+        /**
+         * Whether [child], an inline element of this block, has text beside it on its line: text
+         * before it in the block, or a text or an inline element with text after it before the
+         * next block (#580).
+         */
+        private fun hasTextBeside(child: KiteXmlNode.Element): Boolean {
+            if (inl.hasContent()) return true
+            val at = el.children.indexOfFirst { it === child }
+            for (k in at + 1 until el.children.size) {
+                when (val n = el.children[k]) {
+                    is KiteXmlNode.Text -> if (n.text.isNotBlank()) return true
+                    is KiteXmlNode.Element -> {
+                        val display = resolver.compute(n, childAncestors, style).display
+                        if (display != Display.INLINE && display != Display.INLINE_BLOCK) return false
+                        if (n.textContent().isNotBlank()) return true
+                    }
+                    else -> {}
+                }
+            }
+            return false
         }
 
         /** Ends the block: its ::after content, its last text, and its box. */
