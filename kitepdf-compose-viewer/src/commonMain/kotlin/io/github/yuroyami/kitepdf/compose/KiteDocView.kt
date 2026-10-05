@@ -421,6 +421,7 @@ public fun KiteDocView(
             }
             .focusable()
             .kiteWheelPaging(state, layout, enabled = userScrollEnabled, scope = tapScope)
+            .kitePointerKind(state)
             .pointerInput(keyFocus) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -801,8 +802,8 @@ private fun ContinuousLayout(
         // The strip's own scrolling yields to a text selection, the same way
         // the pan gesture does: a selection drag must not scroll the page out
         // from under itself, and the page has to stay put while the user acts
-        // on the selected text.
-        val listScrollEnabled = userScrollEnabled && !state.isSelectionActive
+        // on the selected text. A mouse keeps the wheel (#594).
+        val listScrollEnabled = userScrollEnabled && !state.selectionHoldsScroll
         when (layout.orientation) {
             Orientation.Vertical -> LazyColumn(
                 modifier = anchored,

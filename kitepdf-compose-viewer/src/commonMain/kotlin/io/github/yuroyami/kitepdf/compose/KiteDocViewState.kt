@@ -1374,7 +1374,8 @@ public class KiteDocViewState(
      * are both suppressed while this is set, so a drag that began as a
      * selection never slides the page out from under the finger, and the page
      * stays put afterwards while the user acts on the selected text.
-     * Two-finger pinch zoom is unaffected.
+     * Two-finger pinch zoom is unaffected, and so is the mouse wheel over a
+     * continuous layout (#594).
      *
      * It goes true the instant the long press fires, which is BEFORE
      * [selection] exists (the hit test and the text extraction still have to
@@ -1384,6 +1385,18 @@ public class KiteDocViewState(
      */
     public var isSelectionActive: Boolean by mutableStateOf(false)
         private set
+
+    /** True when the last pointer to press or move over the view was a mouse, as [kitePointerKind] keeps it. */
+    internal var mousePointer: Boolean by mutableStateOf(false)
+
+    /**
+     * True while a selection holds the strip's own scrolling. The hold is against a finger, whose
+     * drag would slide the page from under the words. The strip never drags with a mouse, so for
+     * a mouse the hold would only stop the wheel, and the page could not move until a click
+     * cleared the selection (#594).
+     */
+    internal val selectionHoldsScroll: Boolean
+        get() = isSelectionActive && !mousePointer
 
     /**
      * True only while the finger is still down on the long-press drag that is

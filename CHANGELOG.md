@@ -247,6 +247,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The mouse wheel scrolls a `KiteDocLayout.Continuous` layout while text is selected. A selection
+  holds the strip's scrolling for as long as it is on screen, so a finger cannot slide the page
+  from under the words, and that hold stopped the wheel too: after a mouse selection on the
+  desktop or the web the page did not move until a click cleared it. The hold now applies while
+  the last pointer over the view was a finger or a pen, so a mouse keeps the wheel and the
+  selection scrolls with its page, while a finger swipe still leaves the page in place (#594).
 - In a browser, text in a generic font family draws in the bundled face of its family. Skia
   knows one face there, Roboto, so the text of a serif book drew in Roboto: `KiteDocView`
   stretched or squeezed each word to its Times width, so the words of one line looked like
