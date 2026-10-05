@@ -562,6 +562,20 @@ internal class StyleResolver(
                 "initial" -> b.emphasisPosition = EmphasisPosition()
                 else -> parseEmphasisPosition(v)?.let { b.emphasisPosition = it }
             }
+            "text-combine-upright", "-epub-text-combine-horizontal", "-webkit-text-combine-upright" -> when (v.trim().lowercase()) {
+                "inherit", "unset" -> b.textCombineUpright = b.parent.textCombineUpright
+                "none", "initial" -> b.textCombineUpright = false
+                "all" -> b.textCombineUpright = true
+            }
+            // EPUB 3.0's name, from an older draft: `horizontal`, with a count of characters that is not read.
+            "-epub-text-combine", "-webkit-text-combine" -> {
+                val w = words(v.lowercase())
+                when {
+                    w == listOf("inherit") || w == listOf("unset") -> b.textCombineUpright = b.parent.textCombineUpright
+                    w == listOf("none") || w == listOf("initial") -> b.textCombineUpright = false
+                    w.firstOrNull() == "horizontal" && (w.size == 1 || w.size == 2 && (w[1].toIntOrNull() ?: 0) > 0) -> b.textCombineUpright = true
+                }
+            }
             "text-align-last", "-epub-text-align-last" -> when (v.trim().lowercase()) {
                 "auto", "initial", "unset" -> b.textAlignLast = null
                 else -> parseAlign(v)?.let { b.textAlignLast = it }
@@ -1085,6 +1099,7 @@ internal class StyleResolver(
         var emphasisStyle = parent.emphasisStyle // inherited
         var emphasisColor = parent.emphasisColor // inherited
         var emphasisPosition = parent.emphasisPosition // inherited
+        var textCombineUpright = parent.textCombineUpright // inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
@@ -1157,6 +1172,7 @@ internal class StyleResolver(
                 emphasisStyle = emphasisStyle,
                 emphasisColor = emphasisColor,
                 emphasisPosition = emphasisPosition,
+                textCombineUpright = textCombineUpright,
             )
         }
     }

@@ -79,6 +79,11 @@ internal data class InlineRun(
     val overline: DecorationLine? = null,
     /** The emphasis marks over the run's letters, or null for none (CSS Text Decoration 3, 3, #508). */
     val emphasis: Emphasis? = null,
+    /**
+     * Tate-chu-yoko: runs of one element with `text-combine-upright: all` share a group id (>= 0),
+     * and vertical text sets their text side by side in one em (CSS Writing Modes 3, 9.1, #508).
+     */
+    val combineGroup: Int = -1,
     /** Inline box background, including the nearest painted inline ancestor. */
     val backgroundColor: CssBackground? = null,
     /** The pronunciation of the element this run's text belongs to, or null (#39). */

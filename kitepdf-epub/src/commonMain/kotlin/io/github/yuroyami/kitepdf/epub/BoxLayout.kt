@@ -2114,7 +2114,12 @@ internal class BoxLayout(
         var src: Int = -1,
         // text-orientation of the character's element, which vertical text reads (#508).
         val orientation: TextOrientation = TextOrientation.MIXED,
+        // A tate-chu-yoko composition (cp = U+FFFC, text its characters): what it draws (#508).
+        val combined: Combined? = null,
     )
+
+    /** A tate-chu-yoko composition's glyphs at their own advances across the column, in [face] or the generic font. */
+    private class Combined(val glyphs: List<TextGlyph>, val face: EmbeddedFace?)
 
     private sealed class Token {
         /**
@@ -2147,6 +2152,31 @@ internal class BoxLayout(
         val lineHeight = (style.lineHeightPt ?: style.fontSizePt * 1.4) * lineHeightScale
         val below = (lineHeight - style.fontSizePt * 0.8).coerceAtLeast(0.0)
         return (maxImageHeight - below).coerceAtLeast(1.0)
+    }
+
+    /**
+     * A tate-chu-yoko composition (CSS Writing Modes 3, 9.1, #508): [text] side by side in one cell
+     * an em long down the column, which [placeRuns] makes a run of its own and the painter squeezes
+     * into an em across the column. It takes the run's face when that has every character, else a
+     * face that does. Letter-spacing goes after it, as after one character, and not inside it.
+     */
+    private fun combinedCell(run: InlineRun, text: String, face: EmbeddedFace?, spec: FontSpec, shift: Double, level: Int, src: Int): Cell {
+        val fs = run.fontSizePt
+        val cps = codePointsOf(text)
+        val f = face?.let { own -> own.takeIf { cps.all { own.gidFor(it) != 0 } } ?: fonts.coveringAll(cps) }
+        val glyphs = cps.map { cp ->
+            if (f == null) glyph(cp, spec)
+            else f.gidFor(cp).let { gid -> TextGlyph(0, 1, gid, CharText.of(cp), f.advance1000(gid).toDouble(), f.outline(gid), cp == ' '.code) }
+        }
+        val spacing = if (run.letterSpacingPt != 0.0 && fs > 0.0) (run.letterSpacingPt / fs * 1000.0).roundToInt() else 0
+        return Cell(
+            0xFFFC, fs + spacing * fs / 1000.0, fs, spec, run.color, shift, run.underline,
+            kernAfter1000 = spacing,
+            rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
+            element = run.element, text = text,
+            lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor,
+            level = level, src = src, combined = Combined(glyphs, f),
+        )
     }
 
     private fun tokenize(
@@ -2221,7 +2251,10 @@ internal class BoxLayout(
                 wordLineBreak = LineBreak.AUTO
             }
         }
+        // The last run that a tate-chu-yoko composition has taken (#508).
+        var combinedTo = -1
         for ((r, run) in runs.withIndex()) {
+            if (r <= combinedTo) continue
             val levelsOfRun = levels?.get(r)
             if (run.hardBreak) { endWord(); tokens.add(Token.Break); continue }
             // Inline image: one unbreakable single-cell token, sized from CSS
@@ -2298,6 +2331,36 @@ internal class BoxLayout(
             }
             val spec = fontSpec(run.family, run.bold, run.italic)
             val face = run.fontFamilyNames.firstNotNullOfOrNull { fonts.match(it, run.bold, run.italic) }
+            // Tate-chu-yoko: the text of one element, which may come as several runs, is one cell an
+            // em long down the column, set as an ideograph is between its neighbours. A space or a
+            // line break at either end of it is dropped (#508).
+            if (vertical && run.combineGroup >= 0) {
+                var end = r
+                while (end + 1 < runs.size && runs[end + 1].combineGroup == run.combineGroup &&
+                    !runs[end + 1].hardBreak && runs[end + 1].imageSrc == null && runs[end + 1].math == null
+                ) end++
+                val all = buildString { for (k in r..end) append(runs[k].text) }
+                val lead = all.length - all.trimStart(' ', '\n', '\r').length
+                val core = all.trim(' ', '\n', '\r').filter { it != '\n' && it != '\r' }
+                if (core.isNotEmpty()) {
+                    val cell = combinedCell(run, core, face, spec, shift, levelsOfRun?.getOrNull(lead) ?: 0, srcAt + lead)
+                    srcAt += codePointCount(all)
+                    combinedTo = end
+                    if (run.rubyGroup >= 0) {
+                        // A ruby base stays one word.
+                        word.add(cell); wordW += cell.width
+                    } else {
+                        endWord()
+                        val last = tokens.lastOrNull()
+                        if (last is Token.Word && last.cells.isNotEmpty() && isOpener(last.cells.last().cp, last.lineBreak)) {
+                            tokens[tokens.lastIndex] = Token.Word(last.cells + cell, last.width + cell.width, lineBreak = run.lineBreak)
+                        } else {
+                            tokens.add(Token.Word(listOf(cell), cell.width, lineBreak = run.lineBreak))
+                        }
+                    }
+                    continue
+                }
+            }
             fun cellFor(cp: Int, level: Int, src: Int): Cell {
                 // font-variant: small-caps. Prefer the face's real `smcp` glyph;
                 // otherwise synthesize: the UPPERCASE form at 0.8x size (the cell
@@ -2795,11 +2858,34 @@ internal class BoxLayout(
             if (c.rubyGroup >= 0 && openGroup < 0) { openGroup = c.rubyGroup; groupStart = x; groupCell = c }
             x += c.padBefore
             val startX = x
+            val comb = c.combined
+            if (comb != null) {
+                // A composition is a run of its own: its glyphs as drawn, and spread over its em for
+                // the page text, so a search or a selection finds them inside it (#508).
+                val natural = comb.glyphs.sumOf { it.advanceWidth }
+                val n = comb.glyphs.size
+                val spread = comb.glyphs.mapIndexed { k, g ->
+                    val share = if (natural > 0.0) g.advanceWidth * 1000.0 / natural else 1000.0 / n
+                    g.copy(advanceWidth = share + if (k == n - 1) c.kernAfter1000 else 0)
+                }
+                out.add(PlacedRun(
+                    spread, startX, c.fontSize, c.spec, c.color, c.shift, c.underline,
+                    hasOutlines = comb.face != null, unitsPerEm = comb.face?.unitsPerEm ?: 1000,
+                    href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, overline = c.overline, backgroundColor = c.backgroundColor,
+                    paintWidth = c.width, element = c.element, spacesBefore = spaces, spacesWidth = spacesWidth,
+                    combined = comb.glyphs,
+                ))
+                // One emphasis mark for the composition, as for one character.
+                if (c.emphasis != null && codePointsOf(c.text ?: "").any { takesMark(it) }) markRun(c, startX + c.fontSize / 2)?.let(out::add)
+                x += c.width + c.padAfter; i++
+                spaces = 0; spacesWidth = 0.0
+                continue
+            }
             val spec = c.spec; val fs = c.fontSize; val col = c.color; val sh = c.shift; val ul = c.underline; val face = c.face
             val glyphs = ArrayList<TextGlyph>()
             val marks = ArrayList<PlacedRun>()
             // An image cell always ends a text run, even when glued to a word (#99).
-            while (i < cells.size && !isGap(cells[i].cp) && !cells[i].isImage && cells[i].math == null && cells[i].rubyGroup == c.rubyGroup &&
+            while (i < cells.size && !isGap(cells[i].cp) && !cells[i].isImage && cells[i].math == null && cells[i].combined == null && cells[i].rubyGroup == c.rubyGroup &&
                 cells[i].href == c.href && cells[i].speech === c.speech && cells[i].ids === c.ids && cells[i].element === c.element &&
                 samePaint(cells[i], c) && cells[i].orientation == c.orientation
             ) {

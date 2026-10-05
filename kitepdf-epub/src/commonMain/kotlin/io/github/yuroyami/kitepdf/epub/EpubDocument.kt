@@ -1954,6 +1954,23 @@ public class EpubPage internal constructor(
                 // ruby lands to the RIGHT of its base column).
                 val xAxis = axisX(run.baselineShift)
                 var pen = margin + run.x // display-y pen, running down the page
+                val combined = run.combined
+                if (combined != null) {
+                    // A tate-chu-yoko composition stands upright, side by side across the column's em
+                    // and squeezed into it when wider, centred in its advance down the column as an
+                    // upright character is (#508).
+                    val width = combined.sumOf { it.advanceWidth } * run.fontSize / 1000.0
+                    val scale = if (width > run.fontSize) run.fontSize / width else 1.0
+                    val x0 = xAxis + UPRIGHT_CENTER * run.fontSize - width * scale / 2.0
+                    val baseline = pen + run.paintWidth / 2.0 + UPRIGHT_CENTER * run.fontSize
+                    canvas.drawGlyphs(
+                        combined, run.fontSize, unitsPerEm = run.unitsPerEm, hasOutlines = run.hasOutlines, fontSpec = run.fontSpec,
+                        textToDevice = deviceCtm.concat(KiteMatrix(scale, 0.0, 0.0, 1.0, x0, displayHeight - baseline)),
+                        color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
+                    )
+                    paintRunLines(run, canvas, vertical = true) { shift -> runTransform(run, shift) }
+                    continue
+                }
                 var k = 0
                 while (k < run.glyphs.size) {
                     val g = run.glyphs[k]

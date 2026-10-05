@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB chapters set tate-chu-yoko: `text-combine-upright: all`, EPUB's
+  `-epub-text-combine-horizontal: all` and its older `-epub-text-combine: horizontal`, and their
+  `-webkit-` names. In vertical text the element's text stands upright and side by side in the
+  space of one character, an em down the column, squeezed across the column when it is wider than
+  an em, so a date's digits no longer run sideways one by one. Each element makes its own
+  composition, a child that inherits the property included, a line never breaks inside one, and it
+  takes one emphasis mark as one character would. The page text keeps its characters inside that
+  em, and horizontal text is as it was (#508).
+
 - EPUB chapters draw emphasis marks: `text-emphasis-style`, `text-emphasis-color`,
   `text-emphasis-position` and the `text-emphasis` shorthand, under their `-epub-` and `-webkit-`
   names too. Each letter takes its mark at half its size, from the book's font when the font has

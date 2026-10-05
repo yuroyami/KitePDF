@@ -257,6 +257,12 @@ internal data class ComputedStyle(
     val emphasisColor: RgbColor? = null,
     /** `text-emphasis-position` (3.3). Inherited. */
     val emphasisPosition: EmphasisPosition = EmphasisPosition(),
+    /**
+     * `text-combine-upright: all`, or EPUB's `-epub-text-combine-horizontal`: vertical text sets the
+     * element's text side by side in the space of one character, tate-chu-yoko (CSS Writing Modes 3,
+     * 9.1, #508). Inherited.
+     */
+    val textCombineUpright: Boolean = false,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

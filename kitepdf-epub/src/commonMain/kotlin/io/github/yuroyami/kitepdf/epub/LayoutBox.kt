@@ -191,6 +191,11 @@ internal class PlacedRun(
     val spacesWidth: Double = 0.0,
     /** Which of the run's glyphs stand upright in vertical text (CSS Writing Modes 3, 5.1, #508). */
     val orientation: TextOrientation = TextOrientation.MIXED,
+    /**
+     * A tate-chu-yoko composition's glyphs at their own advances, which the painter sets upright and
+     * side by side in the column's em; [glyphs] then hold the same glyphs spread over that em (#508).
+     */
+    val combined: List<TextGlyph>? = null,
 )
 
 /**
