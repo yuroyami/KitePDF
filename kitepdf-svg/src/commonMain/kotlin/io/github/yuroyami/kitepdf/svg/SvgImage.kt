@@ -65,7 +65,10 @@ import kotlin.math.PI
  */
 public class SvgImage private constructor(
     private val root: KiteXmlNode.Element,
-    /** Intrinsic size in px (from width/height, else the viewBox extent, else 300x150). */
+    /**
+     * Intrinsic size in px: from width and height, a missing one from the other and the
+     * viewBox's ratio, else the viewBox extent, else 300x150.
+     */
     public val width: Double,
     public val height: Double,
     private val viewBox: DoubleArray?, // minX, minY, w, h
@@ -1708,8 +1711,13 @@ public class SvgImage private constructor(
                     null
                 }
             }
-            val w = svg.attrs["width"]?.let { lenOrNull(it) } ?: vb?.get(2) ?: 300.0
-            val h = svg.attrs["height"]?.let { lenOrNull(it) } ?: vb?.get(3) ?: 150.0
+            val givenW = svg.attrs["width"]?.let { lenOrNull(it) }
+            val givenH = svg.attrs["height"]?.let { lenOrNull(it) }
+            // The viewBox gives the svg its aspect ratio, so one given side makes the other
+            // (SVG 2, 8.2, #566). Its extent stands for a size only when neither side is given.
+            val ratio = vb?.takeIf { it[2] > 0 && it[3] > 0 }?.let { it[3] / it[2] }
+            val w = givenW ?: givenH?.let { h -> ratio?.let { h / it } } ?: vb?.get(2) ?: 300.0
+            val h = givenH ?: givenW?.let { w -> ratio?.let { w * it } } ?: vb?.get(3) ?: 150.0
             if (!w.isFinite() || !h.isFinite() || w <= 0 || h <= 0) return null
             return SvgImage(svg, w, h, vb, hostStyle)
         }

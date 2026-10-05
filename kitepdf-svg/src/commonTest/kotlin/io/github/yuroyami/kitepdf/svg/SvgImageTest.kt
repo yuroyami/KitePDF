@@ -86,6 +86,27 @@ class SvgImageTest {
     }
 
     @Test
+    fun a_missing_side_follows_the_view_box_ratio() {
+        // SVG 2, 8.2: the viewBox gives the outermost svg its aspect ratio, so one side and the
+        // ratio make the size, and CSS 2.1, 10.3.2 and 10.6.2 take the other side from it (#566).
+        fun size(attrs: String) = assertNotNull(SvgImage.parse("<svg $attrs/>".encodeToByteArray())).let { it.width to it.height }
+        assertEquals(30.0 to 60.0, size("""width="30" viewBox="0 0 20 40""""))
+        assertEquals(30.0 to 60.0, size("""height="60" viewBox="0 0 20 40""""))
+        assertEquals(30.0 to 150.0, size("""width="30""""), "with no ratio the height is the default")
+        assertEquals(20.0 to 40.0, size("""viewBox="0 0 20 40""""), "with no size the view box's extent stands for one")
+        assertEquals(20.0 to 40.0, size("""width="100%" viewBox="0 0 20 40""""), "a percentage is no size")
+    }
+
+    @Test
+    fun a_square_drawn_by_one_side_and_a_view_box_fills_its_width() {
+        val img = assertNotNull(SvgImage.parse("""<svg width="30" viewBox="0 0 20 40"><rect width="20" height="20"/></svg>""".encodeToByteArray()))
+        val rc = RecordingCanvas(); img.render(rc, KiteMatrix.IDENTITY)
+        val f = rc.calls.filterIsInstance<RecordingCanvas.Call.Fill>().single()
+        assertEquals(1.5, f.ctm.a, 1e-6, "20 user units across 30 pixels")
+        assertEquals(1.5, f.ctm.d, 1e-6)
+    }
+
+    @Test
     fun group_transform_composes_into_ctm() {
         val img = SvgImage.parse(
             """<svg width="50" height="50"><g transform="translate(5,7)"><rect width="10" height="10"/></g></svg>""".encodeToByteArray(),

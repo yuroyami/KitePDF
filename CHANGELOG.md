@@ -177,6 +177,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An SVG that gives one of `width` and `height` and a `viewBox` takes the other side from the
+  viewBox's aspect ratio. It took the viewBox's own extent, so `width="30"` with
+  `viewBox="0 0 20 40"` made a 30 by 40 box and drew a third too small, on a line, in a block
+  and through `img` alike (#566).
 - An SVG placed straight in an EPUB block, such as a `p` or a `div`, takes the size its `width`
   and `height` attributes give. It filled the text column, so a 20 pixel icon drew 304 points
   square and two of them took two pages. A size in percent still fills the column (#565).
