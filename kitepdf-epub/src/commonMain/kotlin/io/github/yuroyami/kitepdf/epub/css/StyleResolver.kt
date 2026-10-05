@@ -41,16 +41,12 @@ internal class StyleResolver(
      * The style of an anonymous box with [display] inside a box styled [parent]: inherited
      * properties come from [parent], the others take their initial values (CSS 2.1, 17.2.1).
      */
-    fun anonymous(parent: ComputedStyle, display: Display): ComputedStyle = build(parent, emptyMap()).copy(display = display)
+    fun anonymous(parent: ComputedStyle, display: Display): ComputedStyle = build(parent, emptyList()).copy(display = display)
 
     /** [ancestors]: immediate parent first, outward to the root. [parent] = its computed style. */
     fun compute(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, parent: ComputedStyle): ComputedStyle {
-        val bestWeight = HashMap<String, Long>()
-        val value = HashMap<String, String>()
-        fun offer(prop: String, v: String, weight: Long) {
-            val prev = bestWeight[prop]
-            if (prev == null || weight >= prev) { bestWeight[prop] = weight; value[prop] = v }
-        }
+        val offered = ArrayList<Offered>()
+        fun offer(prop: String, v: String, weight: Long) { offered.add(Offered(prop, v, weight)) }
 
         presentationalHints(el, ancestors, ::offer)
         rules.forEachIndexed { order, rule ->
@@ -67,7 +63,7 @@ internal class StyleResolver(
             val decls = CssParser.parse("*{$inline}", Origin.INLINE).firstOrNull()?.declarations.orEmpty()
             for (d in decls) offer(d.property, d.value, weight(Origin.INLINE, d.important, INLINE_SPEC, rules.size + 1))
         }
-        val cs = build(parent, value)
+        val cs = build(parent, inCascadeOrder(offered))
         // The HTML `dir` attribute wins over the CSS `direction` property.
         return when (el.attrs["dir"]?.lowercase()) {
             "rtl" -> cs.copy(direction = Direction.RTL)
@@ -126,23 +122,21 @@ internal class StyleResolver(
         elementStyle: ComputedStyle,
         side: PseudoSide,
     ): PseudoContent? {
-        val bestWeight = HashMap<String, Long>()
-        val value = HashMap<String, String>()
-        fun offer(prop: String, v: String, weight: Long) {
-            val prev = bestWeight[prop]
-            if (prev == null || weight >= prev) { bestWeight[prop] = weight; value[prop] = v }
-        }
+        val offered = ArrayList<Offered>()
         rules.forEachIndexed { order, rule ->
             var spec = -1
             for (sel in rule.selectors) {
                 if (sel.pseudoElement == side && sel.matches(el, ancestors)) spec = maxOf(spec, sel.specificity)
             }
             if (spec < 0) return@forEachIndexed
-            for (d in rule.declarations) offer(d.property, d.value, weight(rule.origin, d.important, spec, order))
+            for (d in rule.declarations) offered.add(Offered(d.property, d.value, weight(rule.origin, d.important, spec, order)))
         }
-        val raw = value.remove("content") ?: return null
+        val ordered = inCascadeOrder(offered)
+        // The last `content` in cascade order wins even when it is one this resolver cannot draw,
+        // such as a counter, which then makes the rule inert.
+        val raw = ordered.lastOrNull { it.first == "content" }?.second ?: return null
         val parts = parseContentValue(raw) ?: return null
-        val style = build(elementStyle, value)
+        val style = build(elementStyle, ordered.filter { it.first != "content" })
         val content = generate(parts, el, ancestors, style.quotes).takeIf { it.isNotEmpty() } ?: return null
         return PseudoContent(style, content)
     }
@@ -331,14 +325,27 @@ internal class StyleResolver(
 
     private fun isHex(c: Char): Boolean = c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
 
-    private fun build(parent: ComputedStyle, values: Map<String, String>): ComputedStyle {
+    /** A declaration that matches an element, with its place in the cascade. */
+    private class Offered(val property: String, val value: String, val weight: Long)
+
+    /**
+     * Each declaration of [offered] as a property and its value, from the lowest cascade weight to
+     * the highest and, at one weight, in the order they were written (#575). The sort is stable.
+     */
+    private fun inCascadeOrder(offered: List<Offered>): List<Pair<String, String>> =
+        offered.sortedBy { it.weight }.map { it.property to it.value }
+
+    /**
+     * The style that [declarations], in cascade order, give an element whose parent is styled
+     * [parent]. Each declaration applies in turn, so the last one wins, and one whose value this
+     * resolver cannot read changes nothing and leaves the value before it, as CSS drops an invalid
+     * declaration. A shorthand and its longhand meet in the same order (#575).
+     */
+    private fun build(parent: ComputedStyle, declarations: List<Pair<String, String>>): ComputedStyle {
         val b = Builder(parent)
         // font-size first: everything else's `em`/`%` resolves against the new size.
-        values["font-size"]?.let { b.fontSizePt = resolveFontSize(it, parent.fontSizePt) }
-        for ((prop, v) in values) {
-            if (prop == "font-size") continue
-            apply(b, prop, v)
-        }
+        for ((prop, v) in declarations) if (prop == "font-size") resolveFontSize(v, parent.fontSizePt)?.let { b.fontSizePt = it }
+        for ((prop, v) in declarations) if (prop != "font-size") apply(b, prop, v)
         return b.build()
     }
 
@@ -718,12 +725,12 @@ internal class StyleResolver(
         return sizeValue(b, s, refHeightPt)
     }
 
-    private fun resolveFontSize(v: String, parentPt: Double): Double {
+    /** The size [v] gives, or null for a value this resolver cannot read. */
+    private fun resolveFontSize(v: String, parentPt: Double): Double? {
         val s = v.trim().lowercase()
         if (s == "inherit") return parentPt
         CssValues.fontSizeKeyword(s, parentPt, rootFontSizePt)?.let { return it }
-        CssValues.length(s, parentPt, rootFontSizePt, parentPt)?.let { return it }
-        return parentPt
+        return CssValues.length(s, parentPt, rootFontSizePt, parentPt)
     }
 
     private fun resolveLineHeight(b: Builder, v: String) {
