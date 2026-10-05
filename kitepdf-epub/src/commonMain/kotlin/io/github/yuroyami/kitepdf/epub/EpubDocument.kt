@@ -459,19 +459,25 @@ public class EpubDocument internal constructor(
         BlockBox(ComputedStyle.initial(settings.fontSize, direction = directionFor(chapter)), listOf(docRoot))
 
     /**
-     * Vertical writing: the writing mode the first spine root resolves, if it
-     * is a vertical one. `vertical-rl` is Japanese tategaki, columns running
-     * right to left; `vertical-lr` lays out the same way with the columns
-     * running the other direction. One mode per document, read from the first
-     * reflowable chapter; mixed horizontal/vertical spines follow it (a noted
-     * limit). Fixed-layout chapters stay on the pre-paginated path regardless.
+     * The writing mode of the first reflowable chapter, if it is a vertical one. Each chapter
+     * lays out in its own mode, which [verticalModeOf] reads from its box tree (#507).
+     * Fixed-layout chapters stay on the pre-paginated path regardless.
      */
     internal val verticalMode: io.github.yuroyami.kitepdf.epub.css.WritingMode? by lazy {
         val first = parsed.spineIndices.firstOrNull { !parsed.isFixed(it) } ?: return@lazy null
-        // The spine root box wraps the document node (initial style); the html
-        // element's computed style sits one level down and body's below that,
-        // so walk the first-child chain a few levels.
-        var box: LayoutBox? = buildDocRoot(first)
+        verticalModeOf(buildDocRoot(first))
+    }
+
+    /**
+     * The writing mode a chapter's root resolves, if it is a vertical one: `vertical-rl` is
+     * Japanese tategaki, columns running right to left, and `vertical-lr` runs its columns the
+     * other way. A document's principal writing mode is its own, from its root element or, in
+     * HTML, its body (CSS Writing Modes 3, 8, #507).
+     */
+    private fun verticalModeOf(docRoot: LayoutBox): io.github.yuroyami.kitepdf.epub.css.WritingMode? {
+        // The box of the document node has the initial style; the html element's computed style
+        // sits one level down and body's below that, so walk the first-child chain a few levels.
+        var box: LayoutBox? = docRoot
         var depth = 0
         while (box != null && depth < 4) {
             val s = when (box) {
@@ -482,11 +488,11 @@ public class EpubDocument internal constructor(
             val mode = s?.writingMode
             if (mode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_RL ||
                 mode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_LR
-            ) return@lazy mode
+            ) return mode
             box = (box as? BlockBox)?.children?.firstOrNull()
             depth++
         }
-        null
+        return null
     }
 
     internal val isVertical: Boolean get() = verticalMode != null
@@ -598,6 +604,9 @@ public class EpubDocument internal constructor(
         private var docRoot: BlockBox? = null
         private var root: BlockBox? = null
         private var run: BoxLayout.Run? = null
+        /** The chapter's own writing mode, once its box tree is built (#507). */
+        private var vertical = false
+        private var verticalLr = false
 
         /** The chapter's pages, once [step] has returned true. */
         lateinit var laid: Laid
@@ -619,25 +628,28 @@ public class EpubDocument internal constructor(
                 1 -> build = docRootBuild(chapter)
                 2 -> if (!checkNotNull(build).step()) return false
                 3 -> {
+                    val built = checkNotNull(checkNotNull(build).box)
+                    val mode = verticalModeOf(built)
+                    vertical = mode != null
+                    verticalLr = mode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_LR
                     // Vertical writing swaps the budgets: the inline (line-length) budget is
                     // the page content HEIGHT and each page holds contentWidth of columns.
-                    val inlineBudget = if (isVertical) pageContentHeight else contentWidth
-                    val blockBudget = if (isVertical) contentWidth else pageContentHeight
-                    val built = checkNotNull(checkNotNull(build).box)
+                    val inlineBudget = if (vertical) pageContentHeight else contentWidth
+                    val blockBudget = if (vertical) contentWidth else pageContentHeight
                     val chapterRoot = chapterRoot(chapter, built)
                     build = null
                     docRoot = built
                     root = chapterRoot
                     run = BoxLayout(
                         image, svg, blockBudget, fonts, languageFor(chapter),
-                        settings.lineHeightScale, vertical = isVertical, isSvg = parsed::namesSvg,
+                        settings.lineHeightScale, vertical = vertical, isSvg = parsed::namesSvg,
                     ).start(chapterRoot, inlineBudget, blockBudget)
                 }
                 4 -> if (!checkNotNull(run).step()) return false
                 else -> {
                     val pages = Paginator.paginate(
                         checkNotNull(root), settings.pageWidth, settings.pageHeight, settings.margin,
-                        vertical = isVertical, verticalLr = isVerticalLr, hits = hits,
+                        vertical = vertical, verticalLr = verticalLr, hits = hits,
                     )
                     // A spine document with nothing to paint contributed no page when the
                     // whole book shared one box tree. Keep that: do not invent a blank page.

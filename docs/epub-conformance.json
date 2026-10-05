@@ -24,7 +24,7 @@
     "css-epub-text-transform": false,
     "css-epub-text-underline-position": false,
     "css-epub-word-break": false,
-    "css-epub-writing-mode": false,
+    "css-epub-writing-mode": true,
     "fxl-layout-duplication": "n/a",
     "fxl-page-spread-break": true,
     "fxl-page-spread-center": true,

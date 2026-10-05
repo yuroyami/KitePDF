@@ -177,6 +177,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Each EPUB chapter lays out in its own writing mode. The book took the mode of its first
+  chapter, so a vertical chapter after a horizontal one laid out horizontally, and a horizontal
+  chapter after a vertical one laid out in columns (#507).
 - A right-to-left page progression no longer turns a book's text right to left. The spine's
   `page-progression-direction` set the base direction of every chapter, so the English pages of
   a right-to-left book came out right-aligned with their periods at the front. A chapter that

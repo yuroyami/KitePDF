@@ -212,7 +212,10 @@ internal object EpubConformanceChecks {
         check("cnt-svg-support") { fills(0).count { it.isRgb(1.0, 0.0, 0.0) } >= 2 && "Testpasses" in drawnText(0).replace(" ", "") }
         check("cnt-xhtml-support") { "Test passes if you see this." in text(0) }
         check("css-epub-writing-mode") { verticalChapter(1) && verticalChapter(2) && !verticalChapter(0) }
-        check("css-epub-text-orientation") { verticalChapter(1) }
+        // Paragraph 2 asks for upright English and paragraph 3 for sideways Japanese.
+        check("css-epub-text-orientation") {
+            verticalChapter(1) && turnedRun(1, latin = true, turned = false) && turnedRun(1, latin = false, turned = true)
+        }
     }
 
     /**
@@ -220,6 +223,16 @@ internal object EpubConformanceChecks {
      * further down the same column more often than further along the same line. Text space runs
      * up the page, so down is a smaller y.
      */
+    /**
+     * Whether some glyph run of [chapter], on any of its pages, draws letters of Latin script, or
+     * else of CJK script, turned sideways or upright. A turned run's matrix has a rotation in it.
+     */
+    private fun W3cTestBook.turnedRun(chapter: Int, latin: Boolean, turned: Boolean): Boolean =
+        (0 until pages(chapter)).flatMap { glyphRuns(chapter, it) }.any { run ->
+            val letters = run.text.filter { it.isLetter() }
+            letters.isNotEmpty() && letters.all { (it.code < 0x2E80) == latin } && (abs(run.textToDevice.b) > 1e-9) == turned
+        }
+
     private fun W3cTestBook.verticalChapter(chapter: Int): Boolean {
         var down = 0
         var across = 0

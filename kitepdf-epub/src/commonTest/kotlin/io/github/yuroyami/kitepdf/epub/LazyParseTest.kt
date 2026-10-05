@@ -58,17 +58,16 @@ class LazyParseTest {
     }
 
     /**
-     * Laying out chapter N reads chapter N, plus chapter 0: the writing mode and
-     * the hyphenation language are one decision per book and both come from the
-     * first chapter. That is two chapters, never the whole book.
+     * Laying out chapter N reads chapter N and no other: the writing mode and the
+     * hyphenation language both come from the chapter itself (#507), so nothing
+     * sends the layout back to the first chapter.
      */
     @Test
-    fun laying_out_one_chapter_reads_that_chapter_and_the_first() {
+    fun laying_out_one_chapter_reads_only_that_chapter() {
         val doc = open()
         doc.prepareChapter(4)
-        assertEquals(listOf(0, 4), parsedChapters(doc))
+        assertEquals(listOf(4), parsedChapters(doc))
         assertTrue(doc.isChapterReady(4))
-        assertFalse(doc.isChapterReady(0), "chapter 0 was read, not laid out")
     }
 
     @Test

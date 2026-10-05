@@ -9,10 +9,10 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
 | must | 140 | 101 | 35 | 4 |
-| should | 38 | 16 | 21 | 1 |
+| should | 38 | 17 | 20 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 20 | 6 | 1 |
-| all | 206 | 137 | 63 | 6 |
+| all | 206 | 138 | 62 | 6 |
 
 ## How the results are known
 
@@ -133,11 +133,11 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`css-epub-text-align-last`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-align-last) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: `-epub-text-align-last` is not read: the last lines of the right and centre blocks are left-aligned. |
 | [`css-epub-text-combine-horizontal`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-combine-horizontal) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: `-epub-text-combine-horizontal` is not read: the digits stay one sideways run in the vertical column. |
 | [`css-epub-text-emphasis`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-emphasis) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: The `-epub-text-emphasis` properties are not read: no emphasis marks draw. |
-| [`css-epub-text-orientation`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-orientation) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Checked: The test's second chapter lays out vertically; today it is horizontal, and `text-orientation` is not read either. |
+| [`css-epub-text-orientation`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-orientation) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Checked: The test's second chapter lays out vertically, but `text-orientation` is not read: no English letter stands upright and no Japanese one turns sideways. |
 | [`css-epub-text-transform`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-transform) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: `-epub-fullwidth` is not read: the letters keep their own width. |
 | [`css-epub-text-underline-position`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-text-underline-position) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: `-epub-text-underline-position` is not read: every underline sits at the font's own offset. |
 | [`css-epub-word-break`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-word-break) | should | Fails ([#508](https://github.com/yuroyami/KitePDF/issues/508)) | Judged: `-epub-word-break` is not read: the `break-all` block wraps at spaces. |
-| [`css-epub-writing-mode`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-writing-mode) | should | Fails ([#507](https://github.com/yuroyami/KitePDF/issues/507)) | Checked: Chapter 1 lays out horizontally and chapters 2 and 3 vertically; today the book takes the first chapter's mode, so all three are horizontal. |
+| [`css-epub-writing-mode`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/css-epub-writing-mode) | should | Passes | Checked: Chapter 1 lays out horizontally and chapters 2 and 3 vertically. |
 
 ## Internationalization
 
