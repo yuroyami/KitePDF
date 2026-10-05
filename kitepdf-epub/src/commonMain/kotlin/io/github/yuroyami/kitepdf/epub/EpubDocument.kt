@@ -15,6 +15,7 @@ import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.StyleRule
+import io.github.yuroyami.kitepdf.epub.css.TextOrientation
 import io.github.yuroyami.kitepdf.core.render.KiteFunction
 import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
 import io.github.yuroyami.kitepdf.core.render.KiteShading
@@ -1954,14 +1955,16 @@ public class EpubPage internal constructor(
                 var k = 0
                 while (k < run.glyphs.size) {
                     val g = run.glyphs[k]
-                    if (isUpright(g)) {
+                    if (isUpright(g, run)) {
                         val advPt = g.advanceWidth * run.fontSize / 1000.0
                         // Counter-rotated in place: centred on the em axis, the em
                         // box straddling the axis by the nominal ascent/descent.
-                        val x0 = xAxis + UPRIGHT_CENTER * run.fontSize - advPt / 2.0
+                        // A system-font glyph draws with no offset, so its centring moves its origin (#508).
+                        val shifted = !run.hasOutlines && g.xOffset != 0.0
+                        val x0 = xAxis + UPRIGHT_CENTER * run.fontSize - advPt / 2.0 + (if (shifted) g.xOffset * run.fontSize / 1000.0 else 0.0)
                         val baseline = pen + advPt / 2.0 + UPRIGHT_CENTER * run.fontSize
                         canvas.drawGlyphs(
-                            run.glyphs.subList(k, k + 1), run.fontSize, unitsPerEm = run.unitsPerEm,
+                            if (shifted) listOf(g.copy(xOffset = 0.0)) else run.glyphs.subList(k, k + 1), run.fontSize, unitsPerEm = run.unitsPerEm,
                             hasOutlines = run.hasOutlines, fontSpec = run.fontSpec,
                             textToDevice = deviceCtm.concat(KiteMatrix.translation(x0, displayHeight - baseline)),
                             color = run.color, alpha = 1.0, blendMode = KiteBlendMode.Normal,
@@ -1972,7 +1975,7 @@ public class EpubPage internal constructor(
                         // Rotated segment: one call whose pen advances down the page.
                         var j = k
                         var segAdv = 0.0
-                        while (j < run.glyphs.size && !isUpright(run.glyphs[j])) {
+                        while (j < run.glyphs.size && !isUpright(run.glyphs[j], run)) {
                             segAdv += run.glyphs[j].advanceWidth * run.fontSize / 1000.0
                             j++
                         }
@@ -2274,9 +2277,15 @@ public class EpubPage internal constructor(
         return if (page.verticalLr) page.margin + span else displayWidth - page.margin - span
     }
 
-    /** Upright in vertical flow: the full-width (CJK) codepoints; the rest rotate. */
-    private fun isUpright(g: io.github.yuroyami.kitepdf.core.font.TextGlyph): Boolean =
-        g.text.isNotEmpty() && FontMetrics.isWide(codePointAt(g.text, 0))
+    /**
+     * Upright in vertical flow, as the run's text-orientation says: with `mixed` the full-width
+     * (CJK) codepoints stand and the rest rotate (CSS Writing Modes 3, 5.1, #508).
+     */
+    private fun isUpright(g: io.github.yuroyami.kitepdf.core.font.TextGlyph, run: PlacedRun): Boolean = when (run.orientation) {
+        TextOrientation.UPRIGHT -> true
+        TextOrientation.SIDEWAYS -> false
+        TextOrientation.MIXED -> g.text.isNotEmpty() && FontMetrics.isWide(codePointAt(g.text, 0))
+    }
 
     /** [paintBox] under the vertical mapping: block spans columns, inline runs down. */
     private fun paintBoxVertical(

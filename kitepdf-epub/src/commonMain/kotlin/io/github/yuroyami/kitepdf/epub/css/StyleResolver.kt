@@ -528,6 +528,12 @@ internal class StyleResolver(
                 "strict" -> b.lineBreak = LineBreak.STRICT
                 "anywhere" -> b.lineBreak = LineBreak.ANYWHERE
             }
+            // EPUB 3's own names: vertical-right and use-glyph-orientation for mixed, sideways-right for sideways.
+            "text-orientation", "-epub-text-orientation", "-webkit-text-orientation" -> when (v.trim().lowercase()) {
+                "mixed", "vertical-right", "use-glyph-orientation", "initial", "unset" -> b.textOrientation = TextOrientation.MIXED
+                "upright" -> b.textOrientation = TextOrientation.UPRIGHT
+                "sideways", "sideways-right" -> b.textOrientation = TextOrientation.SIDEWAYS
+            }
             "text-align-last", "-epub-text-align-last" -> when (v.trim().lowercase()) {
                 "auto", "initial", "unset" -> b.textAlignLast = null
                 else -> parseAlign(v)?.let { b.textAlignLast = it }
@@ -961,6 +967,7 @@ internal class StyleResolver(
         var overflowWrap = parent.overflowWrap // inherited
         var wordBreak = parent.wordBreak // inherited
         var lineBreak = parent.lineBreak // inherited
+        var textOrientation = parent.textOrientation // inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
@@ -1025,6 +1032,7 @@ internal class StyleResolver(
                 wordBreak = wordBreak,
                 fullWidth = fullWidth,
                 lineBreak = lineBreak,
+                textOrientation = textOrientation,
             )
         }
     }

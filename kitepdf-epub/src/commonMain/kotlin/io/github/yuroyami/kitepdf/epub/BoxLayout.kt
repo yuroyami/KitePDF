@@ -31,6 +31,7 @@ import io.github.yuroyami.kitepdf.epub.css.LineBreak
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
+import io.github.yuroyami.kitepdf.epub.css.TextOrientation
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
 import io.github.yuroyami.kitepdf.core.text.Bidi
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
@@ -87,9 +88,20 @@ internal class BoxLayout(
     private val hyphenator by lazy { Hyphenator.forLanguage(language) ?: Hyphenator.enUs() }
 
     /** Logical pen advance of [gid] in 1/1000 em, honouring vertical mode for upright glyphs. */
-    private fun penAdvance1000(face: EmbeddedFace, gid: Int, cp: Int): Int =
-        if (vertical && FontMetrics.isWide(cp)) face.advanceHeight1000(gid) ?: 1000
+    private fun penAdvance1000(face: EmbeddedFace, gid: Int, cp: Int, orientation: TextOrientation = TextOrientation.MIXED): Int =
+        if (upright(cp, orientation)) face.advanceHeight1000(gid) ?: 1000
         else face.advance1000(gid)
+
+    /** Whether [cp] stands upright in this layout's text: vertical text, as [orientation] says (#508). */
+    private fun upright(cp: Int, orientation: TextOrientation): Boolean = vertical && when (orientation) {
+        TextOrientation.MIXED -> FontMetrics.isWide(cp)
+        TextOrientation.UPRIGHT -> true
+        TextOrientation.SIDEWAYS -> false
+    }
+
+    /** True for a letter that stands upright where text-orientation alone puts it: it takes an em down the column (#508). */
+    private fun uprightOnlyByStyle(cp: Int, orientation: TextOrientation): Boolean =
+        upright(cp, orientation) && !FontMetrics.isWide(cp)
 
     /**
      * A float's exclusion band: text lines whose y-range overlaps it shorten
@@ -2087,6 +2099,8 @@ internal class BoxLayout(
         // its first character's. -1 for a space and for a cell the layout adds, such as a
         // hyphen, so a line starts at its first other character.
         var src: Int = -1,
+        // text-orientation of the character's element, which vertical text reads (#508).
+        val orientation: TextOrientation = TextOrientation.MIXED,
     )
 
     private sealed class Token {
@@ -2143,9 +2157,11 @@ internal class BoxLayout(
         var srcAt = 0
         fun endWord() {
             if (word.isNotEmpty()) {
-                val ligated = shapeWord(word)   // GSUB: joining forms, ligatures, contextual substitutions
+                // Letters stood upright one per em neither join nor kern (#508).
+                val stacked = word.any { uprightOnlyByStyle(it.cp, it.orientation) }
+                val ligated = !stacked && shapeWord(word) // GSUB: joining forms, ligatures, contextual substitutions
                 positionMarks(word)             // GPOS mark-to-base attachment
-                kernWord(word)
+                if (!stacked) kernWord(word)
                 // Skip hyphenation when a ligature collapsed cells (soft-hyphen indices
                 // + the reconstructed word text would no longer line up), and for ruby
                 // bases (a hyphen inside a ruby-annotated base is never wanted).
@@ -2296,15 +2312,20 @@ internal class BoxLayout(
                 }
                 val cell = if (f != null) {
                     val gid = if (smcpGid >= 0) smcpGid else f.gidFor(c)
-                    Cell(c, penAdvance1000(f, gid, c) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
+                    Cell(c, penAdvance1000(f, gid, c, run.textOrientation) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                         element = run.element,
-                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src)
+                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src,
+                        orientation = run.textOrientation)
                 } else {
-                    Cell(c, FontMetrics.advancePt(c, cellFs, run.bold, run.italic, run.family), cellFs, spec, run.color, shift, run.underline,
+                    // An upright letter of the generic font takes one em down the column (#508).
+                    val advance = if (uprightOnlyByStyle(c, run.textOrientation)) cellFs
+                    else FontMetrics.advancePt(c, cellFs, run.bold, run.italic, run.family)
+                    Cell(c, advance, cellFs, spec, run.color, shift, run.underline,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                         element = run.element,
-                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src)
+                        lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src,
+                        orientation = run.textOrientation)
                 }
                 // letter-spacing: added to every glyph advance, kept in sync
                 // between the wrap width and the drawn advance (like kerning).
@@ -2476,7 +2497,7 @@ internal class BoxLayout(
                     c.gid = g.gid; c.invisible = true; c.width = 0.0
                 } else if (g.gid != c.gid) {
                     c.gid = g.gid
-                    c.width = (penAdvance1000(face, g.gid, c.cp) + c.kernAfter1000) * c.fontSize / 1000.0
+                    c.width = (penAdvance1000(face, g.gid, c.cp, c.orientation) + c.kernAfter1000) * c.fontSize / 1000.0
                 }
                 out.add(c)
             }
@@ -2492,12 +2513,12 @@ internal class BoxLayout(
             val spacing = if (first) base.kernAfter1000 else 0
             out.add(
                 Cell(
-                    base.cp, (penAdvance1000(face, g.gid, base.cp) + spacing) * base.fontSize / 1000.0, base.fontSize,
+                    base.cp, (penAdvance1000(face, g.gid, base.cp, base.orientation) + spacing) * base.fontSize / 1000.0, base.fontSize,
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
                     rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href, speech = base.speech, ids = base.ids,
                     element = base.element,
                     lineThrough = base.lineThrough, backgroundColor = base.backgroundColor, level = base.level,
-                    src = base.src,
+                    src = base.src, orientation = base.orientation,
                 ).also {
                     it.ligComponents = g.components; it.text = text
                     if (g.shaperData and TextShaper.INVISIBLE != 0) { it.invisible = true; it.width = 0.0 }
@@ -2687,7 +2708,7 @@ internal class BoxLayout(
         return Cell(
             '-'.code, hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline, face, face?.gidFor('-'.code) ?: -1,
             href = c.href, speech = c.speech, ids = c.ids, element = c.element,
-            lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, level = c.level,
+            lineThrough = c.lineThrough, backgroundColor = c.backgroundColor, level = c.level, orientation = c.orientation,
         )
     }
 
@@ -2766,7 +2787,7 @@ internal class BoxLayout(
             // An image cell always ends a text run, even when glued to a word (#99).
             while (i < cells.size && !isGap(cells[i].cp) && !cells[i].isImage && cells[i].math == null && cells[i].rubyGroup == c.rubyGroup &&
                 cells[i].href == c.href && cells[i].speech === c.speech && cells[i].ids === c.ids && cells[i].element === c.element &&
-                samePaint(cells[i], c)
+                samePaint(cells[i], c) && cells[i].orientation == c.orientation
             ) {
                 glyphs.add(glyphFor(cells[i])); x += cells[i].width + cells[i].padAfter; i++
             }
@@ -2775,6 +2796,7 @@ internal class BoxLayout(
                 hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000,
                 href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, backgroundColor = c.backgroundColor,
                 paintWidth = x - startX, element = c.element, spacesBefore = spaces, spacesWidth = spacesWidth,
+                orientation = c.orientation,
             ))
             spaces = 0; spacesWidth = 0.0
         }
@@ -2832,18 +2854,24 @@ internal class BoxLayout(
             c.lineThrough == other.lineThrough && c.backgroundColor == other.backgroundColor
 
     private fun glyphFor(c: Cell): TextGlyph {
+        // A letter stood upright by text-orientation advances an em down the column and sits in the
+        // middle of it: xOffset moves it by half of what its own width leaves of that em (#508).
+        val stacked = uprightOnlyByStyle(c.cp, c.orientation)
         val face = c.face ?: return glyph(c.cp, c.spec).let { g ->
             // Generic cells fold letter-spacing (kernAfter1000) into the drawn
             // advance the same way embedded-face cells do below.
-            if (c.kernAfter1000 != 0) g.copy(advanceWidth = g.advanceWidth + c.kernAfter1000) else g
+            if (stacked) g.copy(advanceWidth = 1000.0 + c.kernAfter1000, xOffset = (1000.0 - g.advanceWidth) / 2)
+            else if (c.kernAfter1000 != 0) g.copy(advanceWidth = g.advanceWidth + c.kernAfter1000) else g
         }
+        val pen = penAdvance1000(face, c.gid, c.cp, c.orientation)
+        val centring = if (stacked) (pen - face.advance1000(c.gid)) / 2.0 * face.unitsPerEm / 1000.0 else 0.0
         return TextGlyph(
             byteOffset = 0, byteCount = 1, gid = c.gid, text = c.text ?: CharText.of(c.cp),
             // Pair kerning to the next glyph is folded into this glyph's advance so
             // the drawn pen movement matches the wrap width.
-            advanceWidth = if (c.invisible) 0.0 else (penAdvance1000(face, c.gid, c.cp) + c.kernAfter1000).toDouble(),
+            advanceWidth = if (c.invisible) 0.0 else (pen + c.kernAfter1000).toDouble(),
             outline = face.outline(c.gid), isWordSpace = c.cp == ' '.code,
-            xOffset = c.glyphXOffset, yOffset = c.glyphYOffset,
+            xOffset = c.glyphXOffset + centring, yOffset = c.glyphYOffset,
         )
     }
 

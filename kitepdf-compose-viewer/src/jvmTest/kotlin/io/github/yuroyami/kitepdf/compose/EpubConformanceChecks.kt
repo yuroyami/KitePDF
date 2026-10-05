@@ -304,9 +304,13 @@ internal object EpubConformanceChecks {
                 wide.isNotEmpty() && wide.none { abs(it.textToDevice.b) > 1e-9 }
         }
         check("css-epub-writing-mode") { verticalChapter(1) && verticalChapter(2) && !verticalChapter(0) }
-        // Paragraph 2 asks for upright English and paragraph 3 for sideways Japanese.
+        // Paragraph 1 keeps the mixed rule, Japanese upright and English turned; paragraph 2 stands its
+        // English up, a letter at a time; paragraphs 3 and 4 turn their Japanese with the English it
+        // runs into, so a turned run holds Japanese letters (#508).
         check("css-epub-text-orientation") {
-            verticalChapter(1) && turnedRun(1, latin = true, turned = false) && turnedRun(1, latin = false, turned = true)
+            verticalChapter(1) &&
+                turnedRun(1, turned = false) { l -> l.all { it.isCjk() } } && turnedRun(1, turned = true) { l -> l.none { it.isCjk() } } &&
+                turnedRun(1, turned = false) { l -> l.none { it.isCjk() } } && turnedRun(1, turned = true) { l -> l.any { it.isCjk() } }
         }
     }
 
@@ -316,14 +320,17 @@ internal object EpubConformanceChecks {
      * up the page, so down is a smaller y.
      */
     /**
-     * Whether some glyph run of [chapter], on any of its pages, draws letters of Latin script, or
-     * else of CJK script, turned sideways or upright. A turned run's matrix has a rotation in it.
+     * Whether some glyph run of [chapter], on any of its pages, draws letters that [letters]
+     * accepts, turned sideways or upright. A turned run's matrix has a rotation in it.
      */
-    private fun W3cTestBook.turnedRun(chapter: Int, latin: Boolean, turned: Boolean): Boolean =
+    private fun W3cTestBook.turnedRun(chapter: Int, turned: Boolean, letters: (String) -> Boolean): Boolean =
         (0 until pages(chapter)).flatMap { glyphRuns(chapter, it) }.any { run ->
-            val letters = run.text.filter { it.isLetter() }
-            letters.isNotEmpty() && letters.all { (it.code < 0x2E80) == latin } && (abs(run.textToDevice.b) > 1e-9) == turned
+            val l = run.text.filter { it.isLetter() }
+            l.isNotEmpty() && letters(l) && (abs(run.textToDevice.b) > 1e-9) == turned
         }
+
+    /** A letter of CJK script, from the radicals up. */
+    private fun Char.isCjk(): Boolean = code >= 0x2E80
 
     /** Every line of [chapter], page after page. */
     private fun W3cTestBook.textLines(chapter: Int): List<KiteTextLine> =
