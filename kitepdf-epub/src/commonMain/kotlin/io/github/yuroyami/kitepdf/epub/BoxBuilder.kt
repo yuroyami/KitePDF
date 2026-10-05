@@ -957,7 +957,7 @@ internal class BoxBuilder(
             while (at < raw.length) {
                 val cp = codePointAt(raw, at)
                 at += charCount(cp)
-                if (cp < 0x10000 && cp.toChar().isWhitespace()) {
+                if (collapsible(cp)) {
                     if (!pendingSpace) pendingSpaceRun = makeRun(" ", style)
                     pendingSpace = true
                 } else {
@@ -993,6 +993,14 @@ internal class BoxBuilder(
             }
             return if (wide) FullWidth.of(cased) else cased
         }
+
+        /**
+         * True for white space that collapses: U+0020, the tab and the line breaks (CSS Text 3,
+         * 4.1.1). A no-break space, an ideographic space and the other space separators keep
+         * their width wherever they stand (#577).
+         */
+        private fun collapsible(cp: Int): Boolean =
+            cp < 0x10000 && cp.toChar().isWhitespace() && (cp == 0x20 || cp.toChar().category != CharCategory.SPACE_SEPARATOR)
 
         /** Transform preserved-whitespace text: word boundaries follow whitespace. */
         private fun transformPre(raw: String, tt: TextTransform, wide: Boolean): String {

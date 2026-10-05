@@ -1736,6 +1736,10 @@ internal class BoxLayout(
             for (cp in codePointsOf(run.text)) when {
                 cp == '\n'.code -> { endWord(); endLine() }
                 cp == '\r'.code -> {}
+                cp == 0x200B -> endWord()
+                // A no-break space holds a word together; the other spaces end one and hang past the line (#577).
+                isGlueSpace(cp) -> { val w = gapWidthPt(cp, run); line += w; word += w }
+                isFixedSpace(cp) -> { line += gapWidthPt(cp, run); endWord() }
                 isWhitespace(cp) -> { line += FontMetrics.advancePt(' '.code, run.fontSizePt, run.bold, run.italic, run.family); endWord() }
                 else -> { val w = FontMetrics.advancePt(cp, run.fontSizePt, run.bold, run.italic, run.family); line += w; word += w }
             }
@@ -1943,7 +1947,7 @@ internal class BoxLayout(
     private fun justifyCjk(cells: List<Cell>, slack: Double): Boolean {
         if (slack <= 0.0) return true
         var last = cells.size - 1
-        while (last >= 0 && cells[last].cp == ' '.code) last--
+        while (last >= 0 && isGap(cells[last].cp)) last--
         if (last < 1) return false
         if (cells.subList(0, last + 1).count { FontMetrics.isWide(it.cp) } < 2) return false
         val extra = slack / last // `last` = gap count between content cells
@@ -1986,21 +1990,25 @@ internal class BoxLayout(
      * not end it (UAX 14, LB 13, 16, 19 and 21).
      */
     private fun heldTogether(prev: Int, cp: Int): Boolean =
-        tiedToPrevious(prev, cp) || isCloser(cp) || isOpener(prev) || cp in NO_BREAK_BEFORE || prev in NO_BREAK_AFTER
+        tiedToPrevious(prev, cp) || isCloser(cp) || isOpener(prev) || cp in NO_BREAK_BEFORE || prev in NO_BREAK_AFTER ||
+            isGlueSpace(cp) || isGlueSpace(prev)
 
     /** True when no break may fall between [prev] and [cp]: they make one grapheme cluster. */
     private fun tiedToPrevious(prev: Int, cp: Int): Boolean =
         Normalizer.isMark(cp) || cp == 0x200D || prev == 0x200D || cp == 0x200C ||
             cp in 0xFE00..0xFE0F || cp in 0xE0100..0xE01EF || cp in 0x1F3FB..0x1F3FF || cp in 0xE0020..0xE007F
 
-    /** Line content width (trailing spaces excluded) + interior space count (for justify). */
+    /**
+     * Line content width (trailing spaces excluded, as they hang) + interior word separator count
+     * (for justify). A no-break space stretches like a space; the fixed-width spaces do not (#577).
+     */
     private fun measure(cells: List<Cell>): Pair<Double, Int> {
         var last = cells.size - 1
-        while (last >= 0 && cells[last].cp == ' '.code) last--
+        while (last >= 0 && isGap(cells[last].cp)) last--
         var w = 0.0; var spaces = 0
         for (k in 0..last) {
             w += cells[k].width + cells[k].padBefore + cells[k].padAfter
-            if (cells[k].cp == ' '.code) spaces++
+            if (isWordSeparator(cells[k].cp)) spaces++
         }
         return w to spaces
     }
@@ -2296,6 +2304,27 @@ internal class BoxLayout(
                 }
                 return cell
             }
+            // A space that keeps its width: the face's own advance for it, else its width by Unicode (#577).
+            // It holds the face's space glyph, so a word around a no-break space still shapes and kerns.
+            fun spaceCell(cp: Int, level: Int, src: Int): Cell {
+                val own = face?.gidFor(cp) ?: 0
+                val em = spaceEm(cp)
+                val stand = spaceStandIn(cp)
+                val w = when {
+                    face != null && own != 0 -> penAdvance1000(face, own, cp) * fs / 1000.0
+                    em != null -> em * fs
+                    face != null -> face.advance1000(face.gidFor(stand)) * fs / 1000.0
+                    else -> FontMetrics.advancePt(stand, fs, run.bold, run.italic, run.family)
+                }
+                // word-spacing adds to the no-break space, a word separator; letter-spacing to every advance.
+                val spacing = run.letterSpacingPt + if (isWordSeparator(cp)) run.wordSpacingPt else 0.0
+                return Cell(
+                    cp, w + spacing, fs, spec, run.color, shift, run.underline, face, face?.gidFor(' '.code) ?: -1,
+                    rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
+                    element = run.element,
+                    lineThrough = run.lineThrough, backgroundColor = run.backgroundColor, level = level, src = src,
+                )
+            }
             var at = 0
             while (at < run.text.length) {
                 val cp = codePointAt(run.text, at)
@@ -2306,6 +2335,26 @@ internal class BoxLayout(
                     cp == '\n'.code -> { endWord(); tokens.add(Token.Break) }
                     cp == '\r'.code -> {}
                     cp == 0x00AD -> softHyphens.add(word.size) // soft hyphen: a break point, drawn only if used
+                    // A zero-width space is a place to break and nothing more (#577).
+                    cp == 0x200B -> endWord()
+                    // A no-break space joins the characters on its two sides into one word (#577).
+                    isGlueSpace(cp) -> {
+                        val c = spaceCell(cp, level, src); word.add(c); wordW += c.width
+                        wordWraps = wordWraps || run.overflowWrap
+                        wordBreaksAll = wordBreaksAll || run.breakAll
+                    }
+                    // The other spaces keep their width and end the word they follow: a line may break
+                    // after one, and one at the end of a line hangs past it (#577).
+                    isFixedSpace(cp) -> {
+                        endWord()
+                        val c = spaceCell(cp, level, src)
+                        val last = tokens.lastOrNull()
+                        if (last is Token.Word) {
+                            tokens[tokens.lastIndex] = Token.Word(last.cells + c, last.width + c.width, last.hyphenPoints, last.overflowWrap, last.breakAll)
+                        } else {
+                            tokens.add(Token.Word(listOf(c), c.width))
+                        }
+                    }
                     isWhitespace(cp) -> {
                         endWord()
                         val sw = if (face != null) face.advance1000(face.gidFor(' '.code)) * fs / 1000.0
@@ -2548,7 +2597,9 @@ internal class BoxLayout(
                 while (true) {
                     val leading = if (line.isNotEmpty()) space else 0.0
                     val w = cells.sumOf { it.width + it.padBefore + it.padAfter }
-                    if (lineW + leading + w <= lineAvail() || (line.isEmpty() && points.isEmpty() && !tok.overflowWrap && !tok.breakAll)) {
+                    // Spaces at the end of the word may hang past the end of the line (#577).
+                    val hang = cells.asReversed().takeWhile { isGap(it.cp) }.sumOf { it.width }
+                    if (lineW + leading + w - hang <= lineAvail() || (line.isEmpty() && points.isEmpty() && !tok.overflowWrap && !tok.breakAll)) {
                         if (line.isNotEmpty() && space > 0.0) { line.addAll(spaces); lineW += space }
                         line.addAll(cells); lineW += w
                         break
@@ -2602,7 +2653,7 @@ internal class BoxLayout(
                         space = 0.0
                     } else {
                         // The spaces before the word, dropped here or kept on the line, are the break.
-                        val atSpace = spaces.isNotEmpty() || line.last().cp == ' '.code
+                        val atSpace = spaces.isNotEmpty() || isGap(line.last().cp)
                         commit(if (atSpace) KiteLineEnd.SPACE else KiteLineEnd.NONE); space = 0.0 // retry on a fresh line
                     }
                 }
@@ -2655,9 +2706,9 @@ internal class BoxLayout(
         }
         while (i < cells.size) {
             val c = cells[i]
-            if (c.cp == ' '.code) {
+            if (isGap(c.cp)) {
                 closeGroup(x)
-                val width = c.width + extraPerSpace
+                val width = c.width + if (isWordSeparator(c.cp)) extraPerSpace else 0.0
                 if (c.underline != null || c.lineThrough != null || c.backgroundColor != null) {
                     out.add(PlacedRun(
                         emptyList(), x, c.fontSize, c.spec, c.color, c.shift, c.underline,
@@ -2691,7 +2742,7 @@ internal class BoxLayout(
             val spec = c.spec; val fs = c.fontSize; val col = c.color; val sh = c.shift; val ul = c.underline; val face = c.face
             val glyphs = ArrayList<TextGlyph>()
             // An image cell always ends a text run, even when glued to a word (#99).
-            while (i < cells.size && cells[i].cp != ' '.code && !cells[i].isImage && cells[i].math == null && cells[i].rubyGroup == c.rubyGroup &&
+            while (i < cells.size && !isGap(cells[i].cp) && !cells[i].isImage && cells[i].math == null && cells[i].rubyGroup == c.rubyGroup &&
                 cells[i].href == c.href && cells[i].speech === c.speech && cells[i].ids === c.ids && cells[i].element === c.element &&
                 samePaint(cells[i], c)
             ) {
@@ -2797,6 +2848,43 @@ internal class BoxLayout(
 
     /** Whitespace, which no character outside the BMP is. */
     private fun isWhitespace(cp: Int): Boolean = cp < 0x10000 && cp.toChar().isWhitespace()
+
+    /** A space that holds the characters on its two sides on one line: no-break, narrow no-break and figure (#577). */
+    private fun isGlueSpace(cp: Int): Boolean = cp == 0xA0 || cp == 0x202F || cp == 0x2007
+
+    /** A space separator other than U+0020 that keeps its width and lets a line break after it (#577). */
+    private fun isFixedSpace(cp: Int): Boolean =
+        cp == 0x1680 || (cp in 0x2000..0x200A && cp != 0x2007) || cp == 0x205F || cp == 0x3000
+
+    /** A cell that draws nothing and only moves the pen: U+0020 and the other space separators (#577). */
+    private fun isGap(cp: Int): Boolean = cp == ' '.code || isGlueSpace(cp) || isFixedSpace(cp)
+
+    /** A space that justification stretches and word-spacing widens (CSS Text 3, 7.1 and 8.1). */
+    private fun isWordSeparator(cp: Int): Boolean = cp == ' '.code || cp == 0xA0
+
+    /** The width of a space of [isGap] in em, for a face that lacks it; null for one as wide as [spaceStandIn]. */
+    private fun spaceEm(cp: Int): Double? = when (cp) {
+        0x2000, 0x2002 -> 0.5
+        0x2001, 0x2003, 0x3000 -> 1.0
+        0x2004 -> 1.0 / 3
+        0x2005, 0x1680 -> 0.25
+        0x2006 -> 1.0 / 6
+        0x2009, 0x202F -> 0.2
+        0x200A -> 0.1
+        0x205F -> 4.0 / 18
+        else -> null
+    }
+
+    /** The character whose width a space of [isGap] takes when [spaceEm] has none: a digit, a full stop or a space. */
+    private fun spaceStandIn(cp: Int): Int = when (cp) {
+        0x2007 -> '0'.code
+        0x2008 -> '.'.code
+        else -> ' '.code
+    }
+
+    /** The width of a space of [isGap] in [run] by the generic metrics, for the min-content measure. */
+    private fun gapWidthPt(cp: Int, run: InlineRun): Double =
+        spaceEm(cp)?.let { it * run.fontSizePt } ?: FontMetrics.advancePt(spaceStandIn(cp), run.fontSizePt, run.bold, run.italic, run.family)
 
     /** CJK closing punctuation that must not start a line (kinsoku, no-break-before). */
     private fun isCloser(cp: Int): Boolean = cp in CJK_CLOSERS
