@@ -1957,6 +1957,29 @@ internal class BoxLayout(
         return true
     }
 
+    /**
+     * How many of [cells] to keep on a line [budget] wide when the word breaks anywhere (#574): the
+     * most that fit, ending between two characters that a combining mark, a joiner or a variation
+     * selector does not tie, and one character at least. Zero when the word has no such place.
+     */
+    private fun longestFit(cells: List<Cell>, budget: Double): Int {
+        var best = 0
+        var width = 0.0
+        for (k in 1 until cells.size) {
+            width += cells[k - 1].width + cells[k - 1].padBefore + cells[k - 1].padAfter
+            if (tiedToPrevious(cells[k - 1].cp, cells[k].cp)) continue
+            if (width > budget && best > 0) break
+            best = k
+            if (width > budget) break
+        }
+        return best
+    }
+
+    /** True when no break may fall between [prev] and [cp]: they make one grapheme cluster. */
+    private fun tiedToPrevious(prev: Int, cp: Int): Boolean =
+        Normalizer.isMark(cp) || cp == 0x200D || prev == 0x200D || cp == 0x200C ||
+            cp in 0xFE00..0xFE0F || cp in 0xE0100..0xE01EF || cp in 0x1F3FB..0x1F3FF || cp in 0xE0020..0xE007F
+
     /** Line content width (trailing spaces excluded) + interior space count (for justify). */
     private fun measure(cells: List<Cell>): Pair<Double, Int> {
         var last = cells.size - 1
@@ -2040,7 +2063,13 @@ internal class BoxLayout(
     )
 
     private sealed class Token {
-        class Word(val cells: List<Cell>, val width: Double, val hyphenPoints: List<Int> = emptyList()) : Token()
+        /** [overflowWrap]: the word may break between two characters when it cannot fit a line of its own (#574). */
+        class Word(
+            val cells: List<Cell>,
+            val width: Double,
+            val hyphenPoints: List<Int> = emptyList(),
+            val overflowWrap: Boolean = false,
+        ) : Token()
         class Space(val cell: Cell) : Token() {
             val width: Double get() = cell.width
         }
@@ -2070,6 +2099,8 @@ internal class BoxLayout(
         var word = ArrayList<Cell>()
         var wordW = 0.0
         var softHyphens = ArrayList<Int>()
+        // Whether a run that the word's characters come from lets it break anywhere (#574).
+        var wordWraps = false
         // The next character's place in the block's text; it counts what draws nothing too.
         var srcAt = 0
         fun endWord() {
@@ -2111,11 +2142,11 @@ internal class BoxLayout(
                 // opener prefix.
                 if (last is Token.Word && last.cells.isNotEmpty() && isOpener(last.cells.last().cp)) {
                     tokens[tokens.lastIndex] =
-                        Token.Word(last.cells + word, last.width + w, pts.map { it + last.cells.size })
+                        Token.Word(last.cells + word, last.width + w, pts.map { it + last.cells.size }, last.overflowWrap || wordWraps)
                 } else {
-                    tokens.add(Token.Word(word, w, pts))
+                    tokens.add(Token.Word(word, w, pts, wordWraps))
                 }
-                word = ArrayList(); wordW = 0.0; softHyphens = ArrayList()
+                word = ArrayList(); wordW = 0.0; softHyphens = ArrayList(); wordWraps = false
             }
         }
         for ((r, run) in runs.withIndex()) {
@@ -2279,7 +2310,7 @@ internal class BoxLayout(
                             tokens.add(Token.Word(listOf(cell), cell.width))
                         }
                     }
-                    else -> { val c = cellFor(cp, level, src); word.add(c); wordW += c.width }
+                    else -> { val c = cellFor(cp, level, src); word.add(c); wordW += c.width; wordWraps = wordWraps || run.overflowWrap }
                 }
             }
         }
@@ -2481,7 +2512,7 @@ internal class BoxLayout(
                 while (true) {
                     val leading = if (line.isNotEmpty()) space else 0.0
                     val w = cells.sumOf { it.width + it.padBefore + it.padAfter }
-                    if (lineW + leading + w <= lineAvail() || (line.isEmpty() && points.isEmpty())) {
+                    if (lineW + leading + w <= lineAvail() || (line.isEmpty() && points.isEmpty() && !tok.overflowWrap)) {
                         if (line.isNotEmpty() && space > 0.0) { line.addAll(spaces); lineW += space }
                         line.addAll(cells); lineW += w
                         break
@@ -2505,8 +2536,19 @@ internal class BoxLayout(
                         points = points.mapNotNull { if (it > split) it - split else null }
                         space = 0.0
                     } else if (line.isEmpty()) {
-                        line.addAll(cells); lineW += w // unsplittable + nothing before: overflow rather than loop
-                        break
+                        // overflow-wrap: a word that cannot fit a line of its own breaks after as many
+                        // characters as fit, one at least, with no hyphen (#574).
+                        val cut = if (tok.overflowWrap) longestFit(cells, lineAvail()) else 0
+                        if (cut == 0) {
+                            line.addAll(cells); lineW += w // unsplittable + nothing before: overflow rather than loop
+                            break
+                        }
+                        val prefix = cells.subList(0, cut)
+                        line.addAll(prefix); lineW += prefix.sumOf { it.width + it.padBefore + it.padAfter }
+                        commit(KiteLineEnd.NONE)
+                        cells = cells.subList(cut, cells.size)
+                        points = points.mapNotNull { if (it > cut) it - cut else null }
+                        space = 0.0
                     } else {
                         // The spaces before the word, dropped here or kept on the line, are the break.
                         val atSpace = spaces.isNotEmpty() || line.last().cp == ' '.code

@@ -20,11 +20,12 @@ import org.jetbrains.skia.Image
  */
 class SceneThreadTextTest {
 
-    private val book = multiSpineEpub(listOf("<p style='font-size:40px'>WWWWWWWW WWWWWWWW WWWWWWWW</p>"))
+    // Words that fit the line, four lines of them on the page: a word wider than the line breaks (#574).
+    private val book = multiSpineEpub(listOf("<p style='font-size:40px'>WWWWWW WWWWWW WWWWWW WWWWWW</p>"))
 
     private val content: @androidx.compose.runtime.Composable () -> Unit = {
         val doc = androidx.compose.runtime.remember {
-            EpubDocument.open(book, EpubSettings(pageWidth = 200.0, pageHeight = 200.0))
+            EpubDocument.open(book, EpubSettings(pageWidth = 200.0, pageHeight = 200.0, margin = 10.0))
         }
         KiteDocView(
             state = rememberKiteDocViewState(doc),
