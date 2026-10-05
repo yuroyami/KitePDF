@@ -268,6 +268,13 @@ internal object EpubConformanceChecks {
             samples.all { it.size >= 3 } && inWord[1] == 0 && samples[0].none { it.end == KiteLineEnd.NONE } &&
                 all.count { it.end == KiteLineEnd.NONE } > 0 && all.dropLast(1).all { it.bounds.right > right - (right - left) * 0.05 }
         }
+        // The sample sets its digits and letters full-width, so in the vertical chapter they stand
+        // upright as the Japanese beside them does (#508).
+        check("css-epub-text-transform") {
+            val wide = (0 until pages(0)).flatMap { glyphRuns(0, it) }.filter { r -> r.text.any { it in '\uFF10'..'\uFF5A' } }
+            textLines(0).any { "\uFF11\uFF12\uFF13\uFF14\uFF15\uFF16\uFF41\uFF42\uFF43\uFF44\uFF45\uFF46" in it.text } &&
+                wide.isNotEmpty() && wide.none { abs(it.textToDevice.b) > 1e-9 }
+        }
         check("css-epub-writing-mode") { verticalChapter(1) && verticalChapter(2) && !verticalChapter(0) }
         // Paragraph 2 asks for upright English and paragraph 3 for sideways Japanese.
         check("css-epub-text-orientation") {

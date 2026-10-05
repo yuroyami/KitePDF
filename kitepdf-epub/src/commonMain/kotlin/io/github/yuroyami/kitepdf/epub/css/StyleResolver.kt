@@ -612,13 +612,7 @@ internal class StyleResolver(
                 else -> WritingMode.HORIZONTAL
             }
             "quotes" -> b.quotes = quotesValue(v.trim(), b.quotes)
-            "text-transform" -> b.textTransform = when (v.trim().lowercase()) {
-                "uppercase" -> TextTransform.UPPERCASE
-                "lowercase" -> TextTransform.LOWERCASE
-                "capitalize" -> TextTransform.CAPITALIZE
-                "none" -> TextTransform.NONE
-                else -> b.textTransform
-            }
+            "text-transform" -> parseTextTransform(v)?.let { (case, wide) -> b.textTransform = case; b.fullWidth = wide }
             "letter-spacing" -> b.letterSpacingPt =
                 if (v.trim().lowercase() == "normal") 0.0 else len(b.fontSizePt) ?: b.letterSpacingPt
             "word-spacing" -> b.wordSpacingPt =
@@ -833,6 +827,29 @@ internal class StyleResolver(
         else -> null
     }
 
+    /**
+     * `text-transform`: a case, `full-width` (EPUB's `-epub-fullwidth`), both, or `none`, or null
+     * for a value that holds another word (CSS Text 3, 2.1, #508). `full-size-kana` is read and
+     * has no effect.
+     */
+    private fun parseTextTransform(v: String): Pair<TextTransform, Boolean>? {
+        val words = v.trim().lowercase().split(' ', '\t', '\n').filter { it.isNotEmpty() }
+        if (words.singleOrNull() in setOf("none", "initial", "unset")) return TextTransform.NONE to false
+        var case: TextTransform? = null
+        var wide = false
+        var kana = false
+        for (w in words) when (w) {
+            "uppercase", "lowercase", "capitalize" -> {
+                if (case != null) return null
+                case = when (w) { "uppercase" -> TextTransform.UPPERCASE; "lowercase" -> TextTransform.LOWERCASE; else -> TextTransform.CAPITALIZE }
+            }
+            "full-width", "-epub-fullwidth" -> { if (wide) return null; wide = true }
+            "full-size-kana" -> { if (kana) return null; kana = true }
+            else -> return null
+        }
+        return if (words.isEmpty()) null else (case ?: TextTransform.NONE) to wide
+    }
+
     private fun parseWhiteSpace(v: String): WhiteSpaceMode? = when (v.trim().lowercase()) {
         "normal" -> WhiteSpaceMode.NORMAL
         "pre" -> WhiteSpaceMode.PRE
@@ -893,6 +910,7 @@ internal class StyleResolver(
         var objectFit = ObjectFit.FILL // not inherited
         var writingMode = parent.writingMode // inherited
         var textTransform = parent.textTransform // inherited
+        var fullWidth = parent.fullWidth // inherited
         var letterSpacingPt = parent.letterSpacingPt // inherited
         var wordSpacingPt = parent.wordSpacingPt // inherited
         var smallCaps = parent.smallCaps // inherited
@@ -990,6 +1008,7 @@ internal class StyleResolver(
                 textAlignLast = textAlignLast,
                 overflowWrap = overflowWrap,
                 wordBreak = wordBreak,
+                fullWidth = fullWidth,
             )
         }
     }

@@ -948,7 +948,7 @@ internal class BoxBuilder(
         fun appendText(raw: String, style: ComputedStyle) {
             if (raw.isEmpty()) return
             if (style.whiteSpace == WhiteSpaceMode.PRE || style.whiteSpace == WhiteSpaceMode.PRE_WRAP || style.whiteSpace == WhiteSpaceMode.PRE_LINE) {
-                runs.add(makeRun(transformPre(raw, style.textTransform), style))
+                runs.add(makeRun(transformPre(raw, style.textTransform, style.fullWidth), style))
                 blockHasContent = true; pendingSpace = false; lastWasBreak = false
                 return
             }
@@ -974,30 +974,36 @@ internal class BoxBuilder(
                         else b.append(' ')
                     }
                     pendingSpace = false; lastWasBreak = false
-                    appendCodePoint(b, transform(cp, style.textTransform, boundary)); blockHasContent = true
+                    appendCodePoint(b, transform(cp, style.textTransform, style.fullWidth, boundary)); blockHasContent = true
                 }
             }
             if (b.isNotEmpty()) runs.add(makeRun(b.toString(), style))
         }
 
-        /** The case of [cp] that [tt] asks for, one code point at a time, so a letter outside the BMP changes too (#322). */
-        private fun transform(cp: Int, tt: TextTransform, wordBoundary: Boolean): Int = when (tt) {
-            TextTransform.NONE -> cp
-            TextTransform.UPPERCASE -> CaseMapping.uppercase(cp)
-            TextTransform.LOWERCASE -> CaseMapping.lowercase(cp)
-            TextTransform.CAPITALIZE -> if (wordBoundary) CaseMapping.titlecase(cp) else cp
+        /**
+         * The case of [cp] that [tt] asks for, one code point at a time, so a letter outside the BMP
+         * changes too (#322), then its full-width form when [wide] asks for it (#508).
+         */
+        private fun transform(cp: Int, tt: TextTransform, wide: Boolean, wordBoundary: Boolean): Int {
+            val cased = when (tt) {
+                TextTransform.NONE -> cp
+                TextTransform.UPPERCASE -> CaseMapping.uppercase(cp)
+                TextTransform.LOWERCASE -> CaseMapping.lowercase(cp)
+                TextTransform.CAPITALIZE -> if (wordBoundary) CaseMapping.titlecase(cp) else cp
+            }
+            return if (wide) FullWidth.of(cased) else cased
         }
 
         /** Transform preserved-whitespace text: word boundaries follow whitespace. */
-        private fun transformPre(raw: String, tt: TextTransform): String {
-            if (tt == TextTransform.NONE) return raw
+        private fun transformPre(raw: String, tt: TextTransform, wide: Boolean): String {
+            if (tt == TextTransform.NONE && !wide) return raw
             val sb = StringBuilder(raw.length)
             var boundary = true
             var at = 0
             while (at < raw.length) {
                 val cp = codePointAt(raw, at)
                 at += charCount(cp)
-                appendCodePoint(sb, transform(cp, tt, boundary))
+                appendCodePoint(sb, transform(cp, tt, wide, boundary))
                 boundary = cp < 0x10000 && cp.toChar().isWhitespace()
             }
             return sb.toString()

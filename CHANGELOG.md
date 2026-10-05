@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB chapters read `full-width` in `text-transform`, and EPUB's `-epub-fullwidth`, alone or
+  beside a case: letters, digits and signs take their full-width forms and half-width katakana
+  its ordinary width, so Latin text in a vertical chapter stands upright as the Japanese around it
+  does. The table comes from Unicode's width pairs, through `tools/generate_full_width.py`, and a
+  value with a word it does not know leaves the declaration out (#508).
+
 - EPUB chapters read `word-break` and `-epub-word-break`. With `break-all` a line may end between
   any two letters of a word, so each line fills to its edge, with no hyphen and never just before
   a comma, a stop or a closing quote. With `keep-all` Chinese, Japanese and Korean letters stay

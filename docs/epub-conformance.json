@@ -21,7 +21,7 @@
     "css-epub-text-combine-horizontal": false,
     "css-epub-text-emphasis": false,
     "css-epub-text-orientation": false,
-    "css-epub-text-transform": false,
+    "css-epub-text-transform": true,
     "css-epub-text-underline-position": false,
     "css-epub-word-break": true,
     "css-epub-writing-mode": true,
