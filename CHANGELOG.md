@@ -184,6 +184,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A DOCTYPE with an internal subset ends after it, so a chapter whose DOCTYPE declares entities
+  no longer shows `]>` at the top of its first page, and an SVG that Illustrator exported reads
+  as it should. `KiteXml` reads the subset's general entities and expands a reference to one in
+  text and attribute values, the first declaration of a name binding, as a non-validating XML
+  reader must. An external entity is never fetched and stands for nothing. Expansion stops 16
+  entities deep and after a million characters for the document, so nested entities cannot
+  exhaust memory (#571).
+
 - HTML's named character references decode in an EPUB chapter, an SVG and every other file
   `KiteXml` reads: all 2125 names that end in a semicolon, which hold every entity the XHTML 1.0
   and 1.1 DTDs declare. Before, only `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;` and `&nbsp;`
