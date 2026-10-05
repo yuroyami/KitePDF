@@ -247,6 +247,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A PDF page whose `/Contents` is null, as a file that `saveRewritten` wrote from a damaged source
+  can have it, or of a type that no content can have is an empty page that still draws its
+  annotations, where `renderTo`, `textContent()` and `contentBytes` used to throw (#583).
+
 - A glyph of an embedded TrueType font that reads past the end of the font draws nothing, as a
   broken CFF or Type 1 glyph already did, where it used to fail the whole page with
   `PdfFormatException`, so one damaged glyph cost every other glyph, image and shape on the page
