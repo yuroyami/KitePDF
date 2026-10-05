@@ -177,6 +177,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An SVG placed straight in an EPUB block, such as a `p` or a `div`, takes the size its `width`
+  and `height` attributes give. It filled the text column, so a 20 pixel icon drew 304 points
+  square and two of them took two pages. A size in percent still fills the column (#565).
 - An SVG written inline in an EPUB chapter takes the chapter's style sheets, as in a browser: a
   class rule of the document fills its paths, a selector reaches into it from its host, and a rule
   outranks a presentation attribute. The SVG's own `style` element, a `style` attribute and an

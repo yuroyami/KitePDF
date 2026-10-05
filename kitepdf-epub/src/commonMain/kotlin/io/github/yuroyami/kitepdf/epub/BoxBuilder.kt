@@ -260,7 +260,12 @@ internal class BoxBuilder(
                         // A hidden sprite sheet or glyph cache generates no box (CSS 2.1, 9.2.4, #275).
                         if (cs.display != Display.NONE) SvgImage.fromElement(child, resolver.svgHostStyle(child))?.let {
                             flush()
-                            children.add(ImageBox(cs, "", it).also { box -> box.semantics = svgSemantics(child, sem); box.source = child })
+                            // Its width and height attributes are its intrinsic size, as on the line (#565).
+                            val image = ImageBox(
+                                cs, "", it,
+                                attrWidth = svgSizePt(child.attrs["width"], cs), attrHeight = svgSizePt(child.attrs["height"], cs),
+                            )
+                            children.add(image.also { box -> box.semantics = svgSemantics(child, sem); box.source = child })
                         }
                         return null
                     }
