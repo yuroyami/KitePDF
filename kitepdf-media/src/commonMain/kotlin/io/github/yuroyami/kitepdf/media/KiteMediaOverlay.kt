@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -53,9 +54,11 @@ import io.github.yuroyami.kiteplayer.compose.KitePlayerVideo
 import io.github.yuroyami.kiteplayer.compose.KiteRenderPath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Plays the `<video>` and `<audio>` elements of an EPUB page over the page (#31). Pass it as the
@@ -102,9 +105,11 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  *
  * Before it starts, it draws a play button, and a tap starts it. A video then plays in the box, and
  * an audio element shows a transport bar in its own. With [EpubMedia.controls], a video shows that
- * bar along its bottom too, and a tap pauses and plays again. An element with
+ * bar along its bottom too, and a tap pauses and plays again. Without it, a tap still pauses and
+ * plays again, and shows the bar until the video has played on for a few seconds, since a reader
+ * must be able to stop what moves (#480). An element with
  * [EpubMedia.autoplay] starts by itself, muted, since browsers let only muted media start unasked;
- * the first touch of its controls turns the sound on. [EpubMedia.muted] mutes it from the start. [EpubMedia.loop] plays it again from the start when it
+ * the first touch of its controls, or of a video without them, turns the sound on. [EpubMedia.muted] mutes it from the start. [EpubMedia.loop] plays it again from the start when it
  * ends. The player plays the first source it can, in the element's order, and when it can play none,
  * the poster stays and the button goes.
  *
@@ -193,8 +198,8 @@ public fun EpubMediaPlayer(
 }
 
 /**
- * The element while its player exists: the video, and the transport bar where the element shows one.
- * With [unmuteOnTouch], the first touch of a control turns on the sound that autoplay muted, and the
+ * The element while its player exists: the video, and the transport bar where the element shows one,
+ * or for a moment after a tap on a video that shows none. With [unmuteOnTouch], the first touch of a control turns on the sound that autoplay muted, and the
  * media goes on playing. With [fullScreen], the video and its bar show over the whole window instead
  * of on the box, and [onFullScreen] switches between the two.
  */
@@ -225,18 +230,35 @@ private fun Playing(
         TransportBar(active, progress.position, snapshot.duration, toggle, Modifier.fillMaxSize())
         return
     }
+    // HTML, 4.8.11 lets a reading system offer controls the element does not ask for, and WCAG 2.2,
+    // 2.2.2 asks for a way to pause what moves. A tap shows the bar while the video stays paused,
+    // and for a few seconds once it plays, so a decoration does not carry a bar for good (#480).
+    var revealed by remember(player) { mutableStateOf(false) }
+    var touches by remember(player) { mutableIntStateOf(0) }
+    LaunchedEffect(revealed, touches, active) {
+        if (revealed && active) {
+            delay(REVEAL_TIME)
+            revealed = false
+        }
+    }
+    val touched: () -> Unit = {
+        toggle()
+        if (!media.controls) {
+            revealed = true
+            touches++
+        }
+    }
     val video = @Composable {
         Box(Modifier.fillMaxSize()) {
             // Compose draws the frames, so the video clips, scrolls and zooms with the page, and the
             // controls over it take clicks: over a native view, macOS sends a click to the view.
             KitePlayerVideo(player, Modifier.fillMaxSize(), path = KiteRenderPath.ComposeCanvas)
-            val tap = if (media.controls) Modifier.clickable(onClickLabel = if (active) "Pause" else "Play", onClick = toggle) else Modifier
-            Box(Modifier.fillMaxSize().then(tap))
-            if (media.controls) {
+            Box(Modifier.fillMaxSize().clickable(onClickLabel = if (active) "Pause" else "Play", onClick = touched))
+            if (media.controls || revealed) {
                 // Over the whole screen, the bar keeps clear of a notch, a cutout and the home indicator.
                 val clear = if (fullScreen) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)) else Modifier
                 TransportBar(
-                    active, progress.position, snapshot.duration, toggle,
+                    active, progress.position, snapshot.duration, touched,
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(clear).height(TRANSPORT_HEIGHT),
                     fullScreen = fullScreen,
                     onFullScreen = { onFullScreen(!fullScreen) },
@@ -371,3 +393,6 @@ private val TRACK = Color(0x66FFFFFF)
 private val PLAY_BUTTON_SIZE = 56.dp
 private val GLYPH_SIZE = 18.dp
 private val TRANSPORT_HEIGHT = 40.dp
+
+/** How long the bar that a tap showed on a video without controls stays once the video plays. */
+private val REVEAL_TIME = 3.seconds
