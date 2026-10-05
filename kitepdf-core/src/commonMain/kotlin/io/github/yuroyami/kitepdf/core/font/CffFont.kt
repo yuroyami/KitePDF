@@ -37,7 +37,7 @@ public class CffFont private constructor(
     /** FDSelect[gid] = font-dict index. Empty for non-CID fonts (always index 0). */
     internal val fdSelect: IntArray,
     /** Glyph index → glyph name (or "cid<N>" for CID-keyed fonts). */
-    private val glyphNames: Array<String?>,
+    internal val glyphNames: Array<String?>,
     /** Glyph name → glyph index (reverse of glyphNames). */
     private val nameToGid: Map<String, Int>,
     /** Default char width in design units (from Private DICT, defaultWidthX). */

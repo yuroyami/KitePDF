@@ -33,14 +33,13 @@ internal object SkiaSystemFonts {
         "Cousine", "DejaVu Sans Mono", "Noto Sans Mono", "FreeMono",
     )
 
-    fun resolve(family: KiteFontFamily, style: FontStyle): Typeface? = resolveCandidates(
-        when (family) {
-            KiteFontFamily.Serif -> SERIF
-            KiteFontFamily.SansSerif -> SANS_SERIF
-            KiteFontFamily.Monospace -> MONOSPACE
-        },
-        style,
-    )
+    fun resolve(family: KiteFontFamily, style: FontStyle): Typeface? = resolveCandidates(candidatesOf(family), style)
+
+    private fun candidatesOf(family: KiteFontFamily): List<String> = when (family) {
+        KiteFontFamily.Serif -> SERIF
+        KiteFontFamily.SansSerif -> SANS_SERIF
+        KiteFontFamily.Monospace -> MONOSPACE
+    }
 
     /**
      * The typeface for [spec]. A font of a CJK language takes a face of that language first: the
@@ -60,17 +59,40 @@ internal object SkiaSystemFonts {
         return face
     }
 
-    private fun lookUp(spec: FontSpec, style: FontStyle): Typeface? {
-        val sample = spec.languageSample ?: return resolve(spec.family, style)
-        val language = spec.language ?: return resolve(spec.family, style)
-        val cjk = try {
+    private fun lookUp(spec: FontSpec, style: FontStyle): Typeface? = cjkFace(spec, style) ?: resolve(spec.family, style)
+
+    /** A face of [spec]'s CJK language, or null for a spec without one or a host without such a face. */
+    private fun cjkFace(spec: FontSpec, style: FontStyle): Typeface? {
+        val sample = spec.languageSample ?: return null
+        val language = spec.language ?: return null
+        return try {
             val mgr = FontMgr.default
             spec.hostFaces.firstNotNullOfOrNull { mgr.matchFamilyStyle(it, style) }
                 ?: mgr.matchFamilyStyleCharacter(genericName(spec.family), style, arrayOf(language), sample)
         } catch (t: Throwable) {
             null
         }
-        return cjk ?: resolve(spec.family, style)
+    }
+
+    /**
+     * True when the host has a face of [spec]'s family by one of its names, or of its CJK
+     * language, so that [resolve] is not just whatever face the host has. A browser has one face,
+     * Roboto, and a family it lacks draws from the bundled standard faces instead (#593).
+     */
+    fun hasFace(spec: FontSpec, style: FontStyle): Boolean {
+        val key = FaceKey(spec.family, style.weight, style.width, style.slant, spec.language, codePoint = -2)
+        cacheLock.withLock { named[key]?.let { return it } }
+        val has = cjkFace(spec, style) != null || try {
+            val mgr = FontMgr.default
+            candidatesOf(spec.family).any { mgr.matchFamilyStyle(it, style) != null }
+        } catch (t: Throwable) {
+            false
+        }
+        cacheLock.withLock {
+            if (named.size >= FACE_CACHE_SIZE) named.clear()
+            named[key] = has
+        }
+        return has
     }
 
     /**
@@ -95,7 +117,7 @@ internal object SkiaSystemFonts {
         return face
     }
 
-    /** What a face is looked up by. [codePoint] is the character of a [fallback], or -1 for the face of [resolve]. */
+    /** What a face is looked up by. [codePoint] is the character of a [fallback], -1 for the face of [resolve], or -2 for [hasFace]. */
     private data class FaceKey(
         val family: KiteFontFamily, val weight: Int, val width: Int, val slant: FontSlant, val language: String?, val codePoint: Int,
     )
@@ -103,6 +125,7 @@ internal object SkiaSystemFonts {
     private val cacheLock = KiteLock()
     private val faces = HashMap<FaceKey, Typeface?>()
     private val fallbacks = HashMap<FaceKey, Typeface?>()
+    private val named = HashMap<FaceKey, Boolean>()
     private const val FACE_CACHE_SIZE = 256
     private const val FALLBACK_CACHE_SIZE = 4096
 

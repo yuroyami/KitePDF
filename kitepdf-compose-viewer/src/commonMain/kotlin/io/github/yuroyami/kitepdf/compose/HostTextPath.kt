@@ -12,6 +12,14 @@ import io.github.yuroyami.kitepdf.core.font.FontSpec
 internal expect fun hostTextPath(text: String, fontSpec: FontSpec): Path?
 
 /**
+ * True when the host has a face of [fontSpec]'s family by name, or of its CJK language. A
+ * browser has one face, Roboto, so a canvas there draws a family it lacks from the bundled
+ * standard faces that the layout measured the text with, not stretched Roboto (#593). The
+ * desktop JVM, Android and Apple platforms have faces of every family.
+ */
+internal expect fun hostHasFace(fontSpec: FontSpec): Boolean
+
+/**
  * The host face that draws a CJK [fontSpec] in its own language, as a Compose family, or null to
  * draw in the generic family of [FontSpec.family] under the locale of [FontSpec.language]. A
  * locale picks a face of the right language for a character the generic face lacks, but not its

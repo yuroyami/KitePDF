@@ -68,6 +68,16 @@ private fun cjkTypeface(spec: FontSpec, style: FontStyle): SkTypeface? {
  */
 private fun hostTypeface(spec: FontSpec): SkTypeface? {
     val style = styleOf(spec)
+    return namedTypeface(spec, style) ?: try {
+        val mgr = FontMgr.default
+        (0 until mgr.familiesCount).firstNotNullOfOrNull { mgr.matchFamilyStyle(mgr.getFamilyName(it), style) }
+    } catch (failure: Throwable) {
+        null
+    }
+}
+
+/** A face of [spec]'s CJK language, else the first family of [spec]'s list that the host has, or null. */
+private fun namedTypeface(spec: FontSpec, style: FontStyle): SkTypeface? {
     cjkTypeface(spec, style)?.let { return it }
     val names = when (spec.family) {
         KiteFontFamily.Serif -> listOf("Times New Roman", "Times", "Liberation Serif", "Nimbus Roman", "Tinos", "DejaVu Serif", "Noto Serif")
@@ -77,11 +87,18 @@ private fun hostTypeface(spec: FontSpec): SkTypeface? {
     return try {
         val mgr = FontMgr.default
         names.firstNotNullOfOrNull { mgr.matchFamilyStyle(it, style) }
-            ?: (0 until mgr.familiesCount).firstNotNullOfOrNull { mgr.matchFamilyStyle(mgr.getFamilyName(it), style) }
     } catch (failure: Throwable) {
         null
     }
 }
+
+internal actual fun hostHasFace(fontSpec: FontSpec): Boolean {
+    val key = fontSpec.copy(name = "")
+    return namedFaces.getOrPut(key) { namedTypeface(fontSpec, styleOf(fontSpec)) != null }
+}
+
+/** Whether the host has a face of each spec by name. A page asks on every run of host text. Host text thread only. */
+private val namedFaces = HashMap<FontSpec, Boolean>()
 
 /** A browser has no host faces for Skia to find, and a page draws on the only thread anyway (#131). */
 internal actual val hostTextAnyThread: Boolean = false

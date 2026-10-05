@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.skia
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.font.standardFaceGlyphs
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
 import io.github.yuroyami.kitepdf.core.render.HostTextPart
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
@@ -87,6 +88,12 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
 
     /** The canvas that paints go to: the host's, or the surface of a raster step's render. */
     private var canvas: SkCanvas = canvas
+
+    /**
+     * True when the host has a face of a spec's family, else the text draws from the bundled
+     * standard faces (#593). A test can take the faces away, as a browser has none.
+     */
+    internal var hostFace: (FontSpec, FontStyle) -> Boolean = SkiaSystemFonts::hasFace
 
     /** Count of open transparency groups + soft-mask layers, for endPage cleanup. */
     private var openLayers = 0
@@ -224,7 +231,14 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     ) {
         if (glyphs.isEmpty()) return
         if (!hasOutlines) {
-            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+            // A family the host has no face of draws from the bundled face the layout measured
+            // it with. Another face at those advances drew with uneven gaps (#593).
+            val bundled = if (hostFace(fontSpec, styleOf(fontSpec))) null else standardFaceGlyphs(glyphs, fontSpec)
+            if (bundled != null) {
+                drawGlyphs(bundled, fontSize, 1000, true, fontSpec, textToDevice, color, alpha, blendMode)
+            } else {
+                drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+            }
             return
         }
 
@@ -504,14 +518,13 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         }
     }
 
-    private fun systemTypeface(spec: FontSpec): Typeface? {
-        val style = when {
-            spec.bold && spec.italic -> FontStyle.BOLD_ITALIC
-            spec.bold -> FontStyle.BOLD
-            spec.italic -> FontStyle.ITALIC
-            else -> FontStyle.NORMAL
-        }
-        return SkiaSystemFonts.resolve(spec, style)
+    private fun systemTypeface(spec: FontSpec): Typeface? = SkiaSystemFonts.resolve(spec, styleOf(spec))
+
+    private fun styleOf(spec: FontSpec): FontStyle = when {
+        spec.bold && spec.italic -> FontStyle.BOLD_ITALIC
+        spec.bold -> FontStyle.BOLD
+        spec.italic -> FontStyle.ITALIC
+        else -> FontStyle.NORMAL
     }
 
     override fun fillShading(
