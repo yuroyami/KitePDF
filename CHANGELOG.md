@@ -247,6 +247,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A Type 1 font whose `/lenIV` is -1 runs its charstrings and subroutines as they are, as
+  FreeType does, where every glyph threw while it was decrypted and drew nothing (#597).
 - An embedded Type 1 font decrypts each of its subroutines before a glyph calls it, as it already
   decrypted each charstring. A subroutine ran still encrypted, so every letter that called one drew
   noise, and every flex drew its points as moves: 69 of the 132 glyphs of a pdfTeX CMR10 came out

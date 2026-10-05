@@ -146,16 +146,20 @@ class Type1Test {
 
     /**
      * A Type 1 font whose glyph /A runs [glyph] with [subrs] as its `/Subrs`, each program
-     * charstring-encrypted behind four random bytes, as a font file stores it.
+     * charstring-encrypted behind four random bytes, as a font file stores it, or stored as it
+     * is when [lenIV] is -1.
      */
-    private fun subrFont(subrs: List<IntArray>, glyph: IntArray): Type1Font {
-        fun encrypted(program: IntArray) = csEncrypt(byteArrayOf(7, 7, 7, 7) + ByteArray(program.size) { program[it].toByte() })
+    private fun subrFont(subrs: List<IntArray>, glyph: IntArray, lenIV: Int = 4): Type1Font {
+        fun encrypted(program: IntArray): ByteArray {
+            val bytes = ByteArray(program.size) { program[it].toByte() }
+            return if (lenIV < 0) bytes else csEncrypt(ByteArray(lenIV) { 7 } + bytes)
+        }
         val subrText = subrs.withIndex().fold("/Subrs ${subrs.size} array\n".encodeToByteArray()) { acc, (i, program) ->
             val bytes = encrypted(program)
             acc + "dup $i ${bytes.size} RD ".encodeToByteArray() + bytes + " NP\n".encodeToByteArray()
         }
         val charstring = encrypted(glyph)
-        val privateText = "dup /Private 5 dict dup begin\n/lenIV 4 def\n".encodeToByteArray() + subrText +
+        val privateText = "dup /Private 5 dict dup begin\n/lenIV $lenIV def\n".encodeToByteArray() + subrText +
             "ND\n/CharStrings 1 dict dup begin\n/A ${charstring.size} RD ".encodeToByteArray() + charstring +
             "\nND\nend\nend\n".encodeToByteArray()
         val eexec = eexecEncrypt(byteArrayOf(0, 0, 0, 0) + privateText)
@@ -223,6 +227,23 @@ class Type1Test {
                 KitePath.Segment.LineTo(400.0, 300.0), KitePath.Segment.LineTo(0.0, 300.0),
             ),
             drawn(subrFont(subrs, glyph)),
+        )
+    }
+
+    /**
+     * A `/lenIV` of -1 says the charstrings and subroutines are not encrypted, as FreeType reads
+     * it. Decrypted all the same, the glyph threw and drew nothing (#597).
+     */
+    @Test
+    fun a_font_with_len_iv_minus_one_runs_its_programs_as_they_are() {
+        val sides = intArrayOf(248, 136, 139, 5, 139, 249, 80, 5, 252, 136, 139, 5, 11)
+        val glyph = intArrayOf(139, 248, 136, 13, 139, 139, 21, 139, 10, 9, 14)
+        assertEquals(
+            listOf(
+                KitePath.Segment.MoveTo(0.0, 0.0), KitePath.Segment.LineTo(500.0, 0.0),
+                KitePath.Segment.LineTo(500.0, 700.0), KitePath.Segment.LineTo(0.0, 700.0),
+            ),
+            drawn(subrFont(listOf(sides), glyph, lenIV = -1)),
         )
     }
 
