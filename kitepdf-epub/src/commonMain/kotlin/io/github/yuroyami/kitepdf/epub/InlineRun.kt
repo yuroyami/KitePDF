@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
+import io.github.yuroyami.kitepdf.epub.css.Emphasis
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.LineBreak
 import io.github.yuroyami.kitepdf.epub.css.TextOrientation
@@ -76,6 +77,8 @@ internal data class InlineRun(
     val imageObjectFit: ObjectFit = ObjectFit.FILL,
     val lineThrough: DecorationLine? = null,
     val overline: DecorationLine? = null,
+    /** The emphasis marks over the run's letters, or null for none (CSS Text Decoration 3, 3, #508). */
+    val emphasis: Emphasis? = null,
     /** Inline box background, including the nearest painted inline ancestor. */
     val backgroundColor: CssBackground? = null,
     /** The pronunciation of the element this run's text belongs to, or null (#39). */

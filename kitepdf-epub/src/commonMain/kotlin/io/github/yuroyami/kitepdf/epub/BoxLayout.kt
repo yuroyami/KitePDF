@@ -15,6 +15,7 @@ import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.Edge
+import io.github.yuroyami.kitepdf.epub.css.Emphasis
 import io.github.yuroyami.kitepdf.epub.css.Direction
 import io.github.yuroyami.kitepdf.epub.css.FlexAlign
 import io.github.yuroyami.kitepdf.epub.css.FlexBasis
@@ -45,6 +46,12 @@ import kotlin.math.roundToInt
 
 // GSUB ligature features, applied required-first: Arabic lam-alef (`rlig`) then
 // discretionary Latin ligatures like fi/fl (`liga`).
+
+/**
+ * Vertical writing: offset (in em) from the mapped baseline axis to the em-box centre an upright
+ * glyph is centred on, assuming the nominal 0.88/0.12 ascent/descent split: (0.88 - 0.12) / 2.
+ */
+internal const val UPRIGHT_CENTER = 0.38
 
 /**
  * Positions the [LayoutBox] tree in document space (x from content-left, y down).
@@ -1828,8 +1835,12 @@ internal class BoxLayout(
             // A line carrying ruby grows by the reading's ascent: the base text
             // drops within the line so the overlay fits inside the line box.
             val rubyBaseFs = cells.filter { it.rubyGroup >= 0 }.maxOfOrNull { it.fontSize } ?: 0.0
-            val rubyExtra = rubyBaseFs * RUBY_SIZE * 0.8
-            var lineHeight = (style.lineHeightPt ?: maxFs * 1.4) * lineHeightScale + rubyExtra
+            // Emphasis marks make room as ruby does: over the line, or under it (CSS Text Decoration 3, 3.3, #508).
+            val marked = cells.filter { it.emphasis != null && takesMark(it.cp) }
+            val marksOver = marked.filter { marksOver(it) }.maxOfOrNull { it.fontSize * EMPHASIS_SIZE * 0.8 } ?: 0.0
+            val marksUnder = marked.filter { !marksOver(it) }.maxOfOrNull { it.fontSize * EMPHASIS_SIZE } ?: 0.0
+            val rubyExtra = rubyBaseFs * RUBY_SIZE * 0.8 + marksOver
+            var lineHeight = (style.lineHeightPt ?: maxFs * 1.4) * lineHeightScale + rubyExtra + marksUnder
             var ascent = maxFs * 0.8 + rubyExtra
             // An inline image grows the line: its bottom sits on the baseline,
             // so the ascent must cover the image height (descent unchanged).
@@ -2093,6 +2104,7 @@ internal class BoxLayout(
         var padBefore: Double = 0.0, var padAfter: Double = 0.0,
         val lineThrough: DecorationLine? = null,
         val overline: DecorationLine? = null,
+        val emphasis: Emphasis? = null,
         val backgroundColor: CssBackground? = null,
         // The bidi level of the character, from [bidiLevels]; odd for right to left.
         val level: Int = 0,
@@ -2316,7 +2328,7 @@ internal class BoxLayout(
                     Cell(c, penAdvance1000(f, gid, c, run.textOrientation) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                         element = run.element,
-                        lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level, src = src,
+                        lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, level = level, src = src,
                         orientation = run.textOrientation)
                 } else {
                     // An upright letter of the generic font takes one em down the column (#508).
@@ -2325,7 +2337,7 @@ internal class BoxLayout(
                     Cell(c, advance, cellFs, spec, run.color, shift, run.underline,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                         element = run.element,
-                        lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level, src = src,
+                        lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, level = level, src = src,
                         orientation = run.textOrientation)
                 }
                 // letter-spacing: added to every glyph advance, kept in sync
@@ -2355,7 +2367,7 @@ internal class BoxLayout(
                     cp, w + spacing, fs, spec, run.color, shift, run.underline, face, face?.gidFor(' '.code) ?: -1,
                     rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                     element = run.element,
-                    lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level, src = src,
+                    lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, level = level, src = src,
                 )
             }
             var at = 0
@@ -2518,7 +2530,7 @@ internal class BoxLayout(
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
                     rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href, speech = base.speech, ids = base.ids,
                     element = base.element,
-                    lineThrough = base.lineThrough, overline = base.overline, backgroundColor = base.backgroundColor, level = base.level,
+                    lineThrough = base.lineThrough, overline = base.overline, emphasis = base.emphasis, backgroundColor = base.backgroundColor, level = base.level,
                     src = base.src, orientation = base.orientation,
                 ).also {
                     it.ligComponents = g.components; it.text = text
@@ -2709,7 +2721,7 @@ internal class BoxLayout(
         return Cell(
             '-'.code, hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline, face, face?.gidFor('-'.code) ?: -1,
             href = c.href, speech = c.speech, ids = c.ids, element = c.element,
-            lineThrough = c.lineThrough, overline = c.overline, backgroundColor = c.backgroundColor, level = c.level, orientation = c.orientation,
+            lineThrough = c.lineThrough, overline = c.overline, emphasis = c.emphasis, backgroundColor = c.backgroundColor, level = c.level, orientation = c.orientation,
         )
     }
 
@@ -2785,12 +2797,19 @@ internal class BoxLayout(
             val startX = x
             val spec = c.spec; val fs = c.fontSize; val col = c.color; val sh = c.shift; val ul = c.underline; val face = c.face
             val glyphs = ArrayList<TextGlyph>()
+            val marks = ArrayList<PlacedRun>()
             // An image cell always ends a text run, even when glued to a word (#99).
             while (i < cells.size && !isGap(cells[i].cp) && !cells[i].isImage && cells[i].math == null && cells[i].rubyGroup == c.rubyGroup &&
                 cells[i].href == c.href && cells[i].speech === c.speech && cells[i].ids === c.ids && cells[i].element === c.element &&
                 samePaint(cells[i], c) && cells[i].orientation == c.orientation
             ) {
-                glyphs.add(glyphFor(cells[i])); x += cells[i].width + cells[i].padAfter; i++
+                glyphs.add(glyphFor(cells[i]))
+                // One mark over each letter a ligature stands for.
+                val n = cells[i].ligComponents
+                if (cells[i].emphasis != null && takesMark(cells[i].cp)) {
+                    for (k in 0 until n) markRun(cells[i], x + cells[i].width * (k + 0.5) / n)?.let(marks::add)
+                }
+                x += cells[i].width + cells[i].padAfter; i++
             }
             out.add(PlacedRun(
                 glyphs, startX, fs, spec, col, sh, ul,
@@ -2799,10 +2818,58 @@ internal class BoxLayout(
                 paintWidth = x - startX, element = c.element, spacesBefore = spaces, spacesWidth = spacesWidth,
                 orientation = c.orientation,
             ))
+            out.addAll(marks)
             spaces = 0; spacesWidth = 0.0
         }
         closeGroup(x)
         return out
+    }
+
+    /** Whether [c]'s emphasis marks go over its line, or right of its column, the line-over side. */
+    private fun marksOver(c: Cell): Boolean = c.emphasis?.position?.let { if (vertical) it.right else it.over } ?: true
+
+    /**
+     * The emphasis mark over one letter (CSS Text Decoration 3, 3, #508), drawn as the letter's ruby
+     * would be: at half its size, in its face when the face has the mark, centred on [centre], over
+     * or under the line, or right or left of the column, and outside the letter's own ruby. Down a
+     * column the mark stands upright and its em clears the letter's em box.
+     */
+    private fun markRun(c: Cell, centre: Double): PlacedRun? {
+        val e = c.emphasis ?: return null
+        val mark = e.style.mark(vertical && c.orientation != TextOrientation.SIDEWAYS)
+        if (mark.isEmpty()) return null
+        val r = rubyGlyphs(mark, c)
+        val m = c.fontSize * EMPHASIS_SIZE
+        val over = marksOver(c)
+        val ruby = if (over && c.rubyText != null) c.fontSize * RUBY_SIZE else 0.0
+        val lift = when {
+            vertical && over -> c.fontSize * (UPRIGHT_CENTER + 0.5) + m * (0.5 - UPRIGHT_CENTER) + ruby
+            vertical -> -c.fontSize * 0.2 - m * (0.5 + UPRIGHT_CENTER)
+            over -> c.fontSize * 0.8 + ruby
+            else -> -c.fontSize * 0.2 - m * 0.8
+        }
+        return PlacedRun(
+            r.glyphs, centre - r.width / 2, m, c.spec, e.color ?: c.color,
+            baselineShift = c.shift + lift,
+            hasOutlines = r.face != null, unitsPerEm = r.face?.unitsPerEm ?: 1000,
+            isAnnotation = true, orientation = TextOrientation.UPRIGHT,
+        )
+    }
+
+    /**
+     * Whether [cp] takes an emphasis mark (CSS Text Decoration 3, 3.1): not a separator, a control,
+     * a format or an unassigned character, nor a combining mark, which shares the mark of its base,
+     * nor punctuation other than the symbols the spec names.
+     */
+    private fun takesMark(cp: Int): Boolean = cp in MARKED_PUNCTUATION || when (GeneralCategory.of(cp)) {
+        CharCategory.SPACE_SEPARATOR, CharCategory.LINE_SEPARATOR, CharCategory.PARAGRAPH_SEPARATOR,
+        CharCategory.CONTROL, CharCategory.FORMAT, CharCategory.UNASSIGNED, CharCategory.SURROGATE,
+        CharCategory.NON_SPACING_MARK, CharCategory.COMBINING_SPACING_MARK, CharCategory.ENCLOSING_MARK,
+        CharCategory.DASH_PUNCTUATION, CharCategory.START_PUNCTUATION, CharCategory.END_PUNCTUATION,
+        CharCategory.CONNECTOR_PUNCTUATION, CharCategory.OTHER_PUNCTUATION,
+        CharCategory.INITIAL_QUOTE_PUNCTUATION, CharCategory.FINAL_QUOTE_PUNCTUATION,
+        -> false
+        else -> true
     }
 
     /** The reading overlay for one ruby group, centered over its base envelope. */
@@ -2973,6 +3040,16 @@ internal class BoxLayout(
         val EMPTY_SPEC = FontSpec(KiteFontFamily.Serif, bold = false, italic = false)
         /** Ruby reading size as a fraction of its base's font size. */
         const val RUBY_SIZE = 0.5
+        /** An emphasis mark's size as a fraction of its letter's (CSS Text Decoration 3, 3.1). */
+        const val EMPHASIS_SIZE = 0.5
+        /**
+         * The punctuation that takes an emphasis mark all the same (CSS Text Decoration 3, 3.1):
+         * number sign, percent and per mille signs, ampersand, at sign, section and pilcrow signs,
+         * the reversed pilcrow, the swung dash and the part alternation mark.
+         */
+        val MARKED_PUNCTUATION = setOf(
+            0x23, 0x25, 0x2030, 0x2031, 0x066A, 0x0609, 0x060A, 0x26, 0x204A, 0x40, 0xA7, 0xB6, 0x204B, 0x2053, 0x303D,
+        )
         /** Synthesized small-caps size (uppercase form scaled down). */
         const val SMALL_CAPS_SCALE = 0.8
         /** The bidi classes that can move a character in a left-to-right paragraph. */
