@@ -521,6 +521,13 @@ internal class StyleResolver(
                 "keep-all" -> b.wordBreak = WordBreak.KEEP_ALL
                 "break-word" -> b.wordBreak = WordBreak.BREAK_WORD
             }
+            "line-break", "-epub-line-break", "-webkit-line-break" -> when (v.trim().lowercase()) {
+                "auto", "initial", "unset" -> b.lineBreak = LineBreak.AUTO
+                "loose" -> b.lineBreak = LineBreak.LOOSE
+                "normal" -> b.lineBreak = LineBreak.NORMAL
+                "strict" -> b.lineBreak = LineBreak.STRICT
+                "anywhere" -> b.lineBreak = LineBreak.ANYWHERE
+            }
             "text-align-last", "-epub-text-align-last" -> when (v.trim().lowercase()) {
                 "auto", "initial", "unset" -> b.textAlignLast = null
                 else -> parseAlign(v)?.let { b.textAlignLast = it }
@@ -953,6 +960,7 @@ internal class StyleResolver(
         var textAlignLast = parent.textAlignLast // inherited
         var overflowWrap = parent.overflowWrap // inherited
         var wordBreak = parent.wordBreak // inherited
+        var lineBreak = parent.lineBreak // inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
@@ -1016,6 +1024,7 @@ internal class StyleResolver(
                 overflowWrap = overflowWrap,
                 wordBreak = wordBreak,
                 fullWidth = fullWidth,
+                lineBreak = lineBreak,
             )
         }
     }

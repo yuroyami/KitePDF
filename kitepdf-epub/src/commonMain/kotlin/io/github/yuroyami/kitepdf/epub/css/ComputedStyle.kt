@@ -21,6 +21,12 @@ internal enum class TextTransform { NONE, UPPERCASE, LOWERCASE, CAPITALIZE }
 internal enum class WordBreak { NORMAL, BREAK_ALL, KEEP_ALL, BREAK_WORD }
 
 /**
+ * `line-break` (CSS Text 3, 5.3): how strictly CJK text keeps its small kana, marks and punctuation
+ * off the start of a line. AUTO takes the STRICT rule, as Unicode's line breaking does by default.
+ */
+internal enum class LineBreak { AUTO, LOOSE, NORMAL, STRICT, ANYWHERE }
+
+/**
  * The `border-style` of one edge. Where two collapsed table borders of the same width
  * meet, the visible style listed first wins (CSS 2.1, 17.6.2.1).
  */
@@ -187,6 +193,8 @@ internal data class ComputedStyle(
     val wordBreak: WordBreak = WordBreak.NORMAL,
     /** `full-width` (or EPUB's `-epub-fullwidth`) in `text-transform`, beside its case (CSS Text 3, 2.1, #508). Inherited. */
     val fullWidth: Boolean = false,
+    /** `line-break` or `-epub-line-break` (CSS Text 3, 5.3, #508). Inherited. */
+    val lineBreak: LineBreak = LineBreak.AUTO,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
