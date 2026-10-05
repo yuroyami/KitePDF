@@ -168,6 +168,12 @@ internal data class ComputedStyle(
      * `none`, or null for `auto`, which takes the marks of the content language (#511). Inherited.
      */
     val quotes: List<String>? = null,
+    /**
+     * `text-align-last`: how the last line of a block, and a line that a forced break ends, align,
+     * or null for `auto`, which follows [textAlign] and sets a justified block's last line at the
+     * start (CSS Text 3, 7.2, #508). Inherited.
+     */
+    val textAlignLast: TextAlign? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

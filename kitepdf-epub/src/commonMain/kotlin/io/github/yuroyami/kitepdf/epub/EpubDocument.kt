@@ -340,7 +340,7 @@ public class EpubDocument internal constructor(
             // A forced text colour could sit on an author background of the same
             // lightness, so the reader drops backgrounds with it (#253).
             settings.textColor?.let { append("*{color:${cssColor(it)};background-color:transparent;background:transparent}") }
-            settings.justify?.let { append("*{text-align:${if (it) "justify" else "start"}}") }
+            settings.justify?.let { append("*{text-align:${if (it) "justify" else "start"};text-align-last:auto}") }
             settings.hyphenate?.let { append("*{hyphens:${if (it) "auto" else "manual"}}") }
         }
         if (css.isEmpty()) emptyList() else CssParser.parse(css, Origin.READER)

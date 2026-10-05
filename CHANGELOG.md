@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB chapters read `text-align-last` and `-epub-text-align-last`: the last line of a block,
+  and each line that a `<br>` ends, align as it says, and with `auto` as `text-align` does but at
+  the start when that justifies. `start` and `end` follow the text's direction, the value
+  inherits, and the reader's justify setting puts it back to `auto` (#508).
+
 - `EpubMetadata.titleRightToLeft` and `creatorsRightToLeft` give the base direction of the title
   and of each creator, so a host can show a right-to-left title or name in its own run of text the
   right way round. A value's own `dir` decides when it says `ltr` or `rtl`, else the package's

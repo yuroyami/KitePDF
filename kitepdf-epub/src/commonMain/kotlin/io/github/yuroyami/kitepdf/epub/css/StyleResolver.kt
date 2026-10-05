@@ -504,6 +504,10 @@ internal class StyleResolver(
             "background-position-y" -> backgrounds(b).offsets(v)?.let { b.bgYs = it }
             "background-repeat" -> backgrounds(b).repeats(v)?.let { b.bgRepeats = it }
             "text-align" -> parseAlign(v)?.let { b.textAlign = it }
+            "text-align-last", "-epub-text-align-last" -> when (v.trim().lowercase()) {
+                "auto", "initial", "unset" -> b.textAlignLast = null
+                else -> parseAlign(v)?.let { b.textAlignLast = it }
+            }
             "text-indent" -> len(refWidthPt)?.let { b.textIndentPt = it }
             "line-height" -> resolveLineHeight(b, v)
             "margin-top" -> len(refWidthPt)?.let { b.marginTop = it }
@@ -911,6 +915,7 @@ internal class StyleResolver(
         var ruleColor: io.github.yuroyami.kitepdf.core.render.RgbColor? = null // currentColor; not inherited
         var columnSpanAll = false // not inherited
         var quotes = parent.quotes // inherited
+        var textAlignLast = parent.textAlignLast // inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
@@ -970,6 +975,7 @@ internal class StyleResolver(
                     spanAll = columnSpanAll,
                 ),
                 quotes = quotes,
+                textAlignLast = textAlignLast,
             )
         }
     }
