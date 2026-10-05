@@ -337,6 +337,18 @@ internal object EpubConformanceChecks {
                 marks.filter { (r, _) -> r.text != "a" }.all { (r, _) -> r.hasOutlines && r.glyphs.all { it.outline != null } } &&
                 verticalChapter(1) && markSide(1, firstOnLeft = true) == -1 && verticalChapter(3) && markSide(3, firstOnLeft = false) == 1
         }
+        // Tests 2 and 4 set each pair of digits upright and side by side in the space of one
+        // character, an em down the column from the last, and tests 1 and 3 set the same digits one
+        // by one, turned as the mixed rule turns them (#508).
+        check("css-epub-text-combine-horizontal") {
+            val runs = (0 until pages(0)).flatMap { glyphRuns(0, it) }
+            val pairs = runs.filter { r ->
+                r.text in setOf("10", "11", "12") && abs(r.textToDevice.b) < 1e-9 &&
+                    abs(r.textToDevice.transformX(r.glyphs.sumOf { it.advanceWidth } * r.fontSize / 1000.0, 0.0) - r.textToDevice.e) <= r.fontSize + 1e-9
+            }
+            val apart = pairs.chunked(3).all { p -> p.size == 3 && p.zipWithNext().all { (a, b) -> abs(abs(a.textToDevice.f - b.textToDevice.f) - a.fontSize) < 0.01 } }
+            verticalChapter(0) && pairs.size == 6 && apart && runs.count { it.text == "101112" && abs(it.textToDevice.b) > 1e-9 } == 2
+        }
     }
 
     /**

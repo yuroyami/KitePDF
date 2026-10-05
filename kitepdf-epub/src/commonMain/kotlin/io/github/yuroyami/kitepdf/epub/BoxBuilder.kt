@@ -148,6 +148,7 @@ internal class BoxBuilder(
             inl.beginIds((listOf(el) + ancestors).asReversed().mapNotNull { e -> e.attrs["id"]?.takeIf { it.isNotBlank() } })
             // Text right inside the block belongs to the block (#41).
             if (tracksElements && !isRoot && !anonymous) inl.beginElement(el)
+            inl.beginCombine(style.textCombineUpright)
             injectPseudo(PseudoSide.BEFORE)
         }
 
@@ -687,6 +688,7 @@ internal class BoxBuilder(
         val id = el.attrs["id"]?.takeIf { it.isNotBlank() }
         if (id != null) inl.beginId(id)
         if (tracksElements) inl.beginElement(el)
+        inl.beginCombine(style.textCombineUpright)
         val background = inl.beginBackground(style.backgroundColor)
         try {
             if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
@@ -775,6 +777,7 @@ internal class BoxBuilder(
             resolver.computePseudo(el, ancestors, style, PseudoSide.AFTER)?.let { inl.appendText(it.text, it.style) }
         } finally {
             inl.endBackground(background)
+            inl.endCombine()
             if (tracksElements) inl.endElement()
             if (id != null) inl.endId()
             if (speech != null) inl.endSpeech()
@@ -869,6 +872,16 @@ internal class BoxBuilder(
         }
 
         fun endRuby() { rubyGroup = -1; rubyText = null }
+
+        // The element whose text sets in one em down a column: each such element is a
+        // composition of its own, a child that inherits the property included (#508).
+        private val combineStack = ArrayDeque<Int>()
+        private var combineGroup = -1
+        private var nextCombineId = 0
+
+        fun beginCombine(on: Boolean) { combineStack.addLast(combineGroup); combineGroup = if (on) nextCombineId++ else -1 }
+
+        fun endCombine() { combineGroup = combineStack.removeLastOrNull() ?: -1 }
 
         // Active <a href>: nested anchors save/restore the enclosing target.
         private val linkStack = ArrayDeque<String?>()
@@ -1020,8 +1033,10 @@ internal class BoxBuilder(
             return sb.toString()
         }
 
+        // A space outside a composition stays out of it.
         private fun samePaint(a: InlineRun, b: InlineRun): Boolean =
-            a.underline == b.underline && a.lineThrough == b.lineThrough && a.overline == b.overline && a.backgroundColor == b.backgroundColor
+            a.underline == b.underline && a.lineThrough == b.lineThrough && a.overline == b.overline && a.backgroundColor == b.backgroundColor &&
+                a.combineGroup == b.combineGroup
 
         private fun makeRun(text: String, style: ComputedStyle) = InlineRun(
             text = text, fontSizePt = style.fontSizePt,
@@ -1043,6 +1058,7 @@ internal class BoxBuilder(
             lineThrough = style.lineThrough,
             overline = style.overline,
             emphasis = emphasisOf(style),
+            combineGroup = combineGroup,
             backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
                 ?: backgroundColor,
         )
