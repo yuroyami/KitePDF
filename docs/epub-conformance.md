@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 106 | 30 | 4 |
+| must | 140 | 109 | 27 | 4 |
 | should | 38 | 18 | 19 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 24 | 2 | 1 |
-| all | 206 | 148 | 52 | 6 |
+| all | 206 | 151 | 49 | 6 |
 
 ## How the results are known
 
@@ -291,12 +291,12 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`mol-navigation`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-navigation) | must | Fails ([#524](https://github.com/yuroyami/KitePDF/issues/524)) | Judged: From the code of `KiteReadAloud`: after a jump through the table of contents, it reads the rest of the old chapter first. |
 | [`mol-support_xhtml`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml) | must | Passes | Judged: From the code of `KiteReadAloud`: it reads the overlay clip by clip, highlights each piece of text and turns the page with the reading. |
 | [`mol-support_xhtml-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-fxl) | must | Passes | Judged: From the code of `KiteReadAloud`: it reads the fixed page's overlay as it does a reflowable one. |
-| [`mol-support_xhtml-load`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-load) | must | Fails ([#522](https://github.com/yuroyami/KitePDF/issues/522)) | Checked: The overlay that two chapters share gives each only the clips of its own text; today each gets all of them. |
-| [`mol-support_xhtml-load-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-load-fxl) | must | Fails ([#522](https://github.com/yuroyami/KitePDF/issues/522)) | Checked: The overlay that two chapters share gives each only the clips of its own text; today each gets all of them. |
+| [`mol-support_xhtml-load`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-load) | must | Passes | Checked: The overlay that two chapters share gives each only the clips of its own text. |
+| [`mol-support_xhtml-load-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-load-fxl) | must | Passes | Checked: The overlay that two chapters share gives each only the clips of its own text. |
 | [`mol-support_xhtml-load-next`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-load-next) | should | Passes | Judged: From the code of `KiteReadAloud`: when a chapter's overlay ends it goes on with the next chapter's and turns the page itself. |
 | [`mol-support_xhtml-load-next-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml-load-next-fxl) | should | Passes | Judged: From the code of `KiteReadAloud`: on fixed pages too, reading moves on to the next page's overlay and turns the page. |
 | [`mol-timing-synchronization`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization) | must | Passes | Judged: From the code of `KiteReadAloud`: each clip's text is highlighted while its audio plays. |
-| [`mol-timing-synchronization_fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_fxl) | must | Fails ([#522](https://github.com/yuroyami/KitePDF/issues/522)) | Checked: The overlay that three pages share gives each page its one clip; today each gets all three. |
+| [`mol-timing-synchronization_fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_fxl) | must | Passes | Checked: The overlay that three pages share gives each page its one clip. |
 | [`mol-timing-synchronization_multiple_audio`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_multiple_audio) | must | Passes | Judged: From the code of `KiteReadAloud`: the clips of both audio files read in order, the second file opening in the same player. |
 | [`mol-timing-synchronization_multiple_audio-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_multiple_audio-fxl) | must | Passes | Judged: From the code of `KiteReadAloud`: on the fixed page too, the reading goes from the first audio file to the second in clip order. |
 | [`mol-timing-synchronization_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_svg) | must | Fails ([#523](https://github.com/yuroyami/KitePDF/issues/523)) | Checked: A clip's text inside the SVG chapter has a place on its page; today `locateFragment` finds none. |
