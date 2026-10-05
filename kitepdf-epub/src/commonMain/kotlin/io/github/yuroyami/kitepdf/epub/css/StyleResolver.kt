@@ -4,6 +4,9 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 import io.github.yuroyami.kitepdf.core.css.CssValues
 import io.github.yuroyami.kitepdf.core.render.RgbColor
+import io.github.yuroyami.kitepdf.epub.GeneralCategory
+import io.github.yuroyami.kitepdf.epub.appendCodePoint
+import io.github.yuroyami.kitepdf.epub.codePointsOf
 
 /**
  * The cascade. Given the UA sheet plus the document's author CSS, computes a
@@ -538,6 +541,27 @@ internal class StyleResolver(
                 "inherit", "unset" -> b.underlinePosition = b.parent.underlinePosition
                 else -> parseUnderlinePosition(v)?.let { b.underlinePosition = it }
             }
+            "text-emphasis-style", "-epub-text-emphasis-style", "-webkit-text-emphasis-style" -> when (v.trim().lowercase()) {
+                "inherit", "unset" -> b.emphasisStyle = b.parent.emphasisStyle
+                "none", "initial" -> b.emphasisStyle = null
+                else -> parseEmphasisStyle(words(v))?.let { b.emphasisStyle = it }
+            }
+            "text-emphasis-color", "-epub-text-emphasis-color", "-webkit-text-emphasis-color" -> when (v.trim().lowercase()) {
+                "inherit", "unset" -> b.emphasisColor = b.parent.emphasisColor
+                "currentcolor", "initial" -> b.emphasisColor = null
+                else -> CssValues.color(v)?.let { b.emphasisColor = it }
+            }
+            // The shorthand sets the style and the colour and leaves the position (3.4).
+            "text-emphasis", "-epub-text-emphasis", "-webkit-text-emphasis" -> when (v.trim().lowercase()) {
+                "inherit", "unset" -> { b.emphasisStyle = b.parent.emphasisStyle; b.emphasisColor = b.parent.emphasisColor }
+                "initial" -> { b.emphasisStyle = null; b.emphasisColor = null }
+                else -> parseEmphasis(v)?.let { (style, color) -> b.emphasisStyle = style; b.emphasisColor = color }
+            }
+            "text-emphasis-position", "-epub-text-emphasis-position", "-webkit-text-emphasis-position" -> when (v.trim().lowercase()) {
+                "inherit", "unset" -> b.emphasisPosition = b.parent.emphasisPosition
+                "initial" -> b.emphasisPosition = EmphasisPosition()
+                else -> parseEmphasisPosition(v)?.let { b.emphasisPosition = it }
+            }
             "text-align-last", "-epub-text-align-last" -> when (v.trim().lowercase()) {
                 "auto", "initial", "unset" -> b.textAlignLast = null
                 else -> parseAlign(v)?.let { b.textAlignLast = it }
@@ -852,6 +876,71 @@ internal class StyleResolver(
         else -> null
     }
 
+    /** The space-separated words of [v], each function such as `rgb(0, 0, 255)` one word. */
+    private fun words(v: String): List<String> = CssParser.splitTopLevel(v.trim(), ' ').map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** The text of a CSS string, `'x'` or `"x"`, or null when [w] is not one. */
+    private fun quotedText(w: String): String? =
+        if (w.length >= 2 && (w[0] == '\'' || w[0] == '"') && w.last() == w[0]) w.substring(1, w.length - 1) else null
+
+    /**
+     * `text-emphasis-style` from its words: a string alone, or `filled` or `open` and a shape, either
+     * or both, or null for anything else (CSS Text Decoration 3, 3.1, #508). A string draws its first
+     * character, with any combining marks after it.
+     */
+    private fun parseEmphasisStyle(words: List<String>): EmphasisStyle? {
+        words.singleOrNull()?.let(::quotedText)?.let { s ->
+            val cps = codePointsOf(s)
+            val end = cps.drop(1).takeWhile { GeneralCategory.of(it).code.startsWith("M") }.size + 1
+            return EmphasisStyle(custom = buildString { cps.take(end).forEach { appendCodePoint(this, it) } })
+        }
+        var filled: Boolean? = null
+        var shape: EmphasisShape? = null
+        for (w in words) when (val k = w.lowercase()) {
+            "filled", "open" -> { if (filled != null) return null; filled = k == "filled" }
+            else -> { if (shape != null) return null; shape = EmphasisShape.entries.firstOrNull { it.keyword == k } ?: return null }
+        }
+        return if (filled == null && shape == null) null else EmphasisStyle(filled ?: true, shape)
+    }
+
+    /**
+     * The `text-emphasis` shorthand: a style, `none` or neither, and a colour or none, in either
+     * order (3.4). A part it leaves out takes its initial value: no marks, or the text's colour.
+     */
+    private fun parseEmphasis(v: String): Pair<EmphasisStyle?, RgbColor?>? {
+        val style = ArrayList<String>()
+        var none = false
+        var color: RgbColor? = null
+        var sawColor = false
+        for (w in words(v)) {
+            val k = w.lowercase()
+            when {
+                k == "none" -> { if (none || style.isNotEmpty()) return null; none = true }
+                k == "filled" || k == "open" || EmphasisShape.entries.any { it.keyword == k } || quotedText(w) != null -> {
+                    if (none) return null
+                    style += w
+                }
+                sawColor -> return null
+                k == "currentcolor" -> sawColor = true
+                else -> { color = CssValues.color(w) ?: return null; sawColor = true }
+            }
+        }
+        if (!none && style.isEmpty() && !sawColor) return null
+        return (if (style.isEmpty()) null else parseEmphasisStyle(style) ?: return null) to color
+    }
+
+    /** `text-emphasis-position`: `over` or `under`, with `right`, `left` or neither, which means `right` (3.3). */
+    private fun parseEmphasisPosition(v: String): EmphasisPosition? {
+        var over: Boolean? = null
+        var right: Boolean? = null
+        for (w in v.trim().lowercase().split(' ', '\t', '\n').filter { it.isNotEmpty() }) when (w) {
+            "over", "under" -> { if (over != null) return null; over = w == "over" }
+            "right", "left" -> { if (right != null) return null; right = w == "right" }
+            else -> return null
+        }
+        return EmphasisPosition(over ?: return null, right ?: true)
+    }
+
     /**
      * `text-underline-position`: `auto`, `from-font`, or `under` with or without one of `left` and
      * `right`, in either order, or null for anything else (CSS Text Decoration 3 and 4, #508).
@@ -993,6 +1082,9 @@ internal class StyleResolver(
         var lineBreak = parent.lineBreak // inherited
         var textOrientation = parent.textOrientation // inherited
         var underlinePosition = parent.underlinePosition // inherited
+        var emphasisStyle = parent.emphasisStyle // inherited
+        var emphasisColor = parent.emphasisColor // inherited
+        var emphasisPosition = parent.emphasisPosition // inherited
 
         fun build(): ComputedStyle {
             // CSS Flexible Box Layout 1, 4: an in-flow child of a flex container is a flex item. It is
@@ -1062,6 +1154,9 @@ internal class StyleResolver(
                 textOrientation = textOrientation,
                 underlinePosition = underlinePosition,
                 overline = overline,
+                emphasisStyle = emphasisStyle,
+                emphasisColor = emphasisColor,
+                emphasisPosition = emphasisPosition,
             )
         }
     }

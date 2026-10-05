@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.KiteLineEnd
 import io.github.yuroyami.kitepdf.core.KiteTextLine
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubEmbedKind
 import io.github.yuroyami.kitepdf.epub.EpubFormatException
@@ -321,6 +322,73 @@ internal object EpubConformanceChecks {
             val under = underlineDepth(1)
             auto != null && auto >= 0.0 && auto < 0.2 && under != null && under >= 0.2 &&
                 verticalChapter(2) && underlineSide(2) == -1 && verticalChapter(4) && underlineSide(4) == 1
+        }
+        // The first chapter draws the mark each paragraph's style sheet asks for over its text, from
+        // the book's own font where it has the mark, a blue one for test 12 and one under the text for
+        // test 13. Tests 8 to 11 name other marks than their style sheet asks for, and the check
+        // follows the style sheet. The vertical chapters draw the marks left of the first column and
+        // then right of it (#508).
+        check("css-epub-text-emphasis") {
+            val marks = emphasisMarks(0)
+            val blue = RgbColor(0.0, 0.0, 1.0)
+            listOf("\u2022", "\u25CF", "\u25C9", "\u25B2", "\uFE45", "a", "\u25E6").all { m -> marks.any { (r, side) -> r.text == m && side == 1 } } &&
+                marks.any { (r, side) -> r.text == "\u2022" && r.color == blue && side == 1 } &&
+                marks.any { (r, side) -> r.text == "\u2022" && side == -1 } &&
+                marks.filter { (r, _) -> r.text != "a" }.all { (r, _) -> r.hasOutlines && r.glyphs.all { it.outline != null } } &&
+                verticalChapter(1) && markSide(1, firstOnLeft = true) == -1 && verticalChapter(3) && markSide(3, firstOnLeft = false) == 1
+        }
+    }
+
+    /**
+     * The emphasis marks among a page's glyph runs: a run of one glyph set at half the size of
+     * another run. A page can hold more marks than words, so the commonest size does not tell them.
+     */
+    private fun marksOf(runs: List<RecordingCanvas.Call.Glyphs>): List<RecordingCanvas.Call.Glyphs> =
+        runs.filter { r -> r.glyphs.size == 1 && r.text.isNotBlank() && runs.any { abs(it.fontSize - 2 * r.fontSize) < 1e-6 } }
+
+    /**
+     * Every emphasis mark of [chapter] across the line, with 1 when it sits over the text it marks
+     * and -1 when under it: the text run under the middle of the mark whose baseline is nearest.
+     */
+    private fun W3cTestBook.emphasisMarks(chapter: Int): List<Pair<RecordingCanvas.Call.Glyphs, Int>> =
+        (0 until pages(chapter)).flatMap { p ->
+            val runs = glyphRuns(chapter, p)
+            val marks = marksOf(runs)
+            val text = runs - marks.toSet()
+            marks.mapNotNull { m ->
+                val centre = m.textToDevice.e + m.glyphs.sumOf { it.advanceWidth } * m.fontSize / 1000.0 / 2
+                val base = text.filter { r ->
+                    centre >= r.textToDevice.e && centre <= r.textToDevice.e + r.glyphs.sumOf { it.advanceWidth } * r.fontSize / 1000.0
+                }.minByOrNull { abs(it.textToDevice.f - m.textToDevice.f) } ?: return@mapNotNull null
+                m to if (m.textToDevice.f > base.textToDevice.f) 1 else -1
+            }
+        }
+
+    /** The physical x range of a glyph run's em boxes, upright or turned: 0.2 em under its baseline to 0.8 em over it. */
+    private fun RecordingCanvas.Call.Glyphs.boxX(): ClosedFloatingPointRange<Double> {
+        val advance = glyphs.sumOf { it.advanceWidth } * fontSize / 1000.0
+        val xs = listOf(0.0, advance).flatMap { x -> listOf(-0.2 * fontSize, 0.8 * fontSize).map { y -> textToDevice.transformX(x, y) } }
+        return xs.min()..xs.max()
+    }
+
+    /**
+     * Which side of the first column of a vertical [chapter] its emphasis marks run on: -1 left of
+     * its letters, 1 right of them, 0 across them or with no mark. The first column is the leftmost
+     * when [firstOnLeft], as in `vertical-lr`, and its outermost mark on either side is the one on
+     * that end of the page.
+     */
+    private fun W3cTestBook.markSide(chapter: Int, firstOnLeft: Boolean): Int {
+        val runs = glyphRuns(chapter).filter { it.text.isNotBlank() }
+        val marks = marksOf(runs)
+        val text = (runs - marks.toSet()).map { it.boxX() }
+        if (marks.isEmpty() || text.isEmpty()) return 0
+        val column = if (firstOnLeft) text.minOf { it.start }.let { s -> text.filter { abs(it.start - s) < 0.5 } }
+        else text.maxOf { it.endInclusive }.let { e -> text.filter { abs(it.endInclusive - e) < 0.5 } }
+        val mark = marks.map { it.boxX() }.let { b -> if (firstOnLeft) b.minBy { it.start } else b.maxBy { it.endInclusive } }
+        return when {
+            mark.endInclusive <= column.minOf { it.start } + 0.01 -> -1
+            mark.start >= column.maxOf { it.endInclusive } - 0.01 -> 1
+            else -> 0
         }
     }
 

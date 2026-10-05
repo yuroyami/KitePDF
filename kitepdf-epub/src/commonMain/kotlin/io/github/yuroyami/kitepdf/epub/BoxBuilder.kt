@@ -15,6 +15,7 @@ import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
 import io.github.yuroyami.kitepdf.epub.css.WritingMode
 import io.github.yuroyami.kitepdf.epub.css.Edge
+import io.github.yuroyami.kitepdf.epub.css.Emphasis
 import io.github.yuroyami.kitepdf.epub.css.ListType
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.PseudoContent
@@ -425,6 +426,7 @@ internal class BoxBuilder(
             fontFamilyNames = pc.style.fontFamilyNames,
             lineThrough = pc.style.lineThrough,
             overline = pc.style.overline,
+            emphasis = emphasisOf(pc.style),
         )
         return BlockBox(pc.style, listOf(TextBlockBox(pc.style, listOf(run))))
     }
@@ -1040,6 +1042,7 @@ internal class BoxBuilder(
             textOrientation = style.textOrientation,
             lineThrough = style.lineThrough,
             overline = style.overline,
+            emphasis = emphasisOf(style),
             backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
                 ?: backgroundColor,
         )
@@ -1127,6 +1130,10 @@ internal fun collapsedWins(challenger: Edge, holder: Edge): Boolean = when {
 private val MEDIA_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 /** Whether [href] names an HTML or XHTML document by its extension. */
+/** The emphasis marks [style] puts over its text, or null when it puts none (CSS Text Decoration 3, 3, #508). */
+private fun emphasisOf(style: ComputedStyle): Emphasis? =
+    style.emphasisStyle?.let { Emphasis(it, style.emphasisColor, style.emphasisPosition) }
+
 private fun isDocumentPath(href: String): Boolean {
     val path = href.substringBefore('#').substringBefore('?').lowercase()
     return path.endsWith(".xhtml") || path.endsWith(".html") || path.endsWith(".htm") || path.endsWith(".xht")

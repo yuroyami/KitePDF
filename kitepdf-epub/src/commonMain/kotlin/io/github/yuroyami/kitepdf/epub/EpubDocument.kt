@@ -3126,13 +3126,6 @@ public class EpubPage internal constructor(
     private companion object {
         /** Pen-gap threshold (in em) that reads as a collapsed word space. */
         const val SPACE_GAP_EM = 0.15
-
-        /**
-         * Vertical writing: offset (in em) from the mapped baseline axis to the
-         * em-box centre an upright glyph is centred on, assuming the nominal
-         * 0.88/0.12 ascent/descent split: (0.88 - 0.12) / 2.
-         */
-        const val UPRIGHT_CENTER = 0.38
     }
 }
 

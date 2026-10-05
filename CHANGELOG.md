@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB chapters draw emphasis marks: `text-emphasis-style`, `text-emphasis-color`,
+  `text-emphasis-position` and the `text-emphasis` shorthand, under their `-epub-` and `-webkit-`
+  names too. Each letter takes its mark at half its size, from the book's font when the font has
+  the mark, centred over it and lifted as ruby is, over or under a line and right or left of a
+  column, outside the letter's own ruby, and the line makes room for the marks as it does for
+  ruby. Spaces, punctuation other than the few symbols CSS names, controls and combining marks
+  take none, a filled or open shape alone is a circle across a line and a sesame down a column,
+  and a string draws its first character. The marks stay out of the page text (#508).
+
 - EPUB chapters read `text-underline-position` and `-epub-text-underline-position`. `under` sets
   the underline below the descenders instead of just under the baseline where they cross it, and
   in vertical text `left` and `under` draw it clear of the column on the left while `right` draws

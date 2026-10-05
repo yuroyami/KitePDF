@@ -82,6 +82,31 @@ internal data class UnderlinePosition(val under: Boolean = false, val side: Unde
 internal enum class UnderlineSide { LEFT, RIGHT }
 
 /**
+ * `text-emphasis-style` or `-epub-text-emphasis-style` (CSS Text Decoration 3, 3.1, #508): a
+ * [shape], [filled] or open, or a [custom] character. With no shape the mark is a circle across a
+ * line and a sesame down a column.
+ */
+internal data class EmphasisStyle(val filled: Boolean = true, val shape: EmphasisShape? = null, val custom: String? = null) {
+    fun mark(vertical: Boolean): String =
+        custom ?: (shape ?: if (vertical) EmphasisShape.SESAME else EmphasisShape.CIRCLE).let { if (filled) it.filled else it.open }
+}
+
+/** The shapes of `text-emphasis-style`, by keyword, and the characters that draw them filled and open. */
+internal enum class EmphasisShape(val keyword: String, val filled: String, val open: String) {
+    DOT("dot", "\u2022", "\u25E6"),
+    CIRCLE("circle", "\u25CF", "\u25CB"),
+    DOUBLE_CIRCLE("double-circle", "\u25C9", "\u25CE"),
+    TRIANGLE("triangle", "\u25B2", "\u25B3"),
+    SESAME("sesame", "\uFE45", "\uFE46"),
+}
+
+/** `text-emphasis-position` (3.3): marks [over] a line or under it, and on the [right] of a column or its left. */
+internal data class EmphasisPosition(val over: Boolean = true, val right: Boolean = true)
+
+/** The emphasis marks of a run of text: their style, their colour or null for the text's own, and where they go (#508). */
+internal data class Emphasis(val style: EmphasisStyle, val color: RgbColor?, val position: EmphasisPosition)
+
+/**
  * The fully-resolved style of one element: the cascade's output. Lengths are in
  * absolute points; inherited properties already carry the parent's value.
  * Box-model fields (margins/padding/background) are computed here; the layout
@@ -226,6 +251,12 @@ internal data class ComputedStyle(
     val underlinePosition: UnderlinePosition = UnderlinePosition.AUTO,
     /** Propagated overline (CSS Text Decoration 3, 2.1, #578). */
     val overline: DecorationLine? = null,
+    /** `text-emphasis-style` or `-epub-text-emphasis-style`, null for `none` (CSS Text Decoration 3, 3.1, #508). Inherited. */
+    val emphasisStyle: EmphasisStyle? = null,
+    /** `text-emphasis-color`, null for `currentcolor`, which each element reads as its own `color` (3.2). Inherited. */
+    val emphasisColor: RgbColor? = null,
+    /** `text-emphasis-position` (3.3). Inherited. */
+    val emphasisPosition: EmphasisPosition = EmphasisPosition(),
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
