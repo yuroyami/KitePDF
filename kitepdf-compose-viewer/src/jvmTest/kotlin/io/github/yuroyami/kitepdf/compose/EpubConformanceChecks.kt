@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.compose
 
 import io.github.yuroyami.kitepdf.core.KiteLineEnd
 import io.github.yuroyami.kitepdf.core.KiteTextLine
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubEmbedKind
@@ -312,6 +313,61 @@ internal object EpubConformanceChecks {
                 turnedRun(1, turned = false) { l -> l.all { it.isCjk() } } && turnedRun(1, turned = true) { l -> l.none { it.isCjk() } } &&
                 turnedRun(1, turned = false) { l -> l.none { it.isCjk() } } && turnedRun(1, turned = true) { l -> l.any { it.isCjk() } }
         }
+        // Chapter 1 keeps the underline at the baseline, where descenders cross it, and chapter 2
+        // sets it under them; the layout's em box reaches 0.2 em below the baseline. Chapters 3 and
+        // 5 are vertical, the line left of the column and then right of it (#508).
+        check("css-epub-text-underline-position") {
+            val auto = underlineDepth(0)
+            val under = underlineDepth(1)
+            auto != null && auto >= 0.0 && auto < 0.2 && under != null && under >= 0.2 &&
+                verticalChapter(2) && underlineSide(2) == -1 && verticalChapter(4) && underlineSide(4) == 1
+        }
+    }
+
+    private fun RecordingCanvas.Call.Fill.points(): List<Pair<Double, Double>> = path.segments.mapNotNull {
+        when (it) {
+            is KitePath.Segment.MoveTo -> ctm.transformPoint(it.x, it.y)
+            is KitePath.Segment.LineTo -> ctm.transformPoint(it.x, it.y)
+            else -> null
+        }
+    }
+
+    /**
+     * How far under the baseline the top of the shallowest underline of [chapter] sits, in ems of
+     * the text it runs under, or null when no line runs under a glyph run. A line fills a thin
+     * rectangle in its run's own text space.
+     */
+    private fun W3cTestBook.underlineDepth(chapter: Int): Double? {
+        val calls = calls(chapter)
+        val runs = calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        return calls.filterIsInstance<RecordingCanvas.Call.Fill>().mapNotNull { fill ->
+            val run = runs.firstOrNull { it.textToDevice == fill.ctm } ?: return@mapNotNull null
+            val toText = fill.ctm.invert() ?: return@mapNotNull null
+            -fill.points().maxOf { (x, y) -> toText.transformY(x, y) } / run.fontSize
+        }.minOrNull()
+    }
+
+    /**
+     * Which side of the first column of a vertical [chapter] its underline runs on: -1 left of the
+     * glyphs, 1 right of them, 0 across them or with no line. The first column of `vertical-rl`
+     * text is the rightmost, and so is its line, on either side.
+     */
+    private fun W3cTestBook.underlineSide(chapter: Int): Int {
+        val calls = calls(chapter)
+        val glyphs = calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().filter { it.text.isNotBlank() }.map { run ->
+            val advance = run.glyphs.sumOf { it.advanceWidth } * run.fontSize / 1000.0
+            val xs = listOf(run.textToDevice.transformX(0.0, 0.0), run.textToDevice.transformX(advance, 0.0))
+            xs.min()..xs.max()
+        }
+        val right = glyphs.maxOfOrNull { it.endInclusive } ?: return 0
+        val column = glyphs.filter { abs(it.endInclusive - right) < 0.5 }
+        val line = calls.filterIsInstance<RecordingCanvas.Call.Fill>().map { f -> f.points().map { it.first } }
+            .maxByOrNull { it.max() } ?: return 0
+        return when {
+            line.max() <= column.minOf { it.start } -> -1
+            line.min() >= column.maxOf { it.endInclusive } -> 1
+            else -> 0
+        }
     }
 
     /**
@@ -319,6 +375,17 @@ internal object EpubConformanceChecks {
      * further down the same column more often than further along the same line. Text space runs
      * up the page, so down is a smaller y.
      */
+    private fun W3cTestBook.verticalChapter(chapter: Int): Boolean {
+        var down = 0
+        var across = 0
+        for ((a, b) in glyphRuns(chapter).filter { it.text.isNotBlank() }.zipWithNext()) {
+            val dx = b.textToDevice.e - a.textToDevice.e
+            val dy = b.textToDevice.f - a.textToDevice.f
+            if (abs(dx) < 1 && dy < 0) down++ else if (abs(dy) < 1 && dx > 0) across++
+        }
+        return down > across
+    }
+
     /**
      * Whether some glyph run of [chapter], on any of its pages, draws letters that [letters]
      * accepts, turned sideways or upright. A turned run's matrix has a rotation in it.
@@ -335,17 +402,6 @@ internal object EpubConformanceChecks {
     /** Every line of [chapter], page after page. */
     private fun W3cTestBook.textLines(chapter: Int): List<KiteTextLine> =
         (0 until pages(chapter)).flatMap { p -> page(chapter, p).textContent().blocks.flatMap { it.lines } }
-
-    private fun W3cTestBook.verticalChapter(chapter: Int): Boolean {
-        var down = 0
-        var across = 0
-        for ((a, b) in glyphRuns(chapter).filter { it.text.isNotBlank() }.zipWithNext()) {
-            val dx = b.textToDevice.e - a.textToDevice.e
-            val dy = b.textToDevice.f - a.textToDevice.f
-            if (abs(dx) < 1 && dy < 0) down++ else if (abs(dy) < 1 && dx > 0) across++
-        }
-        return down > across
-    }
 
     private fun internationalization() {
         // A title or creator reads right to left by its own dir, else the package's, else by its
