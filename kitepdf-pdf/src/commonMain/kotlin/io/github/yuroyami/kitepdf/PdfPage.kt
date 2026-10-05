@@ -7,7 +7,6 @@ import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.PdfFormatException
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
@@ -212,11 +211,12 @@ public class PdfPage internal constructor(
      * Decoded content-stream bytes (FlateDecode etc. applied). May be empty.
      * If /Contents is an array, the chunks are concatenated with a separating
      * newline (per ISO 32000-1 §7.8.2: "The effect is as if all of the streams
-     * in the array were concatenated").
+     * in the array were concatenated"). A `/Contents` that is null or of a type no
+     * content can have is an empty page, which still draws its annotations (#583).
      */
     public val contentBytes: ByteArray by lazy {
         PageContents.concatenated(node["Contents"]) { document.resolve(it) as? PdfStream }
-            ?: throw PdfFormatException("/Contents must be stream, ref, or array")
+            ?: ByteArray(0).also { kiteWarn { "page $index: /Contents is not a stream or an array" } }
     }
 
     /**
