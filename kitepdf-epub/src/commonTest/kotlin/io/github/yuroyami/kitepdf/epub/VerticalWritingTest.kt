@@ -43,6 +43,42 @@ class VerticalWritingTest {
     }
 
     @Test
+    fun each_chapter_lays_out_in_its_own_writing_mode() {
+        // CSS Writing Modes 3, 8: each document's principal writing mode is its own (#507).
+        val doc = EpubDocument.open(
+            EpubFixtures.epubMultiSpine(
+                listOf(
+                    "<p>横書きの章</p>",
+                    "<style>body{-epub-writing-mode:vertical-rl}</style><p>縦書きの章</p>",
+                    "<style>body{writing-mode:vertical-lr}</style><p>縦書きの章</p>",
+                    "<p>また横書き</p>",
+                ),
+            ),
+            settings,
+        )
+        val modes = doc.pages.groupBy { it.chapter }.mapValues { (_, pages) ->
+            pages.flatMap { page -> page.textContent().blocks.flatMap { it.lines }.map { it.vertical } }.distinct()
+        }
+        assertEquals(mapOf(0 to listOf(false), 1 to listOf(true), 2 to listOf(true), 3 to listOf(false)), modes)
+        // The vertical-lr chapter starts its columns at the left edge, the vertical-rl one at the right.
+        val firstColumn = { chapter: Int ->
+            glyphCalls(doc, doc.pages.indexOfFirst { it.chapter == chapter }).first { it.text.isNotBlank() }.textToDevice.e
+        }
+        assertTrue(firstColumn(1) > 100.0, "vertical-rl starts on the right: ${firstColumn(1)}")
+        assertTrue(firstColumn(2) < 100.0, "vertical-lr starts on the left: ${firstColumn(2)}")
+    }
+
+    @Test
+    fun a_horizontal_chapter_after_a_vertical_one_stays_horizontal() {
+        val doc = EpubDocument.open(
+            EpubFixtures.epubMultiSpine(listOf("<style>html{writing-mode:vertical-rl}</style><p>縦</p>", "<p>horizontal words</p>")),
+            settings,
+        )
+        val second = doc.pages.first { it.chapter == 1 }
+        assertEquals(listOf(false), second.textContent().blocks.flatMap { it.lines }.map { it.vertical }.distinct())
+    }
+
+    @Test
     fun upright_cjk_runs_down_the_rightmost_column() {
         val doc = open("<p>日本語のテスト</p>")
         val calls = glyphCalls(doc).filter { it.text.isNotBlank() }
