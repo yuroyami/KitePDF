@@ -184,6 +184,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- HTML's named character references decode in an EPUB chapter, an SVG and every other file
+  `KiteXml` reads: all 2125 names that end in a semicolon, which hold every entity the XHTML 1.0
+  and 1.1 DTDs declare. Before, only `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;` and `&nbsp;`
+  decoded, so a book that writes `&mdash;`, `&rsquo;` or `&eacute;`, as its XHTML DOCTYPE lets it,
+  showed the names on the page. A name the table does not have stays as text (#570).
+
 - `KiteReadAloud` follows the reader to another place in the book. When the reader moves the
   viewer by a link, the table of contents, a page turn or a scroll, the reading goes on from the
   first clip at or after that place once the view settles, also while it is paused, as Media
