@@ -286,7 +286,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
      * The characters of [glyphs] in [font], each glyph placed where the document's own
      * advances put it (ISO 32000-1, 9.4.4), character and word spacing included (#121).
      * The characters of one glyph, such as a ligature, keep the host face's spacing. A
-     * character that [font] lacks draws in a fallback face of [spec]'s language (#472).
+     * character that [font] lacks draws in a host face that has it (#472, #587).
      */
     private fun placedRun(
         glyphs: List<TextGlyph>, font: Font, advanceScale: Double, adjustScale: Double, spec: FontSpec,
@@ -332,11 +332,11 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
 
     /**
      * The font of each of the [ids] of [codePoints], or null when [font] draws them all. A
-     * character that [font] has no glyph for takes a face of [spec]'s language that has one,
-     * and its entries of [ids] and [widths] change to that face's.
+     * character that [font] has no glyph for takes a host face that has one, of [spec]'s
+     * language when there is one, and its entries of [ids] and [widths] change to that face's.
      */
     private fun fallbackFonts(font: Font, codePoints: IntArray, ids: ShortArray, widths: FloatArray, spec: FontSpec): Array<Font>? {
-        if (spec.language == null || ids.none { it == 0.toShort() }) return null
+        if (ids.none { it == 0.toShort() }) return null
         val style = font.typeface?.fontStyle ?: FontStyle.NORMAL
         val faces = HashMap<Int, Font?>()
         return Array(ids.size) { k ->
