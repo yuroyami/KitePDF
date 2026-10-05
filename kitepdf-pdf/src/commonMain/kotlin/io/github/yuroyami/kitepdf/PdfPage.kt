@@ -41,8 +41,10 @@ public class PdfPage internal constructor(
     public val index: Int,
     /**
      * The page's own indirect reference (its entry in the parent's `/Kids`).
-     * `null` only for the unusual case of a page dict inlined directly in
-     * `/Kids`. The writer needs this to target the page object for edits.
+     * `null` only for the unusual case of a kid inlined directly in `/Kids`.
+     * The writer needs this to target the page object for edits. A blank page
+     * that stands for a kid that is no dictionary keeps the kid's reference,
+     * so it can be removed, though it names no page dictionary (#585).
      */
     public val reference: PdfReference? = null,
 ) : KitePage {

@@ -247,6 +247,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A kid of a PDF page tree that is no dictionary, such as a missing object or `null`, is a blank
+  page, and a kid dictionary without `/Type /Page` is read as a page, as MuPDF reads both, where
+  both used to drop out of the page list and move every later page to the index, label and
+  destinations of the page before it. The blank page keeps the kid's reference, so
+  `PdfEditor.removePage` can remove it (#585).
+
 - `PdfDocument.open` throws `PdfFormatException`, and `openOrNull` returns null, for a damaged
   file in which no catalog leads to a page tree, as mutool refuses it, where it used to return a
   document whose `pageCount`, `pages`, `outline` and every other catalog read threw on first use.
