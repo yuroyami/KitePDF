@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
+import io.github.yuroyami.kitepdf.epub.css.LineBreak
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.svg.SvgImage
@@ -54,6 +55,8 @@ internal data class InlineRun(
     val breakAll: Boolean = false,
     /** `word-break: keep-all`: CJK letters join into words, as Latin ones do (#508). */
     val keepAll: Boolean = false,
+    /** `line-break` (CSS Text 3, 5.3, #508). */
+    val lineBreak: LineBreak = LineBreak.AUTO,
     /**
      * Inline `<img>`: the resolved zip path of the image this run stands for
      * ([text] is then a single U+FFFC object-replacement char). Sized at

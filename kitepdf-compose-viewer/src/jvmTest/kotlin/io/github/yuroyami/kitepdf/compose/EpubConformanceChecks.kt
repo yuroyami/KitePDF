@@ -10,6 +10,7 @@ import io.github.yuroyami.kitepdf.epub.EpubLayout
 import io.github.yuroyami.kitepdf.epub.EpubMediaKind
 import io.github.yuroyami.kitepdf.epub.EpubOrientation
 import io.github.yuroyami.kitepdf.epub.EpubPageSpread
+import io.github.yuroyami.kitepdf.epub.EpubSettings
 import io.github.yuroyami.kitepdf.epub.EpubSpread
 import io.github.yuroyami.kitepdf.epub.EpubTargetKind
 import kotlin.math.abs
@@ -267,6 +268,33 @@ internal object EpubConformanceChecks {
             val right = all.maxOfOrNull { it.bounds.right } ?: 0.0
             samples.all { it.size >= 3 } && inWord[1] == 0 && samples[0].none { it.end == KiteLineEnd.NONE } &&
                 all.count { it.end == KiteLineEnd.NONE } > 0 && all.dropLast(1).all { it.bounds.right > right - (right - left) * 0.05 }
+        }
+        // The four samples break the same two Japanese sentences, which put 々 and ぁ at the same place.
+        // Over many widths of the page, as the book asks, no line runs past the page's edge, `auto`
+        // and `strict` start no line with either, `normal` starts some with ぁ and none with 々, and
+        // `loose` starts some with each (CSS Text 3, 5.3, #508).
+        check("css-epub-line-break") {
+            val labels = listOf("auto:", "loose:", "normal:", "strict:")
+            val starts = List(labels.size) { HashSet<Char>() }
+            var inside = true
+            // From a page that holds a few characters a line: a narrower one breaks every pair.
+            for (width in 160..400 step 3) {
+                val doc = EpubDocument.open(bytes, EpubSettings(pageWidth = width.toDouble(), pageHeight = 2000.0))
+                var sample = -1
+                for (p in 0 until doc.pageCountIn(0)) {
+                    for (line in doc.page(io.github.yuroyami.kitepdf.core.KiteLocation(0, p)).textContent().blocks.flatMap { it.lines }) {
+                        val t = line.text.trim()
+                        if (t in labels) { sample = labels.indexOf(t); continue }
+                        val first = t.firstOrNull() ?: continue
+                        if (sample < 0 || first.code < 0x3000) continue
+                        starts[sample] += first
+                        inside = inside && line.bounds.right <= width
+                    }
+                }
+            }
+            val (auto, loose, normal, strict) = starts
+            inside && listOf(auto, strict).all { '\u3005' !in it && '\u3041' !in it } && '\u3041' in normal && '\u3005' !in normal &&
+                '\u3041' in loose && '\u3005' in loose
         }
         // The sample sets its digits and letters full-width, so in the vertical chapter they stand
         // upright as the Japanese beside them does (#508).

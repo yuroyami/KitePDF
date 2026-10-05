@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB chapters read `line-break` and `-epub-line-break`, which used to share one table of the
+  marks that may not start a line. `strict`, and `auto` with it as Unicode's default, keep small
+  kana, the long vowel mark, iteration marks such as 々, middle dots, fullwidth `!` and `?`, wide
+  suffixes such as `％` and the CJK hyphens off the start of a line; `normal` lets the small kana,
+  the long vowel mark and the hyphens start one; `loose` lets everything but the closing marks
+  start one and a wide prefix such as `￥` end one; and `anywhere` breaks between any two
+  characters, inside a Latin word too, keeping only a letter and its marks together. The katakana
+  middle dot used to start a line under every value. The value inherits (#508).
+
 - EPUB chapters read `full-width` in `text-transform`, and EPUB's `-epub-fullwidth`, alone or
   beside a case: letters, digits and signs take their full-width forms and half-width katakana
   its ordinary width, so Latin text in a vertical chapter stands upright as the Japanese around it

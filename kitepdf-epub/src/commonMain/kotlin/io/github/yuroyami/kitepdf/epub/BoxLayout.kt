@@ -27,6 +27,7 @@ import io.github.yuroyami.kitepdf.epub.css.GridSize
 import io.github.yuroyami.kitepdf.epub.css.GridStyle
 import io.github.yuroyami.kitepdf.epub.css.GridTrack
 import io.github.yuroyami.kitepdf.epub.css.GridTracks
+import io.github.yuroyami.kitepdf.epub.css.LineBreak
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
@@ -1741,7 +1742,10 @@ internal class BoxLayout(
                 isGlueSpace(cp) -> { val w = gapWidthPt(cp, run); line += w; word += w }
                 isFixedSpace(cp) -> { line += gapWidthPt(cp, run); endWord() }
                 isWhitespace(cp) -> { line += FontMetrics.advancePt(' '.code, run.fontSizePt, run.bold, run.italic, run.family); endWord() }
-                else -> { val w = FontMetrics.advancePt(cp, run.fontSizePt, run.bold, run.italic, run.family); line += w; word += w }
+                else -> {
+                    val w = FontMetrics.advancePt(cp, run.fontSizePt, run.bold, run.italic, run.family); line += w; word += w
+                    if (run.lineBreak == LineBreak.ANYWHERE) endWord()
+                }
             }
         }
         endWord(); endLine()
@@ -1987,11 +1991,13 @@ internal class BoxLayout(
     /**
      * True when `word-break: break-all` may not break between [prev] and [cp] (#508): one grapheme
      * cluster, a closing or joining mark that must not start a line, or an opening one that must
-     * not end it (UAX 14, LB 13, 16, 19 and 21).
+     * not end it (UAX 14, LB 13, 16, 19 and 21), as [rule] has them. `line-break: anywhere` keeps
+     * only the grapheme clusters whole.
      */
-    private fun heldTogether(prev: Int, cp: Int): Boolean =
-        tiedToPrevious(prev, cp) || isCloser(cp) || isOpener(prev) || cp in NO_BREAK_BEFORE || prev in NO_BREAK_AFTER ||
-            isGlueSpace(cp) || isGlueSpace(prev)
+    private fun heldTogether(prev: Int, cp: Int, rule: LineBreak = LineBreak.AUTO): Boolean =
+        if (rule == LineBreak.ANYWHERE) tiedToPrevious(prev, cp)
+        else tiedToPrevious(prev, cp) || isCloser(cp, rule) || isOpener(prev, rule) || cp in NO_BREAK_BEFORE ||
+            prev in NO_BREAK_AFTER || isGlueSpace(cp) || isGlueSpace(prev)
 
     /** True when no break may fall between [prev] and [cp]: they make one grapheme cluster. */
     private fun tiedToPrevious(prev: Int, cp: Int): Boolean =
@@ -2087,7 +2093,7 @@ internal class BoxLayout(
         /**
          * [overflowWrap]: the word may break between two characters when it cannot fit a line of
          * its own (#574). [breakAll]: a line may break between two of its letters wherever it
-         * ends, `word-break: break-all` (#508).
+         * ends, `word-break: break-all` or `line-break: anywhere` (#508).
          */
         class Word(
             val cells: List<Cell>,
@@ -2095,6 +2101,8 @@ internal class BoxLayout(
             val hyphenPoints: List<Int> = emptyList(),
             val overflowWrap: Boolean = false,
             val breakAll: Boolean = false,
+            /** The `line-break` of the word's text, which says where [breakAll] may break it (#508). */
+            val lineBreak: LineBreak = LineBreak.AUTO,
         ) : Token()
         class Space(val cell: Cell) : Token() {
             val width: Double get() = cell.width
@@ -2129,6 +2137,8 @@ internal class BoxLayout(
         var wordWraps = false
         // Whether a run that the word's characters come from lets a line break between its letters (#508).
         var wordBreaksAll = false
+        // The `line-break` of the word's characters (#508).
+        var wordLineBreak = LineBreak.AUTO
         // The next character's place in the block's text; it counts what draws nothing too.
         var srcAt = 0
         fun endWord() {
@@ -2169,16 +2179,17 @@ internal class BoxLayout(
                 // Kinsoku no-break-after: a word following an opener token
                 // (e.g. （word) merges into it; hyphen indices shift past the
                 // opener prefix.
-                if (last is Token.Word && last.cells.isNotEmpty() && isOpener(last.cells.last().cp)) {
+                if (last is Token.Word && last.cells.isNotEmpty() && isOpener(last.cells.last().cp, last.lineBreak)) {
                     tokens[tokens.lastIndex] =
                         Token.Word(
                             last.cells + word, last.width + w, pts.map { it + last.cells.size },
-                            last.overflowWrap || wordWraps, last.breakAll || wordBreaksAll,
+                            last.overflowWrap || wordWraps, last.breakAll || wordBreaksAll, wordLineBreak,
                         )
                 } else {
-                    tokens.add(Token.Word(word, w, pts, wordWraps, wordBreaksAll))
+                    tokens.add(Token.Word(word, w, pts, wordWraps, wordBreaksAll, wordLineBreak))
                 }
                 word = ArrayList(); wordW = 0.0; softHyphens = ArrayList(); wordWraps = false; wordBreaksAll = false
+                wordLineBreak = LineBreak.AUTO
             }
         }
         for ((r, run) in runs.withIndex()) {
@@ -2341,7 +2352,8 @@ internal class BoxLayout(
                     isGlueSpace(cp) -> {
                         val c = spaceCell(cp, level, src); word.add(c); wordW += c.width
                         wordWraps = wordWraps || run.overflowWrap
-                        wordBreaksAll = wordBreaksAll || run.breakAll
+                        wordBreaksAll = wordBreaksAll || run.breakAll || run.lineBreak == LineBreak.ANYWHERE
+                        wordLineBreak = run.lineBreak
                     }
                     // The other spaces keep their width and end the word they follow: a line may break
                     // after one, and one at the end of a line hangs past it (#577).
@@ -2368,11 +2380,12 @@ internal class BoxLayout(
                     }
                     // keep-all: CJK letters join the word like Latin ones. A break may still come
                     // before an opener and after a closer (#508).
-                    FontMetrics.isWide(cp) && run.rubyGroup < 0 && run.keepAll -> {
-                        if (isOpener(cp)) endWord()
+                    FontMetrics.isWide(cp) && run.rubyGroup < 0 && run.keepAll && run.lineBreak != LineBreak.ANYWHERE -> {
+                        if (isOpener(cp, run.lineBreak)) endWord()
                         val c = cellFor(cp, level, src); word.add(c); wordW += c.width
                         wordWraps = wordWraps || run.overflowWrap
-                        if (isCloser(cp)) endWord()
+                        wordLineBreak = run.lineBreak
+                        if (isCloser(cp, run.lineBreak)) endWord()
                     }
                     // Ruby bases do not split per CJK char: the whole base is one token.
                     FontMetrics.isWide(cp) && run.rubyGroup < 0 -> {
@@ -2382,19 +2395,22 @@ internal class BoxLayout(
                         endWord()
                         val cell = cellFor(cp, level, src)
                         val last = tokens.lastOrNull()
+                        // Which marks bind is the `line-break` rule of the text (#508).
                         val bindsBack = last is Token.Word && last.cells.isNotEmpty() &&
-                            (isCloser(cp) || isOpener(last.cells.last().cp))
+                            (isCloser(cp, run.lineBreak) || isOpener(last.cells.last().cp, last.lineBreak))
                         if (bindsBack) {
                             val lw = last as Token.Word
-                            tokens[tokens.lastIndex] = Token.Word(lw.cells + cell, lw.width + cell.width)
+                            tokens[tokens.lastIndex] = Token.Word(lw.cells + cell, lw.width + cell.width, lineBreak = run.lineBreak)
                         } else {
-                            tokens.add(Token.Word(listOf(cell), cell.width))
+                            tokens.add(Token.Word(listOf(cell), cell.width, lineBreak = run.lineBreak))
                         }
                     }
                     else -> {
                         val c = cellFor(cp, level, src); word.add(c); wordW += c.width
                         wordWraps = wordWraps || run.overflowWrap
-                        wordBreaksAll = wordBreaksAll || run.breakAll
+                        // line-break: anywhere breaks a word wherever its line ends, as break-all does (#508).
+                        wordBreaksAll = wordBreaksAll || run.breakAll || run.lineBreak == LineBreak.ANYWHERE
+                        wordLineBreak = run.lineBreak
                     }
                 }
             }
@@ -2607,7 +2623,7 @@ internal class BoxLayout(
                     // break-all: as many letters as fit the rest of the line, or, on a line of its own,
                     // one letter at least; a closing mark stays with the letter before it (#508).
                     if (tok.breakAll) {
-                        val cut = longestFit(cells, lineAvail() - lineW - leading, line.isEmpty(), ::heldTogether)
+                        val cut = longestFit(cells, lineAvail() - lineW - leading, line.isEmpty()) { a, b -> heldTogether(a, b, tok.lineBreak) }
                         if (cut > 0) {
                             if (line.isNotEmpty() && space > 0.0) { line.addAll(spaces); lineW += space }
                             val prefix = cells.subList(0, cut)
@@ -2893,11 +2909,26 @@ internal class BoxLayout(
     private fun gapWidthPt(cp: Int, run: InlineRun): Double =
         spaceEm(cp)?.let { it * run.fontSizePt } ?: FontMetrics.advancePt(spaceStandIn(cp), run.fontSizePt, run.bold, run.italic, run.family)
 
-    /** CJK closing punctuation that must not start a line (kinsoku, no-break-before). */
-    private fun isCloser(cp: Int): Boolean = cp in CJK_CLOSERS
+    /**
+     * A CJK mark that must not start a line under [rule] (kinsoku, no-break-before; CSS Text 3,
+     * 5.3): the closing marks always, the centered ones, iteration marks and suffixes unless
+     * `loose`, and the small kana and the CJK hyphens only for `strict`.
+     */
+    private fun isCloser(cp: Int, rule: LineBreak = LineBreak.AUTO): Boolean = when (rule) {
+        LineBreak.ANYWHERE -> false
+        LineBreak.LOOSE -> cp in CJK_CLOSERS
+        LineBreak.NORMAL -> cp in CJK_CLOSERS || cp in CJK_CENTERED || cp in CJK_ITERATION || cp in CJK_POSTFIXES
+        LineBreak.STRICT, LineBreak.AUTO ->
+            cp in CJK_CLOSERS || cp in CJK_CENTERED || cp in CJK_ITERATION || cp in CJK_POSTFIXES || cp in CJK_SMALL_KANA ||
+                cp in CJK_HYPHENS
+    }
 
-    /** CJK opening punctuation that must not end a line (kinsoku, no-break-after). */
-    private fun isOpener(cp: Int): Boolean = cp in CJK_OPENERS
+    /** A CJK mark that must not end a line under [rule] (kinsoku, no-break-after): openings, and prefixes unless `loose`. */
+    private fun isOpener(cp: Int, rule: LineBreak = LineBreak.AUTO): Boolean = when (rule) {
+        LineBreak.ANYWHERE -> false
+        LineBreak.LOOSE -> cp in CJK_OPENERS
+        else -> cp in CJK_OPENERS || cp in CJK_PREFIXES
+    }
 
     private companion object {
         /** A width no line of text reaches, to measure text that does not wrap (#33). */
@@ -2928,28 +2959,46 @@ internal class BoxLayout(
             '('.code, '['.code, '{'.code, '\''.code, '"'.code, 0x2018, 0x201C, 0x2019, 0x201D, 0x00AB, 0x00BB, '$'.code,
         )
 
-        // JIS X 4051 no-break-before set (matching MuPDF's kinsoku table):
-        // closing punctuation, plus the small kana and sound/iteration marks
-        // that bind to the preceding character.
+        // JIS X 4051 no-break-before set, split by the `line-break` rule that lets each part start
+        // a line (CSS Text 3, 5.3, #508). Together they are MuPDF's kinsoku table and a little more.
+        // Closing punctuation: no line starts with it under any rule but `anywhere`.
         val CJK_CLOSERS = setOf(
             0x3001, 0x3002, // 、 。
-            0xFF0C, 0xFF0E, 0xFF01, 0xFF1F, 0xFF1B, 0xFF1A, // fullwidth , . ! ? ; :
+            0xFF0C, 0xFF0E, // fullwidth , .
             0x300D, 0x300F, 0x3011, 0x3015, 0x3009, 0x300B, 0x3017, // 」 』 】 〕 〉 》 〗
             0xFF09, 0xFF3D, 0xFF5D, // ） ］ ｝
-            0x3005, // 々 ideographic iteration mark
-            0x309D, 0x309E, 0x30FD, 0x30FE, // ゝ ゞ ヽ ヾ kana iteration marks
+        )
+        // Centered punctuation, which `loose` lets start a line.
+        val CJK_CENTERED = setOf(
+            0x30FB, 0xFF65, // ・ ･
+            0xFF1A, 0xFF1B, 0xFF01, 0xFF1F, // fullwidth : ; ! ?
+            0x203C, 0x2047, 0x2048, 0x2049, // ‼ ⁇ ⁈ ⁉
+        )
+        // Iteration marks, which `loose` lets start a line.
+        val CJK_ITERATION = setOf(
+            0x3005, 0x303B, // 々 〻
+            0x309D, 0x309E, 0x30FD, 0x30FE, // ゝ ゞ ヽ ヾ
+        )
+        // Wide suffixes (line breaking class PO), which `loose` lets start a line.
+        val CJK_POSTFIXES = setOf(0xFF05, 0xFFE0, 0x2103) // ％ ￠ ℃
+        // Small kana and the prolonged sound mark (class CJ), which only `strict` keeps off the start.
+        val CJK_SMALL_KANA = setOf(
             0x30FC, // ー prolonged sound mark
             0x3041, 0x3043, 0x3045, 0x3047, 0x3049, // small ぁぃぅぇぉ
-            0x3063, 0x3083, 0x3085, 0x3087, 0x308E, // small っゃゅょゎ
+            0x3063, 0x3083, 0x3085, 0x3087, 0x308E, 0x3095, 0x3096, // small っゃゅょゎゕゖ
             0x30A1, 0x30A3, 0x30A5, 0x30A7, 0x30A9, // small ァィゥェォ
             0x30C3, 0x30E3, 0x30E5, 0x30E7, 0x30EE, // small ッャュョヮ
             0x30F5, 0x30F6, // small ヵヶ
-        )
+        ) + (0x31F0..0x31FF) // small katakana extensions ㇰ to ㇿ
+        // The CJK hyphens, which only `strict` keeps off the start.
+        val CJK_HYPHENS = setOf(0x301C, 0x30A0) // 〜 ゠
         // JIS X 4051 no-break-after set: an opener binds to what follows it.
         val CJK_OPENERS = setOf(
             0x300C, 0x300E, 0x3010, 0x3014, 0x3008, 0x300A, 0x3016, // 「 『 【 〔 〈 《 〖
             0xFF08, 0xFF3B, 0xFF5B, // （ ［ ｛
         )
+        // Wide prefixes (class PR), which bind to what follows them unless `loose`.
+        val CJK_PREFIXES = setOf(0xFF04, 0xFFE1, 0xFFE5) // ＄ ￡ ￥
     }
 }
 
