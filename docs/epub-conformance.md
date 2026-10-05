@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 109 | 27 | 4 |
-| should | 38 | 18 | 19 | 1 |
+| must | 140 | 110 | 26 | 4 |
+| should | 38 | 19 | 18 | 1 |
 | may | 1 | 0 | 1 | 0 |
-| deprecated | 27 | 24 | 2 | 1 |
-| all | 206 | 151 | 49 | 6 |
+| deprecated | 27 | 25 | 1 | 1 |
+| all | 206 | 154 | 46 | 6 |
 
 ## How the results are known
 
@@ -204,7 +204,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | Test | Level | Result | How it is known |
 |---|---|---|---|
 | [`lay-page-layout-both`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-page-layout-both) | should | Passes | Checked: The reflowable chapter flows over pages between the fixed ones, each one page of its viewport. |
-| [`lay-page-layout-both-spread`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-page-layout-both-spread) | must | Fails ([#504](https://github.com/yuroyami/KitePDF/issues/504)) | Judged: The reflowable chapter and the fixed pages pair as asked, but the last page, which asks for the left, shows centred: the viewer draws a spread of one page centred, since the spread plan keeps no side. |
+| [`lay-page-layout-both-spread`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-page-layout-both-spread) | must | Passes | Checked: The last page, which asks for the left, sits alone in the left half of its spread. |
 | [`lay-pkg-flow-paginated`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pkg-flow-paginated) | should | Passes | Checked: With `flow paginated`, the chapters are cut into pages. |
 | [`lay-pkg-flow-scrolled-continuous`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pkg-flow-scrolled-continuous) | should | Fails ([#505](https://github.com/yuroyami/KitePDF/issues/505)) | Checked: With `flow scrolled-continuous`, a chapter is one scrolling column; today it is cut into pages. |
 | [`lay-pkg-flow-scrolled-doc`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pkg-flow-scrolled-doc) | should | Fails ([#505](https://github.com/yuroyami/KitePDF/issues/505)) | Checked: With `flow scrolled-doc`, a chapter is one scrolling column; today it is cut into pages. |
@@ -229,7 +229,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`lay-fxl-orientation-landscape`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-orientation-landscape) | deprecated | Fails | Judged: `rendition:orientation landscape` is read, but `KiteDocView` neither rotates nor tells the reader. |
 | [`lay-fxl-page-spread-combined`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-page-spread-combined) | deprecated | Passes | Checked: The left and right pages share one spread, the left one first. |
 | [`lay-fxl-page-spread-left`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-page-spread-left) | deprecated | Passes | Checked: The `page-spread-left` page opens its spread on the left. |
-| [`lay-fxl-page-spread-right`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-page-spread-right) | deprecated | Fails ([#504](https://github.com/yuroyami/KitePDF/issues/504)) | Judged: The `page-spread-right` first page shows centred, not in the right half: the viewer draws a spread of one page centred, since the spread plan keeps no side. |
+| [`lay-fxl-page-spread-right`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-page-spread-right) | deprecated | Passes | Checked: The `page-spread-right` first page sits alone in the right half of its spread, and the pages after it pair. |
 | [`lay-fxl-spread-auto`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-spread-auto) | deprecated | Passes | Checked: With `spread auto`, the viewer pairs the pages. |
 | [`lay-fxl-spread-both`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-spread-both) | deprecated | Passes | Checked: With `spread both`, the viewer pairs the pages in landscape and in portrait. |
 | [`lay-fxl-spread-default`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-fxl-spread-default) | deprecated | Passes | Checked: With no `rendition:spread`, the value is auto and the viewer pairs the pages. |
@@ -253,7 +253,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`lay-pp-layout-pre-paginated-spreads`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-layout-pre-paginated-spreads) | must | Passes | Checked: The viewer pairs the four pages into two spreads with no lone page between. |
 | [`lay-pp-page-spread-combined`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-page-spread-combined) | should | Passes | Checked: The left and right pages share one spread, the left one first. |
 | [`lay-pp-page-spread-left`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-page-spread-left) | should | Passes | Checked: The `page-spread-left` page opens its spread on the left. |
-| [`lay-pp-page-spread-right`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-page-spread-right) | should | Fails ([#504](https://github.com/yuroyami/KitePDF/issues/504)) | Judged: The `page-spread-right` first page shows centred, not in the right half: the viewer draws a spread of one page centred, since the spread plan keeps no side. |
+| [`lay-pp-page-spread-right`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-page-spread-right) | should | Passes | Checked: The `page-spread-right` first page sits alone in the right half of its spread, and the pages after it pair. |
 | [`lay-pp-spine-overrides_behave-as-global`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-spine-overrides_behave-as-global) | must | Passes | Checked: The fixed chapter is one page of its viewport and the overriding chapter flows over pages. |
 | [`lay-pp-spine-overrides_behave-as-global-bis`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-spine-overrides_behave-as-global-bis) | must | Passes | Checked: The overriding chapter is one fixed page of its viewport between two reflowable ones. |
 | [`lay-pp-spine-overrides_image-only-pp`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pp-spine-overrides_image-only-pp) | must | Passes | Checked: The fixed chapter is one page that draws its image, and the overriding chapter flows over pages. |

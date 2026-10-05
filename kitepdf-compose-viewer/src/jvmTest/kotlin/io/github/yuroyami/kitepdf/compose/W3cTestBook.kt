@@ -80,12 +80,22 @@ internal class W3cTestBook(val folder: File) {
      * is its pages as (chapter, page) pairs, left to right in reading order.
      */
     fun spreads(landscape: Boolean = true): List<List<Pair<Int, Int>>> {
+        val (slots, plan) = plan(landscape)
+        return plan.spreads.map { spread -> spread.map { slots[it] } }
+    }
+
+    /** For each of [spreads], the side its one page sits on, or null for a page in the middle and for a pair (#504). */
+    fun spreadSides(landscape: Boolean = true): List<SpreadSide?> {
+        val plan = plan(landscape).second
+        return plan.spreads.indices.map(plan::sideOf)
+    }
+
+    private fun plan(landscape: Boolean): Pair<List<Pair<Int, Int>>, SpreadPlan> {
         val slots = (0 until chapters).flatMap { c -> (0 until pages(c)).map { c to it } }
-        val plan = pairSpreads(slots.size, rightToLeft = doc.epubMetadata.rightToLeft) { slot ->
+        return slots to pairSpreads(slots.size, rightToLeft = doc.epubMetadata.rightToLeft) { slot ->
             val (c, p) = slots[slot]
             epubSide(doc, c, p, landscape)
         }
-        return plan.spreads.map { spread -> spread.map { slots[it] } }
     }
 
     private companion object {

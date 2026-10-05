@@ -2018,6 +2018,7 @@ private fun SpreadLayout(
             state = state,
             leftIndex = pages[0],
             rightIndex = pages.getOrNull(1),
+            loneSide = plans.current.sideOf(spread),
             reverseOrder = layout.reverseLayout,
             zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
             pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
@@ -2058,13 +2059,15 @@ private fun SpreadLayout(
  * One spread: reading-order pages [leftIndex] and [rightIndex] (null for a
  * page shown alone) letterboxed into the viewport halves. LTR shows [leftIndex]
  * on the left; [reverseOrder] (right-to-left books) shows it on the RIGHT. A
- * lone page centres across the full width.
+ * lone page sits in the half of [loneSide], with the other half empty, or
+ * centres across the full width when it asked for no side (#504).
  */
 @Composable
 private fun SpreadBox(
     state: KiteDocViewState,
     leftIndex: Int,
     rightIndex: Int?,
+    loneSide: SpreadSide?,
     reverseOrder: Boolean,
     zoom: () -> Float,
     pan: () -> Offset,
@@ -2139,7 +2142,11 @@ private fun SpreadBox(
         }
 
         if (rightIndex == null) {
-            slot(leftIndex, 0, fullW) // odd tail: centre alone
+            when (loneSide) {
+                SpreadSide.LEFT -> slot(leftIndex, 0, fullW / 2)
+                SpreadSide.RIGHT -> slot(leftIndex, fullW / 2, fullW - fullW / 2)
+                else -> slot(leftIndex, 0, fullW) // centre alone
+            }
         } else {
             val firstVisual = if (reverseOrder) rightIndex else leftIndex
             val secondVisual = if (reverseOrder) leftIndex else rightIndex
