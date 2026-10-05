@@ -1036,6 +1036,7 @@ internal class BoxBuilder(
             breakAll = style.wordBreak == WordBreak.BREAK_ALL,
             keepAll = style.wordBreak == WordBreak.KEEP_ALL,
             lineBreak = style.lineBreak,
+            textOrientation = style.textOrientation,
             lineThrough = style.lineThrough,
             backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
                 ?: backgroundColor,

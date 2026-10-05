@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
+import io.github.yuroyami.kitepdf.epub.css.TextOrientation
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.KiteLineEnd
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
@@ -187,6 +188,8 @@ internal class PlacedRun(
      */
     val spacesBefore: Int = 0,
     val spacesWidth: Double = 0.0,
+    /** Which of the run's glyphs stand upright in vertical text (CSS Writing Modes 3, 5.1, #508). */
+    val orientation: TextOrientation = TextOrientation.MIXED,
 )
 
 /**

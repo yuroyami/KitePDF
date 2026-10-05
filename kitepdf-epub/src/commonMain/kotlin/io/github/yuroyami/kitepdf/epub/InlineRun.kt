@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.DecorationLine
 import io.github.yuroyami.kitepdf.epub.css.GenericFont
 import io.github.yuroyami.kitepdf.epub.css.LineBreak
+import io.github.yuroyami.kitepdf.epub.css.TextOrientation
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.svg.SvgImage
@@ -57,6 +58,8 @@ internal data class InlineRun(
     val keepAll: Boolean = false,
     /** `line-break` (CSS Text 3, 5.3, #508). */
     val lineBreak: LineBreak = LineBreak.AUTO,
+    /** `text-orientation`, which only vertical text reads (CSS Writing Modes 3, 5.1, #508). */
+    val textOrientation: TextOrientation = TextOrientation.MIXED,
     /**
      * Inline `<img>`: the resolved zip path of the image this run stands for
      * ([text] is then a single U+FFFC object-replacement char). Sized at

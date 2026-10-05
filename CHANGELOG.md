@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- EPUB chapters read `text-orientation` and `-epub-text-orientation`, with EPUB's
+  `vertical-right` and `sideways-right` as `mixed` and `sideways`. In vertical text `upright`
+  stands every letter up, one an em down the column and set in the middle of it, with no
+  ligature or kerning between them, and `sideways` turns the Japanese as well as the Latin text,
+  where one fixed rule used to stand CJK characters up and turn everything else. The value
+  inherits and leaves horizontal text as it was (#508).
+
 - EPUB chapters read `line-break` and `-epub-line-break`, which used to share one table of the
   marks that may not start a line. `strict`, and `auto` with it as Unicode's default, keep small
   kana, the long vowel mark, iteration marks such as 々, middle dots, fullwidth `!` and `?`, wide

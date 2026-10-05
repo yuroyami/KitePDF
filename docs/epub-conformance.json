@@ -20,7 +20,7 @@
     "css-epub-text-align-last": true,
     "css-epub-text-combine-horizontal": false,
     "css-epub-text-emphasis": false,
-    "css-epub-text-orientation": false,
+    "css-epub-text-orientation": true,
     "css-epub-text-transform": true,
     "css-epub-text-underline-position": false,
     "css-epub-word-break": true,

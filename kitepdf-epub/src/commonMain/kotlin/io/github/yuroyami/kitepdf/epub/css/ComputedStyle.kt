@@ -27,6 +27,12 @@ internal enum class WordBreak { NORMAL, BREAK_ALL, KEEP_ALL, BREAK_WORD }
 internal enum class LineBreak { AUTO, LOOSE, NORMAL, STRICT, ANYWHERE }
 
 /**
+ * `text-orientation` (CSS Writing Modes 3, 5.1): in vertical text, MIXED stands CJK characters
+ * upright and turns the rest sideways, UPRIGHT stands every character up, SIDEWAYS turns them all.
+ */
+internal enum class TextOrientation { MIXED, UPRIGHT, SIDEWAYS }
+
+/**
  * The `border-style` of one edge. Where two collapsed table borders of the same width
  * meet, the visible style listed first wins (CSS 2.1, 17.6.2.1).
  */
@@ -195,6 +201,8 @@ internal data class ComputedStyle(
     val fullWidth: Boolean = false,
     /** `line-break` or `-epub-line-break` (CSS Text 3, 5.3, #508). Inherited. */
     val lineBreak: LineBreak = LineBreak.AUTO,
+    /** `text-orientation` or `-epub-text-orientation` (CSS Writing Modes 3, 5.1, #508). Inherited. */
+    val textOrientation: TextOrientation = TextOrientation.MIXED,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
