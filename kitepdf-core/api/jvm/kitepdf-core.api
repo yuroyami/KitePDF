@@ -815,6 +815,10 @@ public final class io/github/yuroyami/kitepdf/core/font/Standard14Widths {
 	public final fun widthOf (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Integer;
 }
 
+public final class io/github/yuroyami/kitepdf/core/font/StandardFaceGlyphsKt {
+	public static final fun standardFaceGlyphs (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/font/FontSpec;)Ljava/util/List;
+}
+
 public final class io/github/yuroyami/kitepdf/core/font/Table {
 	public fun <init> (Ljava/lang/String;II)V
 	public final fun component1 ()Ljava/lang/String;

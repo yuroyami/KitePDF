@@ -97,3 +97,5 @@ private class AndroidHostTextLine(private val text: String, private val paint: T
         scope.drawIntoCanvas { it.nativeCanvas.drawText(text, 0f, 0f, paint) }
     }
 }
+
+internal actual fun hostHasFace(fontSpec: FontSpec): Boolean = true

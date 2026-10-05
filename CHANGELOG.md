@@ -247,6 +247,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In a browser, text in a generic font family draws in the bundled face of its family. Skia
+  knows one face there, Roboto, so the text of a serif book drew in Roboto: `KiteDocView`
+  stretched or squeezed each word to its Times width, so the words of one line looked like
+  different sizes, and `EpubPageRasterizer` set each Roboto letter at its Times advance, with
+  uneven gaps and no bold or italic. Where the host has no face of the family, `ComposeCanvas`
+  and `SkiaCanvas` now draw the URW face of the standard 14 fonts that the layout measured the
+  text with, so each glyph fills its own advance. A run with a character those faces lack keeps
+  the host's text, and a host with a face of the family keeps drawing it. `standardFaceGlyphs`
+  gives a run those outlines (#593).
 - The mouse wheel turns the page of a horizontal `KiteDocLayout.Paged` or `Spread` layout on the
   desktop and the web. Its pager took only the sideways wheel, so a reader with a mouse could
   not page a book without the keyboard. Down goes forward and up goes back, one page or spread

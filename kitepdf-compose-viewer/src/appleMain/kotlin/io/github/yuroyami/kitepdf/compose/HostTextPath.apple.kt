@@ -214,3 +214,5 @@ private fun hostTypeface(spec: FontSpec): SkTypeface? {
         null
     }
 }
+
+internal actual fun hostHasFace(fontSpec: FontSpec): Boolean = true

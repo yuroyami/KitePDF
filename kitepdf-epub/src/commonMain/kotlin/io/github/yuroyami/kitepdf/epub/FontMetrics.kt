@@ -12,7 +12,8 @@ import io.github.yuroyami.kitepdf.core.font.Standard14Widths
  * the backend substitutes a host serif/sans/mono face. That substitute is chosen
  * to be metric-compatible with the PDF base-14 fonts, so the Standard-14 AFM
  * widths in core ([Standard14Widths]) are the right measurements for BOTH line
- * breaking AND the advances handed to `drawGlyphs`. Widths are in 1/1000 em; the
+ * breaking AND the advances handed to `drawGlyphs`. A host with no face of the
+ * family, such as a browser, draws the bundled base-14 faces themselves (#593). Widths are in 1/1000 em; the
  * layout scales by the run's font size.
  *
  * Mapping is char -> PostScript glyph name -> Standard-14 width. The reverse

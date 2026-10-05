@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.TextUnitType
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.font.standardFaceGlyphs
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
@@ -134,6 +135,11 @@ public class ComposeCanvas internal constructor(
      * step can read the backdrop from it. Null for a canvas on screen, whose pixels Compose keeps.
      */
     private val target: ImageBitmap? = null,
+    /**
+     * True when the host has a face of a spec's family, else the text draws from the bundled
+     * standard faces (#593). A test can take the faces away, as a browser has none.
+     */
+    private val hostFace: (FontSpec) -> Boolean = ::hostHasFace,
 ) : KiteCanvas {
 
     /**
@@ -271,6 +277,14 @@ public class ComposeCanvas internal constructor(
         if (glyphs.isEmpty()) return
         if (hasOutlines) {
             drawTextViaOutlines(glyphs, fontSize, unitsPerEm, textToDevice, color, alpha, blendMode)
+            return
+        }
+        // A family the host has no face of draws from the bundled face the layout measured it
+        // with, each glyph at its own advance. Fitted to its width, a word in another face drew
+        // stretched or squeezed (#593).
+        val bundled = if (hostFace(fontSpec)) null else standardFaceGlyphs(glyphs, fontSpec)
+        if (bundled != null) {
+            drawTextViaOutlines(bundled, fontSize, 1000, textToDevice, color, alpha, blendMode)
         } else {
             drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
         }
