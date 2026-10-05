@@ -993,16 +993,28 @@ public class KiteDocViewState(
     internal var remoteArrivals: Int by mutableIntStateOf(0)
 
     /**
+     * How many times a font landed for the host-font text of each page after the page drew, as
+     * its [HostFontWatch] said (#595). Written only on the composition's thread, by [hostFontsLanded].
+     */
+    private val hostFontLandings = mutableStateMapOf<KitePage, Int>()
+
+    /** Counts a font that landed for [page]'s host-font text, so the page draws again with it (#595). */
+    internal fun hostFontsLanded(page: KitePage) {
+        hostFontLandings[page] = (hostFontLandings[page] ?: 0) + 1
+    }
+
+    /**
      * What [page]'s pixels depend on besides the viewer's own settings: for an EPUB page, the
      * remote pictures of its chapter that have landed since it painted (#38), and the changes its
-     * scripts made to its chapter (#41). It reads [remoteArrivals] and [chapterRevision], so a
-     * landing or a change composes the pages on screen again, and a page whose chapter changed
-     * draws again.
+     * scripts made to its chapter (#41); for any page, the fonts that landed for its host-font
+     * text since it drew (#595). It reads [remoteArrivals] and [chapterRevision], so a landing or a
+     * change composes the pages on screen again, and a page whose chapter changed draws again.
      */
     internal fun contentVersionOf(page: KitePage): Int {
-        // Both counts only grow, so their sum moves whenever either does (#41).
+        // Every count only grows, so their sum moves whenever one does (#41).
         if (remoteArrivals < 0 || chapterRevision < 0) return 0
-        return (page as? EpubPage)?.let { it.remoteVersion + it.chapterVersion } ?: 0
+        val fonts = hostFontLandings[page] ?: 0
+        return fonts + ((page as? EpubPage)?.let { it.remoteVersion + it.chapterVersion } ?: 0)
     }
 
     /** Copies [EpubDocument.remoteArrivals] into [remoteArrivals] for as long as the view shows this state (#38). */
@@ -2030,6 +2042,12 @@ public class KiteDocViewState(
      * page for its whole layout (#389).
      */
     internal var layoutPausesForFrames: Boolean = rastersOnUiThread
+
+    /**
+     * True where the pages draw host-font text without Compose's text, off the UI thread (#131).
+     * A browser draws it through Compose's text, and a test sets this false to draw as one (#595).
+     */
+    internal var hostTextOffMain: Boolean = hostTextAnyThread
 
     /** The time a slice of [prepareInSlices] may take before a frame is drawn. */
     internal var layoutSlice: Duration = LAYOUT_SLICE

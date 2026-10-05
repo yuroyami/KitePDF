@@ -910,6 +910,7 @@ private fun PageSlotContent(
     }
     val formTextMeasurer = rememberTextMeasurer()
     val formFailure = remember(page) { DrawFailure() }
+    val formFonts = remember(page) { arrayOfNulls<HostFontWatch>(1) }
     val strings = LocalKiteViewerStrings.current
     val slot = Modifier
         .fillMaxSize()
@@ -917,7 +918,7 @@ private fun PageSlotContent(
             page, state.scripts, formTextMeasurer,
             // The form layer draws at screen resolution, so a hairline is one screen pixel unless the spec says else.
             (renderSpec as? KiteRenderSpec.Vectorized)?.hairlineWidthPx ?: 1f,
-            state.formRevision, formFailure, colors.theme,
+            state.formRevision, formFailure, colors.theme, formFonts, hostLines = state.hostTextOffMain,
         )
         .highlightOverlay(state, page, pageIndex, colors)
         // A screen reader names the page, as the page indicator numbers it (#427).
@@ -942,6 +943,7 @@ private fun PageSlotContent(
                 page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom,
                 imageCache = state.vectorImageCacheFor(renderSpec.imageCacheBudgetBytes),
                 contentVersion = contentVersion,
+                hostLines = state.hostTextOffMain,
             )
         }
         // What a screen reader finds on the page: its text, links and fields at their places (#427).
@@ -1254,6 +1256,7 @@ private fun KitePageRaster(
             spec.maxBitmapLongSide.toLong() * spec.maxBitmapLongSide,
         ),
     )
+    if (state != null) rasterizer.textOffMain = state.hostTextOffMain
     val onRendered by rememberUpdatedState(onPageRendered)
 
     // The slot's size reaches the raster size only once it stops changing: a window drag, a split
@@ -1301,7 +1304,7 @@ private fun KitePageRaster(
     // Keyed on the paper the page is drawn on, so a background change that a theme hides renders nothing again (#394).
     val paper = paperColor(colors.pageBackground, colors.theme)
     // Keyed on the rasterizer too: a new font environment gives a new one, and the text renders again (#421).
-    val rastered by produceState<Pair<ImageBitmap, Boolean>?>(null, page, raster, paper, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry, rasterizer, contentVersion) {
+    val rastered by produceState<PageRaster?>(null, page, raster, paper, colors.theme, hairline, cache, drawsFormLayer, spec.canvasDecorator, retry, rasterizer, contentVersion) {
         // Off the main thread: a 10-30ms page raster on the UI thread
         // janks scroll and pinch. The rasterizer runs two pages at once, a page on
         // screen before a page drawn ahead (#370); the bitmap cache turns scroll-back
@@ -1327,7 +1330,7 @@ private fun KitePageRaster(
         // bitmap of this page instead of blanking it, and says it failed (#430).
         value = when {
             result != null -> result.also { shownFor[0] = page }
-            shownFor[0] === page -> value?.let { it.first to false }
+            shownFor[0] === page -> value?.copy(fresh = false)
             else -> null
         }
         render = if (result != null) KitePageRenderState.Ready else KitePageRenderState.Failed
@@ -1337,7 +1340,9 @@ private fun KitePageRaster(
         SideEffect { state.noteRender(pageIndex, shownRender) }
         DisposableEffect(state, pageIndex) { onDispose { state.noteRender(pageIndex, null) } }
     }
-    val bitmap = rastered?.first
+    val bitmap = rastered?.bitmap
+    // A font that lands for characters the page drew as boxes draws the page again (#595).
+    WatchHostFonts(rastered?.fonts, state, page)
 
     // The page at this zoom in full, which the long-side cap may have cut down. When it has, the
     // part on screen is drawn again at full resolution in tiles, so deep zoom and a tall page stay
@@ -1443,7 +1448,7 @@ private fun PageTiles(
                 contentVersion = contentVersion,
             )
             backOnComposeThread()
-            if (result != null) bitmaps[tile] = result.first
+            if (result != null) bitmaps[tile] = result.bitmap
         }
     }
     Canvas(Modifier.fillMaxSize()) {
@@ -1489,9 +1494,25 @@ private const val TILE_SETTLE_MS = 120L
  * the new value (#229).
  */
 @Composable
-internal fun ReportFreshRaster(rastered: Pair<ImageBitmap, Boolean>?, report: (ImageBitmap) -> Unit) {
+internal fun ReportFreshRaster(rastered: PageRaster?, report: (ImageBitmap) -> Unit) {
     LaunchedEffect(rastered) {
         rastered?.let { (bmp, fresh) -> if (fresh) report(bmp) }
+    }
+}
+
+/**
+ * Counts a font that lands for [page]'s host-font text in [state] once [fonts] goes stale, so the
+ * page and its thumbnail draw again with it (#595). A browser draws a box for a character until
+ * Compose has downloaded a face for it.
+ */
+@Composable
+internal fun WatchHostFonts(fonts: HostFontWatch?, state: KiteDocViewState?, page: KitePage) {
+    if (fonts == null || state == null) return
+    LaunchedEffect(fonts, state, page) {
+        snapshotFlow { fonts.stale }.first { it }
+        // The flow can end its wait on the thread that marked the paragraphs (#443).
+        backOnComposeThread()
+        state.hostFontsLanded(page)
     }
 }
 
@@ -1525,10 +1546,14 @@ private fun KitePageVector(
     imageCache: io.github.yuroyami.kitepdf.core.render.KiteBitmapCache<ImageBitmap>? = null,
     /** What the page paints besides the viewer's settings; a new value draws it again (#38). */
     contentVersion: Int = 0,
+    /** False to draw host-font text through Compose's text, as a browser does. See [KiteDocViewState.hostTextOffMain]. */
+    hostLines: Boolean = hostTextAnyThread,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
     val failure = remember(page) { DrawFailure() }
+    // The watch on the fonts of the page's last draw, kept here so that its paragraphs live as long as the page (#595).
+    val fonts = remember(page) { arrayOfNulls<HostFontWatch>(1) }
     // A page whose chapter the layout budget dropped would lay it out here, on the UI thread
     // (#377). It shows its paper instead, and its chapter comes back on the raster dispatcher.
     var loads by remember(page) { mutableIntStateOf(0) }
@@ -1562,7 +1587,7 @@ private fun KitePageVector(
             val base = ComposeCanvas(
                 this, textMeasurer, spec.hairlineWidthPx, skipSystemFontText = false, magnification = magnification,
                 bitmaps = imageCache ?: io.github.yuroyami.kitepdf.core.render.KiteBitmapCache(),
-                inSceneDrawPass = true,
+                inSceneDrawPass = true, hostLines = hostLines,
             )
             val themed = theme?.wrap(base) ?: base
             val target = spec.canvasDecorator?.invoke(themed) ?: themed
@@ -1574,6 +1599,8 @@ private fun KitePageVector(
                 } else {
                     page.renderTo(target, deviceCtm)
                 }
+                // Read in the draw, so a font that lands for characters drawn as boxes draws the page again (#595).
+                fonts[0] = base.hostFontWatch()?.takeUnless { it.stale }
             }
         }
         // Paper over whatever the failed draw left, so the page shows as blank, not half drawn.

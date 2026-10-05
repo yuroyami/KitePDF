@@ -247,6 +247,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In a browser, a page draws again once Compose's text has downloaded the font for characters it
+  drew as boxes. No face in a browser covers every script, so Compose fetches a fallback face for
+  the code points that none of its faces has, and draws its own text again when the face lands,
+  while `KiteDocView` kept the page it had drawn, with a box for each such character, in a PDF
+  with a non-embedded Japanese font for example. Each page now keeps one paragraph for each face
+  its host-font text asked for, made of the characters it drew in that face, which Compose marks
+  stale with the rest when a font lands. The page then draws again in both render modes, as do its
+  thumbnail, its form fields and a cached raster that comes back on screen. Other platforms draw
+  host-font text without Compose's text and do not change (#595).
 - The mouse wheel scrolls a `KiteDocLayout.Continuous` layout while text is selected. A selection
   holds the strip's scrolling for as long as it is on screen, so a finger cannot slide the page
   from under the words, and that hold stopped the wheel too: after a mouse selection on the

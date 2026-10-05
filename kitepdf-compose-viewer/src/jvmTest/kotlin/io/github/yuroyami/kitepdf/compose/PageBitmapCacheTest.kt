@@ -100,6 +100,6 @@ class PageBitmapCacheTest {
         assertTrue(cache.trackedBytes in 0..200_000, "tracked bytes ${cache.trackedBytes}")
         val key = PageBitmapCache.Key(pageIdentity = "after", w = 10, h = 10, bgArgb = 0, theme = null, hairlineBits = 0)
         cache.put(key, bitmap)
-        assertSame(bitmap, cache.get(key))
+        assertSame(bitmap, cache.get(key)?.bitmap)
     }
 }

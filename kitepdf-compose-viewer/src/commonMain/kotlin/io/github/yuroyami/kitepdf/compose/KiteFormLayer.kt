@@ -53,6 +53,13 @@ internal fun Modifier.kiteFormLayer(
      * colours over a dark page (#419). The canvas decorator is page paint only and stays out.
      */
     theme: io.github.yuroyami.kitepdf.core.render.ReaderTheme? = null,
+    /**
+     * Remembered per page by the caller: the watch on the fonts of the field text of the last draw,
+     * kept so that its paragraphs live as long as the page (#595).
+     */
+    fonts: Array<HostFontWatch?> = arrayOfNulls(1),
+    /** False to draw field text through Compose's text, as a browser does. See [KiteDocViewState.hostTextOffMain]. */
+    hostLines: Boolean = hostTextAnyThread,
 ): Modifier {
     if (scripts == null || page !is PdfPage) return this
     return drawWithContent {
@@ -65,12 +72,15 @@ internal fun Modifier.kiteFormLayer(
         // Inside this scene's draw pass, as a Vectorized page draws, so field text draws here (#464).
         val base = ComposeCanvas(
             this, textMeasurer, hairlineWidthPx, skipSystemFontText = false, magnification = 1f, inSceneDrawPass = true,
+            hostLines = hostLines,
         )
         val canvas = theme?.wrap(base) ?: base
         failure.guard("form layer") {
             page.renderAnnotationsTo(canvas, deviceCtm, scripts.formState) {
                 it.subtype == PdfAnnotation.Subtype.Widget
             }
+            // Read in the draw, so a font that lands for characters drawn as boxes draws the fields again (#595).
+            fonts[0] = base.hostFontWatch()?.takeUnless { it.stale }
         }
     }
 }

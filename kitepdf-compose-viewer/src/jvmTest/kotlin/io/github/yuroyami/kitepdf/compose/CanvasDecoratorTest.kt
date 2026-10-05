@@ -199,15 +199,15 @@ class CanvasDecoratorTest {
             cache, page, 200, 200, Color.White, 1f, null, canvasDecorator = ink)
         val first = render(firstInk)
         val second = render(firstInk)
-        assertTrue(first.second)
-        assertFalse(second.second)
-        assertSame(first.first, second.first)
+        assertTrue(first.fresh)
+        assertFalse(second.fresh)
+        assertSame(first.bitmap, second.bitmap)
         val changed = render(Ink(yellow))
-        assertTrue(changed.second)
-        assertPaint(changed.first, Color.Yellow)
+        assertTrue(changed.fresh)
+        assertPaint(changed.bitmap, Color.Yellow)
         val plain = render(null)
-        assertTrue(plain.second)
-        assertEquals(Color.Red, plain.first.toPixelMap()[50, 100])
+        assertTrue(plain.fresh)
+        assertEquals(Color.Red, plain.bitmap.toPixelMap()[50, 100])
     }
 
     @Test
