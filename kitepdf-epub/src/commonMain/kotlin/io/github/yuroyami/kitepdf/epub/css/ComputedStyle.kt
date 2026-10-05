@@ -148,8 +148,11 @@ internal data class ComputedStyle(
     val radii: CornerRadii? = null,
     /** `box-shadow`, in the order the rule lists them, the first on top (#28). Not inherited. */
     val shadows: List<BoxShadow> = emptyList(),
-    /** The first `background-image` layer with its size, position and repeat, or null (#28). Not inherited. */
-    val backgroundLayer: CssBackgroundLayer? = null,
+    /**
+     * The layers of `background-image` that paint, each with its size, position and repeat, the
+     * first on top (#28, #503). Not inherited.
+     */
+    val backgroundLayers: List<CssBackgroundLayer> = emptyList(),
     /** `transform`, applied right to left, or null for none. It moves paint, not layout (#28). Not inherited. */
     val transform: List<CssTransform>? = null,
     /** `transform-origin`, x then y, in the border box. Not inherited. */

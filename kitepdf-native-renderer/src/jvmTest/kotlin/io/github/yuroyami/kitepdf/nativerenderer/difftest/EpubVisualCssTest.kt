@@ -184,9 +184,12 @@ class EpubVisualCssTest {
         val down = raster("""<div style="width:100px;height:200px;background-image:linear-gradient(#000000 25%, #ffffff)"></div>""")
         assertTrue(rgb(down, 80, 80).first < 20, "the top quarter is not black: ${rgb(down, 80, 80)}")
         assertTrue(rgb(down, 80, 190).first > 200, "the bottom is not white")
-        // Stops that differ in alpha do not paint.
+        // Stops that differ in alpha paint, blending premultiplied, so a fade from black to
+        // transparent over white reads as the ramp from black to white (#503).
         val fade = raster("""<div style="width:200px;height:50px;background-image:linear-gradient(to right, #000000, rgba(0,0,0,0))"></div>""")
-        assertColor(fade, 60, 60, 255, 255, 255, "a gradient with a fade")
+        assertColor(fade, 60, 60, 20, 20, 20, "near the opaque end of a fade", tol = 16)
+        assertColor(fade, 123, 60, 128, 128, 128, "the middle of a fade", tol = 16)
+        assertTrue(rgb(fade, 194, 60).first > 215, "the transparent end of a fade is not white: ${rgb(fade, 194, 60)}")
     }
 
     @Test

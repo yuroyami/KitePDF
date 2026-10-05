@@ -2324,11 +2324,11 @@ public class EpubPage internal constructor(
         }
 
         s.backgroundColor?.let { rectFill(canvas, ctm, xDev, yUp(botDoc), w, yUp(topDoc) - yUp(botDoc), it.color, it.alpha) }
-        if (s.backgroundLayer != null) {
-            // The layer is cut to the part of the box on this page, as the colour is.
+        if (s.backgroundLayers.isNotEmpty()) {
+            // The layers are cut to the part of the box on this page, as the colour is.
             val band = KitePath.Builder().apply { rectangle(xDev, yUp(botDoc), w, yUp(topDoc) - yUp(botDoc)) }.build()
             canvas.pushClip(band, ctm, evenOdd = false)
-            paintBackgroundLayer(box, canvas, ctm, xDev, yUp(box.bottom), xDev + w, yUp(box.y), null)
+            paintBackgroundLayers(box, canvas, ctm, xDev, yUp(box.bottom), xDev + w, yUp(box.y), null, yUp(botDoc), yUp(topDoc))
             canvas.popClip()
         }
 
@@ -2364,7 +2364,7 @@ public class EpubPage internal constructor(
                 val shape = KitePath.Builder().apply { roundedRect(left, bottom, right, top, radii) }.build()
                 canvas.fillPath(shape, ctm, bg.color, evenOdd = false, alpha = bg.alpha, blendMode = KiteBlendMode.Normal)
             }
-            paintBackgroundLayer(box, canvas, ctm, left, bottom, right, top, radii)
+            paintBackgroundLayers(box, canvas, ctm, left, bottom, right, top, radii, maxOf(bottom, yUp(bandBottom)), minOf(top, yUp(startY)))
             val eT = s.borderTop.effective; val eR = s.borderRight.effective
             val eB = s.borderBottom.effective; val eL = s.borderLeft.effective
             val edge = listOf(s.borderTop, s.borderRight, s.borderBottom, s.borderLeft).firstOrNull { it.effective > 0 }
@@ -2384,28 +2384,34 @@ public class EpubPage internal constructor(
     }
 
     /**
-     * [box]'s background image or gradient, over its colour and under its border. It is sized
-     * and placed in the padding box, repeated as the style asks, and cut to the border box, with
-     * that box's rounded corners [radii] (CSS Backgrounds 3, 3; #28). The box is from ([left],
-     * [bottom]) to ([right], [top]) in the page's y-up space.
+     * [box]'s background layers, over its colour and under its border, the first on top (#503).
+     * Each is sized and placed in the padding box, repeated as the style asks, and cut to the
+     * border box, with that box's rounded corners [radii] (CSS Backgrounds 3, 3; #28). The box
+     * is from ([left], [bottom]) to ([right], [top]) in the page's y-up space, and only its part
+     * from [visibleBottom] to [visibleTop] shows on this page, so tiles go there alone.
      */
-    private fun paintBackgroundLayer(
+    private fun paintBackgroundLayers(
         box: LayoutBox, canvas: KiteCanvas, ctm: KiteMatrix,
         left: Double, bottom: Double, right: Double, top: Double, radii: DoubleArray?,
+        visibleBottom: Double, visibleTop: Double,
     ) {
-        val layer = box.style.backgroundLayer ?: return
+        val layers = box.style.backgroundLayers
+        if (layers.isEmpty()) return
         val s = box.style
         val pl = left + s.borderLeft.effective
         val pr = right - s.borderRight.effective
         val pt = top - s.borderTop.effective
         val pb = bottom + s.borderBottom.effective
         if (pr <= pl || pt <= pb) return
+        val area = BackgroundArea(left, right, maxOf(bottom, visibleBottom), minOf(top, visibleTop), pl, pb, pr, pt)
+        if (area.visibleTop <= area.visibleBottom) return
         val border = KitePath.Builder().apply { roundedRect(left, bottom, right, top, radii) }.build()
         canvas.pushClip(border, ctm, evenOdd = false)
         try {
-            when (val image = layer.image) {
-                is CssBackgroundImage.LinearGradient -> paintGradient(canvas, ctm, image, pl, pb, pr, pt, border)
-                is CssBackgroundImage.Url -> paintBackgroundImage(canvas, ctm, layer, image.url, left, bottom, right, top, pl, pb, pr, pt)
+            // The first layer is on top, so the last paints first.
+            for (layer in layers.asReversed()) when (val image = layer.image) {
+                is CssBackgroundImage.LinearGradient -> paintGradientLayer(canvas, ctm, layer, image, s.color, area)
+                is CssBackgroundImage.Url -> paintBackgroundImage(canvas, ctm, layer, image.url, area)
             }
         } finally {
             canvas.popClip()
@@ -2413,15 +2419,45 @@ public class EpubPage internal constructor(
     }
 
     /**
-     * A background picture in the padding box from ([pl], [pb]) to ([pr], [pt]), tiled over the
-     * border box from ([left], [bottom]) to ([right], [top]) when it repeats. A size of auto is
-     * the picture's own, in CSS pixels.
+     * Where a box's background layers go, in the page's y-up space: the border box across, from
+     * [left] to [right], the part of it on this page, from [visibleBottom] to [visibleTop], and
+     * the padding box, from ([pl], [pb]) to ([pr], [pt]), which places and sizes the layers.
      */
-    private fun paintBackgroundImage(
-        canvas: KiteCanvas, ctm: KiteMatrix, layer: CssBackgroundLayer, url: String,
-        left: Double, bottom: Double, right: Double, top: Double,
-        pl: Double, pb: Double, pr: Double, pt: Double,
+    private class BackgroundArea(
+        val left: Double, val right: Double, val visibleBottom: Double, val visibleTop: Double,
+        val pl: Double, val pb: Double, val pr: Double, val pt: Double,
     ) {
+        val width: Double get() = pr - pl
+        val height: Double get() = pt - pb
+
+        /**
+         * The tiles of [layer], [tw] by [th], that meet the visible part of the box, as the left
+         * edges of their columns and the tops of their rows. A layer that does not repeat on an
+         * axis has one there. Null past [MAX_BACKGROUND_TILES].
+         */
+        fun tiles(layer: CssBackgroundLayer, tw: Double, th: Double): Pair<List<Double>, List<Double>>? {
+            // A percentage lines that point of the tile up with that point of the area. CSS y runs down.
+            val x0 = pl + (if (layer.x.percent) (width - tw) * layer.x.value else layer.x.value)
+            val top0 = pt - (if (layer.y.percent) (height - th) * layer.y.value else layer.y.value)
+            fun starts(origin: Double, step: Double, from: Double, to: Double, repeat: Boolean): List<Double> {
+                if (!repeat) return listOf(origin)
+                var first = origin - kotlin.math.ceil((origin - from) / step) * step
+                val out = ArrayList<Double>()
+                while (first < to && out.size < MAX_BACKGROUND_TILES) { out += first; first += step }
+                return out
+            }
+            val xs = starts(x0, tw, left, right, layer.repeatX)
+            // Tops of the rows, from the top of the visible part down.
+            val tops = starts(-top0, th, -visibleTop, -visibleBottom, layer.repeatY).map { -it }
+            return if (xs.size * tops.size > MAX_BACKGROUND_TILES) null else xs to tops
+        }
+    }
+
+    /**
+     * A background picture, sized from its own size in CSS pixels where `background-size` says
+     * auto, and tiled over the visible part of the box when it repeats.
+     */
+    private fun paintBackgroundImage(canvas: KiteCanvas, ctm: KiteMatrix, layer: CssBackgroundLayer, url: String, area: BackgroundArea) {
         // A stylesheet's url is absolute already, with a leading slash; a style attribute's is the document's.
         val path = EpubDocument.resolvePath(doc.chapterDir(chapter), url)
         val picture = doc.paintPicture(path, chapter)
@@ -2430,8 +2466,8 @@ public class EpubPage internal constructor(
         val iw = (svg?.width ?: image?.width?.toDouble() ?: return) * CSS_PX
         val ih = (svg?.height ?: image?.height?.toDouble() ?: return) * CSS_PX
         if (iw <= 0.0 || ih <= 0.0) return
-        val areaW = pr - pl
-        val areaH = pt - pb
+        val areaW = area.width
+        val areaH = area.height
         val size = layer.size
         val (tw, th) = when {
             size.cover -> maxOf(areaW / iw, areaH / ih).let { iw * it to ih * it }
@@ -2448,61 +2484,129 @@ public class EpubPage internal constructor(
             }
         }
         if (tw <= 0.0 || th <= 0.0 || !tw.isFinite() || !th.isFinite()) return
-        // A percentage lines that point of the picture up with that point of the area. CSS y runs down.
-        val x0 = pl + (if (layer.x.percent) (areaW - tw) * layer.x.value else layer.x.value)
-        val top0 = pt - (if (layer.y.percent) (areaH - th) * layer.y.value else layer.y.value)
-        fun starts(origin: Double, step: Double, from: Double, to: Double, repeat: Boolean): List<Double> {
-            if (!repeat) return listOf(origin)
-            var first = origin - kotlin.math.ceil((origin - from) / step) * step
-            val out = ArrayList<Double>()
-            while (first < to && out.size < MAX_BACKGROUND_TILES) { out += first; first += step }
-            return out
-        }
-        val xs = starts(x0, tw, left, right, layer.repeatX)
-        // Tops of the rows, from the top of the box down.
-        val tops = starts(-top0, th, -top, -bottom, layer.repeatY).map { -it }
-        if (xs.size * tops.size > MAX_BACKGROUND_TILES) return
+        val (xs, tops) = area.tiles(layer, tw, th) ?: return
         for (x in xs) for (t in tops) {
             paintImage(canvas, ctm, image, svg, tw, th, x, t - th, ObjectFit.FILL, path.substringBeforeLast('/', ""))
         }
     }
 
     /**
-     * A `linear-gradient` over the padding box from ([pl], [pb]) to ([pr], [pt]), through the
-     * canvas's axial shading, inside [clip]. A gradient whose stops differ in alpha does not paint,
-     * since the shading has no alpha of its own; stops that share one alpha paint at it.
+     * A `linear-gradient` layer, tiled by its `background-size` (#503). A gradient has no size of
+     * its own, so an auto side, `cover` and `contain` take the area's (CSS Backgrounds 3, 3.9).
+     * A `currentColor` stop takes [current], the colour of the box.
      */
-    private fun paintGradient(
-        canvas: KiteCanvas, ctm: KiteMatrix, gradient: CssBackgroundImage.LinearGradient,
-        pl: Double, pb: Double, pr: Double, pt: Double, clip: KitePath,
+    private fun paintGradientLayer(
+        canvas: KiteCanvas, ctm: KiteMatrix, layer: CssBackgroundLayer,
+        gradient: CssBackgroundImage.LinearGradient, current: RgbColor, area: BackgroundArea,
     ) {
-        val alpha = gradient.stops.first().alpha
-        if (gradient.stops.any { kotlin.math.abs(it.alpha - alpha) > 1e-6 } || alpha <= 0.0) return
-        val w = pr - pl
-        val h = pt - pb
+        val size = layer.size
+        val whole = size.cover || size.contain
+        val tw = if (whole) area.width else size.width?.resolve(area.width) ?: area.width
+        val th = if (whole) area.height else size.height?.resolve(area.height) ?: area.height
+        if (!(tw > 0.0) || !(th > 0.0) || !tw.isFinite() || !th.isFinite()) return
+        val (xs, tops) = area.tiles(layer, tw, th) ?: return
+        for (x in xs) for (t in tops) paintGradientTile(canvas, ctm, gradient, current, x, t - th, x + tw, t)
+    }
+
+    /**
+     * One tile of a `linear-gradient`, from ([x0], [y0]) to ([x1], [y1]) in y-up space. Stops of
+     * one alpha paint as one axial shading at that alpha. The shading has no alpha of its own, so
+     * stops that differ in alpha paint in bands across the gradient line: a band between stops of
+     * one alpha is a shading or a solid fill, and one whose alpha changes is a run of thin solid
+     * strips, each of the colour the stops blend to there in premultiplied space, as CSS Images 3,
+     * 3.5.3 says, so a fade to `transparent` keeps its colour (#503).
+     */
+    private fun paintGradientTile(
+        canvas: KiteCanvas, ctm: KiteMatrix, gradient: CssBackgroundImage.LinearGradient, current: RgbColor,
+        x0: Double, y0: Double, x1: Double, y1: Double,
+    ) {
+        val w = x1 - x0
+        val h = y1 - y0
         val radians = gradient.angleFor(w, h) * kotlin.math.PI / 180.0
         val sin = kotlin.math.sin(radians)
         val cos = kotlin.math.cos(radians)
         // CSS Images 3, 3.1.1: the line runs through the centre, long enough that its ends touch the corners.
         val length = kotlin.math.abs(w * sin) + kotlin.math.abs(h * cos)
         if (length <= 0.0) return
-        val cx = (pl + pr) / 2
-        val cy = (pb + pt) / 2
-        // 0 degrees points up, and y runs up here.
-        val coords = doubleArrayOf(cx - sin * length / 2, cy - cos * length / 2, cx + sin * length / 2, cy + cos * length / 2)
-        val shading = KiteShading.Axial(
-            KiteColorSpace.DeviceRGB, background = null, bbox = null, coords = coords, domain = doubleArrayOf(0.0, 1.0),
-            function = gradientFunction(gradient.stops, length) ?: return, extendStart = true, extendEnd = true,
-        )
-        canvas.fillShading(shading, ctm, clip, alpha = alpha, blendMode = KiteBlendMode.Normal)
+        // 0 degrees points up, and y runs up here. The line starts at (sx, sy).
+        val sx = (x0 + x1) / 2 - sin * length / 2
+        val sy = (y0 + y1) / 2 - cos * length / 2
+        fun along(t: Double) = doubleArrayOf(sx + sin * length * t, sy + cos * length * t)
+        val stops = gradient.stops
+        val colors = stops.map { it.color ?: current }
+        val at = stopPositions(stops, length)
+        val alpha = stops.first().alpha
+        val tile = KitePath.Builder().apply { rectangle(x0, y0, w, h) }.build()
+        if (stops.all { kotlin.math.abs(it.alpha - alpha) <= 1e-6 }) {
+            if (alpha <= 0.0) return
+            val shading = KiteShading.Axial(
+                KiteColorSpace.DeviceRGB, background = null, bbox = null, coords = along(0.0) + along(1.0), domain = doubleArrayOf(0.0, 1.0),
+                function = gradientFunction(colors, at) ?: return, extendStart = true, extendEnd = true,
+            )
+            canvas.fillShading(shading, ctm, tile, alpha = alpha, blendMode = KiteBlendMode.Normal)
+            return
+        }
+        // The part of the tile between t0 and t1 along the line: a strip across the line, cut to the tile.
+        fun band(t0: Double, t1: Double): KitePath? {
+            val reach = w + h
+            val a = along(t0)
+            val b = along(t1)
+            val corners = listOf(
+                a[0] + cos * reach to a[1] - sin * reach, b[0] + cos * reach to b[1] - sin * reach,
+                b[0] - cos * reach to b[1] + sin * reach, a[0] - cos * reach to a[1] + sin * reach,
+            )
+            val cut = clipToRect(corners, x0, y0, x1, y1)
+            if (cut.size < 3) return null
+            return KitePath.Builder().apply {
+                moveTo(cut[0].first, cut[0].second)
+                for (k in 1 until cut.size) lineTo(cut[k].first, cut[k].second)
+                close()
+            }.build()
+        }
+        fun solid(t0: Double, t1: Double, color: RgbColor, a: Double) {
+            if (a <= 0.0 || t1 - t0 <= 1e-9) return
+            band(t0, t1)?.let { canvas.fillPath(it, ctm, color, evenOdd = false, alpha = a, blendMode = KiteBlendMode.Normal) }
+        }
+        // Before the first stop and after the last, the colour stays flat.
+        solid(0.0, at.first(), colors.first(), stops.first().alpha)
+        for (k in 0 until stops.lastIndex) {
+            val t0 = at[k]
+            val t1 = at[k + 1]
+            if (t1 - t0 <= 1e-9) continue
+            val c0 = colors[k]
+            val c1 = colors[k + 1]
+            val a0 = stops[k].alpha
+            val a1 = stops[k + 1].alpha
+            if (kotlin.math.abs(a0 - a1) <= 1e-6) {
+                if (a0 <= 0.0) continue
+                if (c0 == c1) { solid(t0, t1, c0, a0); continue }
+                val path = band(t0, t1) ?: continue
+                val shading = KiteShading.Axial(
+                    KiteColorSpace.DeviceRGB, background = null, bbox = null, coords = along(t0) + along(t1), domain = doubleArrayOf(0.0, 1.0),
+                    function = KiteFunction.Type2(doubleArrayOf(0.0, 1.0), null, doubleArrayOf(c0.r, c0.g, c0.b), doubleArrayOf(c1.r, c1.g, c1.b), 1.0),
+                    extendStart = true, extendEnd = true,
+                )
+                canvas.fillShading(shading, ctm, path, alpha = a0, blendMode = KiteBlendMode.Normal)
+                continue
+            }
+            val strips = kotlin.math.ceil((t1 - t0) * length / GRADIENT_STRIP_PT).toInt().coerceIn(2, MAX_GRADIENT_STRIPS)
+            for (i in 0 until strips) {
+                val f = (i + 0.5) / strips
+                val a = a0 + (a1 - a0) * f
+                if (a <= 0.0) continue
+                fun mix(v0: Double, v1: Double) = ((v0 * a0 * (1 - f) + v1 * a1 * f) / a).coerceIn(0.0, 1.0)
+                solid(t0 + (t1 - t0) * i / strips, t0 + (t1 - t0) * (i + 1) / strips, RgbColor(mix(c0.r, c1.r), mix(c0.g, c1.g), mix(c0.b, c1.b)), a)
+            }
+        }
+        solid(at.last(), 1.0, colors.last(), stops.last().alpha)
     }
 
     /**
-     * The colour of the gradient along its line, from 0 to 1: a straight blend between each
-     * pair of stops. A stop without a position sits halfway between its neighbours that have one,
-     * and no stop goes back before the one before it (CSS Images 3, 3.5.3).
+     * Where each stop sits along the gradient line, from 0 to 1 (and past them for a stop outside
+     * the line): a stop without a position halfway between its neighbours that have one, and no
+     * stop before the one before it (CSS Images 3, 3.5.3).
      */
-    private fun gradientFunction(stops: List<GradientStop>, length: Double): KiteFunction? {
+    private fun stopPositions(stops: List<GradientStop>, length: Double): DoubleArray {
         val positions = arrayOfNulls<Double>(stops.size)
         for ((i, stop) in stops.withIndex()) positions[i] = stop.position?.resolve(length)?.div(length)
         if (positions[0] == null) positions[0] = 0.0
@@ -2521,12 +2625,16 @@ public class EpubPage internal constructor(
             i++
         }
         var max = Double.NEGATIVE_INFINITY
-        val at = DoubleArray(stops.size) { k -> maxOf(positions[k]!!, max).also { max = it } }
+        return DoubleArray(stops.size) { k -> maxOf(positions[k]!!, max).also { max = it } }
+    }
+
+    /** The colour of the gradient along its line, from 0 to 1: a straight blend between each pair of [colors], at [at]. */
+    private fun gradientFunction(colors: List<RgbColor>, at: DoubleArray): KiteFunction? {
         // The function runs over 0 to 1: the colour before the first stop and after the last stays flat.
         val points = ArrayList<Pair<Double, RgbColor>>()
-        if (at.first() > 0.0) points += 0.0 to stops.first().color
-        for (k in stops.indices) points += at[k].coerceIn(0.0, 1.0) to stops[k].color
-        if (at.last() < 1.0) points += 1.0 to stops.last().color
+        if (at.first() > 0.0) points += 0.0 to colors.first()
+        for (k in colors.indices) points += at[k].coerceIn(0.0, 1.0) to colors[k]
+        if (at.last() < 1.0) points += 1.0 to colors.last()
         if (points.size < 2) return null
         fun rgb(c: RgbColor) = doubleArrayOf(c.r, c.g, c.b)
         val segments = (0 until points.size - 1).map { k ->
@@ -2989,6 +3097,38 @@ private const val BACKGROUND_BYTES = 32L * 1024 * 1024
 
 /** The most copies of a repeated background picture one box paints; a pattern of tiny tiles draws none. */
 private const val MAX_BACKGROUND_TILES = 4096
+
+/** How wide, in points, each strip of a gradient's alpha fade is at most, up to [MAX_GRADIENT_STRIPS] of them (#503). */
+private const val GRADIENT_STRIP_PT = 2.0
+
+/** The most strips one alpha fade of a gradient paints in. */
+private const val MAX_GRADIENT_STRIPS = 64
+
+/** The convex polygon [points] cut to the rectangle from ([x0], [y0]) to ([x1], [y1]), one edge at a time (Sutherland and Hodgman). */
+private fun clipToRect(points: List<Pair<Double, Double>>, x0: Double, y0: Double, x1: Double, y1: Double): List<Pair<Double, Double>> {
+    var poly = points
+    // Each edge keeps the points where inside(p) holds, and cuts the polygon where it crosses the edge.
+    fun cut(inside: (Pair<Double, Double>) -> Boolean, cross: (Pair<Double, Double>, Pair<Double, Double>) -> Pair<Double, Double>) {
+        if (poly.isEmpty()) return
+        val out = ArrayList<Pair<Double, Double>>()
+        for (k in poly.indices) {
+            val p = poly[k]
+            val q = poly[(k + 1) % poly.size]
+            val pin = inside(p)
+            val qin = inside(q)
+            if (pin) out += p
+            if (pin != qin) out += cross(p, q)
+        }
+        poly = out
+    }
+    fun atX(p: Pair<Double, Double>, q: Pair<Double, Double>, x: Double) = x to p.second + (q.second - p.second) * (x - p.first) / (q.first - p.first)
+    fun atY(p: Pair<Double, Double>, q: Pair<Double, Double>, y: Double) = p.first + (q.first - p.first) * (y - p.second) / (q.second - p.second) to y
+    cut({ it.first >= x0 }) { p, q -> atX(p, q, x0) }
+    cut({ it.first <= x1 }) { p, q -> atX(p, q, x1) }
+    cut({ it.second >= y0 }) { p, q -> atY(p, q, y0) }
+    cut({ it.second <= y1 }) { p, q -> atY(p, q, y1) }
+    return poly
+}
 
 /** Points in a CSS pixel. */
 private const val CSS_PX = 0.75
