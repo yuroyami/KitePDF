@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An `<iframe>` in a chapter shows the document of the book that it names, laid out at the
+  frame's size, and the document's scripts run in a window of their own. That window has the
+  book's origin and `navigator.epubReadingSystem`, and its `parent` is itself, so it cannot change
+  the chapter or the frame's size. A tap on a frame goes to its document, and a chapter whose
+  frames run scripts counts as scripted. Five more W3C EPUB tests pass. Before this change, a
+  frame's box stayed empty and its scripts never ran (#528).
+
 - An `<img>` in a book's scripts loads its picture as in a browser: `load` and `error` fire, and
   `complete`, `naturalWidth`, `naturalHeight` and `decode()` follow the load. A canvas draws an
   image once it has loaded, and throws for a broken one. Before this change, every image was

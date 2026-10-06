@@ -2,12 +2,14 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.css.CssTransform
 import io.github.yuroyami.kitepdf.epub.css.FormValues
@@ -37,6 +39,11 @@ import kotlin.math.roundToLong
  * in-memory `localStorage` for the book. They run the first time the chapter opens, in document
  * order, and a script that changes the chapter has it laid out again from the changed tree once
  * the script returns, with the pages that it gains or loses.
+ *
+ * The document that an `iframe` of a chapter shows from the book is a window of its own too, with
+ * an engine from [engineFor] for the chapter, opened and closed with the chapter's (#528). Its
+ * `parent` is itself, so its scripts cannot reach the chapter. With [liveChapters] at one, frames
+ * run no script, since their engines would share the thread with the chapter's.
  *
  * Nothing a script does reaches outside the book: there is no `fetch` or `XMLHttpRequest`, a
  * script at an address outside the book does not run, and a change of `location` goes to
@@ -99,7 +106,10 @@ public class EpubScriptSession(
     private val now: () -> Long = clock ?: { started.elapsedNow().inWholeMilliseconds }
 
     /** The chapters whose scripts run, the one used least recently first. */
-    private val chapters = LinkedHashMap<Int, ChapterScripts>()
+    private val chapters = LinkedHashMap<Int, ChapterWindows>()
+
+    /** The key of the next frame's window in the book's blob URL store, below every chapter's (#528). */
+    private var nextFrameKey = -1
 
     private val lock = KiteLock()
     private val timerListeners = ArrayList<() -> Unit>()
@@ -136,23 +146,40 @@ public class EpubScriptSession(
     override val hasTimers: Boolean get() = timersWaiting
 
     override fun chapterOpened(chapter: Int) {
-        open(chapter)?.followFragment()
+        open(chapter)?.main?.followFragment()
     }
 
     override fun tap(page: EpubPage, x: Double, y: Double): Boolean {
         if (!page.document.sharesBookWith(document)) return false
-        val scripts = open(page.chapter) ?: return false
-        val target = page.elementAt(x, y)?.let { scripts.dom.fromLayout[it] }
+        val windows = open(page.chapter) ?: return false
+        // A tap on a frame goes to the frame's document, at the point inside the frame (#528).
+        var scripts = windows.main
+        var at = page
+        var px = x
+        var py = y
+        for (embed in page.embeds) {
+            if (embed.kind != EpubEmbedKind.FRAME || x < embed.rect.left || x > embed.rect.right || y < embed.rect.bottom || y > embed.rect.top) continue
+            val path = embed.href.substringBefore('#')
+            val frame = windows.frames[path] ?: break
+            val (w, h) = document.frameViewportOf(page.chapter, path)
+            at = document.framePage(page.chapter, path, w, h) ?: break
+            scripts = frame
+            px = x - embed.rect.left
+            py = y - embed.rect.bottom
+            break
+        }
+        if (scripts == null) return false
+        val target = at.elementAt(px, py)?.let { scripts.dom.fromLayout[it] }
             ?: scripts.dom.root.children.firstOrNull { it is KiteXmlNode.Element }
             ?: scripts.dom.root
-        val prevented = scripts.steps("tap", "__kite_tap(${scripts.dom.idOf(target)}, ${x / PT_PER_PX}, ${y / PT_PER_PX})") == "true"
+        val prevented = scripts.steps("tap", "__kite_tap(${scripts.dom.idOf(target)}, ${px / PT_PER_PX}, ${py / PT_PER_PX})") == "true"
         scripts.commit()
         return prevented
     }
 
     override fun pumpTimers(nowMillis: Long): Long? {
         var next: Long? = null
-        for (scripts in chapters.values.toList()) {
+        for (scripts in chapters.values.flatMap { it.all }) {
             if (scripts.timers == 0) continue
             scripts.steps("timers", "__kite_pump(${now()})")
             val wait = scripts.call("timers") { scripts.engine.evaluate("__kite_wait()", "timers")?.toDoubleOrNull() }
@@ -181,7 +208,7 @@ public class EpubScriptSession(
     public fun unloadChapters() {
         if (closed || chapters.isEmpty()) return
         val hadTimers = chapters.values.any { it.timers > 0 }
-        for (scripts in chapters.values) scripts.close()
+        for (windows in chapters.values) windows.close()
         chapters.clear()
         if (hadTimers) timersChanged()
     }
@@ -190,23 +217,28 @@ public class EpubScriptSession(
     override fun close() {
         if (closed) return
         closed = true
-        for (scripts in chapters.values) scripts.close()
+        for (windows in chapters.values) windows.close()
         chapters.clear()
         timersWaiting = false
     }
 
     /**
-     * [chapter]'s scripts, run the first time and after its engine was closed to make room;
-     * null for a chapter the book does not have or that has no scripts, which takes no engine
-     * and leaves the others open. The chapter becomes the one used last.
+     * [chapter]'s windows, its own and its frames', run the first time and after their engines
+     * were closed to make room; null for a chapter the book does not have or where no script
+     * runs, which takes no engine and leaves the others open. The chapter becomes the one used last.
      */
-    private fun open(chapter: Int): ChapterScripts? {
+    private fun open(chapter: Int): ChapterWindows? {
         check(!closed) { "the script session is closed" }
-        if (chapter !in 0 until document.chapterCount || !document.isScripted(chapter)) return null
-        chapters.remove(chapter)?.let { scripts ->
-            chapters[chapter] = scripts
-            return scripts
+        if (chapter !in 0 until document.chapterCount) return null
+        chapters.remove(chapter)?.let { windows ->
+            chapters[chapter] = windows
+            return windows
         }
+        if (!document.isScripted(chapter)) return null
+        val scripted = document.hasOwnScripts(chapter)
+        // A frame needs an engine beside its chapter's, which an engine that cannot share its thread does not allow.
+        val frames = if (liveChapters > 1) document.scriptedFramesOf(chapter) else emptyList()
+        if (!scripted && frames.isEmpty()) return null
         // Room first: an engine that cannot share its thread opens only once the other has closed.
         var dropped = false
         while (chapters.size >= liveChapters) {
@@ -214,10 +246,24 @@ public class EpubScriptSession(
             chapters.remove(eldest)?.let { if (it.timers > 0) dropped = true; it.close() }
         }
         if (dropped) timersChanged()
-        val scripts = ChapterScripts(chapter)
-        chapters[chapter] = scripts
-        scripts.start()
-        return scripts
+        val windows = ChapterWindows(chapter)
+        chapters[chapter] = windows
+        // A frame's document loads before the load event of the document around it (HTML, 4.8.5).
+        // Each window is in place before it starts, so the timers it sets count.
+        val startFrames = {
+            for (path in frames) ChapterScripts(chapter, path).also { windows.frames[path] = it }.start()
+        }
+        if (scripted) ChapterScripts(chapter).also { windows.main = it }.start(beforeLoad = startFrames) else startFrames()
+        return windows
+    }
+
+    /** The windows of one chapter: its own, when its document has scripts, and its frames' (#528). */
+    private inner class ChapterWindows(val chapter: Int) {
+        var main: ChapterScripts? = null
+        val frames = LinkedHashMap<String, ChapterScripts>()
+        val all: List<ChapterScripts> get() = listOfNotNull(main) + frames.values
+        val timers: Int get() = all.sumOf { it.timers }
+        fun close() = all.forEach { it.close() }
     }
 
     private fun recordFailure(failure: KiteScriptException) {
@@ -235,35 +281,63 @@ public class EpubScriptSession(
         lock.withLock { navigationListeners.toList() }.forEach { it(href) }
     }
 
-    /** One chapter's window: its engine, its live tree and what binds the two. */
-    private inner class ChapterScripts(val chapter: Int) {
+    /**
+     * One window: its engine, its live tree and what binds the two. The window of a chapter, or,
+     * with a [frame], of the document at that path that a frame of the chapter shows (#528). A
+     * frame's window has the book's origin and a tree of its own: its `parent` and `top` are
+     * itself, so its scripts cannot reach the chapter around it, as EPUB 3.3 says of a
+     * container-constrained script.
+     */
+    private inner class ChapterScripts(val chapter: Int, val frame: String? = null) {
+        /** How a failure names this window. */
+        val label: String = if (frame == null) "chapter $chapter" else "chapter $chapter, frame $frame"
+
+        /** The zip path of the window's document, and its folder. */
+        val path: String = frame ?: document.chapterPath(chapter)
+        val dir: String = frame?.substringBeforeLast('/', "") ?: document.chapterDir(chapter)
+
+        /** Who owns the blob URLs this window's scripts make: the chapter, or a key of the frame's own. */
+        val blobKey: Int = if (frame == null) chapter else nextFrameKey--
+
         /** Null when it would not open, so nothing runs here. */
         private val opened: KiteScriptEngine? = try {
             engineFor(chapter)
         } catch (failure: Exception) {
-            recordFailure(KiteScriptException("chapter $chapter: the engine did not open: ${failure.message}", failure))
+            recordFailure(KiteScriptException("$label: the engine did not open: ${failure.message}", failure))
             null
         }
         val engine: KiteScriptEngine get() = checkNotNull(opened)
-        /** The chapter's media type, which makes its document an HTML or an XML one (#541). */
-        val contentType: String = document.resourceType(document.chapterPath(chapter))?.lowercase() ?: "application/xhtml+xml"
-        val dom = ScriptDom(document.sourceChapterTree(chapter), html = contentType == "text/html", markup = document.chapterText(chapter))
+        /** The document's media type, which makes it an HTML or an XML one (#541). */
+        val contentType: String = document.resourceType(path)?.lowercase() ?: "application/xhtml+xml"
+        val dom = ScriptDom(
+            if (frame == null) document.sourceChapterTree(chapter) else checkNotNull(document.frameSourceTree(frame)),
+            html = contentType == "text/html",
+            markup = if (frame == null) document.chapterText(chapter) else document.frameText(frame),
+        )
+
+        private fun styleOf(el: KiteXmlNode.Element): ComputedStyle =
+            if (frame == null) document.scriptStyleOf(chapter, el) else document.frameStyleOf(chapter, frame, el)
+
+        private fun boundsOf(laid: KiteXmlNode.Element): KiteRectangle? =
+            if (frame == null) document.scriptBoundsOf(chapter, laid) else document.frameBoundsOf(chapter, frame, laid)
+
+        private fun usesTarget(): Boolean = if (frame == null) document.usesTarget(chapter) else document.frameUsesTarget(chapter, frame)
 
         /** The canvases of the chapter's scripts and what they drew (#501). */
         val canvases = CanvasHost(
             nodeOf = { dom.node(it) },
             currentColor = { el ->
                 if (!dom.isConnected(el)) CanvasColor.BLACK
-                else document.scriptStyleOf(chapter, el).color.let { c ->
+                else styleOf(el).color.let { c ->
                     CanvasColor((c.r * 255).roundToInt(), (c.g * 255).roundToInt(), (c.b * 255).roundToInt(), 255)
                 }
             },
-            fontBase = { el -> if (dom.isConnected(el)) document.scriptStyleOf(chapter, el).fontSizePt / PT_PER_PX else 10.0 },
+            fontBase = { el -> if (dom.isConnected(el)) styleOf(el).fontSizePt / PT_PER_PX else 10.0 },
             imageOf = ::canvasImage,
             isHtml = ::isHtml,
             changed = { dom.dirty = true },
             images = document.canvasImages,
-            load = { href -> document.svgResource(document.chapterDir(chapter), href, chapter) },
+            load = { href -> document.svgResource(dir, href, chapter) },
             fontOutlines = fontOutlines,
         )
 
@@ -284,7 +358,7 @@ public class EpubScriptSession(
             }?.trim()?.takeIf { it.isNotEmpty() } ?: return null
             val size = imageSizes.getOrPut(href) {
                 val bytes = if (KiteDataUrl.isDataUrl(href)) KiteDataUrl.decode(href)?.bytes
-                else document.svgResource(document.chapterDir(chapter), href, chapter)
+                else document.svgResource(dir, href, chapter)
                 bytes?.let { b ->
                     KiteImageData.fromEncodedImage(b)?.let { it.width.toDouble() to it.height.toDouble() }
                         ?: SvgImage.parse(b)?.let { it.width to it.height }
@@ -296,19 +370,19 @@ public class EpubScriptSession(
         /** The timers and frames its scripts wait on. */
         var timers = 0
 
-        /** The fragment of the chapter's URL, which the book's document keeps for the chapter (#550). */
-        private var fragment: String? = document.fragmentOf(chapter)
+        /** The fragment of the document's URL, which the book's document keeps for a chapter (#550). */
+        private var fragment: String? = if (frame == null) document.fragmentOf(chapter) else null
 
-        private var holdsTree = true
+        private var holdsTree = frame == null
 
         init {
-            document.holdTree(chapter, true)
+            if (holdsTree) document.holdTree(chapter, true)
             dom.attributeSet = canvases::attributeSet
             dom.canvasContent = { el -> if (isHtml(el, "canvas")) canvases.svgOf(el) else null }
         }
 
         /** The chapter's URL, with its fragment. */
-        fun location(): String = "$origin/" + document.chapterPath(chapter) + (fragment?.let { "#$it" } ?: "")
+        fun location(): String = "$origin/" + path + (fragment?.let { "#$it" } ?: "")
 
         /**
          * Moves to [to], a fragment of this chapter, as navigating to a fragment does (HTML, 7.4.6.4):
@@ -318,8 +392,8 @@ public class EpubScriptSession(
         fun moveToFragment(to: String): String {
             val old = location()
             fragment = normalizedFragment(to)
-            document.setFragment(chapter, to)
-            dom.retarget(fragment, restyle = document.usesTarget(chapter))
+            if (frame == null) document.setFragment(chapter, to)
+            dom.retarget(fragment, restyle = usesTarget())
             return old
         }
 
@@ -328,6 +402,7 @@ public class EpubScriptSession(
          * the scripts get `popstate`, then `hashchange` as a task (#550).
          */
         fun followFragment() {
+            if (frame != null) return
             val reached = document.fragmentOf(chapter) ?: return
             if (reached == fragment) return
             val old = moveToFragment(reached)
@@ -347,7 +422,7 @@ public class EpubScriptSession(
             return try {
                 block()
             } catch (failure: KiteScriptException) {
-                recordFailure(KiteScriptException("chapter $chapter, $what: ${failure.message}", failure))
+                recordFailure(KiteScriptException("$label, $what: ${failure.message}", failure))
                 null
             }
         }
@@ -370,22 +445,27 @@ public class EpubScriptSession(
          */
         fun commit() {
             val tree = if (dom.dirty) dom.snapshot() else null
-            if (tree != null) document.replaceChapterTree(chapter, tree)
-            document.blobUrls.settle(chapter, tree)
+            if (tree != null) {
+                if (frame == null) document.replaceChapterTree(chapter, tree) else document.replaceFrameTree(chapter, frame, tree)
+            }
+            document.blobUrls.settle(blobKey, tree)
         }
 
         /** Closes the engine, which revokes the blob URLs its scripts made, as a browser does when a page unloads (#533). */
         fun close() {
             if (holdsTree) { holdsTree = false; document.holdTree(chapter, false) }
             runCatching { opened?.close() }
-            document.blobUrls.closeChapter(chapter)
+            document.blobUrls.closeChapter(blobKey)
         }
 
-        fun start() {
-            // The layout shows what scripts made of the chapter before, so it takes this run's
+        /** Runs the document's scripts, then [beforeLoad], then the load event. */
+        fun start(beforeLoad: () -> Unit = {}) {
+            // The layout shows what scripts made of the document before, so it takes this run's
             // tree even when the scripts change nothing.
-            if (document.chapterVersionOf(chapter) > 0) dom.dirty = true
+            val version = if (frame == null) document.chapterVersionOf(chapter) else document.frameVersionOf(chapter, frame)
+            if (version > 0) dom.dirty = true
             if (!usable) {
+                beforeLoad()
                 commit()
                 return
             }
@@ -394,8 +474,9 @@ public class EpubScriptSession(
                 engine.evaluate(DOM_PRELUDE, "kitepdf-dom.js")
             } catch (failure: KiteScriptException) {
                 // Without its DOM no script of the chapter can run, so none is tried.
-                recordFailure(KiteScriptException("chapter $chapter: the DOM did not start: ${failure.message}", failure))
+                recordFailure(KiteScriptException("$label: the DOM did not start: ${failure.message}", failure))
                 usable = false
+                beforeLoad()
                 commit()
                 return
             }
@@ -413,6 +494,7 @@ public class EpubScriptSession(
             walk(dom.root)
             if (handlers.isNotEmpty()) call("markup") { engine.evaluate("__kite_markup([${handlers.joinToString(",")}])", "markup") }
             for ((script, reached) in scripts) runScript(script, reached)
+            beforeLoad()
             steps("load", "__kite_loaded()")
             commit()
         }
@@ -449,19 +531,19 @@ public class EpubScriptSession(
             if (type.isNotEmpty() && type !in SCRIPT_TYPES) return
             val src = dom.attr(script, "src")?.trim()
             val (name, source) = if (!src.isNullOrEmpty()) {
-                val path = EpubDocument.resolvePath(document.chapterDir(chapter), src)
-                if (isRemoteUrl(path)) {
-                    recordFailure(KiteScriptException("chapter $chapter: $src is outside the book, so it does not run"))
+                val at = EpubDocument.resolvePath(dir, src)
+                if (isRemoteUrl(at)) {
+                    recordFailure(KiteScriptException("$label: $src is outside the book, so it does not run"))
                     return
                 }
-                val bytes = document.resource(path)
+                val bytes = document.resource(at)
                 if (bytes == null) {
-                    recordFailure(KiteScriptException("chapter $chapter: $src is not in the book"))
+                    recordFailure(KiteScriptException("$label: $src is not in the book"))
                     return
                 }
-                path to bytes.decodeToString().removePrefix("﻿")
+                at to bytes.decodeToString().removePrefix("﻿")
             } else {
-                "${document.chapterPath(chapter)}#script" to dom.textOf(script)
+                "$path#script" to dom.textOf(script)
             }
             val id = dom.idOf(script)
             call("current") { engine.evaluate("__kite_current($id, $reached)", "current") }
@@ -579,17 +661,17 @@ public class EpubScriptSession(
                 // A browser lays the page out again when a script measures after a change (#499).
                 commit()
                 val laid = dom.toLayout[live] ?: return@def null
-                val r = document.scriptBoundsOf(chapter, laid) ?: return@def null
+                val r = boundsOf(laid) ?: return@def null
                 listOf(r.left / PT_PER_PX, r.bottom / PT_PER_PX, r.width / PT_PER_PX, r.height / PT_PER_PX)
             }
             def("computed") { args -> element(args, 0)?.let { computed(it, string(args, 1)) } }
             def("viewport") {
-                val (w, h) = document.scriptViewportOf(chapter)
+                val (w, h) = if (frame == null) document.scriptViewportOf(chapter) else document.frameViewportOf(chapter, frame)
                 listOf(w / PT_PER_PX, h / PT_PER_PX)
             }
             def("now") { now().toDouble() }
             def("console") { args -> onConsole(string(args, 0), string(args, 1)); null }
-            def("error") { args -> recordFailure(KiteScriptException("chapter $chapter: ${string(args, 0)}")); null }
+            def("error") { args -> recordFailure(KiteScriptException("$label: ${string(args, 0)}")); null }
             def("storage") { args -> storage(string(args, 0), string(args, 1), args.getOrNull(2)?.toString(), args.getOrNull(3)?.toString()) }
             def("navigate") { args ->
                 // An address under the book's own origin is a path in the book, from its root.
@@ -597,15 +679,17 @@ public class EpubScriptSession(
                 // A data URL never opens as a page of its own (EPUB Reading Systems 3.3, 3.4), as a
                 // browser will not navigate its top frame to one (#514).
                 if (KiteDataUrl.isDataUrl(href)) {
-                    recordFailure(KiteScriptException("chapter $chapter: a script may not open a data: URL as a page"))
+                    recordFailure(KiteScriptException("$label: a script may not open a data: URL as a page"))
                     return@def null
                 }
-                val target = resolveLinkHref(href, document.chapterPath(chapter)) { EpubDocument.resolvePath(document.chapterDir(chapter), it) }
-                // A URL of this chapter with a fragment moves within it, at once (HTML, 7.4.2.2, step 15): the
+                val target = resolveLinkHref(href, path) { EpubDocument.resolvePath(dir, it) }
+                // A URL of this document with a fragment moves within it, at once (HTML, 7.4.2.2, step 15): the
                 // prelude fires popstate and hashchange on the URL that this answers (#550).
                 val hash = href.indexOf('#')
-                val old = if (hash >= 0 && target.substringBefore('#') == document.chapterPath(chapter)) moveToFragment(href.substring(hash + 1)) else null
-                navigate(target)
+                val old = if (hash >= 0 && target.substringBefore('#') == path) moveToFragment(href.substring(hash + 1)) else null
+                // A frame's scripts move within their own document only: the book's place is the reader's (#528).
+                if (frame == null) navigate(target)
+                else if (old == null) recordFailure(KiteScriptException("$label: a frame's script may not open another page"))
                 old
             }
             def("location") { location() }
@@ -617,7 +701,7 @@ public class EpubScriptSession(
                 if (url.fragment == old) null else url.href()
             }
             // Scrolls to the fragment once the document is parsed, which makes its element the target (#550).
-            def("indicate") { dom.retarget(fragment, restyle = document.usesTarget(chapter)); null }
+            def("indicate") { dom.retarget(fragment, restyle = usesTarget()); null }
             def("origin") { origin }
             // The URL Standard (#520): a parse against an optional base, a setter of the URL class
             // on a serialized URL, and the application/x-www-form-urlencoded parser and serializer
@@ -655,7 +739,7 @@ public class EpubScriptSession(
                     ?: "UTF-8"
                 WhatwgEncoding.decode(bytesOf(string(args, 0)), encoding)
             }
-            def("blobUrl") { args -> document.blobUrls.create(origin, chapter, bytesOf(string(args, 0)), string(args, 1)) }
+            def("blobUrl") { args -> document.blobUrls.create(origin, blobKey, bytesOf(string(args, 0)), string(args, 1)) }
             def("revokeBlobUrl") { args -> document.blobUrls.revoke(string(args, 0)); null }
             def("timers") { args ->
                 timers = (args.getOrNull(0) as? Double)?.toInt() ?: 0
@@ -683,7 +767,7 @@ public class EpubScriptSession(
 
         /** What `getComputedStyle` answers for [property] of [el]: the cascade's value, in CSS pixels. */
         private fun computed(el: KiteXmlNode.Element, property: String): String {
-            val style = document.scriptStyleOf(chapter, el)
+            val style = styleOf(el)
             fun px(pt: Double) = "${(pt / PT_PER_PX * 100).roundToLong() / 100.0}px".replace(".0px", "px")
             fun rgb(c: io.github.yuroyami.kitepdf.core.render.RgbColor, alpha: Double = 1.0): String {
                 fun v(x: Double) = (x.coerceIn(0.0, 1.0) * 255).roundToLong()
@@ -717,7 +801,7 @@ public class EpubScriptSession(
          * the element's box on the page.
          */
         private fun transformValue(el: KiteXmlNode.Element, functions: List<CssTransform>): String {
-            val box = dom.toLayout[el]?.let { document.scriptBoundsOf(chapter, it) }
+            val box = dom.toLayout[el]?.let(::boundsOf)
             val w = box?.width ?: 0.0
             val h = box?.height ?: 0.0
             var m = CssMatrixParser.IDENTITY

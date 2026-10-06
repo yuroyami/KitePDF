@@ -143,8 +143,9 @@ public class EpubDocument internal constructor(
     public fun renditionOf(chapter: Int): EpubRendition = parsed.renditions[chapter]
 
     /**
-     * Whether [chapter] is scripted: its manifest item has the `scripted` property, or its
-     * document has a `script` element (#40). Without a script handler such a chapter shows what
+     * Whether [chapter] is scripted: its manifest item has the `scripted` property, its
+     * document has a `script` element (#40), or one of its frames shows a document of the book
+     * whose scripts run (#528). Without a script handler such a chapter shows what
      * its markup shows, `noscript` content included; [EpubScriptSession], or `EpubScriptRunner`
      * of `kitepdf-javascript`, runs its scripts over this library's own layout (#235). Reads the
      * chapter's markup once, and does not lay it out.
@@ -152,6 +153,9 @@ public class EpubDocument internal constructor(
      * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
      */
     public fun isScripted(chapter: Int): Boolean = parsed.isScripted(chapter)
+
+    /** Whether [chapter]'s own document runs scripts, not only the documents of its frames (#528). */
+    internal fun hasOwnScripts(chapter: Int): Boolean = parsed.hasOwnScripts(chapter)
 
     /** The scripted chapters, in reading order (#40). Reads the markup of every chapter once. */
     public val scriptedChapters: List<Int> get() = parsed.spineIndices.filter(parsed::isScripted)
@@ -226,7 +230,7 @@ public class EpubDocument internal constructor(
     public val chapterChanges: StateFlow<Int> get() = parsed.chapterChanges
 
     /** How many times scripts changed [chapter], which its pages answer as [EpubPage.chapterVersion] (#41). */
-    internal fun chapterVersionOf(chapter: Int): Int = parsed.treeVersion(chapter)
+    internal fun chapterVersionOf(chapter: Int): Int = parsed.treeVersion(chapter) + parsed.framesVersion(chapter)
 
     /**
      * The tree the layout reads for [chapter]: its document as parsed, or the last tree its scripts
@@ -259,10 +263,14 @@ public class EpubDocument internal constructor(
      * rules the chapter was last laid out with (#41).
      */
     internal fun scriptStyleOf(chapter: Int, el: KiteXmlNode.Element): ComputedStyle {
-        val sp = parsed.layoutSpine(chapter)
         val (width, height) = scriptViewportOf(chapter)
+        return styleIn(parsed.layoutSpine(chapter).rules, width, height, directionFor(chapter), el)
+    }
+
+    /** The cascade's style of [el] under [rules], in a window [width] by [height] points. */
+    private fun styleIn(rules: List<StyleRule>, width: Double, height: Double, direction: Direction, el: KiteXmlNode.Element): ComputedStyle {
         val resolver = StyleResolver(
-            sp.rules, settings.fontSize, width, directionFor(chapter), height,
+            rules, settings.fontSize, width, direction, height,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
         // The parser's root holds the document, and is no element of it.
@@ -332,6 +340,137 @@ public class EpubDocument internal constructor(
 
     /** A script session holds [chapter]'s live tree while [held], and marks its target itself (#550). */
     internal fun holdTree(chapter: Int, held: Boolean): Unit = parsed.holdTree(chapter, held)
+
+    /* ── frames (#528) ─────────────────────────────────────────────────── */
+
+    /** A frame's layout, for one size and one tree version of its document. */
+    private data class FrameKey(val chapter: Int, val path: String, val width: Double, val height: Double, val version: Int)
+
+    private val frameLock = KiteLock()
+
+    /** The frames laid out last, the one used least recently first. */
+    private val frameRenders = LinkedHashMap<FrameKey, PageRender>()
+
+    /**
+     * The document that a frame of [chapter] shows from [href], laid out at [width] by [height]
+     * points, or null when the frame shows nothing: a URL outside the book, or no document there.
+     * The layout reads the tree that the frame's scripts gave it last.
+     */
+    internal fun frameRender(chapter: Int, href: String, width: Double, height: Double): PageRender? {
+        val path = framePathOf(href) ?: return null
+        val key = FrameKey(chapter, path, width, height, parsed.frameVersion(chapter, path))
+        frameLock.withLock { frameRenders.remove(key)?.let { frameRenders[key] = it; return it } }
+        val laid = layFrame(chapter, path, width, height) ?: return null
+        return frameLock.withLock {
+            frameRenders.keys.removeAll { it.chapter == chapter && it.path == path && it.version != key.version }
+            frameRenders.getOrPut(key) { laid }.also { while (frameRenders.size > MAX_FRAME_RENDERS) frameRenders.remove(frameRenders.keys.first()) }
+        }
+    }
+
+    /** The path a frame's [href] names in the book, or null for a URL outside it, which shows nothing. */
+    private fun framePathOf(href: String): String? {
+        if (KiteDataUrl.isDataUrl(href)) return href
+        val path = href.substringBefore('#')
+        if (path.isEmpty() || (!isBlobUrl(path) && FRAME_SCHEME.containsMatchIn(path))) return null
+        return path
+    }
+
+    private fun layFrame(chapter: Int, path: String, width: Double, height: Double): PageRender? {
+        val sp = parsed.frameLayoutSpine(chapter, path) ?: return null
+        val language = languageOf(sp.tree)
+        val resolver = StyleResolver(
+            sp.rules, settings.fontSize, width, if (isRightToLeftLanguage(language)) Direction.RTL else Direction.LTR, height,
+            readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
+        )
+        val build = BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, true, canvasImages::get) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
+        while (!build.step()) Unit
+        val root = checkNotNull(build.box)
+        val fonts = if (sp.localFaces.isEmpty()) parsed.fonts else parsed.fonts.with(sp.localFaces)
+        val image: (String) -> KiteImageData? = { p -> loadImage(p) { url -> layoutBytes(chapter, url) } }
+        val svg: (String) -> SvgImage? = { p -> loadSvg(p) { url -> layoutBytes(chapter, url) } }
+        BoxLayout(image, svg, height, fonts, language, settings.lineHeightScale, isSvg = parsed::namesSvg).layout(root, width, height)
+        return Paginator.paginateFixed(root, width, height, true)
+    }
+
+    /**
+     * The page that paints the frame of [chapter] showing [href] at [width] by [height] points,
+     * or null when it shows nothing. [ancestors] are the documents of the frames around it, which
+     * it does not show again.
+     */
+    internal fun framePage(chapter: Int, href: String, width: Double, height: Double, ancestors: Set<String> = emptySet()): EpubPage? {
+        val path = framePathOf(href) ?: return null
+        if (path in ancestors || ancestors.size >= MAX_FRAME_DEPTH || width <= 0.0 || height <= 0.0) return null
+        if (parsed.frameSpine(path) == null) return null
+        return EpubPage(this, chapter, 0, width, height, EpubPage.FrameView(path, ancestors + path))
+    }
+
+    /**
+     * The size of the frame of [chapter] that shows [path], in points: its content box on the
+     * chapter's pages or in another frame, else the 300 by 150 CSS pixels of a frame that sets none.
+     */
+    internal fun frameViewportOf(chapter: Int, path: String): Pair<Double, Double> {
+        for (page in pagesIn(chapter)) page.frameSize(path)?.let { return it }
+        val renders = frameLock.withLock { frameRenders.filterKeys { it.chapter == chapter }.values.toList() }
+        for (render in renders) frameSizeIn(render, path)?.let { return it }
+        return EMBED_DEFAULT_WIDTH_PT to EMBED_DEFAULT_HEIGHT_PT
+    }
+
+    /** The document that the frame of [chapter] showing [path] holds before its scripts run, or null (#528). */
+    internal fun frameSourceTree(path: String): KiteXmlNode.Element? = parsed.frameSpine(path)?.tree
+
+    internal fun frameText(path: String): String = parsed.frameText(path)
+
+    internal fun frameVersionOf(chapter: Int, path: String): Int = parsed.frameVersion(chapter, path)
+
+    /** The style of [el], an element of a script's tree for the frame of [chapter] showing [path] (#528). */
+    internal fun frameStyleOf(chapter: Int, path: String, el: KiteXmlNode.Element): ComputedStyle {
+        val (width, height) = frameViewportOf(chapter, path)
+        val sp = parsed.frameLayoutSpine(chapter, path)
+        val direction = if (isRightToLeftLanguage(sp?.tree?.let(::languageOf))) Direction.RTL else Direction.LTR
+        return styleIn(sp?.rules.orEmpty(), width, height, direction, el)
+    }
+
+    /** Where [element] of the frame's laid-out tree is in the frame, in the frame's display space (#528). */
+    internal fun frameBoundsOf(chapter: Int, path: String, element: KiteXmlNode.Element): KiteRectangle? {
+        val (width, height) = frameViewportOf(chapter, path)
+        return framePage(chapter, path, width, height)?.boundsOf(element)
+    }
+
+    internal fun frameUsesTarget(chapter: Int, path: String): Boolean =
+        parsed.frameLayoutSpine(chapter, path)?.rules?.any { rule -> rule.selectors.any { it.usesTarget } } == true
+
+    /** Lays the frame of [chapter] showing [path] out from [tree] from now on, and tells every viewer (#528). */
+    internal fun replaceFrameTree(chapter: Int, path: String, tree: KiteXmlNode.Element) {
+        parsed.replaceFrameTree(chapter, path, tree)
+        parsed.announceTreeChange()
+    }
+
+    /**
+     * The documents in the book that frames of [chapter] show and whose scripts run, those of
+     * frames inside them included, outermost first (#528). Read from the trees the layout has.
+     */
+    internal fun scriptedFramesOf(chapter: Int): List<String> {
+        val out = ArrayList<String>()
+        fun scan(tree: KiteXmlNode.Element, dir: String, ancestors: Set<String>) {
+            val found = ArrayList<String>()
+            fun walk(e: KiteXmlNode.Element) {
+                if (e.tag == "iframe") e.attrs["src"]?.trim()?.takeIf { it.isNotEmpty() && !FRAME_SCHEME.containsMatchIn(it) }?.let { src ->
+                    val path = resolvePath(dir, src).substringBefore('#')
+                    if (path !in ancestors && path !in out && path !in found && ancestors.size < MAX_FRAME_DEPTH) found += path
+                }
+                for (c in e.children) if (c is KiteXmlNode.Element) walk(c)
+            }
+            walk(tree)
+            for (path in found) {
+                val sp = parsed.frameLayoutSpine(chapter, path) ?: continue
+                if (parsed.isScriptedFrame(path)) out += path
+                scan(sp.tree, sp.docDir, ancestors + path)
+            }
+        }
+        val sp = parsed.layoutSpine(chapter)
+        scan(sp.tree, sp.docDir, setOf(sp.path))
+        return out
+    }
 
     /**
      * [chapter]'s media overlay: the clips of its synchronised narration, in document order, or
@@ -569,8 +708,13 @@ public class EpubDocument internal constructor(
      */
     internal fun languageFor(chapter: Int): String? {
         val tree = if (chapter !in 0 until parsed.spineCount) null else parsed.spine(chapter).tree
-        val html = tree?.children?.filterIsInstance<KiteXmlNode.Element>()
-            ?.firstOrNull { it.tag == "html" }
+        return tree?.let(::languageOf) ?: parsed.metadata.language?.takeIf { it.isNotBlank() }
+    }
+
+    /** The `lang` or `xml:lang` that [tree] gives its `html` or `body` element, else the book's. */
+    private fun languageOf(tree: KiteXmlNode.Element): String? {
+        val html = tree.children.filterIsInstance<KiteXmlNode.Element>()
+            .firstOrNull { it.tag == "html" }
         val body = html?.children?.filterIsInstance<KiteXmlNode.Element>()
             ?.firstOrNull { it.tag == "body" }
         return html?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
@@ -1616,7 +1760,12 @@ public class EpubPage internal constructor(
     private val index: Int,
     private val pageWidth: Double,
     private val pageHeight: Double,
+    /** The frame this page paints, when it is the page of a frame's document rather than of [chapter] (#528). */
+    private val frame: FrameView? = null,
 ) : KitePage {
+
+    /** The document of a frame of [chapter], and the documents of the frames around it, its own included (#528). */
+    internal class FrameView(val path: String, val documents: Set<String>)
 
     /**
      * The book this page belongs to, for the bytes of its resources: a player that plays an
@@ -1625,7 +1774,32 @@ public class EpubPage internal constructor(
     public val document: EpubDocument get() = doc
 
     /** The laid-out page, fetched per operation: holding it would defeat the budget. */
-    private fun laidOut(): PageRender = doc.render(chapter, index)
+    private fun laidOut(): PageRender = frame?.let { doc.frameRender(chapter, it.path, pageWidth, pageHeight) ?: EMPTY_FRAME }
+        ?: doc.render(chapter, index)
+
+    /** The content box of the frame showing [path] on this page, in points, or null when the page has none (#528). */
+    internal fun frameSize(path: String): Pair<Double, Double>? = frameSizeIn(laidOut(), path)
+
+    /** Paints this frame's page under [ctm], with no page of its own around it (#528). */
+    internal fun paintFrame(canvas: KiteCanvas, ctm: KiteMatrix, cancellation: KiteCancellation?) {
+        val page = laidOut()
+        if (page.vertical) renderVerticalTo(page, canvas, ctm, cancellation, nested = true)
+        else renderHorizontalTo(page, canvas, ctm, cancellation, nested = true)
+    }
+
+    /**
+     * Paints the frame that [box] embeds into its content box at ([left], [bottom]), clipped to
+     * it, when the frame shows a document of the book (#528). Answers whether [box] is a frame.
+     */
+    private fun paintFrameBox(canvas: KiteCanvas, ctm: KiteMatrix, box: ImageBox, left: Double, bottom: Double, cancellation: KiteCancellation?): Boolean {
+        val info = box.embed?.takeIf { it.kind == EpubEmbedKind.FRAME } ?: return false
+        val inner = doc.framePage(chapter, info.href, box.drawWidth, box.drawHeight, frame?.documents ?: setOf(doc.chapterPath(chapter))) ?: return true
+        val clip = KitePath.Builder().apply { rectangle(left, bottom, box.drawWidth, box.drawHeight) }.build()
+        canvas.pushClip(clip, ctm, evenOdd = false)
+        inner.paintFrame(canvas, ctm.concat(KiteMatrix.translation(left, bottom)), cancellation)
+        canvas.popClip()
+        return true
+    }
 
     /** Whether this page object has the size [width] by [height], so a new layout of its chapter can keep it (#41). */
     internal fun hasSize(width: Double, height: Double): Boolean = pageWidth == width && pageHeight == height
@@ -1864,15 +2038,15 @@ public class EpubPage internal constructor(
         if (page.vertical) renderVerticalTo(page, canvas, deviceCtm, cancellation) else renderHorizontalTo(page, canvas, deviceCtm, cancellation)
     }
 
-    private fun renderHorizontalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
-        canvas.beginPage(displayWidth, displayHeight, deviceCtm)
+    private fun renderHorizontalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?, nested: Boolean = false) {
+        if (!nested) canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         val margin = page.margin
         val startY = page.startY
         val bandBottom = startY + (displayHeight - 2 * margin)
         fun yUp(docY: Double) = displayHeight - displayY(page, docY)
 
-        // Reader background (night mode): under everything, full page.
-        doc.settings.backgroundColor?.let { bg ->
+        // Reader background (night mode): under everything, full page. A frame shows the page's through it.
+        if (!nested) doc.settings.backgroundColor?.let { bg ->
             val rect = KitePath.Builder().apply {
                 moveTo(0.0, 0.0); lineTo(displayWidth, 0.0); lineTo(displayWidth, displayHeight); lineTo(0.0, displayHeight); close()
             }.build()
@@ -1949,6 +2123,7 @@ public class EpubPage internal constructor(
                     canvas.pushClip(shape, ctm, evenOdd = false)
                 }
                 when {
+                    paintFrameBox(canvas, ctm, box, left, bottom, cancellation) -> Unit
                     // A remote picture whose bytes have landed fills its box (#38).
                     paintsRemote(box.image, box.svg, box.zipPath) &&
                         paintRemoteImage(canvas, ctm, box.zipPath, box.drawWidth, box.drawHeight, left, bottom, box.style.objectFit) -> Unit
@@ -1959,7 +2134,7 @@ public class EpubPage internal constructor(
                 if (radii != null) canvas.popClip()
             },
         )
-        canvas.endPage()
+        if (!nested) canvas.endPage()
     }
 
     /**
@@ -1968,14 +2143,14 @@ public class EpubPage internal constructor(
      * Full-width glyphs stand upright, centred on the column's em axis;
      * everything else rotates 90 degrees clockwise around the shared baseline.
      */
-    private fun renderVerticalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
-        canvas.beginPage(displayWidth, displayHeight, deviceCtm)
+    private fun renderVerticalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?, nested: Boolean = false) {
+        if (!nested) canvas.beginPage(displayWidth, displayHeight, deviceCtm)
         val margin = page.margin
         val startY = page.startY
         val bandBottom = startY + (displayWidth - 2 * margin)
         fun colX(v: Double) = columnX(page, v)
 
-        doc.settings.backgroundColor?.let { bg ->
+        if (!nested) doc.settings.backgroundColor?.let { bg ->
             val rect = KitePath.Builder().apply {
                 moveTo(0.0, 0.0); lineTo(displayWidth, 0.0); lineTo(displayWidth, displayHeight); lineTo(0.0, displayHeight); close()
             }.build()
@@ -2092,6 +2267,7 @@ public class EpubPage internal constructor(
                 val top = margin + box.x + inset.inlineStart
                 val bottom = displayHeight - top - box.drawHeight
                 when {
+                    paintFrameBox(canvas, deviceCtm, box, left, bottom, cancellation) -> Unit
                     // A remote picture whose bytes have landed fills its box (#38).
                     paintsRemote(box.image, box.svg, box.zipPath) &&
                         paintRemoteImage(canvas, deviceCtm, box.zipPath, box.drawWidth, box.drawHeight, left, bottom, box.style.objectFit) -> Unit
@@ -2101,7 +2277,7 @@ public class EpubPage internal constructor(
                 }
             },
         )
-        canvas.endPage()
+        if (!nested) canvas.endPage()
     }
 
     /**
@@ -2831,8 +3007,9 @@ public class EpubPage internal constructor(
 
     /**
      * The inline frames and the HTML objects on this page, in document order, each with its box
-     * and the document it embeds (#40). The page keeps a frame's box empty and paints an object's
-     * fallback children there, so an app can place a web view over [EpubEmbed.rect].
+     * and the document it embeds (#40). The page paints a frame's document of the book in its box
+     * (#528) and an object's fallback children in its own, so an app can place a web view over
+     * [EpubEmbed.rect] for the rest.
      */
     public val embeds: List<EpubEmbed> get() = buildEmbeds(laidOut())
 
@@ -3216,6 +3393,9 @@ public class EpubPage internal constructor(
     private companion object {
         /** Pen-gap threshold (in em) that reads as a collapsed word space. */
         const val SPACE_GAP_EM = 0.15
+
+        /** What a frame paints when its document is gone: nothing. */
+        val EMPTY_FRAME = PageRender(0.0, emptyList(), emptyList(), emptyList(), 0.0, 0.0, 0.0)
     }
 }
 
@@ -3227,6 +3407,25 @@ private const val BACKGROUND_BYTES = 32L * 1024 * 1024
 
 /** The most copies of a repeated background picture one box paints; a pattern of tiny tiles draws none. */
 private const val MAX_BACKGROUND_TILES = 4096
+
+/** How many frame layouts a document keeps (#528). */
+private const val MAX_FRAME_RENDERS = 16
+
+/** How deep frames nest before the innermost shows nothing, as a browser stops a loop of frames (#528). */
+private const val MAX_FRAME_DEPTH = 8
+
+/** A URL with a scheme, which a frame does not show unless it is a data or blob URL (#528). */
+private val FRAME_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
+/** The content box of the frame showing [path] on [page], in points, or null when the page has none (#528). */
+internal fun frameSizeIn(page: PageRender, path: String): Pair<Double, Double>? {
+    for (box in page.embedBoxes) {
+        if (box !is ImageBox) continue
+        val info = box.embed ?: continue
+        if (info.kind == EpubEmbedKind.FRAME && info.href.substringBefore('#') == path) return box.drawWidth to box.drawHeight
+    }
+    return null
+}
 
 /** How wide, in points, each strip of a gradient's alpha fade is at most, up to [MAX_GRADIENT_STRIPS] of them (#503). */
 private const val GRADIENT_STRIP_PT = 2.0
