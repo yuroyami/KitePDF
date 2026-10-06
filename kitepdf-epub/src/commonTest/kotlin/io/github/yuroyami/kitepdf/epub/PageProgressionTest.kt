@@ -41,9 +41,12 @@ class PageProgressionTest {
     }
 
     @Test
-    fun an_arabic_chapter_without_a_dir_still_reads_right_to_left() {
-        val doc = open("<p>مرحبا بالعالم</p>", language = "ar")
-        assertEquals(352.0, doc.firstLine().second, 1.0, "the line starts at the right edge")
+    fun the_book_language_does_not_set_a_chapter_direction() {
+        // EPUB Reading Systems 3.3, 3.7: the package's dc:language says nothing of a document's
+        // base direction, so a chapter that declares none reads left to right (#564).
+        val doc = open("<p>مرحبا بالعالم</p>", language = "ar", spineDirection = "rtl")
+        assertEquals(48.0, doc.firstLine().first, 1.0, "the line starts at the left edge")
+        assertEquals(352.0, open("""<body lang="ar"><p>مرحبا بالعالم</p></body>""", language = "ar").firstLine().second, 1.0, "its own lang")
     }
 
     @Test

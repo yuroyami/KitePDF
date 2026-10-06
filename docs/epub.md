@@ -465,7 +465,7 @@ The layout engine covers what real books use:
   Cyrillic included.
 - **Hyphenation**: Knuth-Liang patterns for English, German, French,
   Spanish, Italian, Portuguese, Dutch, and Russian, selected per spine
-  item from its own language tag. Seven of those languages ship a full
+  item from its own language tag, else from the book's `dc:language`. Seven of those languages ship a full
   pattern set. English ships a small common-word set rather than the full
   `hyph-en-us` data.
 - **CJK**: inter-character justification with kinsoku line-break rules, ruby
@@ -498,6 +498,10 @@ The layout engine covers what real books use:
   embeddings and isolates, and paired brackets. Each paragraph resolves as a
   whole before it breaks into lines, and a forced line break ends a paragraph.
   A bracket at a right-to-left level draws as its mirror image.
+  A chapter's base direction comes from its own `dir`, its CSS `direction`, or
+  its own `lang` on `html` or `body`. The package's `dc:language` never sets it,
+  as EPUB Reading Systems 3.3, 3.7 asks. A chapter with none of these reads left
+  to right, even in an Arabic book.
 - **Layout**: floats with exclusion bands, tables (including
   `table-layout: fixed`), `position: absolute`/`relative`/`fixed`, inline
   images on the baseline, `::before`/`::after` generated content,
