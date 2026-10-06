@@ -220,17 +220,30 @@ public class EpubScriptRunner(
     /**
      * A chapter's [engine], whose first script, the session's own DOM, runs outside the budget,
      * which starts again once it returns: the budget measures the book's scripts, and the DOM
-     * takes hundreds of milliseconds to set up on a slow device (#554).
+     * takes hundreds of milliseconds to set up on a slow device (#554). The host functions that
+     * the session defines before it are part of the setup too.
      */
     private inner class OwnDomFirst(private val engine: KiteScriptEngine) : KiteScriptEngine by engine {
         private var first = true
 
+        override fun defineFunction(name: String, function: (List<Any?>) -> Any?) {
+            if (first) settingUp { engine.defineFunction(name, function) } else engine.defineFunction(name, function)
+        }
+
+        override fun defineValue(name: String, value: Any?) {
+            if (first) settingUp { engine.defineValue(name, value) } else engine.defineValue(name, value)
+        }
+
         override fun evaluate(source: String, name: String): String? {
             if (!first) return engine.evaluate(source, name)
             first = false
+            return settingUp { engine.evaluate(source, name) }
+        }
+
+        private inline fun <T> settingUp(block: () -> T): T {
             settingUp = true
             try {
-                return engine.evaluate(source, name)
+                return block()
             } finally {
                 settingUp = false
                 callStartedAt = now()

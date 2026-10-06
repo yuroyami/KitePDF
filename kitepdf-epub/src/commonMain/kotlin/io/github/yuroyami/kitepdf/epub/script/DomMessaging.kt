@@ -236,7 +236,8 @@ function portOf(p) {
 }
 function makePort() {
   var p = ObjectCreate(MessagePort.prototype);
-  WeakMapSet(messagePorts, p, { __proto__: null, other: null, queue: [], enabled: false, neutered: false, handler: null });
+  // A port whose partner is in another window has the host's route to it in place of the partner (#613).
+  WeakMapSet(messagePorts, p, { __proto__: null, other: null, route: 0, queue: [], enabled: false, neutered: false, handler: null });
   return p;
 }
 function MessagePort() { illegal('MessagePort'); }
@@ -247,9 +248,12 @@ function movePort(from, to) {
   var a = portOf(from), b = portOf(to);
   b.other = a.other;
   if (a.other) portOf(a.other).other = to;
+  b.route = a.route;
+  if (b.route) MapSet(routePorts, b.route, to);
   b.queue = a.queue;
   a.queue = [];
   a.other = null;
+  a.route = 0;
   a.neutered = true;
   dropTasks(from);
 }
@@ -277,11 +281,14 @@ function startPort(port) {
 MessagePort.prototype.postMessage = function (message) {
   var what = "Failed to execute 'postMessage' on 'MessagePort'", s = portOf(this);
   needArgs(arguments, 1, what);
-  postToPort(this, cloneWithTransfer(message, transferOf(arguments[1], what, true), what, this));
+  var transfer = transferOf(arguments[1], what, true);
+  if (s.route) refuseStreams(transfer, what);
+  postToPort(this, cloneWithTransfer(message, transfer, what, this));
 };
-/* Hands [r], a clone, to the partner of [port], if it has one. */
+/* Hands [r], a clone, to the partner of [port], if it has one, in this window or through the host in another. */
 function postToPort(port, r) {
   var s = portOf(port);
+  if (s.route) { K.portPost(s.route, messageText(r.value, r.ports, -(s.route ^ 1))); return; }
   if (!s.other) return;
   var target = portOf(s.other);
   ArrayPush(target.queue, r);
@@ -291,6 +298,7 @@ MessagePort.prototype.start = function () { startPort(this); };
 MessagePort.prototype.close = function () { closePort(this); };
 function closePort(port) {
   var s = portOf(port);
+  if (s.route) { K.portClose(s.route); MapDelete(routePorts, s.route); s.route = 0; }
   if (s.other) portOf(s.other).other = null;
   s.other = null;
   s.queue = [];
@@ -335,7 +343,7 @@ var MessageEvent = subEvent(Event, 'MessageEvent', function (init) {
   this.ports = ObjectFreeze(list);
   var source = init.source;
   if (source === undefined || source === null) source = null;
-  else if (source !== global && !WeakMapHas(messagePorts, source)) {
+  else if (!isWindowProxy(source) && !WeakMapHas(messagePorts, source)) {
     if (!isA(source, EventTarget)) throw new TypeError(what + ": Failed to read the 'source' property from 'MessageEventInit': Failed to convert value to 'EventTarget'.");
     throw new TypeError(what + ": The optional 'source' property is neither a Window nor MessagePort.");
   }
@@ -354,9 +362,20 @@ MessageEvent.prototype.initMessageEvent = function (type, bubbles, cancelable, d
 /* window.postMessage (HTML, 9.3.3): the message goes to the chapter's own window, in a task, when
    the target origin is the book's. A target origin of / is the book's, and * is any. */
 function postMessage(message) {
-  var what = "Failed to execute 'postMessage' on 'Window'";
-  needArgs(arguments, 1, what);
-  var second = arguments[1], target = '/', transfer;
+  var what = "Failed to execute 'postMessage' on 'Window'", a = postArgs(arguments, what);
+  var r = cloneWithTransfer(message, a.transfer, what, null);
+  queueTask(function* () {
+    if (a.wanted !== null && a.wanted !== origin) return;
+    var e = new MessageEvent('message', { __proto__: null, data: r.value, origin: origin, source: global, ports: r.ports });
+    e.isTrusted = true;
+    for (var g = dispatchSteps(global, e); !GeneratorNext(g).done;) yield;
+  });
+}
+/* The target origin and the transfer list of a window's postMessage, by either overload: the origin
+   a message needs, or null for any. */
+function postArgs(args, what) {
+  needArgs(args, 1, what);
+  var second = args[1], target = '/', transfer;
   if (second === undefined || second === null || typeof second === 'object' || typeof second === 'function') {
     var options = idlDictionary(second, what, 'WindowPostMessageOptions');
     var to = options.targetOrigin;
@@ -365,7 +384,7 @@ function postMessage(message) {
     transfer = list === undefined ? [] : idlSequence(list, transferable, what + ": Failed to read the 'transfer' property from 'WindowPostMessageOptions'");
   } else {
     target = usv(second);
-    transfer = arguments[2] === undefined ? [] : idlSequence(arguments[2], transferable, what);
+    transfer = args[2] === undefined ? [] : idlSequence(args[2], transferable, what);
   }
   var wanted = null;
   if (target === '/') wanted = origin;
@@ -374,12 +393,6 @@ function postMessage(message) {
     if (parts == null) throw new DOMException(what + ": Invalid target origin '" + target + "' in a call to 'postMessage'.", 'SyntaxError');
     wanted = parts[1];
   }
-  var r = cloneWithTransfer(message, transfer, what, null);
-  queueTask(function* () {
-    if (wanted !== null && wanted !== origin) return;
-    var e = new MessageEvent('message', { __proto__: null, data: r.value, origin: origin, source: global, ports: r.ports });
-    e.isTrusted = true;
-    for (var g = dispatchSteps(global, e); !GeneratorNext(g).done;) yield;
-  });
+  return { __proto__: null, wanted: wanted, transfer: transfer };
 }
 """

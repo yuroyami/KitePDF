@@ -715,8 +715,10 @@ var HTMLImageElement = elementInterface('HTMLImageElement', HTMLElement, 'alt sr
     return new Promise(function (resolve, reject) { ArrayPush(r.decoders, [resolve, reject]); });
   };
 });
+/* The window of a frame is another window's, which this one sees as a window of another origin,
+   so its document is null to this one (#613). */
 function nestedBrowsingContext(p) {
-  def(p, 'contentWindow', function () { idOf(this); return null; });
+  def(p, 'contentWindow', function () { return frameWindow(this); });
   def(p, 'contentDocument', function () { idOf(this); return null; });
 }
 var HTMLIFrameElement = elementInterface('HTMLIFrameElement', HTMLElement, 'src:u srcdoc name sandbox:tsandbox allow ' +

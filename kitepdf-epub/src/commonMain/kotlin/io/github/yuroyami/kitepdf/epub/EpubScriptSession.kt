@@ -41,9 +41,11 @@ import kotlin.math.roundToLong
  * the script returns, with the pages that it gains or loses.
  *
  * The document that an `iframe` of a chapter shows from the book is a window of its own too, with
- * an engine from [engineFor] for the chapter, opened and closed with the chapter's (#528). Its
- * `parent` is itself, so its scripts cannot reach the chapter. With [liveChapters] at one, frames
- * run no script, since their engines would share the thread with the chapter's.
+ * an engine from [engineFor] for the chapter, opened and closed with the chapter's (#528). The
+ * chapter and its frames see each other as windows of another origin, so a frame's scripts cannot
+ * reach the chapter. They talk through `postMessage` and message ports, which the session carries
+ * between the engines (#613). With [liveChapters] at one, frames run no script, since their
+ * engines would share the thread with the chapter's.
  *
  * Nothing a script does reaches outside the book: there is no `fetch` or `XMLHttpRequest`, a
  * script at an address outside the book does not run, and a change of `location` goes to
@@ -111,6 +113,22 @@ public class EpubScriptSession(
     /** The key of the next frame's window in the book's blob URL store, below every chapter's (#528). */
     private var nextFrameKey = -1
 
+    /** The id of the next window that a script can name, and of the next pair of route ends (#613). */
+    private var nextWindowId = 1
+    private var nextEnd = 2
+
+    /** Each window id's chapter windows and the frame path in them, null for the chapter's own. */
+    private val windowsById = HashMap<Int, Pair<ChapterWindows, String?>>()
+
+    /** The window that holds each end of a route between two windows' ports; ends n and n xor 1 pair up. */
+    private val routeEnds = HashMap<Int, Int>()
+
+    /** The messages that windows posted to each other, in the order the host hands them on. */
+    private val deliveries = ArrayDeque<Delivery>()
+
+    /** A message for the window [window], or for the port at the route end [end] when that is not 0. */
+    private class Delivery(val window: Int, val end: Int, val source: Int, val text: String)
+
     private val lock = KiteLock()
     private val timerListeners = ArrayList<() -> Unit>()
     private val navigationListeners = ArrayList<(String) -> Unit>()
@@ -146,7 +164,9 @@ public class EpubScriptSession(
     override val hasTimers: Boolean get() = timersWaiting
 
     override fun chapterOpened(chapter: Int) {
-        open(chapter)?.main?.followFragment()
+        val windows = open(chapter) ?: return
+        windows.main?.followFragment()
+        settle()
     }
 
     override fun tap(page: EpubPage, x: Double, y: Double): Boolean {
@@ -174,6 +194,7 @@ public class EpubScriptSession(
             ?: scripts.dom.root
         val prevented = scripts.steps("tap", "__kite_tap(${scripts.dom.idOf(target)}, ${px / PT_PER_PX}, ${py / PT_PER_PX})") == "true"
         scripts.commit()
+        settle()
         return prevented
     }
 
@@ -186,7 +207,9 @@ public class EpubScriptSession(
             scripts.commit()
             if (wait != null && wait >= 0) next = minOf(next ?: Long.MAX_VALUE, wait.roundToLong())
         }
-        return next
+        settle()
+        // Messages left over from the cap go on at the next pump.
+        return if (deliveries.isNotEmpty()) 0 else next
     }
 
     override fun onTimersChanged(listener: () -> Unit): () -> Unit {
@@ -210,6 +233,7 @@ public class EpubScriptSession(
         val hadTimers = chapters.values.any { it.timers > 0 }
         for (windows in chapters.values) windows.close()
         chapters.clear()
+        deliveries.clear()
         if (hadTimers) timersChanged()
     }
 
@@ -219,6 +243,7 @@ public class EpubScriptSession(
         closed = true
         for (windows in chapters.values) windows.close()
         chapters.clear()
+        deliveries.clear()
         timersWaiting = false
     }
 
@@ -236,8 +261,9 @@ public class EpubScriptSession(
         }
         if (!document.isScripted(chapter)) return null
         val scripted = document.hasOwnScripts(chapter)
+        val all = document.framesOf(chapter)
         // A frame needs an engine beside its chapter's, which an engine that cannot share its thread does not allow.
-        val frames = if (liveChapters > 1) document.scriptedFramesOf(chapter) else emptyList()
+        val frames = if (liveChapters > 1) all.map { it.first }.filter(document::isScriptedFrame) else emptyList()
         if (!scripted && frames.isEmpty()) return null
         // Room first: an engine that cannot share its thread opens only once the other has closed.
         var dropped = false
@@ -247,6 +273,7 @@ public class EpubScriptSession(
         }
         if (dropped) timersChanged()
         val windows = ChapterWindows(chapter)
+        for ((path, around) in all) { windows.parents[path] = around; windows.known += path }
         chapters[chapter] = windows
         // A frame's document loads before the load event of the document around it (HTML, 4.8.5).
         // Each window is in place before it starts, so the timers it sets count.
@@ -257,13 +284,95 @@ public class EpubScriptSession(
         return windows
     }
 
-    /** The windows of one chapter: its own, when its document has scripts, and its frames' (#528). */
+    /**
+     * The windows of one chapter: its own, when its document has scripts, and its frames' (#528).
+     * Each window, with or without scripts, has an id that the scripts of the others name it by (#613).
+     */
     private inner class ChapterWindows(val chapter: Int) {
         var main: ChapterScripts? = null
         val frames = LinkedHashMap<String, ChapterScripts>()
         val all: List<ChapterScripts> get() = listOfNotNull(main) + frames.values
         val timers: Int get() = all.sumOf { it.timers }
-        fun close() = all.forEach { it.close() }
+
+        /** The path of the document around each frame's, null for the chapter's. */
+        val parents = HashMap<String, String?>()
+
+        /** The frames whose windows started, or that have no scripts to start. */
+        val known = HashSet<String>()
+        private val ids = HashMap<String?, Int>()
+
+        /** The id of the window of the frame at [path], or of the chapter's for null. */
+        fun idOf(path: String?): Int = ids.getOrPut(path) { nextWindowId++.also { windowsById[it] = this to path } }
+
+        fun live(path: String?): ChapterScripts? = if (path == null) main else frames[path]
+
+        fun close() {
+            all.forEach { it.close() }
+            for (id in ids.values) windowsById.remove(id)
+            routeEnds.values.removeAll { it in ids.values }
+        }
+    }
+
+    /** The window with scripts that [id] names, or null when it has none or has closed. */
+    private fun liveWindow(id: Int): ChapterScripts? {
+        val (windows, path) = windowsById[id] ?: return null
+        return if (chapters[windows.chapter] === windows) windows.live(path) else null
+    }
+
+    /**
+     * Hands on the messages that windows posted to each other and runs what each one queued, up
+     * to [MAX_DELIVERIES] at a time, then opens the frames that scripts added (#613). It runs after
+     * the host's own calls into the scripts, never inside one, so a script that posts goes on first.
+     */
+    private fun settle() {
+        var left = MAX_DELIVERIES
+        while (!closed) {
+            val d = deliveries.removeFirstOrNull()
+            if (d == null) {
+                if (openAddedFrames()) continue
+                break
+            }
+            if (left-- == 0) { deliveries.addFirst(d); break }
+            val to = if (d.end != 0) routeEnds[d.end] ?: continue else d.window
+            val target = liveWindow(to) ?: continue
+            target.delivery = d
+            target.steps("message", "__kite_deliver()")
+            target.delivery = null
+            target.steps("timers", "__kite_pump(${now()})")
+            target.commit()
+        }
+        timersChanged()
+    }
+
+    /**
+     * Starts the window of each scripted frame that a script added to a document, and gives each
+     * new frame element its load event. Answers whether anything ran.
+     */
+    private fun openAddedFrames(): Boolean {
+        var ran = false
+        for (windows in chapters.values.toList()) {
+            for (scripts in windows.all) {
+                if (!scripts.framesChanged()) continue
+                for (path in scripts.framePaths()) {
+                    if (path == scripts.path || !windows.known.add(path)) continue
+                    if (path !in windows.parents) windows.parents[path] = scripts.frame
+                    if (liveChapters > 1 && document.isScriptedFrame(path) && depthOf(windows, scripts.frame) < MAX_FRAME_DEPTH) {
+                        ChapterScripts(windows.chapter, path).also { windows.frames[path] = it }.start()
+                    }
+                }
+                scripts.steps("load", "__kite_frames_loaded()")
+                scripts.commit()
+                ran = true
+            }
+        }
+        return ran
+    }
+
+    private fun depthOf(windows: ChapterWindows, path: String?): Int {
+        var depth = 0
+        var at = path
+        while (at != null && depth <= MAX_FRAME_DEPTH) { at = windows.parents[at]; depth++ }
+        return depth
     }
 
     private fun recordFailure(failure: KiteScriptException) {
@@ -273,7 +382,7 @@ public class EpubScriptSession(
     }
 
     private fun timersChanged() {
-        timersWaiting = chapters.values.any { it.timers > 0 }
+        timersWaiting = chapters.values.any { it.timers > 0 } || deliveries.isNotEmpty()
         lock.withLock { timerListeners.toList() }.forEach { it() }
     }
 
@@ -284,9 +393,9 @@ public class EpubScriptSession(
     /**
      * One window: its engine, its live tree and what binds the two. The window of a chapter, or,
      * with a [frame], of the document at that path that a frame of the chapter shows (#528). A
-     * frame's window has the book's origin and a tree of its own: its `parent` and `top` are
-     * itself, so its scripts cannot reach the chapter around it, as EPUB 3.3 says of a
-     * container-constrained script.
+     * frame's window has the book's origin and a tree of its own. Its `parent` and `top` are
+     * windows of another origin, so its scripts cannot reach the chapter around it, as EPUB 3.3
+     * says of a container-constrained script (#613).
      */
     private inner class ChapterScripts(val chapter: Int, val frame: String? = null) {
         /** How a failure names this window. */
@@ -309,6 +418,38 @@ public class EpubScriptSession(
         val engine: KiteScriptEngine get() = checkNotNull(opened)
         /** The document's media type, which makes it an HTML or an XML one (#541). */
         val contentType: String = document.resourceType(path)?.lowercase() ?: "application/xhtml+xml"
+        /** The message that the host hands this window now, which `__kite.delivery` answers (#613). */
+        var delivery: Delivery? = null
+
+        /** The windows this one names: its own, the one around it or null, and the chapter's. */
+        private val windows: ChapterWindows get() = checkNotNull(chapters[chapter])
+        private val windowId: Int by lazy { windows.idOf(frame) }
+
+        private var frameVersion = -1
+
+        /** Whether the tree changed since the frames were last looked at, so a frame may have come or gone. */
+        fun framesChanged(): Boolean {
+            if (!usable || frameVersion == dom.version) return false
+            frameVersion = dom.version
+            return true
+        }
+
+        /** The iframe and object elements of the tree that show a document, in tree order (#613). */
+        private fun frameElements(): List<KiteXmlNode.Element> {
+            val out = ArrayList<KiteXmlNode.Element>()
+            fun walk(e: KiteXmlNode.Element) {
+                if ((isHtml(e, "iframe") || isHtml(e, "object")) && document.frameTargetOf(dir, e) != null) out.add(e)
+                for (c in e.children) if (c is KiteXmlNode.Element) walk(c)
+            }
+            walk(dom.root)
+            return out
+        }
+
+        fun framePaths(): List<String> = frameElements().mapNotNull { document.frameTargetOf(dir, it) }.distinct()
+
+        /** Which window [dest] names: a window's id, or minus a route end for the window that holds it. */
+        private fun destination(dest: Int): Int = if (dest >= 0) dest else routeEnds[-dest] ?: 0
+
         val dom = ScriptDom(
             if (frame == null) document.sourceChapterTree(chapter) else checkNotNull(document.frameSourceTree(frame)),
             html = contentType == "text/html",
@@ -450,6 +591,8 @@ public class EpubScriptSession(
             }
             document.blobUrls.settle(blobKey, tree)
         }
+
+        fun frameCount(): Int = frameElements().size
 
         /** Closes the engine, which revokes the blob URLs its scripts made, as a browser does when a page unloads (#533). */
         fun close() {
@@ -741,6 +884,60 @@ public class EpubScriptSession(
             }
             def("blobUrl") { args -> document.blobUrls.create(origin, blobKey, bytesOf(string(args, 0)), string(args, 1)) }
             def("revokeBlobUrl") { args -> document.blobUrls.revoke(string(args, 0)); null }
+            // Other windows (#613): this one, the one around it and the chapter's, by id; the frames
+            // of a document; and messages and port routes between windows, which settle() hands on.
+            def("windows") {
+                val around = if (frame == null) null else windows.idOf(windows.parents[frame])
+                listOf(windowId, around, windows.idOf(null))
+            }
+            def("windowParent") { args ->
+                val id = (args.getOrNull(0) as? Double)?.toInt() ?: return@def null
+                val path = windowsById[id]?.takeIf { it.first === windows }?.second ?: return@def id
+                windows.idOf(windows.parents[path])
+            }
+            def("windowLength") { args ->
+                val id = (args.getOrNull(0) as? Double)?.toInt() ?: return@def 0
+                if (id == windowId) return@def frameElements().size
+                liveWindow(id)?.let { return@def it.frameCount() }
+                val path = windowsById[id]?.takeIf { it.first === windows }?.second
+                windows.parents.values.count { it == path }
+            }
+            def("frameWindow") { args ->
+                val el = element(args, 0) ?: return@def null
+                val path = document.frameTargetOf(dir, el) ?: return@def null
+                if (path !in windows.parents && path != this.path) windows.parents[path] = frame
+                windows.idOf(path)
+            }
+            def("frames") { args -> element(args, 0)?.let { frameElements().map(dom::idOf) } ?: emptyList<Int>() }
+            def("post") { args ->
+                val to = (args.getOrNull(0) as? Double)?.toInt() ?: return@def null
+                deliveries.addLast(Delivery(to, 0, windowId, string(args, 1)))
+                null
+            }
+            def("delivery") { delivery?.let { listOf(it.end, it.source, it.text) } }
+            def("portRoute") { args ->
+                val end = nextEnd
+                nextEnd += 2
+                routeEnds[end] = windowId
+                routeEnds[end + 1] = destination((args.getOrNull(0) as? Double)?.toInt() ?: 0)
+                end + 1
+            }
+            def("portMove") { args ->
+                val end = (args.getOrNull(0) as? Double)?.toInt() ?: return@def null
+                if (end in routeEnds) routeEnds[end] = destination((args.getOrNull(1) as? Double)?.toInt() ?: 0)
+                null
+            }
+            def("portPost") { args ->
+                val end = (args.getOrNull(0) as? Double)?.toInt() ?: return@def null
+                if (end in routeEnds) deliveries.addLast(Delivery(0, end xor 1, windowId, string(args, 1)))
+                null
+            }
+            def("portClose") { args ->
+                val end = (args.getOrNull(0) as? Double)?.toInt() ?: return@def null
+                routeEnds.remove(end)
+                routeEnds.remove(end xor 1)
+                null
+            }
             def("timers") { args ->
                 timers = (args.getOrNull(0) as? Double)?.toInt() ?: 0
                 timersChanged()
@@ -850,6 +1047,9 @@ public class EpubScriptSession(
 
         /** What a start of the prelude and `__kite_step()` answer while a callback is left to run. */
         private const val MORE = "more"
+
+        /** How many messages between windows one host call hands on before it lets the reader draw (#613). */
+        private const val MAX_DELIVERIES = 256
 
         /**
          * The host of a book's origin: 64 bits of an FNV-1a hash of [identifier] and [instanceKey],

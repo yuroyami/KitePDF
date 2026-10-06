@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A frame's `contentWindow`, and a frame's `parent` and `top`, are windows of another origin:
+  `postMessage` carries a structured clone between the two windows, and a `MessagePort` can
+  move to another window and stay entangled. Any other member throws a `SecurityError`. A frame
+  element gets its `load` event, and a frame that a script adds loads and runs its scripts.
+  Before this change, `contentWindow` was null, a frame's `parent` was itself, and a frame that
+  a script added ran no script (#613).
+
 - An `<object>` whose `data` is an HTML or XHTML document of the book shows that document in
   place of its fallback, and the document's scripts run, as a frame's do. The fallback shows when
   the book does not hold the document. Before this change, the object always showed its
@@ -16,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - An `<iframe>` in a chapter shows the document of the book that it names, laid out at the
   frame's size, and the document's scripts run in a window of their own. That window has the
-  book's origin and `navigator.epubReadingSystem`, and its `parent` is itself, so it cannot change
-  the chapter or the frame's size. A tap on a frame goes to its document, and a chapter whose
+  book's origin and `navigator.epubReadingSystem`, and it cannot change the chapter or the
+  frame's size. A tap on a frame goes to its document, and a chapter whose
   frames run scripts counts as scripted. Five more W3C EPUB tests pass. Before this change, a
   frame's box stayed empty and its scripts never ran (#528).
 

@@ -446,12 +446,13 @@ public class EpubDocument internal constructor(
     }
 
     /**
-     * The documents in the book that frames and objects of [chapter] show and whose scripts run,
-     * those inside them included, outermost first (#528, #612). Read from the trees the layout has.
+     * The documents in the book that frames and objects of [chapter] show, those inside them
+     * included, outermost first, each with the path of the document around it: null for the
+     * chapter (#528, #612, #613). Read from the trees the layout has.
      */
-    internal fun scriptedFramesOf(chapter: Int): List<String> {
-        val out = ArrayList<String>()
-        fun scan(tree: KiteXmlNode.Element, dir: String, ancestors: Set<String>) {
+    internal fun framesOf(chapter: Int): List<Pair<String, String?>> {
+        val out = LinkedHashMap<String, String?>()
+        fun scan(tree: KiteXmlNode.Element, dir: String, ancestors: Set<String>, around: String?) {
             val found = ArrayList<String>()
             fun walk(e: KiteXmlNode.Element) {
                 embeddedSource(e)?.takeIf { !FRAME_SCHEME.containsMatchIn(it) }?.let { src ->
@@ -463,13 +464,26 @@ public class EpubDocument internal constructor(
             walk(tree)
             for (path in found) {
                 val sp = parsed.frameLayoutSpine(chapter, path) ?: continue
-                if (parsed.isScriptedFrame(path)) out += path
-                scan(sp.tree, sp.docDir, ancestors + path)
+                out[path] = around
+                scan(sp.tree, sp.docDir, ancestors + path, path)
             }
         }
         val sp = parsed.layoutSpine(chapter)
-        scan(sp.tree, sp.docDir, setOf(sp.path))
-        return out
+        scan(sp.tree, sp.docDir, setOf(sp.path), null)
+        return out.toList()
+    }
+
+    /** Whether the document at [path] has scripts that run when a frame shows it (#528). */
+    internal fun isScriptedFrame(path: String): Boolean = parsed.isScriptedFrame(path)
+
+    /**
+     * The path of the document that [e], an iframe or an object of a document in [dir], shows,
+     * or null when it shows none of the book: for an object, none that the book has (#613).
+     */
+    internal fun frameTargetOf(dir: String, e: KiteXmlNode.Element): String? {
+        val src = embeddedSource(e) ?: return null
+        val path = framePathOf(if (KiteDataUrl.isDataUrl(src)) src else resolvePath(dir, src)) ?: return null
+        return if (e.tag == "object" && !parsed.hasFile(path)) null else path
     }
 
     /**
@@ -3413,7 +3427,7 @@ private const val MAX_BACKGROUND_TILES = 4096
 private const val MAX_FRAME_RENDERS = 16
 
 /** How deep frames nest before the innermost shows nothing, as a browser stops a loop of frames (#528). */
-private const val MAX_FRAME_DEPTH = 8
+internal const val MAX_FRAME_DEPTH = 8
 
 /** A URL with a scheme, which a frame does not show unless it is a data or blob URL (#528). */
 private val FRAME_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
