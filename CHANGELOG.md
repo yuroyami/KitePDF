@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The transport bar of a media element seeks: a tap on its line goes there, and a drag scrubs.
+  A screen reader moves the line as a slider, five seconds a step. The bar shows the elapsed and
+  the total time (#479).
+- The transport bar of a media element has a mute button and a speed menu from 0.5× to 2×, which
+  keeps the pitch. `KiteMediaLabels` sets the words that the controls say to a screen reader, so
+  an app can translate them. `KiteMediaOverlay` and `EpubMediaPlayer` take them as `labels` (#484).
 - `KiteReadAloud` speaks a media overlay clip that has no audio through the new `speak` parameter,
   which hands the app's speech engine the clip and its text with the book's pronunciation hints.
   A book that only speaks needs no player. `EpubDocument.readingOrderOf(href)` gives the text of
