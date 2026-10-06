@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ReaderTheme.withImages(ReaderImages.LineArt)` makes a reading theme recolour line art, as it
+  does text: a grey symbol or equation drawn as an image, on white or on transparent paper. A
+  black symbol on dark paper then keeps the contrast of black text. Photos and coloured artwork
+  keep their colours, and a theme still leaves every image alone unless asked (#458).
 - A video shows its subtitle and caption tracks. The track that the element marks `default`
   shows over the picture at once, and a menu on the transport bar picks another track or none.
   `EpubMedia.tracks` lists the `<track>` elements of a media element, with their kind, language

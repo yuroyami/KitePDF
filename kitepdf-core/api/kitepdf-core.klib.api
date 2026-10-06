@@ -93,6 +93,17 @@ final enum class io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent : ko
     }
 }
 
+final enum class io.github.yuroyami.kitepdf.core.render/ReaderImages : kotlin/Enum<io.github.yuroyami.kitepdf.core.render/ReaderImages> { // io.github.yuroyami.kitepdf.core.render/ReaderImages|null[0]
+    enum entry LineArt // io.github.yuroyami.kitepdf.core.render/ReaderImages.LineArt|null[0]
+    enum entry Unchanged // io.github.yuroyami.kitepdf.core.render/ReaderImages.Unchanged|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.core.render/ReaderImages.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.core.render/ReaderImages> // io.github.yuroyami.kitepdf.core.render/ReaderImages.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core.render/ReaderImages // io.github.yuroyami.kitepdf.core.render/ReaderImages.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core.render/ReaderImages> // io.github.yuroyami.kitepdf.core.render/ReaderImages.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.core/KiteLineEnd : kotlin/Enum<io.github.yuroyami.kitepdf.core/KiteLineEnd> { // io.github.yuroyami.kitepdf.core/KiteLineEnd|null[0]
     enum entry HARD // io.github.yuroyami.kitepdf.core/KiteLineEnd.HARD|null[0]
     enum entry HYPHEN // io.github.yuroyami.kitepdf.core/KiteLineEnd.HYPHEN|null[0]
@@ -1496,15 +1507,19 @@ final class io.github.yuroyami.kitepdf.core.render/KiteStrokePen { // io.github.
 
 final class io.github.yuroyami.kitepdf.core.render/ReaderTheme { // io.github.yuroyami.kitepdf.core.render/ReaderTheme|null[0]
     constructor <init>(io.github.yuroyami.kitepdf.core.render/RgbColor, kotlin/Function1<io.github.yuroyami.kitepdf.core.render/RgbColor, io.github.yuroyami.kitepdf.core.render/RgbColor>) // io.github.yuroyami.kitepdf.core.render/ReaderTheme.<init>|<init>(io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Function1<io.github.yuroyami.kitepdf.core.render.RgbColor,io.github.yuroyami.kitepdf.core.render.RgbColor>){}[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core.render/RgbColor, kotlin/Function1<io.github.yuroyami.kitepdf.core.render/RgbColor, io.github.yuroyami.kitepdf.core.render/RgbColor>, io.github.yuroyami.kitepdf.core.render/ReaderImages) // io.github.yuroyami.kitepdf.core.render/ReaderTheme.<init>|<init>(io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Function1<io.github.yuroyami.kitepdf.core.render.RgbColor,io.github.yuroyami.kitepdf.core.render.RgbColor>;io.github.yuroyami.kitepdf.core.render.ReaderImages){}[0]
 
     final val background // io.github.yuroyami.kitepdf.core.render/ReaderTheme.background|{}background[0]
         final fun <get-background>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.core.render/ReaderTheme.background.<get-background>|<get-background>(){}[0]
+    final val images // io.github.yuroyami.kitepdf.core.render/ReaderTheme.images|{}images[0]
+        final fun <get-images>(): io.github.yuroyami.kitepdf.core.render/ReaderImages // io.github.yuroyami.kitepdf.core.render/ReaderTheme.images.<get-images>|<get-images>(){}[0]
     final val mapColor // io.github.yuroyami.kitepdf.core.render/ReaderTheme.mapColor|{}mapColor[0]
         final fun <get-mapColor>(): kotlin/Function1<io.github.yuroyami.kitepdf.core.render/RgbColor, io.github.yuroyami.kitepdf.core.render/RgbColor> // io.github.yuroyami.kitepdf.core.render/ReaderTheme.mapColor.<get-mapColor>|<get-mapColor>(){}[0]
 
     final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/ReaderTheme.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/ReaderTheme.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.render/ReaderTheme.toString|toString(){}[0]
+    final fun withImages(io.github.yuroyami.kitepdf.core.render/ReaderImages): io.github.yuroyami.kitepdf.core.render/ReaderTheme // io.github.yuroyami.kitepdf.core.render/ReaderTheme.withImages|withImages(io.github.yuroyami.kitepdf.core.render.ReaderImages){}[0]
     final fun wrap(io.github.yuroyami.kitepdf.core.render/KiteCanvas): io.github.yuroyami.kitepdf.core.render/KiteCanvas // io.github.yuroyami.kitepdf.core.render/ReaderTheme.wrap|wrap(io.github.yuroyami.kitepdf.core.render.KiteCanvas){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.render/ReaderTheme.Companion|null[0]

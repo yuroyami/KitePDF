@@ -2225,14 +2225,25 @@ public final class io/github/yuroyami/kitepdf/core/render/NoopCanvas : io/github
 	public fun strokePath (Lio/github/yuroyami/kitepdf/core/render/KitePath;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;Ljava/util/List;DIID)V
 }
 
+public final class io/github/yuroyami/kitepdf/core/render/ReaderImages : java/lang/Enum {
+	public static final field LineArt Lio/github/yuroyami/kitepdf/core/render/ReaderImages;
+	public static final field Unchanged Lio/github/yuroyami/kitepdf/core/render/ReaderImages;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/render/ReaderImages;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/core/render/ReaderImages;
+}
+
 public final class io/github/yuroyami/kitepdf/core/render/ReaderTheme {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/render/ReaderTheme$Companion;
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lkotlin/jvm/functions/Function1;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/core/render/ReaderImages;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getBackground ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public final fun getImages ()Lio/github/yuroyami/kitepdf/core/render/ReaderImages;
 	public final fun getMapColor ()Lkotlin/jvm/functions/Function1;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+	public final fun withImages (Lio/github/yuroyami/kitepdf/core/render/ReaderImages;)Lio/github/yuroyami/kitepdf/core/render/ReaderTheme;
 	public final fun wrap (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;)Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;
 }
 

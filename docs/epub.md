@@ -116,6 +116,19 @@ KiteDocView(document = book, modifier = Modifier.fillMaxSize())
 KiteDocView(document = book, theme = ReaderTheme.Dark)
 ```
 
+A theme leaves images alone, so a photo never changes. A black symbol or equation
+drawn as an image then stays black on dark paper. Ask the theme to recolour line
+art as it does text:
+
+```kotlin
+KiteDocView(document = book, theme = ReaderTheme.Dark.withImages(ReaderImages.LineArt))
+```
+
+Line art is an image whose visible pixels are all grey and fall into one or two
+narrow bands of lightness, such as a black or grey symbol on white or on
+transparent paper. A white box behind the symbol takes the colour of the paper.
+A photo and coloured artwork keep their colours.
+
 Paged/continuous layouts, zoom, selection, search highlights, TOC panels and
 link taps all work the same as for PDF; see the
 [Compose viewer guide](compose-viewer.md).
