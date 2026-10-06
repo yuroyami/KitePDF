@@ -557,10 +557,13 @@ internal object EpubConformanceChecks {
         check("lay-pkg-flow-scrolled-doc") { pages(1) == 1 && KiteDocLayout.forDocument(doc) == KiteDocLayout.Paged(fit = KitePageFit.WIDTH) }
         check("lay-pp-embedded-images") { allFixedPages(1255.5, 1033.5) && (0 until chapters).all { images(it).size == 1 } && doc.renditionOf(0).pageSpread == EpubPageSpread.CENTER }
         check("lay-pp-embedded-images-svg") { allFixedPages(1255.5, 1033.5) && (0 until chapters).all { images(it).size == 1 } }
-        check("lay-pp-images-in-spine") { doc.chapterPath(0) == "EPUB/fallbacks/Title.xhtml" && "A APPLE PIE" in text(0) && doc.chapterPath(1) == "EPUB/fallbacks/A.xhtml" }
+        // An image that the spine lists shows as itself, at its pixel size (#614).
+        check("lay-pp-images-in-spine") {
+            doc.chapterPath(0) == "EPUB/images/Title.png" && allFixedPages(1255.5, 1033.5) && (0 until chapters).all { images(it).size == 1 }
+        }
         check("lay-pp-images-mixed") {
-            doc.chapterPath(3) == "EPUB/fallbacks/C.xhtml" && "C CUT IT" in text(3) && "D DEALT IT" in text(4) &&
-                listOf(0, 1, 2, 5, 6, 7, 8).all { sizeIs(it, 1255.5, 1033.5) && images(it).size == 1 }
+            doc.chapterPath(3) == "EPUB/images/C.png" && doc.chapterPath(4) == "EPUB/images/D.png" &&
+                (0 until chapters).all { sizeIs(it, 1255.5, 1033.5) && images(it).size == 1 }
         }
         check("lay-pp-layout-default") { doc.epubMetadata.rendition.layout == EpubLayout.REFLOWABLE && pages(0) > 1 && "renders as a reflowable document" in text(0) }
         check("lay-pp-layout-pre-paginated") { allFixedPages(675.0, 450.0) && (0 until 4).all { "Page ${it + 1}" in text(it) } }
@@ -585,11 +588,11 @@ internal object EpubConformanceChecks {
                 doc.renditionOf(0).layout == EpubLayout.REFLOWABLE && doc.renditionOf(2).layout == EpubLayout.REFLOWABLE
         }
         check("lay-pp-spine-overrides_image-spine-pp") {
-            doc.chapterPath(0) == "EPUB/page_001.xhtml" && doc.renditionOf(0).layout == EpubLayout.PRE_PAGINATED &&
+            doc.chapterPath(0) == "EPUB/images/page_1.png" && doc.renditionOf(0).layout == EpubLayout.PRE_PAGINATED &&
                 sizeIs(0, 750.0, 450.0) && images(0).size == 1 && doc.renditionOf(1).layout == EpubLayout.REFLOWABLE
         }
         check("lay-pp-spine-overrides_image-spine-reflow") {
-            doc.chapterPath(1) == "EPUB/page_002.xhtml" && doc.renditionOf(1).layout == EpubLayout.PRE_PAGINATED &&
+            doc.chapterPath(1) == "EPUB/images/page_2.png" && doc.renditionOf(1).layout == EpubLayout.PRE_PAGINATED &&
                 sizeIs(1, 750.0, 450.0) && images(1).size == 1 && doc.renditionOf(0).layout == EpubLayout.REFLOWABLE
         }
         check("lay-pp-spread-none") {

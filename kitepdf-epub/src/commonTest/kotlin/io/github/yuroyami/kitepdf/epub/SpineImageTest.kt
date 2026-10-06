@@ -40,7 +40,7 @@ class SpineImageTest {
         <nav epub:type="toc"><ol><li><a href="images/plate.png">The plate</a></li><li><a href="c2.xhtml">Text</a></li></ol></nav></body></html>"""
 
     /** A book whose spine lists the image `plate.png`, of [type], with the fallback document `plate.xhtml`, then a chapter of text. */
-    private fun book(metadata: String = "", type: String = "image/png"): EpubDocument {
+    private fun book(metadata: String = "", type: String = "image/png", plateProperties: String = ""): EpubDocument {
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
             <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">x</dc:identifier>$metadata</metadata>
@@ -50,7 +50,7 @@ class SpineImageTest {
               <item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>
               <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
             </manifest>
-            <spine><itemref idref="plate"/><itemref idref="c2"/></spine></package>"""
+            <spine><itemref idref="plate"$plateProperties/><itemref idref="c2"/></spine></package>"""
         return EpubDocument.open(
             EpubFixtures.storedZip(
                 listOf(
@@ -103,6 +103,18 @@ class SpineImageTest {
         assertEquals(1, doc.pageCountIn(0))
         assertEquals(1, images(doc, 0).size)
         assertEquals("Text.", doc.page(KiteLocation(1, 0)).textContent().plainText.trim())
+    }
+
+    @Test
+    fun a_spine_image_marked_pre_paginated_is_one_fixed_page_of_its_size() {
+        val doc = book(plateProperties = """ properties="rendition:layout-pre-paginated"""")
+        assertEquals(EpubLayout.PRE_PAGINATED, doc.renditionOf(0).layout)
+        assertEquals(EpubLayout.REFLOWABLE, doc.renditionOf(1).layout)
+        assertEquals(1, doc.pageCountIn(0))
+        val page = doc.page(KiteLocation(0, 0))
+        assertEquals(40 * 0.75, page.displayWidth, 0.01)
+        assertEquals(30 * 0.75, page.displayHeight, 0.01)
+        assertEquals(1, images(doc, 0).size)
     }
 
     @Test
