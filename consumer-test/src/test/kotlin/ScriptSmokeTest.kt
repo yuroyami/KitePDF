@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.document.KiteDoc
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.javascript.EpubScriptRunner
 import io.github.yuroyami.kitepdf.javascript.PdfScriptRunner
+import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayOutputStream
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
@@ -68,7 +69,7 @@ class ScriptSmokeTest {
     fun a_book_runs_its_scripts() {
         val book = KiteDoc.open(epub()) as EpubDocument
         EpubScriptRunner(book).use { scripts ->
-            scripts.chapterOpened(0)
+            runBlocking { scripts.chapterOpened(0) }
             assertEquals(emptyList(), scripts.failures.map { it.message })
         }
         val text = book.pages.first().textContent().plainText
@@ -79,7 +80,7 @@ class ScriptSmokeTest {
     fun a_form_runs_its_scripts() {
         val doc = KiteDoc.open(pdf()) as PdfDocument
         PdfScriptRunner(doc).use { scripts ->
-            scripts.documentOpened()
+            runBlocking { scripts.documentOpened() }
             val link = doc.pages.single().annotations.single().action as PdfAction.JavaScript
             assertEquals("42", scripts.run(link), "the link calls the function the document's own script defined")
             assertEquals(emptyList(), scripts.failures.map { it.message })
