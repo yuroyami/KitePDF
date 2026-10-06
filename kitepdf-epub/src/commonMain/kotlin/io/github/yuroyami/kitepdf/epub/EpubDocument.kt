@@ -35,6 +35,7 @@ import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.KiteRole
 import io.github.yuroyami.kitepdf.core.KiteReadingItem
 import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.epub.script.CanvasImages
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.KiteMetadata
 import io.github.yuroyami.kitepdf.core.KiteOutlineItem
@@ -395,6 +396,9 @@ public class EpubDocument internal constructor(
     /** Guards the tables below. Never held while a chapter is being laid out. */
     private val tableLock = KiteLock()
 
+    /** The pixels that scripts wrote into canvases, which the pages paint (#610). */
+    internal val canvasImages = CanvasImages()
+
     /** One per chapter, held for that chapter's layout so it happens once. */
     private val chapterLocks: Array<KiteLock> = Array(parsed.spineCount) { KiteLock() }
 
@@ -486,7 +490,7 @@ public class EpubDocument internal constructor(
             sp.rules, settings.fontSize, layoutWidth, directionFor(chapter), layoutHeight,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
-        return BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, parsed.tracksElements(chapter)) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
+        return BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, parsed.tracksElements(chapter), canvasImages::get) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
     }
 
     /**

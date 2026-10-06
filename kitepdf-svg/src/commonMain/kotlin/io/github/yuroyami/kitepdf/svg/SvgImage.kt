@@ -80,6 +80,8 @@ public class SvgImage private constructor(
     private val viewBox: DoubleArray?, // minX, minY, w, h
     /** What the style sheets of the document that includes this SVG declare for each element (#509). */
     private val hostStyle: ((KiteXmlNode.Element) -> String?)? = null,
+    /** Images the host already holds decoded, by the `href` of an `<image>`, asked before any file. */
+    private val images: ((String) -> KiteImageData?)? = null,
 ) {
 
     private val styles: SvgStyles by lazy { SvgStyles(root, hostStyle) }
@@ -388,8 +390,10 @@ public class SvgImage private constructor(
     ) {
         if (!paint.visible) return
         val href = el.attrs["href"]?.trim()?.takeIf { it.isNotEmpty() } ?: return
-        val bytes = if (KiteDataUrl.isDataUrl(href)) KiteDataUrl.decode(href)?.bytes else load?.invoke(href)
-        val image = bytes?.let { KiteImageData.fromEncodedImage(it) } ?: return
+        val image = images?.invoke(href) ?: run {
+            val bytes = if (KiteDataUrl.isDataUrl(href)) KiteDataUrl.decode(href)?.bytes else load?.invoke(href)
+            bytes?.let { KiteImageData.fromEncodedImage(it) }
+        } ?: return
         // A missing, auto or unreadable size is auto: it takes the intrinsic size,
         // or the other side through the intrinsic aspect ratio (#263). An explicit
         // zero still disables rendering (SVG 2, 12.2, #177).
@@ -1430,8 +1434,10 @@ public class SvgImage private constructor(
             val moved = compose(ctm, KiteMatrix.translation(box[0], box[1]))
             return scope.render { walk(target, moved, paint.copy(filterDepth = paint.filterDepth + 1), canvas, load, depth + 1, stop) }
         }
-        val bytes = if (KiteDataUrl.isDataUrl(href)) KiteDataUrl.decode(href)?.bytes else load?.invoke(href)
-        val image = bytes?.let { KiteImageData.fromEncodedImage(it) } ?: return null
+        val image = images?.invoke(href) ?: run {
+            val bytes = if (KiteDataUrl.isDataUrl(href)) KiteDataUrl.decode(href)?.bytes else load?.invoke(href)
+            bytes?.let { KiteImageData.fromEncodedImage(it) }
+        } ?: return null
         val iw = image.width.toDouble()
         val ih = image.height.toDouble()
         val bw = box[2] - box[0]
@@ -1772,7 +1778,18 @@ public class SvgImage private constructor(
          * nothing. Those declarations outrank presentation attributes and yield to the SVG's own
          * `<style>` rules, which come later in the document, unless they are important.
          */
-        public fun fromElement(svg: KiteXmlNode.Element, hostStyle: ((KiteXmlNode.Element) -> String?)?): SvgImage? {
+        public fun fromElement(svg: KiteXmlNode.Element, hostStyle: ((KiteXmlNode.Element) -> String?)?): SvgImage? =
+            fromElement(svg, hostStyle, null)
+
+        /**
+         * [fromElement] whose `<image>` elements ask [images] for their picture first, by their
+         * `href`, so a host that holds an image decoded hands it over without a file.
+         */
+        public fun fromElement(
+            svg: KiteXmlNode.Element,
+            hostStyle: ((KiteXmlNode.Element) -> String?)?,
+            images: ((String) -> KiteImageData?)?,
+        ): SvgImage? {
             if (!svg.tag.equals("svg", true)) return null
             // The XHTML parser lower-cases attribute names, so camelCase SVG
             // attributes (viewBox) arrive as "viewbox".
@@ -1792,7 +1809,7 @@ public class SvgImage private constructor(
             val w = givenW ?: givenH?.let { h -> ratio?.let { h / it } } ?: vb?.get(2) ?: 300.0
             val h = givenH ?: givenW?.let { w -> ratio?.let { w * it } } ?: vb?.get(3) ?: 150.0
             if (!w.isFinite() || !h.isFinite() || w <= 0 || h <= 0) return null
-            return SvgImage(svg, w, h, givenW != null || givenH != null || ratio == null, vb, hostStyle)
+            return SvgImage(svg, w, h, givenW != null || givenH != null || ratio == null, vb, hostStyle, images)
         }
 
         private fun findSvg(el: KiteXmlNode.Element): KiteXmlNode.Element? {

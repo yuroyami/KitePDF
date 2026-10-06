@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 import io.github.yuroyami.kitepdf.core.withLock
@@ -63,6 +65,9 @@ public class EpubScriptPolicy(
  *   `Date.now()`. Leave it unset for the real one; a test sets it so a timer is repeatable.
  * @param instanceKey a value the app keeps for its reader, such as an install id, which makes the
  *   book's origin one of this reader's copy (#521). Without one each runner has an origin of its own.
+ * @param fontOutlines the outline of a run of text in a host font, in glyph space as
+ *   `KiteCanvas.hostGlyphOutline` answers it. A canvas's `getImageData` and `toDataURL` draw text
+ *   with it. Without it, text reads back as blank.
  */
 public class EpubScriptRunner(
     public val document: EpubDocument,
@@ -70,6 +75,7 @@ public class EpubScriptRunner(
     private val onConsole: (level: String, message: String) -> Unit = { _, _ -> },
     private val clock: (() -> Long)? = null,
     private val instanceKey: String? = null,
+    private val fontOutlines: ((text: String, font: FontSpec) -> KitePath?)? = null,
 ) : EpubScriptHandler, AutoCloseable {
 
     private val startMark = kotlin.time.TimeSource.Monotonic.markNow()
@@ -178,6 +184,7 @@ public class EpubScriptRunner(
         onConsole = onConsole,
         clock = ::now,
         instanceKey = instanceKey,
+        fontOutlines = fontOutlines,
         liveChapters = if (scriptThread.value.isOwnThread || !KiteJsScriptEngine.oneEnginePerThread) LIVE_CHAPTERS else 1,
     ).also { made ->
         made.onTimersChanged { lock.withLock { timerListeners.toList() }.forEach { it() } }

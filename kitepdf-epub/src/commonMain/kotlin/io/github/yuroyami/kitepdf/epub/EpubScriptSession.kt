@@ -2,6 +2,8 @@ package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 import io.github.yuroyami.kitepdf.core.withLock
@@ -75,6 +77,9 @@ import kotlin.math.roundToLong
  *   the book's origin. EPUB 3.3 asks for an origin of each reader's copy, so another reader's
  *   copy of the book cannot reach this one's storage. Without one the session makes a random key,
  *   and the origin lasts as long as the session.
+ * @param fontOutlines the outline of a run of text in a host font, in glyph space as
+ *   `KiteCanvas.hostGlyphOutline` answers it. A canvas's
+ *   `getImageData` and `toDataURL` draw text with it. Without it, text reads back as blank.
  */
 public class EpubScriptSession(
     public val document: EpubDocument,
@@ -83,6 +88,7 @@ public class EpubScriptSession(
     clock: (() -> Long)? = null,
     public val liveChapters: Int = Int.MAX_VALUE,
     instanceKey: String? = null,
+    private val fontOutlines: ((text: String, font: FontSpec) -> KitePath?)? = null,
 ) : EpubScriptHandler, AutoCloseable {
 
     init {
@@ -256,6 +262,9 @@ public class EpubScriptSession(
             imageOf = ::canvasImage,
             isHtml = ::isHtml,
             changed = { dom.dirty = true },
+            images = document.canvasImages,
+            load = { href -> document.svgResource(document.chapterDir(chapter), href, chapter) },
+            fontOutlines = fontOutlines,
         )
 
         /** The size of each image a canvas drew, by its address, or null for one that does not decode. */

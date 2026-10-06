@@ -37,8 +37,11 @@ public final class io/github/yuroyami/kitepdf/svg/SvgImage {
 public final class io/github/yuroyami/kitepdf/svg/SvgImage$Companion {
 	public final fun fromElement (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;)Lio/github/yuroyami/kitepdf/svg/SvgImage;
 	public final fun fromElement (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;Lkotlin/jvm/functions/Function1;)Lio/github/yuroyami/kitepdf/svg/SvgImage;
+	public final fun fromElement (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)Lio/github/yuroyami/kitepdf/svg/SvgImage;
 	public final fun isSvg ([B)Z
 	public final fun parse ([B)Lio/github/yuroyami/kitepdf/svg/SvgImage;
+	public final fun parsePathData (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/render/KitePath;
+	public final fun textAdvance (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;D)D
 }
 
 public final class io/github/yuroyami/kitepdf/svg/SvgPage : io/github/yuroyami/kitepdf/core/KitePage {

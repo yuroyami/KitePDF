@@ -26,6 +26,7 @@ import io.github.yuroyami.kitepdf.epub.css.StyleResolver
 import io.github.yuroyami.kitepdf.epub.css.TextTransform
 import io.github.yuroyami.kitepdf.epub.css.WhiteSpaceMode
 import io.github.yuroyami.kitepdf.epub.css.WordBreak
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 
 /**
@@ -48,6 +49,8 @@ internal class BoxBuilder(
      * spans two elements stays one run.
      */
     private val tracksElements: Boolean = false,
+    /** The pixels that scripts wrote into canvases, by the href that a canvas's drawing names (#610). */
+    private val canvasImages: (String) -> KiteImageData? = { null },
     private val resolveHref: (String) -> String,
 ) {
     fun build(root: KiteXmlNode.Element): BlockBox =
@@ -265,7 +268,7 @@ internal class BoxBuilder(
                         val cs = resolver.compute(child, childAncestors, style)
                         if (cs.display == Display.NONE) return null
                         child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(pendingAnchors::add)
-                        val svg = SvgImage.fromElement(drawing) ?: return null
+                        val svg = SvgImage.fromElement(drawing, null, canvasImages) ?: return null
                         val w = canvasSizePt(drawing, "width")
                         val h = canvasSizePt(drawing, "height")
                         if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) && cs.cssFloat == CssFloat.NONE &&
@@ -828,7 +831,7 @@ internal class BoxBuilder(
                     val drawing = canvasDrawing(child)
                     if (drawing != null) {
                         val cs = resolver.compute(child, childAncestors, style)
-                        if (cs.display != Display.NONE) SvgImage.fromElement(drawing)?.let { svg ->
+                        if (cs.display != Display.NONE) SvgImage.fromElement(drawing, null, canvasImages)?.let { svg ->
                             child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(anchorSink::add)
                             inl.addImage(
                                 "", style, cs.widthPt ?: canvasSizePt(drawing, "width"), cs.heightPt ?: canvasSizePt(drawing, "height"),

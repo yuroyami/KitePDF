@@ -15,8 +15,8 @@ public final class io/github/yuroyami/kitepdf/javascript/EpubScriptPolicy$Compan
 public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner : io/github/yuroyami/kitepdf/epub/EpubScriptHandler, java/lang/AutoCloseable {
 	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/EpubScriptRunner$Companion;
 	public static final field LIVE_CHAPTERS I
-	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;)V
-	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Ljava/lang/String;Lkotlin/jvm/functions/Function2;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Ljava/lang/String;Lkotlin/jvm/functions/Function2;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun chapterOpened (I)V
 	public fun close ()V
 	public final fun getDocument ()Lio/github/yuroyami/kitepdf/epub/EpubDocument;
