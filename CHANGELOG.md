@@ -972,6 +972,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before. `KiteScriptEngine` has a new `evaluatePausing` for this. The synchronous helpers never
   pause. This needs `kitejs-api` and `kitejs-quickjs` 0.5.0 (#489).
 
+- Binary data now crosses between an EPUB script and the library as bytes. Before, it crossed as
+  a string with one character for each byte. `getImageData`, `putImageData`, `toBlob`,
+  `TextEncoder`, `TextDecoder`, `FileReader` and blob URLs take about half the time they took.
+  On a canvas of 500 by 500 pixels, `getImageData` took 56 ms where it took 123 ms, measured once
+  on the JVM. This needs `kitejs-api` and `kitejs-quickjs` 0.6.0.
+- Breaking: a function that `KiteScriptEngine.defineFunction` binds gets an `ArrayBuffer`, a typed
+  array or a `DataView` as a `ByteArray` of the bytes it views. A `ByteArray` that the function
+  returns reaches the script as a `Uint8Array`. An engine that implements `KiteScriptEngine` must
+  convert binary data the same way, or EPUB scripts lose it.
+
 - A scripted chapter opens two to six times faster after the first one. Each engine loads the
   bytecode of a large script that another engine of the process compiled, so the DOM of a
   chapter is parsed once per process. A warm chapter set up in 25 to 28 ms on the JVM, 34 to 38

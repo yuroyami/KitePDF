@@ -92,6 +92,21 @@ class CanvasReadbackTest {
     }
 
     @Test
+    fun a_dirty_rectangle_puts_only_its_own_pixels(): TestResult = scriptTest {
+        // Each pixel of a 4 by 3 image has its own red, 10 for each column and 100 for each row.
+        val (log) = run(
+            "var d = x.createImageData(4, 3);" +
+                "for (var i = 0; i < 12; i++) { d.data[i * 4] = (i % 4) * 10 + ((i / 4) | 0) * 100; d.data[i * 4 + 3] = 255; }" +
+                "x.putImageData(d, 5, 5, 1, 1, 2, 2);" +
+                "var row = function (y) { return Array.prototype.filter.call(x.getImageData(5, y, 4, 1).data, function (v, i) { return i % 4 === 0; }).join(' '); };" +
+                "console.log(row(5) + ' | ' + row(6) + ' | ' + row(7));" +
+                "var w = x.getImageData(0, 0, 40, 20); w.data[0] = 7; w.data[3] = 255; x.putImageData(w, 0, 0, 0, 0, 40, 1);" +
+                "console.log(x.getImageData(0, 0, 1, 1).data[0] + ' ' + x.getImageData(5, 6, 4, 1).data[4]);",
+        )
+        assertEquals(listOf("0 0 0 0 | 0 110 120 0 | 0 210 220 0", "7 110"), log)
+    }
+
+    @Test
     fun drawing_after_put_image_data_goes_over_the_pixels(): TestResult = scriptTest {
         val (log, book) = run(
             "var d = x.createImageData(40, 20); for (var i = 0; i < 800; i++) { d.data[i * 4] = 255; d.data[i * 4 + 3] = 255; }" +

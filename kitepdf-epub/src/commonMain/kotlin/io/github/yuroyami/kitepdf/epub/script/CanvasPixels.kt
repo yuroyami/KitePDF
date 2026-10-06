@@ -11,9 +11,9 @@ import kotlin.math.roundToInt
  */
 internal object CanvasPixels {
 
-    /** The RGBA bytes of the rectangle of [raster] at ([x], [y]), one character each, straight colour. */
-    fun read(raster: KiteRaster, x: Int, y: Int, w: Int, h: Int, p3: Boolean): String {
-        val out = CharArray(w * h * 4)
+    /** The RGBA bytes of the rectangle of [raster] at ([x], [y]), straight colour. */
+    fun read(raster: KiteRaster, x: Int, y: Int, w: Int, h: Int, p3: Boolean): ByteArray {
+        val out = ByteArray(w * h * 4)
         val rgb = DoubleArray(3)
         var k = 0
         for (j in 0 until h) for (i in 0 until w) {
@@ -21,17 +21,17 @@ internal object CanvasPixels {
             val a = p ushr 24
             if (!p3 || a == 0) {
                 val s = unpremultiply(p)
-                out[k++] = (s ushr 16 and 255).toChar()
-                out[k++] = (s ushr 8 and 255).toChar()
-                out[k++] = (s and 255).toChar()
+                out[k++] = (s ushr 16).toByte()
+                out[k++] = (s ushr 8).toByte()
+                out[k++] = s.toByte()
             } else {
                 straight(p, rgb)
                 convert(rgb, SRGB_TO_P3)
-                for (c in rgb) out[k++] = byte(c).toChar()
+                for (c in rgb) out[k++] = byte(c).toByte()
             }
-            out[k++] = a.toChar()
+            out[k++] = a.toByte()
         }
-        return out.concatToString()
+        return out
     }
 
     /** The rectangle as straight RGBA from 0 to 1, for an `rgba-float16` ImageData. */
@@ -49,12 +49,12 @@ internal object CanvasPixels {
     }
 
     /**
-     * Writes [w] by [h] pixels of straight RGBA into [raster] at ([x], [y]): [data] is a string of
-     * bytes or a list of numbers from 0 to 1. Pixels outside the raster are skipped. Answers
+     * Writes [w] by [h] pixels of straight RGBA into [raster] at ([x], [y]): [data] is a byte array
+     * or a list of numbers from 0 to 1. Pixels outside the raster are skipped. Answers
      * whether any pixel landed.
      */
     fun write(raster: KiteRaster, data: Any?, x: Int, y: Int, w: Int, h: Int, p3: Boolean): Boolean {
-        val bytes = data as? String
+        val bytes = data as? ByteArray
         val floats = data as? List<*>
         if (bytes == null && floats == null) return false
         val rgb = DoubleArray(3)
@@ -68,12 +68,12 @@ internal object CanvasPixels {
                 val k = (j * w + i) * 4
                 val a: Int
                 if (bytes != null) {
-                    if (k + 3 >= bytes.length) continue
-                    a = bytes[k + 3].code and 255
-                    if (p3) for (c in 0..2) rgb[c] = (bytes[k + c].code and 255) / 255.0
+                    if (k + 3 >= bytes.size) continue
+                    a = bytes[k + 3].toInt() and 255
+                    if (p3) for (c in 0..2) rgb[c] = (bytes[k + c].toInt() and 255) / 255.0
                     else {
                         raster.pixels[ty * raster.width + tx] = premultiply(
-                            (a shl 24) or (bytes[k].code and 255 shl 16) or (bytes[k + 1].code and 255 shl 8) or (bytes[k + 2].code and 255),
+                            (a shl 24) or (bytes[k].toInt() and 255 shl 16) or (bytes[k + 1].toInt() and 255 shl 8) or (bytes[k + 2].toInt() and 255),
                         )
                         wrote = true
                         continue

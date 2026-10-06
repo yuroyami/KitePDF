@@ -101,7 +101,7 @@ internal class CanvasHost(
         }
         if (op == "toDataURL" || op == "encode") {
             val file = encode(contexts[canvas], canvas, s(args, 2), args.getOrNull(3))
-            if (op == "encode") return file?.let { (type, bytes) -> listOf(type, bytes.latin1()) }
+            if (op == "encode") return file?.let { (type, bytes) -> listOf(type, bytes) }
             return file?.let { (type, bytes) -> "data:$type;base64," + Base64.encode(bytes) } ?: "data:,"
         }
         val c = contexts[canvas] ?: return null
@@ -118,8 +118,8 @@ internal class CanvasHost(
     }
 
     /**
-     * `getImageData`: the rectangle at ([x], [y]), transparent outside the canvas, as bytes in a
-     * string, or as numbers from 0 to 1 when [floats] (HTML, 4.12.5.1.16).
+     * `getImageData`: the rectangle at ([x], [y]), transparent outside the canvas, as bytes, or as
+     * numbers from 0 to 1 when [floats] (HTML, 4.12.5.1.16).
      */
     private fun pixels(c: CanvasContext, x: Int, y: Int, w: Int, h: Int, floats: Boolean, p3: Boolean): Any {
         val r = rasterOf(c)
@@ -161,8 +161,6 @@ internal class CanvasHost(
         val q = (quality as? Number)?.toDouble()?.takeIf { it in 0.0..1.0 } ?: 0.92
         return "image/jpeg" to raster.encodeJpeg((q * 100).roundToInt())
     }
-
-    private fun ByteArray.latin1(): String = CharArray(size) { (this[it].toInt() and 255).toChar() }.concatToString()
 
     private fun d(args: List<Any?>, i: Int): Double = (args.getOrNull(i) as? Number)?.toDouble() ?: Double.NaN
     private fun s(args: List<Any?>, i: Int): String = args.getOrNull(i)?.toString().orEmpty()

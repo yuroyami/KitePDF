@@ -447,8 +447,8 @@ C2D.getImageData = function getImageData(sx, sy, sw, sh, settings) {
     data = new Float16ArrayCtor(pixels.length);
     for (var i = 0; i < pixels.length; i++) data[i] = pixels[i];
   } else {
-    data = new Uint8ClampedArrayCtor(pixels.length);
-    for (var j = 0; j < pixels.length; j++) data[j] = StringCharCodeAt(pixels, j);
+    // The host hands over a Uint8Array of its own, so the image data takes its buffer as it is.
+    data = new Uint8ClampedArrayCtor(TypedArrayBuffer(pixels));
   }
   return newImageData(null, size[0], size[1], data, s);
 };
@@ -479,9 +479,11 @@ C2D.putImageData = function putImageData(imagedata, dx, dy, dirtyX, dirtyY, dirt
     for (row = 0; row < rh; row++) {
       for (k = ((ry + row) * d.width + rx) * 4; k < ((ry + row) * d.width + rx + rw) * 4; k++) ArrayPush(out, data[k]);
     }
+  } else if (rw === d.width) {
+    out = bytesView(data, ry * d.width * 4, (ry + rh) * d.width * 4);
   } else {
-    out = '';
-    for (row = 0; row < rh; row++) out += byteString(bytesView(data, ((ry + row) * d.width + rx) * 4, ((ry + row) * d.width + rx + rw) * 4));
+    out = new Uint8Array(rw * rh * 4);
+    for (row = 0; row < rh; row++) TypedArraySet(out, bytesView(data, ((ry + row) * d.width + rx) * 4, ((ry + row) * d.width + rx + rw) * 4), row * rw * 4);
   }
   K.cv(ctx.canvas, 'putImageData', out, x + rx, y + ry, rw, rh, d.colorSpace === 'display-p3');
 };
@@ -503,7 +505,7 @@ function canvasBlob(canvas, callback, type, quality) {
     var blob = null;
     if (file != null) {
       blob = ObjectCreate(Blob.prototype);
-      WeakMapSet(blobs, blob, { bytes: bytesOf(file[1]), type: file[0] });
+      WeakMapSet(blobs, blob, { bytes: file[1], type: file[0] });
     }
     callback(blob);
   });

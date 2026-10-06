@@ -23,10 +23,9 @@ import io.github.yuroyami.kitepdf.epub.script.WhatwgDecoder
 import io.github.yuroyami.kitepdf.epub.script.WhatwgEncoding
 import io.github.yuroyami.kitepdf.epub.script.WhatwgMimeType
 import io.github.yuroyami.kitepdf.epub.script.WhatwgUrl
-import io.github.yuroyami.kitepdf.epub.script.byteString
-import io.github.yuroyami.kitepdf.epub.script.bytesOf
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.svg.SvgImage
+import kotlin.io.encoding.Base64
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -703,6 +702,7 @@ public class EpubScriptSession(
             fun node(args: List<Any?>, i: Int): KiteXmlNode? = (args.getOrNull(i) as? Double)?.let { dom.node(it.toInt()) }
             fun element(args: List<Any?>, i: Int): KiteXmlNode.Element? = node(args, i) as? KiteXmlNode.Element
             fun string(args: List<Any?>, i: Int): String = args.getOrNull(i)?.toString().orEmpty()
+            fun bytes(args: List<Any?>, i: Int): ByteArray = args.getOrNull(i) as? ByteArray ?: ByteArray(0)
             // A namespace or a prefix, which the prelude passes as the empty string for none.
             fun nullable(args: List<Any?>, i: Int): String? = string(args, i).ifEmpty { null }
             fun flat(a: ScriptDom.Attribute): List<String> = listOf(a.namespace.orEmpty(), a.prefix.orEmpty(), a.localName, a.value)
@@ -862,21 +862,22 @@ public class EpubScriptSession(
             }
             // The Encoding Standard (#532): the encoding a label names, a decoder that goes on from
             // the state the call before it left, the UTF-8 encoder, and forgiving base64. Bytes
-            // cross as strings whose code units are bytes.
+            // cross as byte arrays, which a script sees as Uint8Arrays.
             def("encoding") { args -> WhatwgEncoding.forLabel(string(args, 0)) }
             def("decode") { args ->
                 val state = (args.getOrNull(3) as? List<*>)?.map { (it as? Double)?.toInt() ?: 0 }
                 val decoder = WhatwgDecoder(string(args, 0), args.getOrNull(1) == true, args.getOrNull(2) == true, state)
-                listOf(decoder.decode(bytesOf(string(args, 4)), flush = args.getOrNull(5) == true)) + decoder.state
+                listOf(decoder.decode(bytes(args, 4), flush = args.getOrNull(5) == true)) + decoder.state
             }
-            def("encode") { args -> byteString(WhatwgEncoding.utf8Encode(string(args, 0))) }
+            def("encode") { args -> WhatwgEncoding.utf8Encode(string(args, 0)) }
             def("encodeInto") { args ->
                 val capacity = ((args.getOrNull(1) as? Double) ?: 0.0).coerceIn(0.0, Int.MAX_VALUE.toDouble()).toInt()
                 val (read, bytes) = WhatwgEncoding.utf8EncodeInto(string(args, 0), capacity)
-                listOf(read, byteString(bytes))
+                listOf(read, bytes)
             }
             def("atob") { args -> WhatwgEncoding.atob(string(args, 0)) }
             def("btoa") { args -> WhatwgEncoding.btoa(string(args, 0)) }
+            def("base64") { args -> Base64.encode(bytes(args, 0)) }
             // The File API (#533): the text a FileReader reads, in the encoding its label names,
             // else the charset of the blob's type, else UTF-8, a byte order mark first; and the
             // book's blob URL store.
@@ -884,9 +885,9 @@ public class EpubScriptSession(
                 val encoding = args.getOrNull(1)?.toString()?.let(WhatwgEncoding::forLabel)
                     ?: WhatwgMimeType.parse(string(args, 2))?.parameters?.get("charset")?.let(WhatwgEncoding::forLabel)
                     ?: "UTF-8"
-                WhatwgEncoding.decode(bytesOf(string(args, 0)), encoding)
+                WhatwgEncoding.decode(bytes(args, 0), encoding)
             }
-            def("blobUrl") { args -> document.blobUrls.create(origin, blobKey, bytesOf(string(args, 0)), string(args, 1)) }
+            def("blobUrl") { args -> document.blobUrls.create(origin, blobKey, bytes(args, 0), string(args, 1)) }
             def("revokeBlobUrl") { args -> document.blobUrls.revoke(string(args, 0)); null }
             // Other windows (#613): this one, the one around it and the chapter's, by id; the frames
             // of a document; and messages and port routes between windows, which settle() hands on.

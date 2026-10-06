@@ -2046,9 +2046,9 @@ function TextEncoderStream() {
   var st = { __proto__: null, decoder: false, pending: null, transform: null };
   st.transform = textTransform(function (chunk, c) {
     var input = usvKeepingLead(chunk, st);
-    if (input !== '') transformControllerEnqueue(c, bytesOf(K.encode(input)));
+    if (input !== '') transformControllerEnqueue(c, K.encode(input));
   }, function (c) {
-    if (st.pending !== null) { st.pending = null; transformControllerEnqueue(c, bytesOf(K.encode('�'))); }
+    if (st.pending !== null) { st.pending = null; transformControllerEnqueue(c, K.encode('�')); }
   });
   WeakMapSet(textStreams, this, st);
 }
@@ -2087,10 +2087,10 @@ function TextDecoderStream() {
   st.transform = textTransform(function (chunk, c) {
     var view = bufferView(chunk);
     if (view === null) throw new TypeError("The provided value is not of type '(ArrayBuffer or ArrayBufferView)'.");
-    var text = decode(byteString(view), false);
+    var text = decode(view, false);
     if (text !== '') transformControllerEnqueue(c, text);
   }, function (c) {
-    var text = decode('', true);
+    var text = decode(null, true);
     if (text !== '') transformControllerEnqueue(c, text);
   });
   WeakMapSet(textStreams, this, st);
