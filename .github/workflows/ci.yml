@@ -395,6 +395,7 @@ jobs:
           :kitepdf-core:linuxX64Test :kitepdf-pdf:linuxX64Test
           :kitepdf-epub:linuxX64Test :kitepdf-cbz:linuxX64Test
           :kitepdf-svg:linuxX64Test :kitepdf-xps:linuxX64Test :kitepdf:linuxX64Test
+          :kitepdf-javascript:linuxX64Test
           --continue --stacktrace
 
       # Two workers: linking the wasm test binaries four at a time ran a
@@ -405,6 +406,7 @@ jobs:
           :kitepdf-core:wasmJsNodeTest :kitepdf-pdf:wasmJsNodeTest
           :kitepdf-epub:wasmJsNodeTest :kitepdf-cbz:wasmJsNodeTest
           :kitepdf-svg:wasmJsNodeTest :kitepdf-xps:wasmJsNodeTest :kitepdf:wasmJsNodeTest
+          :kitepdf-javascript:wasmJsNodeTest
           :kitepdf-core:wasmWasiNodeTest :kitepdf-pdf:wasmWasiNodeTest
           :kitepdf-epub:wasmWasiNodeTest :kitepdf-cbz:wasmWasiNodeTest
           :kitepdf-svg:wasmWasiNodeTest :kitepdf-xps:wasmWasiNodeTest :kitepdf:wasmWasiNodeTest
@@ -421,6 +423,7 @@ jobs:
           ./gradlew $tasks \
             :kitepdf-net:compileKotlinLinuxX64 :kitepdf-net:compileKotlinLinuxArm64 \
             :kitepdf-net:compileKotlinMingwX64 :kitepdf-net:compileKotlinWasmJs \
+            :kitepdf-javascript:compileKotlinLinuxArm64 :kitepdf-javascript:compileKotlinMingwX64 \
             :kitepdf-skia-renderer:compileKotlinLinuxX64 :kitepdf-skia-renderer:compileKotlinLinuxArm64 \
             :kitepdf-skia-renderer:compileKotlinWasmJs :kitepdf-compose-viewer:compileKotlinWasmJs \
             --continue --stacktrace
