@@ -63,7 +63,7 @@ internal object NarratedBooks {
         }
         val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">""" +
             """<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">narrated</dc:identifier></metadata>""" +
-            """<manifest>$manifest</manifest><spine>$spine</spine></package>"""
+            """<manifest>$manifest${MediaBooks.items(files.keys)}</manifest><spine>$spine</spine></package>"""
         entries["OEBPS/content.opf"] = opf.encodeToByteArray()
         entries.putAll(texts)
         for ((name, bytes) in files) entries["OEBPS/$name"] = bytes

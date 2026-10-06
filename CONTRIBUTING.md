@@ -39,7 +39,8 @@ Run this before every commit.
 ./gradlew :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest \
           :kitepdf-compose-viewer:jvmTest :kitepdf-skia-renderer:jvmTest \
           :kitepdf-native-renderer:jvmTest :kitepdf-javascript:jvmTest \
-          :kitepdf-difftest:jvmTest
+          :kitepdf-difftest:jvmTest :kitepdf:jvmTest :kitepdf-net:jvmTest \
+          :kitepdf-media:jvmTest
 ```
 
 ```bash
