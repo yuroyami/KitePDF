@@ -18,8 +18,13 @@ class SelectorMatchTest {
     private val red = RgbColor(1.0, 0.0, 0.0)
 
     /** Computed styles for every element keyed by its `id` attribute. */
-    private fun resolve(html: String, css: String): Map<String, ComputedStyle> {
+    private fun resolve(html: String, css: String, states: Map<String, Map<String, String>> = emptyMap()): Map<String, ComputedStyle> {
         val tree = HtmlParser.parse(html)
+        fun setStates(el: KiteXmlNode.Element) {
+            states[el.attrs["id"]]?.let { st -> el.attrs = el.attrs + st.mapKeys { FormStates.STATE + it.key } }
+            for (c in el.children) if (c is KiteXmlNode.Element) setStates(c)
+        }
+        setStates(tree)
         val resolver = StyleResolver(CssParser.parse(css, Origin.AUTHOR), 12.0, 328.0)
         val map = LinkedHashMap<String, ComputedStyle>()
         fun walk(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, parent: ComputedStyle) {
@@ -183,5 +188,23 @@ class SelectorMatchTest {
         // li:first-child (0,1,1) must beat plain li (0,0,1) regardless of order.
         val s = resolve(list, "li:first-child{color:red} li{color:blue}")
         assertTrue(s.redIds().contains("a"), "pseudo-class specificity must win over type")
+    }
+
+    @Test
+    fun a_control_state_that_a_script_set_wins_over_its_attributes() {
+        val html = """<form><input type="checkbox" id="c" checked="checked"/><input type="checkbox" id="d"/>""" +
+            """<input id="t" placeholder="p" required="required"/><select><option id="o1">a</option><option id="o2">b</option></select></form>"""
+        val states = mapOf(
+            "c" to mapOf("checked" to "0"),
+            "d" to mapOf("checked" to "1"),
+            "t" to mapOf("value" to "typed"),
+            "o1" to mapOf("selected" to "0"),
+            "o2" to mapOf("selected" to "1"),
+        )
+        assertEquals(setOf("d", "o2"), resolve(html, ":checked{color:red}", states).redIds())
+        assertEquals(setOf("c"), resolve(html, ":default{color:red}", states).redIds())
+        assertEquals(emptySet(), resolve(html, ":placeholder-shown{color:red}", states).redIds())
+        assertEquals(setOf("t"), resolve(html, ":placeholder-shown{color:red}").redIds())
+        assertEquals(setOf("d"), resolve(html, ":indeterminate{color:red}", mapOf("d" to mapOf("indeterminate" to "1"))).redIds())
     }
 }

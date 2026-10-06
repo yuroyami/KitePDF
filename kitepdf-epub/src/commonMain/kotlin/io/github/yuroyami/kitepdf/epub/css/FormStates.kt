@@ -3,11 +3,25 @@ package io.github.yuroyami.kitepdf.epub.css
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 /**
- * The pseudo-classes of a form control's state (HTML, 4.16.3), read from its attributes: a page
- * shows a control's checkedness from its `checked` attribute, and its value from its `value`
- * attribute or its text.
+ * The pseudo-classes of a form control's state (HTML, 4.16.3). A control's checkedness, an option's
+ * selectedness, a control's value and the indeterminate flag are what a script set, which
+ * [SelectorTree.state] reads, and else what the control's attributes and text say (#552).
  */
 internal object FormStates {
+
+    /**
+     * The start of the key under which an element's layout attribute map keeps a state that a script set.
+     * No attribute name can hold the character, so no selector and no serializer reads it as one.
+     */
+    const val STATE = "\u0000"
+
+    /** The checkedness of an input: what a script set, else its `checked` attribute (HTML, 4.10.5). */
+    private fun checkedness(el: KiteXmlNode.Element, tree: SelectorTree): Boolean =
+        tree.state(el, "checked")?.let { it == "1" } ?: (tree.attr(el, "checked") != null)
+
+    /** The value of an input or a textarea: what a script set, else its `value` attribute or its text. */
+    private fun value(el: KiteXmlNode.Element, local: String?, tree: SelectorTree): String? = tree.state(el, "value")
+        ?: if (local == "textarea") el.children.filterIsInstance<KiteXmlNode.Text>().joinToString("") { it.text } else tree.attr(el, "value")
 
     fun matches(kind: PseudoKind, el: KiteXmlNode.Element, tree: SelectorTree): Boolean {
         val local = html(el, tree)
@@ -22,7 +36,11 @@ internal object FormStates {
             }
             PseudoKind.INDETERMINATE -> when (local) {
                 // The group holds the radio itself (HTML 4.10.5.1.15), as it does for validity below.
-                "input" -> inputType(el, tree) == "radio" && (radioGroup(el, tree) + el).none { tree.attr(it, "checked") != null }
+                "input" -> when (inputType(el, tree)) {
+                    "checkbox" -> tree.state(el, "indeterminate") == "1"
+                    "radio" -> (radioGroup(el, tree) + el).none { checkedness(it, tree) }
+                    else -> false
+                }
                 "progress" -> tree.attr(el, "value") == null
                 else -> false
             }
@@ -33,8 +51,8 @@ internal object FormStates {
             PseudoKind.READ_WRITE -> readWrite(el, local, tree)
             PseudoKind.READ_ONLY -> !readWrite(el, local, tree)
             PseudoKind.PLACEHOLDER_SHOWN -> tree.attr(el, "placeholder") != null && when (local) {
-                "input" -> inputType(el, tree) in PLACEHOLDER_TYPES && tree.attr(el, "value").isNullOrEmpty()
-                "textarea" -> el.children.all { it !is KiteXmlNode.Text || it.text.isEmpty() }
+                "input" -> inputType(el, tree) in PLACEHOLDER_TYPES && value(el, local, tree).isNullOrEmpty()
+                "textarea" -> value(el, local, tree).isNullOrEmpty()
                 else -> false
             }
             PseudoKind.VALID -> validity(el, local, tree) == true
@@ -49,8 +67,13 @@ internal object FormStates {
     private fun inputType(el: KiteXmlNode.Element, tree: SelectorTree): String =
         tree.attr(el, "type")?.let(::asciiLower)?.takeIf { it in INPUT_TYPES } ?: "text"
 
+    // Blink matches no indeterminate checkbox, though its checkedness is true.
     private fun checked(el: KiteXmlNode.Element, local: String?, tree: SelectorTree): Boolean = when (local) {
-        "input" -> inputType(el, tree).let { it == "checkbox" || it == "radio" } && tree.attr(el, "checked") != null
+        "input" -> when (inputType(el, tree)) {
+            "checkbox" -> checkedness(el, tree) && tree.state(el, "indeterminate") != "1"
+            "radio" -> checkedness(el, tree)
+            else -> false
+        }
         "option" -> selected(el, tree)
         else -> false
     }
@@ -60,6 +83,7 @@ internal object FormStates {
      * one choice shown at a time has the last option so marked, or else its first enabled option.
      */
     private fun selected(option: KiteXmlNode.Element, tree: SelectorTree): Boolean {
+        tree.state(option, "selected")?.let { return it == "1" }
         val select = optionSelect(option, tree) ?: return tree.attr(option, "selected") != null
         if (tree.attr(select, "multiple") != null || (tree.attr(select, "size")?.trim()?.toIntOrNull() ?: 0) > 1) {
             return tree.attr(option, "selected") != null
@@ -165,11 +189,11 @@ internal object FormStates {
         if (required(el, local, tree)) {
             val missing = when (local) {
                 "input" -> when (inputType(el, tree)) {
-                    "checkbox" -> tree.attr(el, "checked") == null
-                    "radio" -> (radioGroup(el, tree) + el).none { tree.attr(it, "checked") != null }
-                    else -> tree.attr(el, "value").isNullOrEmpty()
+                    "checkbox" -> !checkedness(el, tree)
+                    "radio" -> (radioGroup(el, tree) + el).none { checkedness(it, tree) }
+                    else -> value(el, local, tree).isNullOrEmpty()
                 }
-                "textarea" -> el.children.all { it !is KiteXmlNode.Text || it.text.isEmpty() }
+                "textarea" -> value(el, local, tree).isNullOrEmpty()
                 "select" -> {
                     val options = options(el, tree)
                     val chosen = options.filter { selected(it, tree) }
@@ -200,8 +224,8 @@ internal object FormStates {
                 val min = tree.attr(el, "min")?.trim()?.toDoubleOrNull()
                 val max = tree.attr(el, "max")?.trim()?.toDoubleOrNull()
                 if ((min == null && max == null) || !candidate(el, local, tree)) return null
-                val value = tree.attr(el, "value")?.trim()?.toDoubleOrNull() ?: return true
-                !(min != null && value < min) && !(max != null && value > max)
+                val number = value(el, local, tree)?.trim()?.toDoubleOrNull() ?: return true
+                !(min != null && number < min) && !(max != null && number > max)
             }
             else -> null
         }

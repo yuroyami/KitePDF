@@ -929,11 +929,11 @@ class EpubScriptTest {
 
             var check = document.getElementById('check'), changes = '';
             check.addEventListener('change', function () { changes += 'change '; });
-            check.addEventListener('click', function () { changes += 'click:' + check.hasAttribute('checked') + ' '; });
+            check.addEventListener('click', function () { changes += 'click:' + check.matches(':checked') + ' '; });
             document.getElementById('label').click();
-            log('label ' + changes + check.hasAttribute('checked'));
+            log('label ' + changes + check.matches(':checked'));
             document.getElementById('r2').click();
-            log('radio ' + document.getElementById('r1').hasAttribute('checked') + ' ' + document.getElementById('r2').hasAttribute('checked'));
+            log('radio ' + document.getElementById('r1').matches(':checked') + ' ' + document.getElementById('r2').matches(':checked'));
             var sel = document.getElementById('sel');
             var before = sel.value;
             sel.value = 'B';
@@ -998,7 +998,7 @@ class EpubScriptTest {
             var tapme = document.getElementById('tapme'), check2 = document.getElementById('check2'), tapped = '';
             tapme.addEventListener('focus', function () { tapped += 'focus '; });
             check2.addEventListener('click', function () { tapped += 'click '; });
-            check2.addEventListener('change', function () { tapped += 'change '; log('tap ' + tapped + check2.hasAttribute('checked')); });
+            check2.addEventListener('change', function () { tapped += 'change '; log('tap ' + tapped + check2.matches(':checked')); });
             var rs = navigator.epubReadingSystem;
             log('features ' + rs.hasFeature('dom-manipulation') + ' ' + rs.hasFeature('toString') + ' ' + rs.hasFeature('touch-events'));
             try { window.__kite_step = null; } catch (e) {}

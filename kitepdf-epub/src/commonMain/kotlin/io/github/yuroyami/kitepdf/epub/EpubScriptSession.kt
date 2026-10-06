@@ -400,6 +400,9 @@ public class EpubScriptSession(
             def("createInstruction") { args -> dom.idOf(dom.createInstruction(string(args, 0), string(args, 1))) }
             def("createCdata") { args -> dom.idOf(dom.createCdata(string(args, 0))) }
             def("quirks") { args -> element(args, 0)?.let(dom::quirks) == true }
+            // A form control's checkedness, selectedness, value and indeterminate flag (#552).
+            def("state") { args -> element(args, 0)?.let { dom.state(it, string(args, 1)) } }
+            def("setState") { args -> element(args, 0)?.let { dom.setState(it, string(args, 1), args.getOrNull(2) as? String) }; null }
             def("createFragment") { dom.idOf(dom.createFragment()) }
             def("insert") { args ->
                 val parent = element(args, 0) ?: return@def "HierarchyRequestError"

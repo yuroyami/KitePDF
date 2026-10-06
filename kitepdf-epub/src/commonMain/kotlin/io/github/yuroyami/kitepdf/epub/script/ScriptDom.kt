@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.epub.script
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.HtmlParser
 import io.github.yuroyami.kitepdf.epub.resolveSwitches
+import io.github.yuroyami.kitepdf.epub.css.FormStates
 import io.github.yuroyami.kitepdf.epub.css.Selector
 import io.github.yuroyami.kitepdf.epub.css.SelectorTree
 import io.github.yuroyami.kitepdf.epub.css.asciiLower
@@ -244,7 +245,7 @@ internal class ScriptDom(
         val name = parsedName(el, parent, html)
         names[el] = name
         if (raw != null && html) attributeLists[el] = htmlAttributes(raw, name.namespace)
-        if (raw != null && relayout) el.attrs = layoutAttributes(attributes(el))
+        if (raw != null && relayout) el.attrs = layoutAttributes(attributes(el), el.attrs)
         for (c in el.children) if (c is KiteXmlNode.Element) nameTree(c, el, inScope, relayout, html)
     }
 
@@ -332,7 +333,21 @@ internal class ScriptDom(
      * layout map, `xmlns` in its namespace and the others in none.
      */
     fun attributes(el: KiteXmlNode.Element): List<Attribute> = attributeLists.getOrPut(el) {
-        el.attrs.map { (name, value) -> if (name == "xmlns") Attribute(XMLNS_NS, null, name, value) else Attribute(null, null, name, value) }
+        el.attrs.filterKeys { !it.startsWith(FormStates.STATE) }
+            .map { (name, value) -> if (name == "xmlns") Attribute(XMLNS_NS, null, name, value) else Attribute(null, null, name, value) }
+    }
+
+    /** The form control state [key] of [el] that a script set, or null while it follows the control's attributes (#552). */
+    fun state(el: KiteXmlNode.Element, key: String): String? = el.attrs[FormStates.STATE + key]
+
+    /**
+     * Sets the form control state [key] of [el], or forgets it for null. The state sits in the layout's
+     * map, where the page and the selectors read it, and stays out of the DOM's attributes (#552).
+     */
+    fun setState(el: KiteXmlNode.Element, key: String, value: String?) {
+        if (el.attrs[FormStates.STATE + key] == value) return
+        el.attrs = LinkedHashMap(el.attrs).apply { if (value == null) remove(FormStates.STATE + key) else put(FormStates.STATE + key, value) }
+        changed()
     }
 
     /** The value of [el]'s attribute [localName] in [namespace], null for none, or null when it has none. */
@@ -373,16 +388,20 @@ internal class ScriptDom(
 
     private fun setAttributes(el: KiteXmlNode.Element, list: List<Attribute>) {
         attributeLists[el] = list
-        el.attrs = layoutAttributes(list)
+        el.attrs = layoutAttributes(list, el.attrs)
         changed()
     }
 
     /**
      * [list] as the layout's parser would key it, by the local name of each qualified name, lowercased,
-     * the last of two with one key winning.
+     * the last of two with one key winning, with the form control states of [old].
      */
-    private fun layoutAttributes(list: List<Attribute>): Map<String, String> =
-        LinkedHashMap<String, String>(list.size).apply { for (a in list) put(a.qualifiedName.substringAfterLast(':').lowercase(), a.value) }
+    private fun layoutAttributes(list: List<Attribute>, old: Map<String, String>): Map<String, String> =
+        LinkedHashMap<String, String>(list.size).apply {
+            for (a in list) put(a.qualifiedName.substringAfterLast(':').lowercase(), a.value)
+            // A form control's state outlives a change of its attributes (#552).
+            for ((k, v) in old) if (k.startsWith(FormStates.STATE)) put(k, v)
+        }
 
     /**
      * The name a parser gives [el] under [parent]. Its namespace is the one an `xmlns` attribute

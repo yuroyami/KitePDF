@@ -260,6 +260,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty element closes itself, and markup that is not well-formed throws a `SyntaxError`. An
   attribute value written as XML keeps its tabs and line breaks as character references, in
   `XMLSerializer` too (#548).
+- A form control's checkedness, an option's selectedness, a control's value and its indeterminate
+  flag are state that the host keeps beside the element, as HTML has them, where setting `checked`
+  wrote the `checked` attribute. `outerHTML` and `[checked]` no longer see an attribute the author
+  never wrote, an attribute set after a script changed the state no longer changes it, and `reset()`
+  restores the state from the attributes. A script's selectors and the page's style sheets match
+  `:checked`, `:placeholder-shown`, `:valid`, `:invalid`, `:in-range` and `:indeterminate` on that
+  state, and an indeterminate checkbox does not match `:checked`, as in Blink (#552).
 - An HTML chapter that leaves out `<html>`, `<head>` or `<body>` gets them, as HTML's parser makes
   them, so its scripts find `document.body` and `document.head`. The elements that belong in a head
   go into it, the rest into the body, a second `<html>` or `<body>` adds its attributes to the first,
