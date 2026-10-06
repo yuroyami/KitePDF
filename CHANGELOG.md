@@ -260,6 +260,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty element closes itself, and markup that is not well-formed throws a `SyntaxError`. An
   attribute value written as XML keeps its tabs and line breaks as character references, in
   `XMLSerializer` too (#548).
+- A script's insert or replace that would make no valid document throws a `HierarchyRequestError`,
+  as the DOM's pre-insert checks say, where it put text, a second root element or a misplaced
+  document type into the document. `replaceChild` checks the replace rules, and `append`, `prepend`,
+  `before`, `after`, `replaceWith` and `replaceChildren` check all their nodes at once, so a failed
+  call inserts none of them (#604).
 - A chapter's scripts see its document type, its processing instructions and its CDATA sections as
   `DocumentType`, `ProcessingInstruction` and `CDATASection` nodes, where the document began at its
   root element. White space beside the root element is no longer a text node of the document.

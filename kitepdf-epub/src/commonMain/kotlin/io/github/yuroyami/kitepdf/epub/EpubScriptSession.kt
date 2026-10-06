@@ -406,6 +406,16 @@ public class EpubScriptSession(
                 val child = node(args, 1) ?: return@def "NotFoundError"
                 dom.insert(parent, child, node(args, 2))
             }
+            def("replace") { args ->
+                val parent = element(args, 0) ?: return@def "HierarchyRequestError"
+                val child = node(args, 1) ?: return@def "NotFoundError"
+                val old = node(args, 2) ?: return@def "NotFoundError"
+                dom.replace(parent, child, old)
+            }
+            def("insertError") { args ->
+                val parent = element(args, 0) ?: return@def "HierarchyRequestError"
+                dom.insertError(parent, node(args, 1) ?: return@def "NotFoundError", node(args, 2))
+            }
             def("remove") { args ->
                 val child = node(args, 1) ?: return@def "NotFoundError"
                 dom.remove(element(args, 0), child)

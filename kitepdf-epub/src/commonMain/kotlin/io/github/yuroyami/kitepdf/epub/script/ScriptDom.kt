@@ -486,19 +486,73 @@ internal class ScriptDom(
      * would make no tree, or null.
      */
     fun insert(parent: KiteXmlNode.Element, child: KiteXmlNode, before: KiteXmlNode?): String? {
-        if (before != null && parentOf(before) !== parent) return "NotFoundError"
-        if (child === root || child in documents || (child is KiteXmlNode.Element && isAncestor(child, parent))) return "HierarchyRequestError"
+        hierarchyError(parent, child, before, replacing = null)?.let { return it }
         if (child === before) return null
+        place(parent, child, before)
+        return null
+    }
+
+    /** Puts [child] into [parent] in place of [old], as `replaceChild` does. Answers the DOM's error name, or null. */
+    fun replace(parent: KiteXmlNode.Element, child: KiteXmlNode, old: KiteXmlNode): String? {
+        hierarchyError(parent, child, old, replacing = old)?.let { return it }
+        if (child === old) return null
+        place(parent, child, old)
+        detach(old)
+        return null
+    }
+
+    /** The error of `ensure pre-insert validity` that [insert] can run alone, for [child] into [parent] before [before], or null. */
+    fun insertError(parent: KiteXmlNode.Element, child: KiteXmlNode, before: KiteXmlNode?): String? =
+        hierarchyError(parent, child, before, replacing = null)
+
+    /**
+     * The DOM's error for putting [child] into [parent] before [before], or in place of [replacing]:
+     * the checks of "ensure pre-insert validity" and "replace a child" (DOM Standard, 4.2.3). A
+     * document holds no text, at most one document type and one element, and the document type
+     * comes first.
+     */
+    private fun hierarchyError(parent: KiteXmlNode.Element, child: KiteXmlNode, before: KiteXmlNode?, replacing: KiteXmlNode?): String? {
+        val error = "HierarchyRequestError"
+        if (child === root || child in documents || (child is KiteXmlNode.Element && isAncestor(child, parent))) return error
+        if (before != null && parentOf(before) !== parent) return "NotFoundError"
+        val childKind = kind(child)
+        if (kind(parent) != 9) return if (childKind == 10) error else null
+        if (childKind == 3 || childKind == 4) return error
+        val siblings = parent.children
+        val at = if (before == null) siblings.size else siblings.indexOfFirst { it === before }
+        val element = when (childKind) {
+            1 -> true
+            11 -> {
+                val fragment = child as KiteXmlNode.Element
+                val elements = fragment.children.count { it is KiteXmlNode.Element }
+                if (elements > 1 || fragment.children.any { it is KiteXmlNode.Text }) return error
+                elements == 1
+            }
+            else -> false
+        }
+        if (element) {
+            if (siblings.any { it is KiteXmlNode.Element && it !== replacing }) return error
+            val after = if (replacing != null) at + 1 else at
+            if (siblings.subList(after, siblings.size).any { kind(it) == 10 }) return error
+        }
+        if (childKind == 10) {
+            if (siblings.any { it !== replacing && kind(it) == 10 }) return error
+            if (siblings.subList(0, at).any { it is KiteXmlNode.Element }) return error
+        }
+        return null
+    }
+
+    /** Puts [child] into [parent] before [before] once the move is known to be valid. */
+    private fun place(parent: KiteXmlNode.Element, child: KiteXmlNode, before: KiteXmlNode?) {
         if (child is KiteXmlNode.Element && child.tag == FRAGMENT && child in fragments) {
-            for (c in child.children.toList()) insert(parent, c, before)
-            return null
+            for (c in child.children.toList()) place(parent, c, before)
+            return
         }
         detach(child)
         val at = if (before == null) parent.children.size else parent.children.indexOfFirst { it === before }
         parent.children.add(at, child)
         link(parent, child)
         changed()
-        return null
     }
 
     /** Takes [child] out of its parent. Answers the DOM's error name when [parent] is not its parent. */
