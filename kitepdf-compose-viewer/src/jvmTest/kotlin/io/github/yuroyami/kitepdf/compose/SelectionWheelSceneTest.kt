@@ -57,8 +57,9 @@ class SelectionWheelSceneTest {
         scene.sendPointerEvent(PointerEventType.Release, to, type = type, buttons = PointerButtons())
     }
 
+    /** Three notches down: Compose on macOS moves 10 px a notch, so one notch cannot pass a 10 px check there. */
     private fun wheelDown(scene: ImageComposeScene, driver: SceneTestDriver) {
-        scene.sendPointerEvent(PointerEventType.Scroll, Offset(100f, 200f), scrollDelta = Offset(0f, 1f), type = PointerType.Mouse)
+        scene.sendPointerEvent(PointerEventType.Scroll, Offset(100f, 200f), scrollDelta = Offset(0f, 3f), type = PointerType.Mouse)
         driver.pumpFrames(20)
     }
 
