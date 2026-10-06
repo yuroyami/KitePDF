@@ -428,6 +428,7 @@ Some effects work on what was drawn, not on shapes: an SVG filter blurs, moves o
 | `CoreGraphicsCanvas` | On a bitmap context, outside every group layer |
 | `AndroidNativeCanvas` | In `AndroidPdfBitmapRenderer`, outside every group and soft mask layer |
 | `ComposeCanvas` | In `KitePageRasterizer`, outside every group and soft mask layer |
+| `KiteRasterCanvas` | Always, also inside a group: it draws into memory in plain Kotlin |
 
 A PDF transparency group that is not isolated and whose paints blend needs the backdrop (ISO 32000-1, 11.4.8). Its paints blend with the page, and the page's part has to come out of the group again before the group composites in its own alpha and blend mode. A knockout group of that kind blends each of its objects with the page, and each object replaces what the objects before it left within its shape (11.4.6). The renderer paints such a group over a copy of the backdrop and alone, or each object of a knockout group three times, and works out the group from those rasters. A knockout group therefore costs three renders of its box for each of its objects, and one that would render more than 100 million pixels, about a second on AWT, paints as a layer instead.
 

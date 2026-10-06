@@ -208,6 +208,15 @@ shadows, `filter`, every `globalCompositeOperation` and every blend mode work.
 uses the metrics of the standard fonts, so `measureText` is near a browser's but not equal. A
 context other than `2d` answers `null`.
 
+A script can read and write the pixels of a canvas with `ImageData`, `createImageData`,
+`getImageData` and `putImageData`, in `rgba-unorm8` or `rgba-float16`, and in sRGB or Display
+P3. `toDataURL` and `toBlob` make a PNG, or a JPEG when asked; any other type makes a PNG. The
+pixels come from `KiteRasterCanvas`, a rasterizer in plain Kotlin, so they are the same on every
+target. They keep each colour premultiplied by its alpha in 8 bits, as Chromium does, so a value
+that a script writes reads back rounded as Chromium rounds it. Text reads back only when the host
+passes `fontOutlines` to `EpubScriptRunner`, for example the outlines of the canvas the app draws
+with. Without it, text reads back as blank, though the page still shows it.
+
 Each object of the DOM has the interface a browser gives it, with its class string, so
 `String(document.body)` is `[object HTMLBodyElement]`, and each interface is a property of the
 window, so `document.body instanceof HTMLBodyElement` holds. An element of HTML has the interface HTML
@@ -392,9 +401,9 @@ document.
 
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
-its value and checkedness; the pixels of a `<canvas>`, since `getImageData`, `putImageData`,
-`toDataURL` and `toBlob` are missing ([#610](https://github.com/yuroyami/KitePDF/issues/610)).
-A script that calls one fails and is
+its value and checkedness; the loading of an image, since an `<img>` never fires `load` and its
+natural size reads its attributes ([#611](https://github.com/yuroyami/KitePDF/issues/611)).
+A script that calls a missing method fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.
 
 Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,

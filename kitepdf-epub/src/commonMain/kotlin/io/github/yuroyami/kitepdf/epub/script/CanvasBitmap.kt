@@ -64,6 +64,28 @@ internal class CanvasBitmap(var width: Int, var height: Int) {
         version++
     }
 
+    /**
+     * Replaces everything with the image at [href], which covers the canvas pixel for pixel, as
+     * `putImageData` leaves it (#610).
+     */
+    fun replaceWith(href: String) {
+        clear()
+        draw(
+            element(
+                "image", "href" to href, "x" to "0", "y" to "0", "width" to "$width", "height" to "$height",
+                "preserveAspectRatio" to "none",
+            ),
+            emptyList(),
+        )
+    }
+
+    /** Adds to [out] the href of each `<image>` of this canvas that names a canvas image. */
+    fun canvasImages(out: MutableSet<String>) {
+        for (el in defs) imagesIn(el, out)
+        for (chunk in chunks) for (el in chunk.items) imagesIn(el, out)
+        for (el in erasers) imagesIn(el, out)
+    }
+
     /** Notes that a drawing blends with what is under it, so the canvas paints as an isolated group. */
     fun noteBlend() { blends = true }
 
@@ -257,6 +279,12 @@ internal class CanvasBitmap(var width: Int, var height: Int) {
                     Segment.Close -> append('Z')
                 }
             }
+        }
+
+        /** Adds to [out] the href of each `<image>` in [el] that names a canvas image. */
+        fun imagesIn(el: KiteXmlNode.Element, out: MutableSet<String>) {
+            if (el.tag == "image") el.attrs["href"]?.takeIf { it.startsWith(CanvasImages.SCHEME) }?.let(out::add)
+            for (c in el.children) if (c is KiteXmlNode.Element) imagesIn(c, out)
         }
 
         /** A deep copy of [el] whose ids, and the references to them, start with [prefix]. */

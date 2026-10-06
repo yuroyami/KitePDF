@@ -7,6 +7,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public final fun chapterPath (I)Ljava/lang/String;
 	public final fun fetchRemoteResources (IZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun fetchRemoteResources$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument;IZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun fragmentOf (I)Ljava/lang/String;
 	public final fun getChapterChanges ()Lkotlinx/coroutines/flow/StateFlow;
 	public fun getChapterCount ()I
 	public final fun getEpubMetadata ()Lio/github/yuroyami/kitepdf/epub/EpubMetadata;
@@ -46,6 +47,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public final fun resourceType (Ljava/lang/String;)Ljava/lang/String;
 	public final fun search (Ljava/lang/String;Z)Lkotlin/sequences/Sequence;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Ljava/lang/String;ZILjava/lang/Object;)Lkotlin/sequences/Sequence;
+	public final fun setFragment (ILjava/lang/String;)V
 	public final fun withFontSize (D)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun withMargin (D)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun withPageSize (DD)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
@@ -274,8 +276,8 @@ public final class io/github/yuroyami/kitepdf/epub/EpubScriptHandler$DefaultImpl
 public final class io/github/yuroyami/kitepdf/epub/EpubScriptSession : io/github/yuroyami/kitepdf/epub/EpubScriptHandler, java/lang/AutoCloseable {
 	public static final field Companion Lio/github/yuroyami/kitepdf/epub/EpubScriptSession$Companion;
 	public static final field MAX_FAILURES I
-	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;I)V
-	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;ILjava/lang/String;Lkotlin/jvm/functions/Function2;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;ILjava/lang/String;Lkotlin/jvm/functions/Function2;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun chapterOpened (I)V
 	public fun close ()V
 	public final fun getDocument ()Lio/github/yuroyami/kitepdf/epub/EpubDocument;

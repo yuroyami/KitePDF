@@ -48,17 +48,27 @@ internal object ScriptBooks {
      * A reflowable book of one chapter whose body is [body], on pages 300 by 200 points: an XHTML
      * chapter, or for [html] an HTML one, which the manifest serves as text/html.
      */
-    fun chapter(body: String, extraFiles: Map<String, String> = emptyMap(), html: Boolean = false): EpubDocument =
-        page(if (html) html(body = body) else xhtml(body = body), extraFiles, html)
+    fun chapter(
+        body: String,
+        extraFiles: Map<String, String> = emptyMap(),
+        html: Boolean = false,
+        binaryFiles: Map<String, ByteArray> = emptyMap(),
+    ): EpubDocument = page(if (html) html(body = body) else xhtml(body = body), extraFiles, html, binaryFiles)
 
     /** A book whose one scripted chapter is the whole document [source], served as HTML when [html] is true, with [extraFiles]. */
-    fun page(source: String, extraFiles: Map<String, String> = emptyMap(), html: Boolean = false): EpubDocument {
+    fun page(
+        source: String,
+        extraFiles: Map<String, String> = emptyMap(),
+        html: Boolean = false,
+        binaryFiles: Map<String, ByteArray> = emptyMap(),
+    ): EpubDocument {
         val name = if (html) "chapter.html" else "chapter.xhtml"
         return book(
             items = listOf(Item(name, if (html) "text/html" else "application/xhtml+xml", properties = "scripted", spine = true)) +
-                extraFiles.keys.map { Item(it, typeOf(it), spine = it.endsWith(".xhtml")) },
+                (extraFiles.keys + binaryFiles.keys).map { Item(it, typeOf(it), spine = it.endsWith(".xhtml")) },
             files = mapOf(name to source) + extraFiles,
             settings = EpubSettings(pageWidth = 300.0, pageHeight = 200.0, margin = 20.0),
+            binaryFiles = binaryFiles,
         )
     }
 
@@ -66,6 +76,7 @@ internal object ScriptBooks {
     private fun typeOf(href: String): String = when {
         href.endsWith(".js") -> "text/javascript"
         href.endsWith(".css") -> "text/css"
+        href.endsWith(".png") -> "image/png"
         else -> "application/xhtml+xml"
     }
 
@@ -83,6 +94,7 @@ internal object ScriptBooks {
         metadata: String = "",
         settings: EpubSettings = EpubSettings(),
         identifier: String = "scripted",
+        binaryFiles: Map<String, ByteArray> = emptyMap(),
     ): EpubDocument {
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val manifest = items.mapIndexed { i, item ->
@@ -98,7 +110,8 @@ internal object ScriptBooks {
             "META-INF/container.xml" to container,
             "OEBPS/content.opf" to opf,
         ) + files.map { (name, text) -> "OEBPS/$name" to text }
-        return EpubDocument.open(storedZip(entries.map { (name, text) -> name to text.encodeToByteArray() }), settings)
+        val zipped = entries.map { (name, text) -> name to text.encodeToByteArray() } + binaryFiles.map { (name, bytes) -> "OEBPS/$name" to bytes }
+        return EpubDocument.open(storedZip(zipped), settings)
     }
 
     /** A zip of [entries], each stored as it is. */

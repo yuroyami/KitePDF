@@ -1,9 +1,17 @@
 package io.github.yuroyami.kitepdf.epub.script
 
+import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import io.github.yuroyami.kitepdf.core.render.KiteRaster
+import io.github.yuroyami.kitepdf.core.render.KiteRasterCanvas
+import io.github.yuroyami.kitepdf.core.render.encodeJpeg
+import io.github.yuroyami.kitepdf.core.render.encodePng
+import io.github.yuroyami.kitepdf.core.render.toImageData
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.svg.SvgImage
+import kotlin.io.encoding.Base64
+import kotlin.math.roundToInt
 
 /**
  * The canvases of one chapter's scripts: each 2D context, and the paths, gradients and patterns
@@ -24,7 +32,21 @@ internal class CanvasHost(
     private val isHtml: (KiteXmlNode.Element, String) -> Boolean,
     /** Notes that a canvas changed, so the layout takes the tree again. */
     val changed: () -> Unit,
+    /** The pixels that `putImageData` wrote, which the page paints from (#610). */
+    private val images: CanvasImages = CanvasImages(),
+    /** A file of the book by the href that an image of a canvas names, to read the pixels back. */
+    private val load: (String) -> ByteArray? = { null },
+    /** Text outlines in the host's fonts, to read back the pixels of text; without them text reads as blank. */
+    private val fontOutlines: ((String, FontSpec) -> KitePath?)? = null,
 ) {
+    private val owner = images.owner()
+
+    /** Each canvas's pixels, with the version of its drawing they show. */
+    private val rasters = HashMap<CanvasContext, Pair<Int, KiteRaster>>()
+
+    /** The canvas images that each canvas's last drawing for the layout names, which must stay. */
+    private val shown = HashMap<KiteXmlNode.Element, Set<String>>()
+
     private val contexts = HashMap<KiteXmlNode.Element, CanvasContext>()
     private val paths = HashMap<Int, CanvasPath>()
     private val gradients = HashMap<Int, CanvasGradient>()
@@ -55,7 +77,11 @@ internal class CanvasHost(
 
     /** What a canvas shows, as an `<svg>` for the layout: its drawing, or nothing at its size. */
     fun svgOf(canvas: KiteXmlNode.Element): KiteXmlNode.Element {
-        contexts[canvas]?.let { return it.bitmap.snapshot() }
+        contexts[canvas]?.let { c ->
+            val svg = c.bitmap.snapshot()
+            shown[canvas] = HashSet<String>().also { CanvasBitmap.imagesIn(svg, it) }
+            return svg
+        }
         val (w, h) = sizeOf(canvas)
         return CanvasBitmap(w, h).snapshot()
     }
@@ -73,9 +99,70 @@ internal class CanvasHost(
             }
             return null
         }
+        if (op == "toDataURL" || op == "encode") {
+            val file = encode(contexts[canvas], canvas, s(args, 2), args.getOrNull(3))
+            if (op == "encode") return file?.let { (type, bytes) -> listOf(type, bytes.latin1()) }
+            return file?.let { (type, bytes) -> "data:$type;base64," + Base64.encode(bytes) } ?: "data:,"
+        }
         val c = contexts[canvas] ?: return null
         return context(c, canvas, op, args)
     }
+
+    /** The canvas's pixels, premultiplied, drawn from its SVG and kept until it changes. */
+    private fun rasterOf(c: CanvasContext): KiteRaster {
+        val b = c.bitmap
+        rasters[c]?.let { (version, raster) -> if (version == b.version) return raster }
+        val canvas = KiteRasterCanvas(b.width, b.height, fontOutlines)
+        if (!b.isBlank) SvgImage.fromElement(b.snapshot(), null, images::get)?.render(canvas, KiteMatrix.IDENTITY, load)
+        return canvas.toPremultipliedRaster().also { rasters[c] = b.version to it }
+    }
+
+    /**
+     * `getImageData`: the rectangle at ([x], [y]), transparent outside the canvas, as bytes in a
+     * string, or as numbers from 0 to 1 when [floats] (HTML, 4.12.5.1.16).
+     */
+    private fun pixels(c: CanvasContext, x: Int, y: Int, w: Int, h: Int, floats: Boolean, p3: Boolean): Any {
+        val r = rasterOf(c)
+        return if (floats) CanvasPixels.readFloats(r, x, y, w, h, p3) else CanvasPixels.read(r, x, y, w, h, p3)
+    }
+
+    /**
+     * `putImageData`: writes [w] by [h] pixels of [data] at ([x], [y]) as they are: no transform,
+     * alpha, composite or clip applies (HTML, 4.12.5.1.16). The canvas's drawing becomes one image.
+     */
+    private fun put(c: CanvasContext, data: Any?, x: Int, y: Int, w: Int, h: Int, p3: Boolean) {
+        val base = rasterOf(c).copy()
+        if (!CanvasPixels.write(base, data, x, y, w, h, p3)) return
+        c.bitmap.replaceWith(images.add(owner, CanvasPixels.straightened(base).toImageData()))
+        rasters[c] = c.bitmap.version to base
+        changed()
+        collect()
+    }
+
+    /** Forgets the canvas images that no canvas, pattern or drawing in the layout names any more. */
+    private fun collect() {
+        if (images.count(owner) <= KEEP_IMAGES) return
+        val live = HashSet<String>()
+        for (c in contexts.values) c.bitmap.canvasImages(live)
+        for (p in patterns.values) (p.source as? CanvasSource.Drawing)?.content?.let { CanvasBitmap.imagesIn(it, live) }
+        for (set in shown.values) live.addAll(set)
+        images.retainOnly(owner, live)
+    }
+
+    /**
+     * The canvas as a file for `toDataURL` and `toBlob`: its type and bytes, a JPEG when [type]
+     * asks for one and a PNG otherwise, or null when the canvas has no pixels. A [quality] from 0
+     * to 1 sets the JPEG's, 0.92 when it is missing or out of range.
+     */
+    private fun encode(c: CanvasContext?, canvas: KiteXmlNode.Element, type: String, quality: Any?): Pair<String, ByteArray>? {
+        val raster = if (c != null) CanvasPixels.straightened(rasterOf(c)) else sizeOf(canvas).let { (w, h) -> KiteRaster(w, h) }
+        if (raster.width == 0 || raster.height == 0) return null
+        if (type.lowercase() != "image/jpeg") return "image/png" to raster.encodePng()
+        val q = (quality as? Number)?.toDouble()?.takeIf { it in 0.0..1.0 } ?: 0.92
+        return "image/jpeg" to raster.encodeJpeg((q * 100).roundToInt())
+    }
+
+    private fun ByteArray.latin1(): String = CharArray(size) { (this[it].toInt() and 255).toChar() }.concatToString()
 
     private fun d(args: List<Any?>, i: Int): Double = (args.getOrNull(i) as? Number)?.toDouble() ?: Double.NaN
     private fun s(args: List<Any?>, i: Int): String = args.getOrNull(i)?.toString().orEmpty()
@@ -138,6 +225,10 @@ internal class CanvasHost(
             "clearRect" -> c.clearRect(d(args, 2), d(args, 3), d(args, 4), d(args, 5))
             "fillText", "strokeText" -> c.drawText(s(args, 2), d(args, 3), d(args, 4), (args.getOrNull(5) as? Number)?.toDouble(), op == "strokeText")
             "measureText" -> return c.measure(s(args, 2))
+            "getImageData" -> return pixels(
+                c, handle(args, 2), handle(args, 3), handle(args, 4), handle(args, 5), args.getOrNull(6) == true, args.getOrNull(7) == true,
+            )
+            "putImageData" -> put(c, args.getOrNull(2), handle(args, 3), handle(args, 4), handle(args, 5), handle(args, 6), args.getOrNull(7) == true)
             "drawImage" -> return drawImage(c, args)
             "pattern" -> return pattern(args)
             else -> return pathOp(c.path, m, op, args, 2)
@@ -311,5 +402,8 @@ internal class CanvasHost(
     companion object {
         /** The first item of an answer that is an error to throw. */
         const val ERROR = "\u0000error"
+
+        /** Canvas images a set of canvases keeps before it looks for ones nothing names. */
+        const val KEEP_IMAGES = 4
     }
 }

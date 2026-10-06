@@ -318,6 +318,190 @@ C2D.drawImage = function drawImage(image) {
   canvasAnswer(K.cv(c.canvas, 'drawImage', id, count, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]), what);
 };
 
+/* ---- ImageData and the pixels of a canvas, of HTML 4.12.5.1.16 (#610) ----
+   Pixels cross to the host as a string with a code unit for each byte, RGBA in rows, and
+   float16 pixels as a list of numbers. The host keeps each canvas's pixels premultiplied, as
+   Chromium does, and converts between sRGB and Display P3. */
+
+var imageDatas = new WeakMap(), Uint8ClampedArrayCtor = TYPED_ARRAYS.Uint8ClampedArray, Float16ArrayCtor = TYPED_ARRAYS.Float16Array || null;
+/* The most bytes an ImageData holds, as a typed array's length is a 32-bit int in Chromium. */
+var IMAGE_DATA_LIMIT = 2147483647;
+function imageDataOf(v) {
+  var d = v !== null && typeof v === 'object' ? WeakMapGet(imageDatas, v) : undefined;
+  if (d === undefined) throw new TypeError('Illegal invocation');
+  return d;
+}
+/* An [EnforceRange] long, as getImageData and putImageData take their numbers. */
+function enforcedLong(v, what) {
+  var x = +v;
+  if (x !== x) throw new TypeError(what + ": Value is not of type 'long'.");
+  if (x === Infinity || x === -Infinity) throw new TypeError(what + ": Value is infinite and not of type 'long'.");
+  x = x < 0 ? MathCeil(x) : MathFloor(x);
+  if (x < -2147483648 || x > 2147483647) throw new TypeError(what + ": Value is outside the 'long' value range.");
+  return x + 0;
+}
+/* An ImageDataSettings dictionary, with [colorSpace] when it names none. */
+function imageSettings(v, what, colorSpace) {
+  var o = geometryDictionary(v, what, 'ImageDataSettings'), cs = colorSpace, pf = 'rgba-unorm8', s;
+  if (o !== null && (s = o.colorSpace) !== undefined) {
+    cs = domString(s);
+    if (cs !== 'srgb' && cs !== 'display-p3') {
+      throw new TypeError(what + ": Failed to read the 'colorSpace' property from 'ImageDataSettings': The provided value '" + cs + "' is not a valid enum value of type PredefinedColorSpace.");
+    }
+  }
+  if (o !== null && (s = o.pixelFormat) !== undefined) {
+    pf = domString(s);
+    if (pf !== 'rgba-unorm8' && (pf !== 'rgba-float16' || Float16ArrayCtor === null)) {
+      throw new TypeError(what + ": Failed to read the 'pixelFormat' property from 'ImageDataSettings': The provided value '" + pf + "' is not a valid enum value of type ImageDataPixelFormat.");
+    }
+  }
+  return { __proto__: null, colorSpace: cs, pixelFormat: pf };
+}
+function newImageData(self, w, h, data, settings) {
+  var o = self || ObjectCreate(ImageData.prototype);
+  if (data === null) data = settings.pixelFormat === 'rgba-float16' ? new Float16ArrayCtor(w * h * 4) : new Uint8ClampedArrayCtor(w * h * 4);
+  WeakMapSet(imageDatas, o, { __proto__: null, width: w, height: h, data: data, colorSpace: settings.colorSpace, pixelFormat: settings.pixelFormat });
+  return o;
+}
+function ImageData(a, b) {
+  var what = "Failed to construct 'ImageData'";
+  needNew(this, ImageData, 'ImageData', function (p) { return WeakMapHas(imageDatas, p); });
+  needArgs(arguments, 2, what);
+  // A view of another type picks the overload of a width, which it converts to 0.
+  var tag = ArrayBufferIsView(a) ? TypedArrayTag(a) : undefined, w, h, settings;
+  if (tag === 'Uint8ClampedArray' || tag === 'Float16Array' || tag === 'Float32Array') {
+    var n = TypedArrayLength(a);
+    settings = imageSettings(arguments[3], what, 'srgb');
+    var wanted = settings.pixelFormat === 'rgba-float16' ? 'Float16Array' : 'Uint8ClampedArray';
+    if (tag !== wanted) {
+      var format = tag === 'Uint8ClampedArray' ? 'rgba-unorm8' : tag === 'Float16Array' ? 'rgba-float16' : 'rgba-float32';
+      throw new DOMException(what + ': ' + tag + ' must use ' + format + ' pixelFormat.', 'InvalidStateError');
+    }
+    if (n === 0) throw new DOMException(what + ': The input data has zero elements.', 'InvalidStateError');
+    if (n % 4 !== 0) throw new DOMException(what + ': The input data length is not a multiple of 4.', 'InvalidStateError');
+    w = unsignedLong(b);
+    if (w === 0) throw new DOMException(what + ': The source width is zero or not a number.', 'IndexSizeError');
+    if ((n / 4) % w !== 0) throw new DOMException(what + ': The input data length is not a multiple of (4 * width).', 'IndexSizeError');
+    h = n / 4 / w;
+    if (arguments.length > 2) {
+      var given = unsignedLong(arguments[2]);
+      if (given === 0) throw new DOMException(what + ': The source height is zero or not a number.', 'IndexSizeError');
+      if (given !== h) throw new DOMException(what + ': The input data length is not equal to (4 * width * height).', 'IndexSizeError');
+    }
+    newImageData(this, w, h, a, settings);
+    return;
+  }
+  w = unsignedLong(a);
+  h = unsignedLong(b);
+  if (w === 0) throw new DOMException(what + ': The source width is zero or not a number.', 'IndexSizeError');
+  if (h === 0) throw new DOMException(what + ': The source height is zero or not a number.', 'IndexSizeError');
+  if (w * h * 4 > IMAGE_DATA_LIMIT) throw new DOMException(what + ': The requested image size exceeds the supported range.', 'IndexSizeError');
+  newImageData(this, w, h, null, imageSettings(arguments[2], what, 'srgb'));
+}
+(function (names) {
+  for (var i = 0; i < names.length; i++) (function (n) {
+    def(ImageData.prototype, n, function () { return imageDataOf(this)[n]; });
+  })(names[i]);
+})(['width', 'height', 'data', 'colorSpace', 'pixelFormat']);
+defineInterface(ImageData, 'ImageData', null, 2);
+
+/* A width and a height as createImageData and getImageData take them: 0 throws, and a negative
+   size counts back from its corner. [zero] is the message for a size of 0. */
+function imageDataSize(w, h, what, zero) {
+  if (w === 0) throw new DOMException(what + ': The source width is ' + zero + '.', 'IndexSizeError');
+  if (h === 0) throw new DOMException(what + ': The source height is ' + zero + '.', 'IndexSizeError');
+  w = w < 0 ? -w : w;
+  h = h < 0 ? -h : h;
+  if (w * h * 4 > IMAGE_DATA_LIMIT) throw new RangeError(what + ': Out of memory at ImageData creation');
+  return [w, h];
+}
+C2D.createImageData = function createImageData(a, b, c) {
+  var ctx = contextOf(this), what = canvasWhat('createImageData');
+  needArgs(arguments, 1, what);
+  if (arguments.length === 1) {
+    var d = a !== null && typeof a === 'object' ? WeakMapGet(imageDatas, a) : undefined;
+    if (d === undefined) throw new TypeError(what + ": parameter 1 is not of type 'ImageData'.");
+    return newImageData(null, d.width, d.height, null, d);
+  }
+  var size = imageDataSize(enforcedLong(a, what), enforcedLong(b, what), what, 'zero or not a number');
+  return newImageData(null, size[0], size[1], null, imageSettings(c, what, ctx.options.colorSpace));
+};
+C2D.getImageData = function getImageData(sx, sy, sw, sh, settings) {
+  var ctx = contextOf(this), what = canvasWhat('getImageData');
+  needArgs(arguments, 4, what);
+  var x = enforcedLong(sx, what), y = enforcedLong(sy, what), w = enforcedLong(sw, what), h = enforcedLong(sh, what);
+  var s = imageSettings(settings, what, ctx.options.colorSpace), size = imageDataSize(w, h, what, '0');
+  if (w < 0) x += w;
+  if (h < 0) y += h;
+  var float = s.pixelFormat === 'rgba-float16', p3 = s.colorSpace === 'display-p3';
+  var pixels = K.cv(ctx.canvas, 'getImageData', x, y, size[0], size[1], float, p3);
+  var data;
+  if (float) {
+    data = new Float16ArrayCtor(pixels.length);
+    for (var i = 0; i < pixels.length; i++) data[i] = pixels[i];
+  } else {
+    data = new Uint8ClampedArrayCtor(pixels.length);
+    for (var j = 0; j < pixels.length; j++) data[j] = StringCharCodeAt(pixels, j);
+  }
+  return newImageData(null, size[0], size[1], data, s);
+};
+C2D.putImageData = function putImageData(imagedata, dx, dy, dirtyX, dirtyY, dirtyWidth, dirtyHeight) {
+  var ctx = contextOf(this), what = canvasWhat('putImageData'), n = arguments.length;
+  needArgs(arguments, 3, what);
+  if (n !== 3 && n < 7) throw new TypeError(what + ': Overload resolution failed.');
+  var d = imagedata !== null && typeof imagedata === 'object' ? WeakMapGet(imageDatas, imagedata) : undefined;
+  if (d === undefined) throw new TypeError(what + ": parameter 1 is not of type 'ImageData'.");
+  var x = enforcedLong(dx, what), y = enforcedLong(dy, what);
+  var rx = 0, ry = 0, rw = d.width, rh = d.height;
+  if (n >= 7) {
+    rx = enforcedLong(dirtyX, what); ry = enforcedLong(dirtyY, what); rw = enforcedLong(dirtyWidth, what); rh = enforcedLong(dirtyHeight, what);
+  }
+  if (ArrayBufferDetached && ArrayBufferDetached(TypedArrayBuffer(d.data))) {
+    throw new DOMException(what + ': The source data has been detached.', 'InvalidStateError');
+  }
+  if (rw < 0) { rx += rw; rw = -rw; }
+  if (rh < 0) { ry += rh; rh = -rh; }
+  if (rx < 0) { rw += rx; rx = 0; }
+  if (ry < 0) { rh += ry; ry = 0; }
+  if (rx + rw > d.width) rw = d.width - rx;
+  if (ry + rh > d.height) rh = d.height - ry;
+  if (rw <= 0 || rh <= 0) return;
+  var float = d.pixelFormat === 'rgba-float16', data = d.data, out, row, k;
+  if (float) {
+    out = [];
+    for (row = 0; row < rh; row++) {
+      for (k = ((ry + row) * d.width + rx) * 4; k < ((ry + row) * d.width + rx + rw) * 4; k++) ArrayPush(out, data[k]);
+    }
+  } else {
+    out = '';
+    for (row = 0; row < rh; row++) out += byteString(bytesView(data, ((ry + row) * d.width + rx) * 4, ((ry + row) * d.width + rx + rw) * 4));
+  }
+  K.cv(ctx.canvas, 'putImageData', out, x + rx, y + ry, rw, rh, d.colorSpace === 'display-p3');
+};
+
+/* toDataURL and toBlob of a canvas: a PNG, or a JPEG when asked; any other type gives a PNG. */
+function canvasId(self) {
+  if (!isNode(self) || !isA(self, HTMLCanvasElement)) throw new TypeError('Illegal invocation');
+  return idOf(self);
+}
+function canvasDataUrl(canvas, type, quality) {
+  var id = canvasId(canvas);
+  return K.cv(id, 'toDataURL', type === undefined ? 'image/png' : domString(type), typeof quality === 'number' ? quality : null);
+}
+function canvasBlob(canvas, callback, type, quality) {
+  var id = canvasId(canvas), what = "Failed to execute 'toBlob' on 'HTMLCanvasElement'";
+  if (typeof callback !== 'function') throw new TypeError(what + ": parameter 1 is not of type 'Function'.");
+  var file = K.cv(id, 'encode', type === undefined ? 'image/png' : domString(type), typeof quality === 'number' ? quality : null);
+  queueTask(function* () {
+    var blob = null;
+    if (file != null) {
+      blob = ObjectCreate(Blob.prototype);
+      WeakMapSet(blobs, blob, { bytes: bytesOf(file[1]), type: file[0] });
+    }
+    callback(blob);
+  });
+}
+
 /* ---- gradients and patterns ---- */
 
 function CanvasGradient() { illegal('CanvasGradient'); }

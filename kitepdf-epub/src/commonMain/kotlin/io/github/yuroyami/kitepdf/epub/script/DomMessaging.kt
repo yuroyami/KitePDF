@@ -89,6 +89,14 @@ function cloneValue(v, memory, what) {
     MapSet(memory, v, out);
     return out;
   }
+  if ((data = WeakMapGet(imageDatas, v)) !== undefined) {
+    // An ImageData is serializable (HTML, 4.12.5.1.16): its pixels clone as a typed array would.
+    out = ObjectCreate(ImageData.prototype);
+    MapSet(memory, v, out);
+    WeakMapSet(imageDatas, out, { __proto__: null, width: data.width, height: data.height, data: cloneValue(data.data, memory, what),
+      colorSpace: data.colorSpace, pixelFormat: data.pixelFormat });
+    return out;
+  }
   var platform = interfaceOf(v);
   if (platform !== null) throw cloneError(what, platform + ' object could not be cloned.');
   if (branded(BooleanValueOf, v)) out = ObjectCtor(BooleanValueOf(v));

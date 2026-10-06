@@ -682,8 +682,13 @@ var HTMLCanvasElement = elementInterface('HTMLCanvasElement', HTMLElement, 'widt
     needArgs(arguments, 1, "Failed to execute 'getContext' on 'HTMLCanvasElement'");
     return canvasContext(this, domString(contextId), options);
   };
-  p.toDataURL = function () { idOf(this); return 'data:,'; };
-  p.toBlob = function () { idOf(this); };
+  p.toDataURL = function toDataURL(type, quality) { return canvasDataUrl(this, type, quality); };
+  p.toBlob = function toBlob(callback, type, quality) {
+    var what = "Failed to execute 'toBlob' on 'HTMLCanvasElement'";
+    canvasId(this);
+    needArgs(arguments, 1, what);
+    canvasBlob(this, callback, type, quality);
+  };
 });
 var HTMLScriptElement = elementInterface('HTMLScriptElement', HTMLElement, 'src:u type noModule=nomodule:b defer:b crossOrigin:ecors ' +
   'integrity referrerPolicy:ereferrer fetchPriority:efetchpriority blocking:tblocking charset event htmlFor=for', function (p) {

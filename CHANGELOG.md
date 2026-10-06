@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts can read and write the pixels of a `<canvas>`: `ImageData`,
+  `createImageData`, `getImageData`, `putImageData`, `toDataURL` and `toBlob` work, in sRGB or
+  Display P3 and in 8-bit or float16 pixels. The pixels are the same on every target and round as
+  Chromium rounds them. `EpubScriptRunner` and `EpubScriptSession` take `fontOutlines`, which the
+  pixels of text need. Before this change, these methods were missing (#610).
+
+- `KiteRasterCanvas` is a `KiteCanvas` in plain Kotlin that draws into memory, the same on
+  every target. `KiteRaster` gains `encodePng`, `encodeJpeg` and `toImageData`.
+  `SvgImage.fromElement` takes the images that an `<image>` names by its `href`.
+
 - A book's scripts can draw on a `<canvas>`. `getContext('2d')` answers a
   `CanvasRenderingContext2D`, with `Path2D`, gradients, patterns, text, shadows, filters, every
   composite operation and every blend mode. The drawing shows on the page where the canvas sits,
