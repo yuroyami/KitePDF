@@ -208,6 +208,12 @@ shadows, `filter`, every `globalCompositeOperation` and every blend mode work.
 uses the metrics of the standard fonts, so `measureText` is near a browser's but not equal. A
 context other than `2d` answers `null`.
 
+An `<img>` loads its picture as in a browser. Setting `src` makes it pending, and a later task
+fires `load` with its natural size, or `error` for a file that is missing or does not decode.
+The images of the chapter load before the window's `load` event, and a URL that loaded once is
+there at once the next time. `decode()` waits for the load, and a canvas draws nothing of an
+image that has not loaded yet.
+
 A script can read and write the pixels of a canvas with `ImageData`, `createImageData`,
 `getImageData` and `putImageData`, in `rgba-unorm8` or `rgba-float16`, and in sRGB or Display
 P3. `toDataURL` and `toBlob` make a PNG, or a JPEG when asked; any other type makes a PNG. The
@@ -401,9 +407,7 @@ document.
 
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
-its value and checkedness; the loading of an image, since an `<img>` never fires `load` and its
-natural size reads its attributes ([#611](https://github.com/yuroyami/KitePDF/issues/611)).
-A script that calls a missing method fails and is
+its value and checkedness. A script that calls a missing method fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.
 
 Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,

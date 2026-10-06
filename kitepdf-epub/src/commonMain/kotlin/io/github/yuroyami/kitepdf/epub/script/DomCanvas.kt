@@ -31,9 +31,11 @@ function fillRule(v, what) {
   return s;
 }
 function pathHandle(v) { return v !== null && typeof v === 'object' ? WeakMapGet(pathHandles, v) : undefined; }
-/* The host's number of an image a canvas draws, after the type checks of Web IDL. */
+/* The host's number of an image a canvas draws, after the type checks of Web IDL, or the img's
+   request while its picture is not there (#611). */
 function imageSource(v, what) {
-  if (isNode(v) && (isA(v, HTMLImageElement) || isA(v, HTMLCanvasElement) || isA(v, HTMLVideoElement) || isA(v, SVG_TYPES.image))) return v.__id;
+  if (isNode(v) && isA(v, HTMLImageElement)) { var r = imageRequest(v.__id); return r.state === 'available' ? v.__id : r; }
+  if (isNode(v) && (isA(v, HTMLCanvasElement) || isA(v, HTMLVideoElement) || isA(v, SVG_TYPES.image))) return v.__id;
   throw new TypeError(what + ": The provided value is not of type '(CSSImageValue or HTMLCanvasElement or HTMLImageElement or " +
     "HTMLVideoElement or ImageBitmap or OffscreenCanvas or SVGImageElement or VideoFrame)'.");
 }
@@ -315,6 +317,11 @@ C2D.drawImage = function drawImage(image) {
   if (n !== 3 && n !== 5 && n < 9) throw new TypeError(what + ': Overload resolution failed.');
   var id = imageSource(image, what), count = n >= 9 ? 8 : n - 1, v = [];
   for (var i = 1; i <= count; i++) ArrayPush(v, canvasNumber(arguments[i], what));
+  // An img checks its picture after the arguments convert: a broken one throws, a missing one draws nothing.
+  if (typeof id === 'object') {
+    if (id.state === 'broken') throw new DOMException(what + ": The HTMLImageElement provided is in the 'broken' state.", 'InvalidStateError');
+    return;
+  }
   canvasAnswer(K.cv(c.canvas, 'drawImage', id, count, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]), what);
 };
 
@@ -554,6 +561,11 @@ C2D.createPattern = function createPattern(image, repetition) {
   var id = imageSource(image, what), r = repetition === null ? '' : domString(repetition);
   if (r !== '' && r !== 'repeat' && r !== 'repeat-x' && r !== 'repeat-y' && r !== 'no-repeat') {
     throw new DOMException(what + ": The provided type ('" + r + "') is not one of 'repeat', 'no-repeat', 'repeat-x', or 'repeat-y'.", 'SyntaxError');
+  }
+  // As in Chromium, the repetition is checked before the picture of an img.
+  if (typeof id === 'object') {
+    if (id.state === 'broken') throw new DOMException(what + ": Source image is in the 'broken' state.", 'InvalidStateError');
+    return null;
   }
   var h = canvasAnswer(K.cv(c.canvas, 'pattern', id, r), what);
   if (h == null) return null;

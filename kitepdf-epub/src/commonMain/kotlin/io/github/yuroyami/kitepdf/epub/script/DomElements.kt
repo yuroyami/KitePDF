@@ -604,11 +604,95 @@ var HTMLBRElement = elementInterface('HTMLBRElement', HTMLElement, 'clear');
 var HTMLModElement = elementInterface('HTMLModElement', HTMLElement, 'cite:u dateTime=datetime');
 var HTMLPictureElement = elementInterface('HTMLPictureElement', HTMLElement);
 var HTMLSourceElement = elementInterface('HTMLSourceElement', HTMLElement, 'src:u type srcset sizes media width:U0 height:U0');
-/* A dimension of an image as a page gives it: its box once laid out, else its attribute. */
-function imageSize(el, attr, at) {
-  var v = K.attr(idOf(el), attr), n = v == null ? null : parseHtmlInteger(v, true);
-  return n !== null && n <= MAX_LONG ? n : MathRound(boxOf(el)[at]);
+/* ---- loading an image, of HTML 4.8.4.3.5 (#611) ----
+   Each img keeps its image request by its node's number: 'none' without a src, 'empty' for an
+   empty one, 'pending' until a task reads the picture, then 'available' with its natural size
+   or 'broken'. An img that markup made with a src starts to load at once, so one that a script
+   meets with no request yet is pending. The window's load event waits for every pending load. */
+var imageRequests = new Map(), imageLoads = [];
+/* The list of available images: the natural size of each picture the document loaded, by its
+   URL. A src that names one of them has its picture at once, and still fires load in a task. */
+var availableImages = new Map();
+function imageRequest(id) {
+  var r = MapGet(imageRequests, id);
+  if (r === undefined) {
+    r = { __proto__: null, state: 'none', width: 0, height: 0, url: null, generation: 0, decoders: [] };
+    MapSet(imageRequests, id, r);
+    // An image of a document that is not the book's, such as one DOMParser made, never loads.
+    if (ownerDocId(id) === rootId) updateImageData(id, r, false);
+  }
+  return r;
 }
+/* Starts to load what the src of [id] names, as setting it does; [again] keeps a picture that
+   is there already when the src names it again, and fires load once more. */
+function updateImageData(id, r, again) {
+  var src = K.attr(id, 'src'), generation = ++r.generation;
+  if (again && src != null && src === r.url && r.state === 'available') {
+    queueImageLoad(id, r, generation);
+    return;
+  }
+  settleDecoders(r, false);
+  r.url = src;
+  r.width = 0;
+  r.height = 0;
+  r.state = src == null ? 'none' : src === '' ? 'empty' : 'pending';
+  var known = r.state === 'pending' ? MapGet(availableImages, resolvedUrl(src)) : undefined;
+  if (known !== undefined) { r.state = 'available'; r.width = known[0]; r.height = known[1]; }
+  if (src != null) queueImageLoad(id, r, generation);
+}
+function queueImageLoad(id, r, generation) {
+  var load = { __proto__: null, id: id, request: r, generation: generation, done: false };
+  ArrayPush(imageLoads, load);
+  queueTask(function* () { for (var g = imageLoadSteps(load); !GeneratorNext(g).done;) yield; });
+}
+/* The task that ends a load: the picture is read, and load or error fires at the element. */
+function* imageLoadSteps(load) {
+  if (load.done) return;
+  load.done = true;
+  var i = ArrayIndexOf(imageLoads, load);
+  if (i >= 0) listRemoveAt(imageLoads, i);
+  var r = load.request;
+  if (r.generation !== load.generation) return;
+  if (r.state === 'pending') {
+    var size = K.imageSize(load.id);
+    if (size == null) r.state = 'broken';
+    else { r.state = 'available'; r.width = size[0]; r.height = size[1]; MapSet(availableImages, resolvedUrl(r.url), size); }
+  }
+  var ok = r.state === 'available';
+  settleDecoders(r, ok);
+  var event = new Event(ok ? 'load' : 'error');
+  event.isTrusted = true;
+  for (var g = dispatchSteps(wrap(load.id), event); !GeneratorNext(g).done;) yield;
+}
+/* Runs every load still waiting, as the window's load event waits for them. */
+function* pendingImageSteps() {
+  while (imageLoads.length) for (var g = imageLoadSteps(imageLoads[0]); !GeneratorNext(g).done;) yield;
+}
+/* Starts the loads of the img elements that markup put at and under [id] in the book's document. */
+function startParsedImages(id) {
+  if (ownerDocId(id) !== rootId) return;
+  var list = K.images(id);
+  for (var i = 0; i < list.length; i++) if (!MapHas(imageRequests, list[i])) imageRequest(list[i]);
+}
+function settleDecoders(r, ok) {
+  var list = r.decoders;
+  r.decoders = [];
+  for (var i = 0; i < list.length; i++) {
+    var settle = list[i][ok ? 0 : 1];
+    settle(ok ? undefined : new DOMException('The source image cannot be decoded.', 'EncodingError'));
+  }
+}
+/* A dimension of an image as a page gives it: its attribute, else its box once laid out, else
+   the natural size of its picture. */
+function imageSize(el, attr, at) {
+  var id = idOf(el), v = K.attr(id, attr), n = v == null ? null : parseHtmlInteger(v, true);
+  if (n !== null && n <= MAX_LONG) return n;
+  var r = imageRequest(id);
+  if (r.state !== 'available') return 0;
+  var box = K.connected(id) ? K.rect(id) : null;
+  return box != null ? MathRound(box[at]) : at === 2 ? r.width : r.height;
+}
+function isImageElement(id) { var n = nameOf(id); return n.ns === XHTML_NS && n.local === 'img'; }
 function sizeAttribute(p, name, at) {
   def(p, name, function () { return imageSize(this, name, at); }, function (v) { setAttr(this, name, String(unsignedValue(unsignedLong(v), 0))); });
 }
@@ -617,13 +701,19 @@ var HTMLImageElement = elementInterface('HTMLImageElement', HTMLElement, 'alt sr
   'hspace:U0 vspace:U0 longDesc=longdesc:u border:N', function (p) {
   sizeAttribute(p, 'width', 2);
   sizeAttribute(p, 'height', 3);
-  def(p, 'naturalWidth', function () { var v = parseInt(K.attr(idOf(this), 'width'), 10); return v > 0 ? v : 0; });
-  def(p, 'naturalHeight', function () { var v = parseInt(K.attr(idOf(this), 'height'), 10); return v > 0 ? v : 0; });
-  def(p, 'complete', function () { idOf(this); return true; });
+  def(p, 'naturalWidth', function () { var r = imageRequest(idOf(this)); return r.state === 'available' ? r.width : 0; });
+  def(p, 'naturalHeight', function () { var r = imageRequest(idOf(this)); return r.state === 'available' ? r.height : 0; });
+  def(p, 'complete', function () { return imageRequest(idOf(this)).state !== 'pending'; });
   def(p, 'currentSrc', function () { var v = K.attr(idOf(this), 'src'); return v == null ? '' : resolvedUrl(v); });
   def(p, 'x', function () { return MathRound(boxOf(this)[0]); });
   def(p, 'y', function () { return MathRound(boxOf(this)[1]); });
-  p.decode = function () { idOf(this); return resolved(); };
+  p.decode = function () {
+    var r;
+    try { r = imageRequest(idOf(this)); } catch (e) { return rejected(e); }
+    if (r.state === 'available') return resolved(undefined);
+    if (r.state !== 'pending') return rejected(new DOMException('The source image cannot be decoded.', 'EncodingError'));
+    return new Promise(function (resolve, reject) { ArrayPush(r.decoders, [resolve, reject]); });
+  };
 });
 function nestedBrowsingContext(p) {
   def(p, 'contentWindow', function () { idOf(this); return null; });
