@@ -388,6 +388,11 @@ public class EpubScriptSession(
             def("setText") { args -> node(args, 0)?.let { dom.setText(it, string(args, 1)) }; null }
             def("create") { args -> dom.idOf(dom.createElement(string(args, 0), args.getOrNull(1) as? String, args.getOrNull(2) as? String)) }
             def("createDocument") { dom.idOf(dom.createDocument()) }
+            // A document that DOMParser parsed, as HTML or else as XML (#543).
+            def("parseDocument") { args -> dom.idOf(dom.parseDocument(string(args, 0), args.getOrNull(1) == true).first) }
+            def("xml") { args -> node(args, 0)?.let(dom::xml).orEmpty() }
+            def("target") { args -> node(args, 0)?.let(dom::target) }
+            def("doctype") { args -> node(args, 0)?.let(dom::doctype)?.let { listOf(it.name, it.publicId, it.systemId) } }
             def("createText") { args -> dom.idOf(KiteXmlNode.Text(string(args, 0))) }
             def("createComment") { args -> dom.idOf(KiteXmlNode.Comment(string(args, 0))) }
             def("createFragment") { dom.idOf(dom.createFragment()) }

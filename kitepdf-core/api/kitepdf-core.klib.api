@@ -3075,6 +3075,7 @@ final object io.github.yuroyami.kitepdf.core.text/TextEncoding { // io.github.yu
 }
 
 final object io.github.yuroyami.kitepdf.core.xml/KiteXml { // io.github.yuroyami.kitepdf.core.xml/KiteXml|null[0]
+    final fun htmlEntity(kotlin/String): kotlin/String? // io.github.yuroyami.kitepdf.core.xml/KiteXml.htmlEntity|htmlEntity(kotlin.String){}[0]
     final fun parse(kotlin/String, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element // io.github.yuroyami.kitepdf.core.xml/KiteXml.parse|parse(kotlin.String;kotlin.Boolean){}[0]
     final fun tokenize(kotlin/String, kotlin/Boolean = ..., kotlin/Boolean = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core.xml/KiteXmlToken> // io.github.yuroyami.kitepdf.core.xml/KiteXml.tokenize|tokenize(kotlin.String;kotlin.Boolean;kotlin.Boolean){}[0]
 }
