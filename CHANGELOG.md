@@ -877,6 +877,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A scripted chapter opens two to six times faster after the first one. Each engine loads the
+  bytecode of a large script that another engine of the process compiled, so the DOM of a
+  chapter is parsed once per process. A warm chapter set up in 25 to 28 ms on the JVM, 34 to 38
+  ms on Node, 31 to 33 ms on Wasm and 84 to 86 ms in a macOS debug build, and now sets up in 10
+  to 13, 19 to 26, 14 to 16 and 13 to 15 ms. The first engine of a desktop JVM process also
+  opens about 300 ms sooner. This needs `kitejs-api` and `kitejs-quickjs` 0.4.0 (#555).
+
 - `kitepdf-javascript` runs document scripts on KiteJS's QuickJS engine, through `kitejs-api`
   and `kitejs-quickjs` 0.3.0, where it used KiteJS's Rhino engine. Scripts that Rhino could not
   run now run: `const` in a `for` head, async functions, `SharedArrayBuffer`, `Float16Array`,

@@ -173,6 +173,11 @@ chapters the reader left. That chapter keeps what its scripts made of it, and wh
 again its scripts start over from its markup, as a page does when it loads again.
 `EpubScriptSession.unloadChapters()` unloads them all at once.
 
+Each engine parses a large script only once for the whole process. `KiteJsScriptEngine` keeps the
+bytecode of every script of 32 KB or more, and a later engine loads that bytecode in place of a
+parse. The DOM that each chapter's engine sets up first is such a script, so a chapter after the
+first sets up in about 11 ms on the JVM, 14 ms on macOS, 15 ms on Wasm and 20 ms on Node.
+
 An `<iframe>` whose `src` is a document of the book shows that document, and the document's
 scripts run in a window of their own, with an engine of its own. So does an `<object>` whose
 `data` is an HTML or XHTML document of the book. The frames' documents load

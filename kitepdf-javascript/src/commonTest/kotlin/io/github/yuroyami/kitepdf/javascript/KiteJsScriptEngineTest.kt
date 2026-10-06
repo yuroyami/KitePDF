@@ -69,4 +69,28 @@ class KiteJsScriptEngineTest {
             assertTrue(depth > floor, "a script recursed only $depth calls deep")
         }
     }
+
+    @Test
+    fun a_large_script_runs_the_same_in_each_engine_that_runs_it(): TestResult = scriptTest {
+        // Large enough that engines after the first load the first one's bytecode (#555).
+        val source = buildString {
+            append("var runs = (typeof runs === 'undefined' ? 0 : runs) + 1;\n")
+            repeat(1200) { append("function f$it(a) { return a + $it; }\n") }
+            append("function fail() { throw new Error('from the large script'); }\n")
+            append("f1199(1) + ':' + runs")
+        }
+        assertTrue(source.length > 32 * 1024)
+        repeat(3) {
+            KiteJsScriptEngine().use { js ->
+                assertEquals("1200:1", js.evaluate(source, "large.js"), "each engine starts from nothing")
+                assertEquals("1200:2", js.evaluate(source, "large.js"))
+                val failure = assertFailsWith<KiteScriptException> { js.evaluate("fail()", "call") }
+                assertTrue("from the large script" in failure.message.orEmpty(), failure.message)
+            }
+        }
+        // A large script that does not parse fails in every engine, and caches nothing.
+        repeat(2) {
+            KiteJsScriptEngine().use { js -> assertFailsWith<KiteScriptException> { js.evaluate("$source (", "broken.js") } }
+        }
+    }
 }

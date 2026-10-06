@@ -1,11 +1,15 @@
 package io.github.yuroyami.kitepdf.javascript
 
+import io.github.yuroyami.kitejs.api.JsEngineError
 import io.github.yuroyami.kitejs.api.JsException
 import io.github.yuroyami.kitejs.api.JsObject
+import io.github.yuroyami.kitejs.api.JsScript
 import io.github.yuroyami.kitejs.api.KiteJs
 import io.github.yuroyami.kitejs.api.function
 import io.github.yuroyami.kitejs.api.obj
 import io.github.yuroyami.kitejs.quickjs.QuickJs
+import io.github.yuroyami.kitepdf.core.KiteLock
+import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 
@@ -59,8 +63,25 @@ public class KiteJsScriptEngine(
     }
 
     override fun evaluate(source: String, name: String): String? = guarded(name) {
-        val value = js.evaluate(source, name)
+        val value = if (source.length >= MIN_CACHED_SOURCE) script(source, name).run() else js.evaluate(source, name)
         if (value.isNullish) null else value.asString()
+    }
+
+    /**
+     * [source] compiled, from the bytecode another engine of the process wrote for it when there
+     * is one (#555). A large script, such as the DOM that each chapter's engine sets up first,
+     * then is parsed once for the whole process.
+     */
+    private fun script(source: String, name: String): JsScript {
+        Bytecodes.find(source, name)?.let { bytes ->
+            try {
+                return js.loadBytecode(bytes)
+            } catch (_: JsEngineError) {
+                // Bytecode this engine cannot read is dropped, and the source is parsed again.
+                Bytecodes.forget(bytes)
+            }
+        }
+        return js.compile(source, name).also { script -> script.bytecode()?.let { Bytecodes.keep(source, name, it) } }
     }
 
     override fun defineFunction(name: String, function: (List<Any?>) -> Any?): Unit = guarded(name) {
@@ -95,7 +116,41 @@ public class KiteJsScriptEngine(
         throw KiteScriptException("$name: ${e.message ?: e::class.simpleName}", e)
     }
 
+    /**
+     * The bytecode of the large scripts that engines of this process compiled, the one used last
+     * at the end. Bytecode is only ever read back for the very source that it was written from.
+     */
+    private object Bytecodes {
+        private class Entry(val source: String, val name: String, val bytes: ByteArray)
+
+        private val lock = KiteLock()
+        private val entries = ArrayList<Entry>()
+
+        fun find(source: String, name: String): ByteArray? = lock.withLock {
+            // The same string object is the usual case, so a hit rarely compares the text itself.
+            val i = entries.indexOfFirst { it.name == name && (it.source === source || it.source.length == source.length && it.source == source) }
+            if (i < 0) null else entries.removeAt(i).also { entries.add(it) }.bytes
+        }
+
+        fun keep(source: String, name: String, bytes: ByteArray) = lock.withLock {
+            entries.add(Entry(source, name, bytes))
+            var total = entries.sumOf { it.bytes.size.toLong() + it.source.length * 2L }
+            while (entries.size > MAX_CACHED_SCRIPTS || total > MAX_CACHED_BYTES && entries.size > 1) {
+                total -= entries.removeAt(0).let { it.bytes.size.toLong() + it.source.length * 2L }
+            }
+        }
+
+        fun forget(bytes: ByteArray) = lock.withLock { entries.removeAll { it.bytes === bytes } }
+    }
+
     public companion object {
+        /** Sources at least this long keep their bytecode for the other engines of the process (#555). */
+        private const val MIN_CACHED_SOURCE = 32 * 1024
+
+        /** How many sources keep their bytecode at most, and how much memory they and their bytecode take. */
+        private const val MAX_CACHED_SCRIPTS = 16
+        private const val MAX_CACHED_BYTES = 64L shl 20
+
         /** The engine underneath. Nothing else in this module names it. */
         internal val ENGINE = QuickJs
 
