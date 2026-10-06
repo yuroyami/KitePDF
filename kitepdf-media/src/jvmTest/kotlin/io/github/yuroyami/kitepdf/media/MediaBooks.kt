@@ -15,11 +15,13 @@ internal object MediaBooks {
         checkNotNull(MediaBooks::class.java.getResourceAsStream("/media/$name")) { "no fixture $name" }.readBytes()
 
     fun book(body: String, files: Map<String, ByteArray> = emptyMap(), manifest: String = ""): EpubDocument {
+        // A book uses only the files its manifest lists, so each file that [manifest] leaves out gets an item.
+        val listed = manifest + files.keys.filter { "href=\"$it\"" !in manifest }.let(::items)
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">""" +
             """<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">""" +
             """<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">media-test</dc:identifier></metadata>""" +
-            """<manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>$manifest</manifest>""" +
+            """<manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>$listed</manifest>""" +
             """<spine><itemref idref="c1"/></spine></package>"""
         val chapter = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>$body</body></html>"""
         val entries = linkedMapOf(
@@ -30,6 +32,19 @@ internal object MediaBooks {
         )
         for ((name, bytes) in files) entries["OEBPS/$name"] = bytes
         return EpubDocument.open(storedZip(entries))
+    }
+
+    /** Manifest items for the files [names], beside the chapter, each with the media type of its extension. */
+    fun items(names: Collection<String>): String = names.withIndex().joinToString("") { (i, name) ->
+        """<item id="file$i" href="$name" media-type="${mediaTypeOf(name)}"/>"""
+    }
+
+    private fun mediaTypeOf(name: String): String = when (name.substringAfterLast('.').lowercase()) {
+        "mp3" -> "audio/mpeg"
+        "mp4" -> "video/mp4"
+        "wav" -> "audio/wav"
+        "png" -> "image/png"
+        else -> "application/octet-stream"
     }
 
     /** A zip of [entries] in their order, every one stored, as an EPUB's mimetype must be (EPUB OCF 3.3, 4.3). */

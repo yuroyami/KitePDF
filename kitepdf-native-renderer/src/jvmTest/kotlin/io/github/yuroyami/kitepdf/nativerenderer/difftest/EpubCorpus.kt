@@ -99,7 +99,12 @@ object EpubCorpus {
     fun epub(bodyHtml: String, extra: List<Pair<String, ByteArray>> = emptyList()): ByteArray {
         val body = if (bodyHtml.trimStart().startsWith("<body")) bodyHtml else "<body>$bodyHtml</body>"
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
-        val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>"""
+        // A book uses only the files its manifest lists, so each extra file gets an item.
+        val items = extra.withIndex().joinToString("") { (i, entry) ->
+            val href = entry.first.removePrefix("OEBPS/")
+            """<item id="x$i" href="$href" media-type="${mediaTypeOf(href)}"/>"""
+        }
+        val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>$items</manifest><spine><itemref idref="c1"/></spine></package>"""
         val chapter = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml">$body</html>"""
         return storedZip(
             listOf(
@@ -109,6 +114,16 @@ object EpubCorpus {
                 "OEBPS/chapter1.xhtml" to chapter.encodeToByteArray(),
             ) + extra,
         )
+    }
+
+    private fun mediaTypeOf(href: String): String = when (href.substringAfterLast('.').lowercase()) {
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "gif" -> "image/gif"
+        "svg" -> "image/svg+xml"
+        "css" -> "text/css"
+        "xhtml" -> "application/xhtml+xml"
+        else -> "application/octet-stream"
     }
 
     /** 2x2 solid-red truecolor PNG (STORED deflate, valid CRCs and Adler-32). */
