@@ -225,7 +225,7 @@ public class EpubScriptSession(
         val engine: KiteScriptEngine get() = checkNotNull(opened)
         /** The chapter's media type, which makes its document an HTML or an XML one (#541). */
         val contentType: String = document.resourceType(document.chapterPath(chapter))?.lowercase() ?: "application/xhtml+xml"
-        val dom = ScriptDom(document.sourceChapterTree(chapter), html = contentType == "text/html", commented = document.commentedChapterTree(chapter))
+        val dom = ScriptDom(document.sourceChapterTree(chapter), html = contentType == "text/html", markup = document.chapterText(chapter))
 
         /** The timers and frames its scripts wait on. */
         var timers = 0
@@ -395,6 +395,11 @@ public class EpubScriptSession(
             def("doctype") { args -> node(args, 0)?.let(dom::doctype)?.let { listOf(it.name, it.publicId, it.systemId) } }
             def("createText") { args -> dom.idOf(KiteXmlNode.Text(string(args, 0))) }
             def("createComment") { args -> dom.idOf(KiteXmlNode.Comment(string(args, 0))) }
+            // The node kinds that only a parse made before, and a document's mode (#546).
+            def("createDoctype") { args -> dom.idOf(dom.createDoctype(string(args, 0), string(args, 1), string(args, 2))) }
+            def("createInstruction") { args -> dom.idOf(dom.createInstruction(string(args, 0), string(args, 1))) }
+            def("createCdata") { args -> dom.idOf(dom.createCdata(string(args, 0))) }
+            def("quirks") { args -> element(args, 0)?.let(dom::quirks) == true }
             def("createFragment") { dom.idOf(dom.createFragment()) }
             def("insert") { args ->
                 val parent = element(args, 0) ?: return@def "HierarchyRequestError"

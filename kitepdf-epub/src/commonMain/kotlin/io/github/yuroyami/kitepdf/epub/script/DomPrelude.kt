@@ -96,7 +96,9 @@ var RE_UPPER = hardened(/[A-Z]/g), RE_ASCII_UPPER = hardened(/[A-Z]/), RE_VENDOR
   RE_FRAGMENT = hardened(/#.*/), RE_CRLF = hardened(/\r\n?/g), RE_PRINTABLE = hardened(/^[\x20-\x7E]*$/), RE_CAPITAL = hardened(/^[A-Z]/),
   RE_TYPE_NAME = hardened(/^[A-Za-z][A-Za-z0-9-]*$/), RE_ATTRIBUTE_NAME = hardened(/^[^\0\t\n\f\r \/>=]+$/),
   RE_CUSTOM_ELEMENT = hardened(/^[a-z](?:[-.0-9_a-z\u00B7\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u037D\u037F-\u1FFF\u200C\u200D\u203F\u2040\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]|[\uD800-\uDB7F][\uDC00-\uDFFF])*$/),
-  RE_ELEMENT_NAME = hardened(/^(?:[A-Za-z][^\0\t\n\f\r />]*|[:_\u0080-\uFFFF][-.0-9:A-Z_a-z\u0080-\uFFFF]*)$/);
+  RE_ELEMENT_NAME = hardened(/^(?:[A-Za-z][^\0\t\n\f\r />]*|[:_\u0080-\uFFFF][-.0-9:A-Z_a-z\u0080-\uFFFF]*)$/),
+  RE_XML_NAME = hardened(/^(?:[:A-Z_a-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]|[\uD800-\uDB7F][\uDC00-\uDFFF])(?:[-.0-9:A-Z_a-z\u00B7\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u037D\u037F-\u1FFF\u200C\u200D\u203F\u2040\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]|[\uD800-\uDB7F][\uDC00-\uDFFF])*$/),
+  RE_DOCTYPE_NAME = hardened(/^[^\0\t\n\f\r >]*$/);
 /* The host's functions, in a table of the DOM's own, and the global that held them gone, so a
    script neither replaces nor calls one. */
 var K = (function (host) {
@@ -1695,7 +1697,8 @@ def(Document.prototype, 'characterSet', utf8);
 def(Document.prototype, 'charset', utf8);
 def(Document.prototype, 'inputEncoding', utf8);
 def(Document.prototype, 'contentType', function () { return documentContentType(idOf(this)); });
-def(Document.prototype, 'compatMode', function () { idOf(this); return 'CSS1Compat'; });
+// The mode that the document type, or its lack, set when an HTML parser made the document (#546).
+def(Document.prototype, 'compatMode', function () { return K.quirks(idOf(this)) ? 'BackCompat' : 'CSS1Compat'; });
 def(Document.prototype, 'doctype', function () {
   var c = childIds(idOf(this));
   for (var i = 0; i < c.length; i++) if (K.kind(c[i]) === 10) return wrap(c[i]);
@@ -1771,6 +1774,23 @@ Document.prototype.createComment = function (data) {
   needArgs(arguments, 1, "Failed to execute 'createComment' on 'Document'");
   return madeBy(idOf(this), K.createComment(domString(data)));
 };
+/* createProcessingInstruction and createCDATASection, of the DOM Standard, 4.5 (#546). */
+Document.prototype.createProcessingInstruction = function (target, data) {
+  var what = "Failed to execute 'createProcessingInstruction' on 'Document'", id = idOf(this);
+  needArgs(arguments, 2, what);
+  var t = domString(target), d = domString(data);
+  if (!RegExpTest(RE_XML_NAME, t)) throw new DOMException(what + ": The target provided ('" + t + "') is not a valid name.", 'InvalidCharacterError');
+  if (StringIndexOf(d, '?>') >= 0) throw new DOMException(what + ": The data provided ('" + d + "') contains '?>'.", 'InvalidCharacterError');
+  return madeBy(id, K.createInstruction(t, d));
+};
+Document.prototype.createCDATASection = function (data) {
+  var what = "Failed to execute 'createCDATASection' on 'Document'", id = idOf(this);
+  needArgs(arguments, 1, what);
+  var d = domString(data);
+  if (isHtmlDocument(id)) throw new DOMException(what + ': This operation is not supported for HTML documents.', 'NotSupportedError');
+  if (StringIndexOf(d, ']]>') >= 0) throw new DOMException(what + ": String cannot contain ']]>' since that is the end delimiter of a CData section.", 'InvalidCharacterError');
+  return madeBy(id, K.createCdata(d));
+};
 Document.prototype.createDocumentFragment = function () { return madeBy(idOf(this), K.createFragment()); };
 Document.prototype.createAttribute = function (localName) {
   var what = "Failed to execute 'createAttribute' on 'Document'", id = idOf(this);
@@ -1843,18 +1863,23 @@ function implementationOf(i) {
   if (id === undefined) throw new TypeError('Illegal invocation');
   return id;
 }
-DOMImplementation.prototype.createDocumentType = function () {
-  implementationOf(this);
-  throw new DOMException("Failed to execute 'createDocumentType' on 'DOMImplementation': A document type is not supported.", 'NotSupportedError');
+DOMImplementation.prototype.createDocumentType = function (qualifiedName, publicId, systemId) {
+  var docId = implementationOf(this), what = "Failed to execute 'createDocumentType' on 'DOMImplementation'";
+  needArgs(arguments, 3, what);
+  var name = domString(qualifiedName);
+  if (!RegExpTest(RE_DOCTYPE_NAME, name)) throw new DOMException(what + ": The qualified name provided ('" + name + "') contains an invalid character.", 'InvalidCharacterError');
+  return madeBy(docId, K.createDoctype(name, domString(publicId), domString(systemId)));
 };
-DOMImplementation.prototype.createDocument = function (namespace, qualifiedName) {
+DOMImplementation.prototype.createDocument = function (namespace, qualifiedName, doctype) {
   implementationOf(this);
   var what = "Failed to execute 'createDocument' on 'DOMImplementation'";
   needArgs(arguments, 2, what);
   var ns = namespace == null || namespace === '' ? null : domString(namespace), q = qualifiedName === null ? '' : domString(qualifiedName);
+  if (doctype != null && !isA(doctype, DocumentType)) throw new TypeError(what + ": parameter 3 is not of type 'DocumentType'.");
   var name = q === '' ? null : extractName(ns, q, what);
   var doc = madeDocument(K.createDocument(), XMLDocument.prototype, false,
     ns === XHTML_NS ? 'application/xhtml+xml' : ns === SVG_NS ? 'image/svg+xml' : 'application/xml');
+  if (doctype != null) insertNode(doc.__id, madeBy(doc.__id, idOf(doctype)), null, what);
   if (name !== null) insertNode(doc.__id, madeBy(doc.__id, createElementId(name)), null, what);
   return doc;
 };
@@ -1862,6 +1887,9 @@ DOMImplementation.prototype.createHTMLDocument = function (title) {
   implementationOf(this);
   var doc = madeDocument(K.createDocument(), HTMLDocument.prototype, true, 'text/html'), id = doc.__id;
   function element(parent, local) { var e = htmlElementId(local); MapSet(nodeDocuments, e, id); check(K.insert(parent, e, null), 'createHTMLDocument'); return e; }
+  var doctype = K.createDoctype('html', '', '');
+  MapSet(nodeDocuments, doctype, id);
+  check(K.insert(id, doctype, null), 'createHTMLDocument');
   var html = element(id, 'html'), head = element(html, 'head');
   if (title !== undefined) K.setText(element(head, 'title'), domString(title));
   element(html, 'body');

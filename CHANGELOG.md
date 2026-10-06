@@ -260,6 +260,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty element closes itself, and markup that is not well-formed throws a `SyntaxError`. An
   attribute value written as XML keeps its tabs and line breaks as character references, in
   `XMLSerializer` too (#548).
+- A chapter's scripts see its document type, its processing instructions and its CDATA sections as
+  `DocumentType`, `ProcessingInstruction` and `CDATASection` nodes, where the document began at its
+  root element. White space beside the root element is no longer a text node of the document.
+  `compatMode` is `BackCompat` for an HTML chapter or parsed HTML that a document type puts in quirks
+  mode, as HTML's parser decides it. `createProcessingInstruction`, `createCDATASection` and
+  `DOMImplementation.createDocumentType` make those nodes, `createDocument` takes a document type,
+  and `createHTMLDocument` gives its document one (#546).
 - In an XHTML chapter, `document.write`, `writeln`, `open` and `close` throw an `InvalidStateError`,
   as a browser's do in an XML document, where they wrote into the chapter. An HTML chapter is written
   as before (#603).
