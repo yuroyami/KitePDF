@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.KiteDataUrl
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.text.TextEncoding
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlError
@@ -480,7 +481,7 @@ internal class ParsedEpub(
     fun hasFile(path: String): Boolean = when {
         KiteDataUrl.isDataUrl(path) -> true
         isBlobUrl(path) -> blobs.resolve(path) != null
-        else -> zip.entry(path.substringBefore('#')) != null
+        else -> path.substringBefore('#').let { zip.entry(it) != null && listed(it) }
     }
 
     /** The size in bytes of what [read] answers for [path], without reading it; for a data URL, the length of the URL. */
@@ -595,14 +596,25 @@ internal class ParsedEpub(
     private fun readAt(path: String): ByteArray? = when {
         KiteDataUrl.isDataUrl(path) -> KiteDataUrl.decode(path)?.bytes
         isBlobUrl(path) -> blobs.resolve(path)?.bytes
-        else -> zip.read(path.substringBefore('#'))
+        else -> path.substringBefore('#').takeIf(::listed)?.let(zip::read)
     }
 
     /** The text of the file at [path] in the zip, of the data URL [path] is (#514), or of the blob a blob URL names (#533). */
     private fun readTextAt(path: String): String? = when {
         KiteDataUrl.isDataUrl(path) -> KiteDataUrl.decode(path)?.let { TextEncoding.decode(it.bytes) }
         isBlobUrl(path) -> blobs.resolve(path)?.let { TextEncoding.decode(it.bytes) }
-        else -> zip.readText(path)
+        else -> path.takeIf(::listed)?.let(zip::readText)
+    }
+
+    /**
+     * Whether the book's documents may read the file at [path]: the manifest lists every resource
+     * of the book, and a reading system does not use one it leaves out (EPUB Reading Systems 3.3,
+     * 3.1). A file the zip does not hold is not refused here, so it stays a plain miss (#516).
+     */
+    private fun listed(path: String): Boolean {
+        if (path in itemsByPath || zip.entry(path) == null) return true
+        kiteWarn { "epub: '$path' is not in the manifest, so the book does not use it" }
+        return false
     }
 
     companion object {

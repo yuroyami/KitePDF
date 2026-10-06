@@ -16,6 +16,8 @@ internal object EpubFixtures {
         primaryWritingMode: String? = null,
         /** Replace the chapter's bytes wholesale, e.g. to store it in another encoding. */
         chapterBytes: ByteArray? = null,
+        /** Files in the zip that the manifest leaves out, unlike [extraEntries] (#516). */
+        unlisted: List<Pair<String, ByteArray>> = emptyList(),
     ): ByteArray {
         val body = if (bodyHtml.trimStart().startsWith("<body")) bodyHtml else "<body>$bodyHtml</body>"
         val container = """
@@ -38,7 +40,7 @@ internal object EpubFixtures {
             <?xml version="1.0"?>
             <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
               $metadata
-              <manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest>
+              <manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>${manifestItems(extraEntries)}</manifest>
               <spine${spineDirection?.let { """ page-progression-direction="$it"""" } ?: ""}><itemref idref="c1"/></spine>
             </package>
         """.trimIndent()
@@ -49,8 +51,40 @@ internal object EpubFixtures {
                 "META-INF/container.xml" to container.encodeToByteArray(),
                 "OEBPS/content.opf" to opf.encodeToByteArray(),
                 "OEBPS/chapter1.xhtml" to (chapterBytes ?: chapter.encodeToByteArray()),
-            ) + extraEntries,
+            ) + extraEntries + unlisted,
         )
+    }
+
+    /**
+     * Manifest items for the files of [entries], with a media type from each name's extension.
+     * A book lists every resource it uses, and a resource it leaves out does not load (#516).
+     */
+    fun manifestItems(entries: List<Pair<String, ByteArray>>, base: String = "OEBPS/"): String =
+        entries.map { it.first }.filter { it != "mimetype" && !it.startsWith("META-INF/") }.withIndex().joinToString("") { (i, path) ->
+            val href = if (path.startsWith(base)) path.removePrefix(base) else "../".repeat(base.count { it == '/' }) + path
+            """<item id="extra-$i" href="${href.replace("&", "&amp;").replace("\"", "&quot;")}" media-type="${mediaTypeFor(path)}"/>"""
+        }
+
+    private fun mediaTypeFor(path: String): String = when (path.substringAfterLast('.').lowercase()) {
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "gif" -> "image/gif"
+        "bmp" -> "image/bmp"
+        "webp" -> "image/webp"
+        "svg" -> "image/svg+xml"
+        "css" -> "text/css"
+        "xhtml" -> "application/xhtml+xml"
+        "html", "htm" -> "text/html"
+        "ttf" -> "font/ttf"
+        "otf" -> "font/otf"
+        "woff" -> "font/woff"
+        "woff2" -> "font/woff2"
+        "js" -> "application/javascript"
+        "mp3" -> "audio/mpeg"
+        "mp4", "m4a" -> "audio/mp4"
+        "smil" -> "application/smil+xml"
+        "xml" -> "application/xml"
+        else -> "application/octet-stream"
     }
 
     /** Multi-spine book with an EPUB 3 nav document pointing at each chapter. */
@@ -149,7 +183,7 @@ internal object EpubFixtures {
         val opf = """<?xml version="1.0"?>
             <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
               <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">folder</dc:identifier></metadata>
-              <manifest>$docItems$ghostItems$sheetItems</manifest>
+              <manifest>$docItems$ghostItems$sheetItems${manifestItems(extraEntries)}</manifest>
               <spine>$refs</spine>
             </package>"""
         val links = sheets.joinToString("") { (name, _) ->

@@ -892,6 +892,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A file in the book's zip that the manifest does not list no longer loads: an image, a style
+  sheet, a font, a frame or a media file that a chapter names there draws nothing, and
+  `EpubDocument.resource` answers null for it. EPUB Reading Systems 3.3 asks a reading system not
+  to use such a file. Each refusal goes to `KiteWarnings`. No book of the test corpus names such a
+  file. One more W3C EPUB test passes (#516).
+
 - Breaking: every event method of `PdfScriptHandler` and `EpubScriptHandler` is a `suspend`
   function, such as `runAction`, `commit`, `chapterOpened`, `tap` and `pumpTimers`. A handler
   that overrides one adds `suspend`, and a caller outside a coroutine wraps the call in one.

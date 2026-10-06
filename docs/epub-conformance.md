@@ -9,10 +9,10 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
 | must | 140 | 127 | 9 | 4 |
-| should | 38 | 30 | 7 | 1 |
+| should | 38 | 31 | 6 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 182 | 18 | 6 |
+| all | 206 | 183 | 17 | 6 |
 
 ## How the results are known
 
@@ -57,7 +57,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`pkg-creator-order`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-creator-order) | must | Passes | Checked: `epubMetadata.creators` lists the five creators in package order. |
 | [`pkg-linked-records`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-linked-records) | should | Not applicable | Judged: Linked metadata records are not read, and the test applies only to a reading system that reads them. The title and creator come from the package. |
 | [`pkg-manifest-unknown`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-manifest-unknown) | must | Passes | Checked: The book opens and shows the pass sentence. |
-| [`pkg-manifest-unlisted-resource`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-manifest-unlisted-resource) | should | Fails ([#516](https://github.com/yuroyami/KitePDF/issues/516)) | Checked: The image that the manifest does not list does not draw; today it does. |
+| [`pkg-manifest-unlisted-resource`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-manifest-unlisted-resource) | should | Passes | Checked: The image that the manifest does not list does not draw. |
 | [`pkg-meta-unknown`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-meta-unknown) | must | Passes | Checked: The book opens with its own title, not the unknown meta's, and shows the pass sentence. |
 | [`pkg-meta-whitespace`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-meta-whitespace) | must | Passes | Checked: The creator reads "Dave Cramer" with one space, and the title reads as written. |
 | [`pkg-spine-duplicate-item-hyperlink`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pkg-spine-duplicate-item-hyperlink) | must | Passes | Checked: The link to the repeated document goes to its first place in the spine. |

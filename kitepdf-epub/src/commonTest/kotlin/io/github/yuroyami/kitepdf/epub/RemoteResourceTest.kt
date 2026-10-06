@@ -60,8 +60,10 @@ class RemoteResourceTest {
             val props = properties[i]?.let { """ properties="$it"""" }.orEmpty()
             """<item id="c$i" href="c$i.xhtml" media-type="application/xhtml+xml"$props/>"""
         }
+        // The book lists each of its files, as every resource it uses must be (#516).
+        val listed = EpubFixtures.manifestItems(files.filter { (name, _) -> "href=\"$name\"" !in manifest }.map { (name, bytes) -> "OEBPS/$name" to bytes })
         val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0">
-            <manifest>$items$manifest</manifest><spine>${bodies.indices.joinToString("") { """<itemref idref="c$it"/>""" }}</spine></package>"""
+            <manifest>$items$manifest$listed</manifest><spine>${bodies.indices.joinToString("") { """<itemref idref="c$it"/>""" }}</spine></package>"""
         val chapters = bodies.mapIndexed { i, body ->
             "OEBPS/c$i.xhtml" to """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>$body</body></html>""".encodeToByteArray()
         }

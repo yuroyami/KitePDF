@@ -148,7 +148,7 @@
     "pkg-lang_but_not_content": true,
     "pkg-linked-records": "n/a",
     "pkg-manifest-unknown": true,
-    "pkg-manifest-unlisted-resource": false,
+    "pkg-manifest-unlisted-resource": true,
     "pkg-meta-unknown": true,
     "pkg-meta-whitespace": true,
     "pkg-spine-duplicate-item-hyperlink": true,
