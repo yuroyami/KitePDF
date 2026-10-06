@@ -48,7 +48,6 @@ class WebPlatformTest {
     }
 
     private val gaps = listOf(
-        Gap("#531, FormData is missing", "typeof FormData === 'undefined'", setOf("URLSearchParams constructor, FormData.")),
         // The tests detach a buffer by transferring it through a port.
         Gap(
             "#534, MessageChannel is missing",

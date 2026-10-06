@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts have `FormData`, `FormDataEvent` and `SubmitEvent`. `new FormData(form,
+  submitter)` takes the entries of the form as HTML builds them, and fires `formdata` at the
+  form. A click on a submit button and `requestSubmit` fire `submit` with its submitter and then
+  `formdata`, as `submit()` fires `formdata` alone. A control in a disabled fieldset no longer
+  activates (#531).
+
 - `EpubDocument.setFragment` and `fragmentOf` hold the fragment the reader reached in each
   chapter. The element that the fragment names matches `:target` in the layout, so a book can
   style the note a link lands on. Only a chapter whose style sheets use `:target` is laid out

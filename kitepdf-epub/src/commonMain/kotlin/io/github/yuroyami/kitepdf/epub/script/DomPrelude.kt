@@ -65,7 +65,8 @@ var StringCharAt = uncurry(String.prototype.charAt), StringCharCodeAt = uncurry(
 var RegExpExec = RegExp.prototype.exec, RegExpReplace = uncurry(RegExp.prototype[Symbol.replace]),
   RegExpTest = uncurry(RegExp.prototype.test);
 var MapGet = uncurry(Map.prototype.get), MapHas = uncurry(Map.prototype.has), MapSet = uncurry(Map.prototype.set);
-var WeakMapGet = uncurry(WeakMap.prototype.get), WeakMapHas = uncurry(WeakMap.prototype.has), WeakMapSet = uncurry(WeakMap.prototype.set);
+var WeakMapGet = uncurry(WeakMap.prototype.get), WeakMapHas = uncurry(WeakMap.prototype.has), WeakMapSet = uncurry(WeakMap.prototype.set),
+  WeakMapDelete = uncurry(WeakMap.prototype["delete"]);
 var TypedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
 var TypedArrayBuffer = getter(TypedArrayPrototype, 'buffer'), TypedArrayByteLength = getter(TypedArrayPrototype, 'byteLength'),
   TypedArrayByteOffset = getter(TypedArrayPrototype, 'byteOffset'), TypedArrayLength = getter(TypedArrayPrototype, 'length'),
@@ -586,17 +587,18 @@ def(Event.prototype, 'returnValue', function () { return !this.defaultPrevented;
 def(Event.prototype, 'cancelBubble', function () { return this.__stop; }, function (v) { if (v) this.__stop = true; });
 defineInterface(Event, 'Event', null, 1);
 
-/* The interface [name] of an event that inherits from [parent], whose dictionary [fill] reads. */
-function subEvent(parent, name, fill) {
+/* The interface [name] of an event that inherits from [parent], whose dictionary [fill] reads,
+   and whose constructor needs [count] arguments, one unless the dictionary is required. */
+function subEvent(parent, name, fill, count) {
   var E = function (type, init) {
     needNew(this, E, name, eventMade);
-    needArgs(arguments, 1, "Failed to construct '" + name + "'");
+    needArgs(arguments, count || 1, "Failed to construct '" + name + "'");
     init = init || { __proto__: null };
     ReflectApply(parent, this, [type, init]);
     ReflectApply(fill, this, [init]);
   };
   E.prototype = ObjectCreate(parent.prototype);
-  return defineInterface(E, name, parent, 1);
+  return defineInterface(E, name, parent, count || 1);
 }
 var UIEvent = subEvent(Event, 'UIEvent', function (init) { this.view = init.view || null; this.detail = init.detail || 0; });
 var MouseEvent = subEvent(UIEvent, 'MouseEvent', function (init) {
@@ -1604,8 +1606,8 @@ function* activateSteps(target, click, trusted) {
       if (K.attr(details, 'open') != null) K.removeAttr(details, 'open'); else K.setAttr(details, 'open', '');
       for (var t = dispatchSteps(wrap(details), new Event('toggle')); !GeneratorNext(t).done;) yield;
     }
-  } else if (tag === 'button' && formOf(c) && buttonType(c) === 'submit') {
-    for (var s = dispatchSteps(formOf(c), new Event('submit', { __proto__: null, bubbles: true, cancelable: true })); !GeneratorNext(s).done;) yield;
+  } else if ((tag === 'button' || tag === 'input') && formOf(c) && isSubmitButton(c.__id)) {
+    for (var s = submitSteps(formOf(c), c); !GeneratorNext(s).done;) yield;
   } else if (tag === 'button' && formOf(c) && buttonType(c) === 'reset') {
     for (var e = resetSteps(formOf(c)); !GeneratorNext(e).done;) yield;
   } else if (tag === 'a' && !trusted) {

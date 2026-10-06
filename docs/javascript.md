@@ -303,6 +303,11 @@ own and fires `loadstart`, `progress`, `load` and `loadend` in that order, or `a
 charset of the blob's type, else UTF-8, and a byte order mark wins over all three, through the
 decoders of `TextDecoder`.
 
+`FormData` takes the entries of a form as HTML builds them, with a submitter, a `select`'s
+chosen options, `_charset_` and `dirname`, and fires `formdata` at the form. A click on a submit
+button, `requestSubmit` and `submit` fire `submit`, as a `SubmitEvent` with its submitter, and
+`formdata` as a browser does, but the book goes nowhere after them.
+
 `URL.createObjectURL` gives a blob a `blob:` URL of the book's origin, and the reader loads an
 image, a style sheet, an `@import` or a font from it as it loads a file of the book.
 `URL.revokeObjectURL` takes it away from the scripts, but what the chapter shows keeps it, as a
@@ -355,8 +360,7 @@ its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `
 Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF/issues/536));
 `postMessage`, which drops each
 message, `MessageChannel` and `structuredClone`
-([#534](https://github.com/yuroyami/KitePDF/issues/534)); and `FormData`
-([#531](https://github.com/yuroyami/KitePDF/issues/531)). A script that calls one fails and is
+([#534](https://github.com/yuroyami/KitePDF/issues/534)). A script that calls one fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.
 
 Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,
