@@ -47,13 +47,7 @@ class WebPlatformTest {
         fun covers(test: String): Boolean = test in tests || names?.containsMatchIn(test) == true
     }
 
-    private val gaps = listOf(
-        Gap(
-            "#536, ReadableStream is missing",
-            "typeof ReadableStream === 'undefined'",
-            names = Regex("^Blob\\.(stream|textStream)\\(\\)|^Reading Blob\\.stream|^textStream method existence"),
-        ),
-    )
+    private val gaps = emptyList<Gap>()
 
     /** The URL tests that read their cases from the parser's own test data. */
     private val dataDriven = listOf("url-constructor.any.js", "url-origin.any.js", "url-setters.any.js", "urlsearchparams-foreach.any.js")
@@ -218,6 +212,7 @@ class WebPlatformTest {
 
     /** Which of [gaps] the engine and the prelude still have. */
     private val openGaps: List<Gap> by lazy {
+        if (gaps.isEmpty()) return@lazy emptyList()
         val probe = gaps.joinToString(", ", "console.log('PROBE ' + JSON.stringify([", "]));") { "!!(${it.probe})" }
         val (console, failures) = chapter(mapOf("probe.js" to probe))
         assertTrue(failures.isEmpty(), "the probes fail: $failures")
