@@ -189,6 +189,9 @@ internal object EpubConformanceChecks {
             val text = chapterText(0)
             "fails" !in text && "]>" !in text && "&xxe;" !in text
         }
+        // A chapter that is not well-formed XML is reported, and still lays out (#517).
+        check("pub-xml-names") { doc.markupErrors(0).any { "p::p" in it.message } && "Test passes" in text(0) }
+        check("pub-xml-non-validating_unclosed") { doc.markupErrors(0).any { "<p> is never closed" in it.message } && "Test passes" in text(0) }
         check("pub-xml-non-validating_comment") { (0 until chapters).map { doc.chapterPath(it) } == listOf("EPUB/content_001.xhtml", "EPUB/content_002.xhtml") }
         check("sec-untrusted-consent_network") {
             // A book opened with the default settings fetches nothing.

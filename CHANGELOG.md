@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `EpubDocument.markupErrors(chapter)` lists where a chapter breaks the rules of XML: a tag that
+  never closes, an invalid name, a value without quotes, an undeclared entity or prefix, and
+  more. `KiteXml.wellFormednessErrors` in `kitepdf-core` does the check for any XML text, and
+  gives each error as a `KiteXmlError` with a line and a column. `KiteDocView` shows the first
+  error across the top of the chapter's first page, unless `showMarkupErrors` is false. The
+  chapter still lays out what it can. Two more W3C EPUB tests pass. Before this change, such a
+  chapter showed no sign of the error (#517).
+
 - `KiteDocView` opens a web or mail address that `onLinkTap` does not take. It asks the reader
   in a small prompt first, then opens the address through Compose's `LocalUriHandler`. The new
   `externalLinks` parameter takes a `KiteExternalLinks`, which sets the schemes the viewer opens

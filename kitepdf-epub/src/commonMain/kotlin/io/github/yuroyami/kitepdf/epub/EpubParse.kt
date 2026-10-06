@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.text.TextEncoding
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlError
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
 
@@ -421,6 +422,14 @@ internal class ParsedEpub(
         // yields no pages, which is what skipping it used to do.
         buildSpine(chapter, HtmlParser.parse(chapterText(chapter), html = isHtmlChapter(chapter)).also(::resolveSwitches))
 
+    /** Each chapter's well-formedness errors, once they were asked for (#517). */
+    private val markupErrorsOf = arrayOfNulls<List<KiteXmlError>>(spinePaths.size)
+
+    /** Where [chapter]'s document breaks the rules of XML; empty for one served as `text/html` (#517). */
+    fun markupErrors(chapter: Int): List<KiteXmlError> = markupErrorsOf[chapter]
+        ?: (if (isHtmlChapter(chapter)) emptyList() else KiteXml.wellFormednessErrors(chapterText(chapter), MARKUP_ERROR_LIMIT))
+            .also { markupErrorsOf[chapter] = it }
+
     /** Whether the manifest serves [chapter] as `text/html`, which HTML's parser reads, where XHTML's is XML (#547). */
     fun isHtmlChapter(chapter: Int): Boolean = mediaTypeOf(spinePaths[chapter])?.lowercase() == "text/html"
 
@@ -597,6 +606,9 @@ internal class ParsedEpub(
     }
 
     companion object {
+        /** How many well-formedness errors of a chapter the book keeps. */
+        const val MARKUP_ERROR_LIMIT = 20
+
 
         /**
          * Read [bytes] far enough to know what the book is: container, OPF, TOC.

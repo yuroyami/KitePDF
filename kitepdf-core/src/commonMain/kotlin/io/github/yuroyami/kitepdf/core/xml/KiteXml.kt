@@ -30,6 +30,15 @@ public sealed class KiteXmlToken {
 
 public object KiteXml {
 
+    /**
+     * Where [xml] breaks the well-formedness rules of XML 1.0 and of Namespaces in XML 1.0, as a
+     * non-validating processor reads it: names, tags that do not match or never close, quotes,
+     * references, and undeclared prefixes. Empty for a well-formed document. [tokenize] and
+     * [parse] salvage such a document anyway; this says what they salvaged (#517). Stops after
+     * [limit] errors.
+     */
+    public fun wellFormednessErrors(xml: String, limit: Int = 20): List<KiteXmlError> = XmlWellFormedness(xml, limit).run()
+
     /** The text of HTML's named character reference [name], given without `&` and `;`, or null when HTML has no such name. */
     public fun htmlEntity(name: String): String? = HtmlEntities.lookup(name)
 

@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 125 | 11 | 4 |
+| must | 140 | 127 | 9 | 4 |
 | should | 38 | 30 | 7 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 180 | 20 | 6 |
+| all | 206 | 182 | 18 | 6 |
 
 ## How the results are known
 
@@ -82,9 +82,9 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`pub-external-links_consent`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-external-links_consent) | should | Passes | Judged: `KiteDocView` asks the reader before it opens the mail link, and opens the mail app through `LocalUriHandler` only after the reader taps Open (#519). `ExternalLinkSceneTest` covers the prompt. |
 | [`pub-file-urls`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-file-urls) | must | Passes | Checked: The three iframes point at `file:` URLs, none of which the book can read, and their boxes stay empty. |
 | [`pub-xml-external-id`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-xml-external-id) | must | Passes | Checked: No page shows the fail sentence: the external entity is not resolved, and stands for nothing, and the DOCTYPE's internal subset leaves nothing of itself on the page. |
-| [`pub-xml-names`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-xml-names) | must | Fails ([#517](https://github.com/yuroyami/KitePDF/issues/517)) | Judged: The XHTML parse is lenient: the invalid element name lays out and no error is reported. |
+| [`pub-xml-names`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-xml-names) | must | Passes | Checked: `EpubDocument.markupErrors` reports that `p::p` is not a name with a namespace prefix, and `KiteDocView` shows the error on the page. |
 | [`pub-xml-non-validating_comment`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-xml-non-validating_comment) | must | Passes | Checked: The spine holds the two chapters, and the commented-out item is not one of them. |
-| [`pub-xml-non-validating_unclosed`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-xml-non-validating_unclosed) | must | Fails ([#517](https://github.com/yuroyami/KitePDF/issues/517)) | Judged: The XHTML parse is lenient: the unclosed paragraph lays out and no error is reported. |
+| [`pub-xml-non-validating_unclosed`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-xml-non-validating_unclosed) | must | Passes | Checked: `EpubDocument.markupErrors` reports that the paragraph is never closed, and `KiteDocView` shows the error on the page. |
 | [`sec-untrusted-consent_network`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/sec-untrusted-consent_network) | should | Passes | Checked: Opened with the default settings, the page fetches nothing: no image draws, nothing arrives from the network, and the remote stylesheet does not turn the text red. Fetching starts only when the host app passes a fetcher, which is where the reader consents. |
 | [`sec-untrusted-consent_scripting`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/sec-untrusted-consent_scripting) | should | Passes | Checked: Without `EpubScriptRunner` the page still says "No script has been executed.": scripts run only when the host app passes a runner, which is where the reader consents. |
 

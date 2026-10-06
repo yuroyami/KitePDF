@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.svg.SvgImage
 import io.github.yuroyami.kitepdf.svg.SvgTextContent
 
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlError
 
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
@@ -153,6 +154,18 @@ public class EpubDocument internal constructor(
      * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
      */
     public fun isScripted(chapter: Int): Boolean = parsed.isScripted(chapter)
+
+    /**
+     * Where [chapter]'s document breaks the rules of XML, or an empty list for a well-formed one
+     * and for one that the manifest serves as `text/html` (#517). EPUB 3.3 requires an XHTML or
+     * SVG content document to be well-formed XML, and EPUB Reading Systems 3.3 asks a reading
+     * system to treat one that is not as in error. KitePDF still lays out what it can of such a
+     * chapter, and `KiteDocView` reports the errors on the chapter's first page. Reads the
+     * chapter's markup once, does not lay it out, and gives at most 20 errors.
+     *
+     * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
+     */
+    public fun markupErrors(chapter: Int): List<KiteXmlError> = parsed.markupErrors(chapter)
 
     /** Whether [chapter]'s own document runs scripts, not only the documents of its frames (#528). */
     internal fun hasOwnScripts(chapter: Int): Boolean = parsed.hasOwnScripts(chapter)
