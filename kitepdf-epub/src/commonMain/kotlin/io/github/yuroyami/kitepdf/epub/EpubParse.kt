@@ -133,17 +133,39 @@ internal class ParsedEpub(
 
     /**
      * Whether [chapter] is scripted: the manifest marks it, or its document has a `script`
-     * element. Reads the chapter's markup once, without building its tree (#40).
+     * element (#40), or one of its frames shows a document of the book whose scripts run (#528).
+     * Reads the markup once, without building a tree.
      */
     fun isScripted(chapter: Int): Boolean {
         if (manifestScripted[chapter]) return true
         scriptLock.withLock { scriptFound[chapter] }?.let { return it }
-        val text = zip.readText(spinePaths[chapter]).orEmpty()
-        val found = KiteXml.tokenize(text).any { token ->
-            token is KiteXmlToken.Open && token.name.substringAfterLast(':').equals("script", ignoreCase = true)
-        }
+        val path = spinePaths[chapter]
+        val found = runsScripts(zip.readText(path).orEmpty(), dirOf(path), setOf(path))
         scriptLock.withLock { scriptFound[chapter] = found }
         return found
+    }
+
+    /** Whether [chapter]'s own document runs scripts: the manifest marks it, or it has a `script` element (#528). */
+    fun hasOwnScripts(chapter: Int): Boolean = manifestScripted[chapter] || spine(chapter).hasScript
+
+    /**
+     * Whether the markup [text] has a `script` element, or an `iframe` whose document in the book
+     * is marked `scripted` or runs scripts itself. [seen] holds the documents around it.
+     */
+    private fun runsScripts(text: String, dir: String, seen: Set<String>): Boolean {
+        val frames = ArrayList<String>()
+        for (token in KiteXml.tokenize(text)) {
+            if (token !is KiteXmlToken.Open) continue
+            val name = token.name.substringAfterLast(':')
+            if (name.equals("script", ignoreCase = true)) return true
+            if (!name.equals("iframe", ignoreCase = true)) continue
+            val src = token.attrs["src"]?.trim()?.takeIf { it.isNotEmpty() && !URL_SCHEME.containsMatchIn(it) } ?: continue
+            frames += EpubDocument.resolvePath(dir, src).substringBefore('#')
+        }
+        return frames.any { path ->
+            path !in seen && seen.size < MAX_FRAME_NESTING &&
+                (itemsByPath[path]?.hasProperty("scripted") == true || runsScripts(zip.readText(path) ?: return@any false, dirOf(path), seen + path))
+        }
     }
 
     val spineIndices: IntRange get() = spinePaths.indices
@@ -273,6 +295,51 @@ internal class ParsedEpub(
         }
     }
 
+    private val frameSpines = HashMap<String, ParsedSpine?>()
+    private val scriptedFrames = HashMap<Pair<Int, String>, ParsedSpine>()
+    private val frameVersions = HashMap<Pair<Int, String>, Int>()
+    private val chapterFrameVersions = IntArray(spinePaths.size)
+
+    /**
+     * The parse of the document at [path] that a frame shows, or null when the book has no
+     * document there (#528). A path in the zip, a data URL or a blob URL; parsed once and kept.
+     */
+    fun frameSpine(path: String): ParsedSpine? {
+        spineLock.withLock { if (path in frameSpines) return frameSpines[path] }
+        val text = readTextAt(path)
+        val type = mediaTypeOf(path)?.lowercase()
+        val built = text?.let { HtmlParser.parse(it, html = type == "text/html").also(::resolveSwitches) }?.let { buildSpine(path, it) }
+        return spineLock.withLock { if (path in frameSpines) frameSpines[path] else built.also { frameSpines[path] = it } }
+    }
+
+    /** The text of the document at [path] that a frame shows, which its scripts' DOM reads (#528). */
+    fun frameText(path: String): String = readTextAt(path).orEmpty()
+
+    /** What the layout reads for the frame of [chapter] that shows [path]: the tree its scripts gave it last, else the document (#528). */
+    fun frameLayoutSpine(chapter: Int, path: String): ParsedSpine? =
+        spineLock.withLock { scriptedFrames[chapter to path] } ?: frameSpine(path)
+
+    /** How many times scripts gave the frame of [chapter] that shows [path] a new tree (#528). */
+    fun frameVersion(chapter: Int, path: String): Int = spineLock.withLock { frameVersions[chapter to path] ?: 0 }
+
+    /** How many times scripts gave any frame of [chapter] a new tree (#528). */
+    fun framesVersion(chapter: Int): Int = spineLock.withLock { chapterFrameVersions[chapter] }
+
+    /** Makes [tree] what the layout reads for the frame of [chapter] that shows [path], as [replaceTree] does for a chapter (#528). */
+    fun replaceFrameTree(chapter: Int, path: String, tree: KiteXmlNode.Element) {
+        val built = buildSpine(path, tree)
+        spineLock.withLock {
+            scriptedFrames[chapter to path] = built
+            frameVersions[chapter to path] = (frameVersions[chapter to path] ?: 0) + 1
+            chapterFrameVersions[chapter]++
+            revision++
+        }
+    }
+
+    /** Whether the document at [path] has a `script` element, or the manifest marks it `scripted` (#528). */
+    fun isScriptedFrame(path: String): Boolean =
+        itemsByPath[path]?.hasProperty("scripted") == true || frameSpine(path)?.hasScript == true
+
     /** Tells every document's viewers that a chapter has a new tree (#41). */
     fun announceTreeChange() {
         treeChanges.update { it + 1 }
@@ -359,8 +426,10 @@ internal class ParsedEpub(
     fun isHtmlChapter(chapter: Int): Boolean = mediaTypeOf(spinePaths[chapter])?.lowercase() == "text/html"
 
     /** [chapter]'s parse with [tree] as its document: the rules and faces of its style elements and links. */
-    private fun buildSpine(chapter: Int, tree: KiteXmlNode.Element): ParsedSpine {
-        val path = spinePaths[chapter]
+    private fun buildSpine(chapter: Int, tree: KiteXmlNode.Element): ParsedSpine = buildSpine(spinePaths[chapter], tree)
+
+    /** The parse of the document at [path] with [tree] as its document: the rules and faces of its style elements and links. */
+    private fun buildSpine(path: String, tree: KiteXmlNode.Element): ParsedSpine {
         val docDir = path.substringBeforeLast('/', "")
         val rules = ArrayList<StyleRule>()
         val faces = ArrayList<EmbeddedFace>()
@@ -769,6 +838,12 @@ internal class ParsedEpub(
  * 5.1). The switch is deprecated in EPUB 3.3, but books still carry it, and painting every branch
  * showed the content twice (#27).
  */
+/** A URL with a scheme, which names nothing in the book for a frame (#528). */
+private val URL_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
+/** How deep frames nest before [ParsedEpub.isScripted] stops looking, as the page stops painting them (#528). */
+private const val MAX_FRAME_NESTING = 8
+
 internal fun resolveSwitches(el: KiteXmlNode.Element) {
     var i = 0
     while (i < el.children.size) {

@@ -682,15 +682,22 @@ internal object EpubConformanceChecks {
             "scr-support_iframe" to "supports scripting in an iframe",
             "scr-readingsystem-support_iframe" to "Test passes",
             "scr-readingsystem-support_iframe_svg" to "Test passes",
-            "scr-not-support_ccscript-modify-host" to "",
-            "scr-not-support_ccscript-modify-size" to "",
+            // The frame's first line, which the script ends with a semicolon where the markup has a full stop.
+            "scr-not-support_ccscript-modify-host" to "This is the content of an iframe;",
+            "scr-not-support_ccscript-modify-size" to "This is the content of an iframe;",
         )) {
             // The box of an iframe paints its document: the text drawn inside the frame's rectangle.
             check(id) {
                 runScripts()
                 val frame = page(0).embeds.firstOrNull { it.kind == EpubEmbedKind.FRAME } ?: return@check false
                 val inside = glyphRuns(0).filter { run -> run.text.isNotBlank() && insideFrame(run, frame.rect) }
-                inside.isNotEmpty() && expected.replace(" ", "") in inside.joinToString("") { it.text }.replace(" ", "")
+                val drawn = inside.isNotEmpty() && expected.replace(" ", "") in inside.joinToString("") { it.text }.replace(" ", "")
+                // The frame's script ran, and the chapter's text and the frame's shape of 500 by 70 pixels stay as they were.
+                when (id) {
+                    "scr-not-support_ccscript-modify-host" -> drawn && "If indeed this text is visible" in text(0)
+                    "scr-not-support_ccscript-modify-size" -> drawn && abs(frame.rect.width / frame.rect.height - 500.0 / 70.0) < 0.01
+                    else -> drawn
+                }
             }
         }
         check("scr-support_scrolled-continuous") { pages(3) == 1 }

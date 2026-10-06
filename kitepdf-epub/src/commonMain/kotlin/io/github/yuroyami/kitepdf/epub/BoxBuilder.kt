@@ -397,9 +397,9 @@ internal class BoxBuilder(
 
     /**
      * The box of an `<iframe>`, or of an `<object>` that embeds an HTML or XHTML document, else
-     * null (#40). A frame keeps an empty box. An object's box holds its fallback children, and is
-     * at least as large as the element asks. Both default to 300 by 150 CSS pixels, as in a
-     * browser, and a script-less reader paints nothing else there.
+     * null (#40). A frame's box paints its document when the page paints (#528). An object's box
+     * holds its fallback children, and is at least as large as the element asks. Both default to
+     * 300 by 150 CSS pixels, as in a browser.
      */
     private fun embedBox(
         el: KiteXmlNode.Element,

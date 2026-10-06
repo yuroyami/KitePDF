@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 121 | 15 | 4 |
-| should | 38 | 27 | 10 | 1 |
+| must | 140 | 125 | 11 | 4 |
+| should | 38 | 28 | 9 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 173 | 27 | 6 |
+| all | 206 | 178 | 22 | 6 |
 
 ## How the results are known
 
@@ -182,17 +182,17 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 
 | Test | Level | Result | How it is known |
 |---|---|---|---|
-| [`scr-not-support_ccscript-modify-host`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-not-support_ccscript-modify-host) | must | Fails ([#528](https://github.com/yuroyami/KitePDF/issues/528)) | Checked: The iframe's box draws its document; today the box is empty. |
-| [`scr-not-support_ccscript-modify-size`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-not-support_ccscript-modify-size) | must | Fails ([#528](https://github.com/yuroyami/KitePDF/issues/528)) | Checked: The iframe's box draws its document; today the box is empty. |
+| [`scr-not-support_ccscript-modify-host`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-not-support_ccscript-modify-host) | must | Passes | Checked: The iframe's box draws its document, whose script ran, and the chapter's text stays: the frame's `parent` is its own window. |
+| [`scr-not-support_ccscript-modify-size`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-not-support_ccscript-modify-size) | must | Passes | Checked: The iframe's box draws its document, whose script ran, and the box keeps its shape of 500 by 70 pixels. |
 | [`scr-readingsystem-features`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-features) | must | Fails ([KiteJS#11](https://github.com/yuroyami/KiteJS/issues/11)) | Checked: After the scripts run, the page lists each feature `hasFeature` answers; today the script does not parse, for `const` in a `for` head. |
 | [`scr-readingsystem-support`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support) | must | Passes | Checked: After the scripts run, the page says the reading system implements `epubReadingSystem`. |
-| [`scr-readingsystem-support_iframe`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support_iframe) | must | Fails ([#528](https://github.com/yuroyami/KitePDF/issues/528)) | Checked: The iframe's box draws its document, whose script finds `epubReadingSystem`; today the box is empty. |
-| [`scr-readingsystem-support_iframe_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support_iframe_svg) | must | Fails ([#528](https://github.com/yuroyami/KitePDF/issues/528)) | Checked: The iframe's box draws its SVG document, whose script finds `epubReadingSystem`; today the box is empty. |
+| [`scr-readingsystem-support_iframe`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support_iframe) | must | Passes | Checked: The iframe's box draws its document, whose script finds `epubReadingSystem`. |
+| [`scr-readingsystem-support_iframe_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support_iframe_svg) | must | Passes | Checked: The iframe's box draws its SVG document, whose script finds `epubReadingSystem`. |
 | [`scr-readingsystem-support_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support_svg) | must | Passes | Checked: After the scripts run in the SVG chapter, it draws the pass text about `epubReadingSystem`. |
 | [`scr-storage-delete`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-storage-delete) | should | Passes | Checked: Opened a second time, the page says persistent data is not kept, so the test passes: local storage lives as long as the session. |
 | [`scr-support`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support) | should | Passes | Checked: After the scripts run, the page says scripting is supported and the test passes. |
 | [`scr-support-fallback`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support-fallback) | must | Not applicable | Judged: Scripts run, so the page itself says its manifest fallback is unused and the test does not apply. |
-| [`scr-support_iframe`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_iframe) | should | Fails ([#528](https://github.com/yuroyami/KitePDF/issues/528)) | Checked: The iframe's box draws its document, whose script says scripting works; today the box is empty. |
+| [`scr-support_iframe`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_iframe) | should | Passes | Checked: The iframe's box draws its document, whose script says scripting works. |
 | [`scr-support_origin`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin) | must | Passes | Checked: After the scripts run, both chapters show the same origin, `epub://` and a host. |
 | [`scr-support_origin_unique`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin_unique) | must | Passes | Checked: After the scripts run, the book shows an origin other than `scr-support_origin`'s. |
 | [`scr-support_scrolled-continuous`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_scrolled-continuous) | should | Fails ([#505](https://github.com/yuroyami/KitePDF/issues/505)) | Checked: With `flow scrolled-continuous`, a chapter is one scrolling column; today it is cut into pages. |
