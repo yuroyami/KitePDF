@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.epub.script
 
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.HtmlParser
+import io.github.yuroyami.kitepdf.epub.resolveSwitches
 import io.github.yuroyami.kitepdf.epub.css.Selector
 import io.github.yuroyami.kitepdf.epub.css.SelectorTree
 import io.github.yuroyami.kitepdf.epub.css.asciiLower
@@ -15,7 +16,9 @@ import io.github.yuroyami.kitepdf.epub.css.asciiLower
  * An attribute map is never changed in place, only replaced, so a snapshot may share it.
  *
  * The tree has the comments of [commented], the chapter parsed again with them, which the layout's
- * tree drops, and a snapshot drops them again, so a layout never sees one (#544).
+ * tree drops, and a snapshot drops them again, so a layout never sees one (#544). [markup] is the
+ * chapter's text: [commented] is parsed from it when not given, and the tree takes from it the
+ * document type, processing instructions and CDATA sections that the layout's parser skips (#546).
  *
  * Each element's attributes are a list of [Attribute], with the namespace, prefix and local name
  * that the document's parser gives each, from the names [commented] keeps as written, and its map
@@ -26,6 +29,7 @@ internal class ScriptDom(
     source: KiteXmlNode.Element,
     private val html: Boolean = false,
     commented: KiteXmlNode.Element? = null,
+    markup: String? = null,
 ) {
 
     private val ids = HashMap<KiteXmlNode, Int>()
@@ -51,6 +55,9 @@ internal class ScriptDom(
 
     /** The XML declaration of each document that a script parsed, which serializing the document writes first, as browsers do. */
     private val declarations = HashMap<KiteXmlNode.Element, String>()
+
+    /** The HTML documents in quirks mode, which their document type, or its lack, set when they were parsed (HTML, 13.2.6.4.1). */
+    private val quirksDocuments = HashSet<KiteXmlNode.Element>()
 
     /**
      * The namespace, prefix and local name of an element (DOM Standard, 4.9), which its tag does
@@ -106,12 +113,110 @@ internal class ScriptDom(
     init {
         val from = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()
         val to = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()
-        root = copy(source, null, from, to, link = true, commented = commented)
+        val parsed = commented ?: markup?.let { HtmlParser.parse(it, keepComments = true, keepNames = true).also(::resolveSwitches) }
+        root = copy(source, null, from, to, link = true, commented = parsed)
         fromLayout = from
         toLayout = to
+        if (markup != null) readPrologue(markup)
         for (c in root.children) if (c is KiteXmlNode.Element) nameTree(c, root, emptyMap(), relayout = false)
         written.clear()
     }
+
+    /**
+     * Adds to the tree what the layout's parser skips (#546). A browser keeps no white space
+     * beside the root element. An HTML chapter gets its document type, and with it its mode. An
+     * XHTML chapter that is well-formed gets its XML declaration, document type, processing
+     * instructions and CDATA sections, from the XML parser's tree where the two trees agree.
+     */
+    private fun readPrologue(markup: String) {
+        for (c in root.children.filter { it is KiteXmlNode.Text && it.text.isBlank() }) {
+            root.children.remove(c)
+            leafParents.remove(c)
+        }
+        if (html) {
+            val found = HtmlDoctype.read(markup)
+            if (found.quirks) quirksDocuments += root
+            found.doctype?.let { insertDoctype(root.children, it, found.commentsBefore) }
+            for (c in root.children) if (c !is KiteXmlNode.Element) leafParents[c] = root
+            return
+        }
+        val parsed = XmlReader.document(markup)
+        if (parsed.error != null) return
+        parsed.declaration?.let { declarations[root] = it }
+        val pending = ArrayDeque<Pair<KiteXmlNode.Element, List<KiteXmlNode>>>()
+        pending.addLast(root to parsed.nodes)
+        while (pending.isNotEmpty()) {
+            val (live, xml) = pending.removeLast()
+            val liveElements = live.children.filterIsInstance<KiteXmlNode.Element>()
+            val xmlElements = xml.filterIsInstance<KiteXmlNode.Element>()
+            if (liveElements.size != xmlElements.size) continue
+            if (liveElements.indices.any { !liveElements[it].tag.equals(parsed.names[xmlElements[it]]?.localName, ignoreCase = true) }) continue
+            mergeLeaves(live, xml, parsed)
+            for (k in liveElements.indices) pending.addLast(liveElements[k] to xmlElements[k].children)
+        }
+    }
+
+    /** Puts a node for [doctype] into [children] after its first [commentsBefore] comments, before any element. */
+    private fun insertDoctype(children: MutableList<KiteXmlNode>, doctype: XmlReader.Doctype, commentsBefore: Int) {
+        val node = KiteXmlNode.Comment("")
+        doctypes[node] = doctype
+        var at = 0
+        var comments = 0
+        while (at < children.size && comments < commentsBefore && children[at] is KiteXmlNode.Comment) {
+            at++
+            comments++
+        }
+        children.add(at, node)
+    }
+
+    /**
+     * Swaps each run of [live]'s texts and comments between two elements for the run of [xml] there,
+     * when the two hold the same text and comments: the XML run splits that text at its CDATA
+     * sections and processing instructions, and has the document type.
+     */
+    private fun mergeLeaves(live: KiteXmlNode.Element, xml: List<KiteXmlNode>, parsed: XmlReader.Result) {
+        fun runs(nodes: List<KiteXmlNode>): List<List<KiteXmlNode>> {
+            val out = arrayListOf(ArrayList<KiteXmlNode>())
+            for (n in nodes) if (n is KiteXmlNode.Element) out.add(ArrayList()) else out.last().add(n)
+            return out
+        }
+        fun plainComment(n: KiteXmlNode) = n is KiteXmlNode.Comment && n !in parsed.instructions && n !in parsed.doctypes
+        val liveRuns = runs(live.children)
+        val xmlRuns = runs(xml)
+        val children = ArrayList<KiteXmlNode>()
+        var element = 0
+        val liveElements = live.children.filterIsInstance<KiteXmlNode.Element>()
+        var changed = false
+        for (r in liveRuns.indices) {
+            val mine = liveRuns[r]
+            val theirs = xmlRuns[r]
+            val special = theirs.any { it in parsed.cdata || it in parsed.instructions || it in parsed.doctypes }
+            val same = special &&
+                mine.filterIsInstance<KiteXmlNode.Text>().joinToString("") { it.text } == theirs.filterIsInstance<KiteXmlNode.Text>().joinToString("") { it.text } &&
+                mine.filterIsInstance<KiteXmlNode.Comment>().map { it.text } == theirs.filter(::plainComment).map { (it as KiteXmlNode.Comment).text }
+            if (same) {
+                changed = true
+                for (n in mine) leafParents.remove(n)
+                for (n in theirs) children += when (n) {
+                    is KiteXmlNode.Text -> KiteXmlNode.Text(n.text).also { if (n in parsed.cdata) cdataSections += it }
+                    else -> KiteXmlNode.Comment((n as KiteXmlNode.Comment).text).also { c ->
+                        parsed.instructions[n]?.let { instructions[c] = it }
+                        parsed.doctypes[n]?.let { doctypes[c] = it }
+                    }
+                }
+            } else {
+                children += mine
+            }
+            if (r < liveElements.size) children += liveElements[element++]
+        }
+        if (!changed) return
+        live.children.clear()
+        live.children += children
+        for (c in children) if (c !is KiteXmlNode.Element) leafParents[c] = live
+    }
+
+    /** Whether [doc] is an HTML document in quirks mode, whose `compatMode` is `BackCompat`. */
+    fun quirks(doc: KiteXmlNode.Element): Boolean = doc in quirksDocuments
 
     /** The name of [el]: the one it was made with, or else the one its place in the tree gives it. */
     fun nameOf(el: KiteXmlNode.Element): Name = names.getOrPut(el) { parsedName(el, el.parent) }
@@ -363,6 +468,16 @@ internal class ScriptDom(
     /** A document of its own, which no tree holds, as `new Document()` makes one. */
     fun createDocument(): KiteXmlNode.Element = KiteXmlNode.Element(DOCUMENT, emptyMap()).also { documents.add(it) }
 
+    /** A new document type node, which no tree holds yet. */
+    fun createDoctype(name: String, publicId: String, systemId: String): KiteXmlNode.Comment =
+        KiteXmlNode.Comment("").also { doctypes[it] = XmlReader.Doctype(name, publicId, systemId) }
+
+    /** A new processing instruction of [target] with [data], which no tree holds yet. */
+    fun createInstruction(target: String, data: String): KiteXmlNode.Comment = KiteXmlNode.Comment(data).also { instructions[it] = target }
+
+    /** A new CDATA section of [data], which no tree holds yet. */
+    fun createCdata(data: String): KiteXmlNode.Text = KiteXmlNode.Text(data).also { cdataSections += it }
+
     fun createFragment(): KiteXmlNode.Element = KiteXmlNode.Element(FRAGMENT, emptyMap()).also { fragments.add(it) }
 
     /**
@@ -606,7 +721,11 @@ internal class ScriptDom(
     fun parseDocument(markup: String, xml: Boolean): Pair<KiteXmlNode.Element, XmlReader.Error?> {
         val doc = createDocument()
         if (!xml) {
-            for (c in htmlDocument(markup)) append(doc, c)
+            val found = HtmlDoctype.read(markup)
+            if (found.quirks) quirksDocuments += doc
+            val children = htmlDocument(markup).toMutableList()
+            found.doctype?.let { insertDoctype(children, it, found.commentsBefore) }
+            for (c in children) append(doc, c)
             return doc to null
         }
         val parsed = XmlReader.document(markup)

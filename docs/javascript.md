@@ -326,6 +326,11 @@ element is `parsererror`, as the HTML standard names it. A document of an XHTML 
 HTML's named characters, as browsers do. `XMLSerializer` writes any node as XML, with the
 namespace declarations its elements need. The scripts of a parsed document do not run.
 
+A chapter's document starts with its document type, as a browser's does. An XHTML chapter that is
+well-formed XML also has its processing instructions and CDATA sections. An HTML chapter without a
+document type, or with an old one, is in quirks mode, and `document.compatMode` says `BackCompat`.
+The layout does not change with the mode.
+
 In an XHTML chapter, as in any XML document, `innerHTML`, `outerHTML` and `insertAdjacentHTML`
 read and write XML, as browsers do. Each element they write declares its namespace, and markup
 that is not well-formed XML throws a `SyntaxError` and changes nothing. `document.write`,
