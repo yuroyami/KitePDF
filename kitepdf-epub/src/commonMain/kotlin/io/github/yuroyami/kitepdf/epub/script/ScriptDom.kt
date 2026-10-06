@@ -699,6 +699,13 @@ internal class ScriptDom(
         XmlWriter(this).node(node, null, hashMapOf(XML_NS to mutableListOf("xml")))
     }
 
+    /** The children of [el] as XML, as `innerHTML` gives them in an XML document: each as `XMLSerializer` would, in one run of prefixes (#548). */
+    fun xmlChildren(el: KiteXmlNode.Element): String = buildString {
+        val writer = XmlWriter(this)
+        val prefixes = hashMapOf<String?, MutableList<String>>(XML_NS to mutableListOf("xml"))
+        for (c in el.children) writer.node(c, null, prefixes)
+    }
+
     /** The XML serialization algorithm, over this tree. [prefixes] is its namespace prefix map. */
     private inner class XmlWriter(val out: StringBuilder) {
         var nextPrefix = 1
@@ -827,37 +834,54 @@ internal class ScriptDom(
             }
         }
 
+        /** An attribute value, its white space other than the space written as references, as browsers do, so that a parse gives it back. */
         private fun attributeValue(v: String): String = buildString(v.length) {
             for (c in v) when (c) {
                 '&' -> append("&amp;")
                 '"' -> append("&quot;")
                 '<' -> append("&lt;")
                 '>' -> append("&gt;")
+                '\n' -> append("&#10;")
+                '\t' -> append("&#9;")
+                '\r' -> append("&#13;")
                 else -> append(c)
             }
         }
     }
 
-    /** Parses [html] and puts what it holds in place of [el]'s children. */
-    fun setHtml(el: KiteXmlNode.Element, html: String) {
+    /**
+     * Parses [html] and puts what it holds in place of [el]'s children: as XML when [xml], for an
+     * element of an XML document. Answers the DOM's error name for markup that is not well-formed
+     * XML, and then changes nothing, or null.
+     */
+    fun setHtml(el: KiteXmlNode.Element, html: String, xml: Boolean = false): String? {
+        val parsed = if (xml) parseXml(html, el).let { (nodes, error) -> error?.let { return it }; nodes } else parse(html, el)
         clearChildren(el)
-        for (c in parse(html, el)) append(el, c)
+        for (c in parsed) append(el, c)
         changed()
+        return null
     }
 
     /**
      * Parses [html] and puts what it holds at [position] of [el], as `insertAdjacentHTML` names
-     * it. Answers the DOM's error name for a position that does not exist, or null.
+     * it, as XML when [xml]. Answers the DOM's error name for a position that does not exist or
+     * markup that is not well-formed XML, or null.
      */
-    fun insertHtml(el: KiteXmlNode.Element, position: String, html: String): String? {
-        val inside = position.lowercase() == "afterbegin" || position.lowercase() == "beforeend"
-        val parsed = parse(html, if (inside) el else el.parent)
-        when (position.lowercase()) {
-            "beforebegin" -> { val p = el.parent ?: return "NoModificationAllowedError"; for (c in parsed) insert(p, c, el) }
+    fun insertHtml(el: KiteXmlNode.Element, position: String, html: String, xml: Boolean = false): String? {
+        val where = position.lowercase()
+        val inside = where == "afterbegin" || where == "beforeend"
+        if (!inside && where != "beforebegin" && where != "afterend") return "SyntaxError"
+        // HTML, 8.5.4: markup beside an element needs a parent that is an element, not a document.
+        val parent = el.parent
+        if (!inside && (parent == null || parent === root || parent in documents)) return "NoModificationAllowedError"
+        val context = if (inside) el else parent
+        val parsed = if (xml) parseXml(html, context).let { (nodes, error) -> error?.let { return it }; nodes } else parse(html, context)
+        when (where) {
+            "beforebegin" -> for (c in parsed) insert(parent!!, c, el)
             "afterbegin" -> { val first = el.children.firstOrNull(); for (c in parsed) insert(el, c, first) }
             "beforeend" -> for (c in parsed) insert(el, c, null)
             "afterend" -> {
-                val p = el.parent ?: return "NoModificationAllowedError"
+                val p = parent!!
                 val next = p.children.getOrNull(p.children.indexOfFirst { it === el } + 1)
                 for (c in parsed) insert(p, c, next)
             }
@@ -881,6 +905,42 @@ internal class ScriptDom(
             at = node
         }
         return at
+    }
+
+    /**
+     * The nodes [markup] holds as XML content under [context], with the namespaces in scope there,
+     * and else the DOM's error name: `SyntaxError` for markup that is not well-formed, and
+     * `NamespaceError` for an attribute in a prefix not declared (#548).
+     */
+    private fun parseXml(markup: String, context: KiteXmlNode.Element?): Pair<List<KiteXmlNode>, String?> {
+        val (prefixes, default) = fragmentScope(context)
+        val parsed = XmlReader.fragment(markup, prefixes, default)
+        parsed.error?.let { return emptyList<KiteXmlNode>() to if (it.namespace) "NamespaceError" else "SyntaxError" }
+        take(parsed)
+        for (c in parsed.nodes) if (c is KiteXmlNode.Element) c.parent = null
+        return parsed.nodes to null
+    }
+
+    /**
+     * The prefixes and the default namespace that a fragment parsed in [context] starts with, as a
+     * browser finds them: from the outermost element down to [context], each element's declarations
+     * and then its own name's namespace and prefix (DOM Standard, 4.9, "locate a namespace"). A
+     * fragment holds markup as the content of a `body` (HTML, 8.5.5).
+     */
+    private fun fragmentScope(context: KiteXmlNode.Element?): Pair<Map<String, String>, String?> {
+        if (context != null && context.tag == FRAGMENT) return emptyMap<String, String>() to XHTML_NS
+        val chain = generateSequence(context) { it.parent }.takeWhile { !it.tag.startsWith('#') }.toList().asReversed()
+        val prefixes = HashMap<String, String>()
+        var default: String? = null
+        for (e in chain) {
+            for (a in attributes(e)) if (a.namespace == XMLNS_NS) {
+                if (a.prefix == null) default = a.value.ifEmpty { null } else prefixes[a.localName] = a.value
+            }
+            val name = nameOf(e)
+            val ns = name.namespace ?: continue
+            if (name.prefix == null) default = ns else prefixes[name.prefix] = ns
+        }
+        return prefixes to default
     }
 
     /** The nodes [html] holds, their elements and attributes named as the parser names them under [context]. */

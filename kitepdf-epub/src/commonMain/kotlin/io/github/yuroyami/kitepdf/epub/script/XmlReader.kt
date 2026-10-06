@@ -17,13 +17,16 @@ import io.github.yuroyami.kitepdf.epub.script.ScriptDom.Name
  * name and attributes of each element, which text nodes were CDATA sections, and which comment
  * nodes stand for a processing instruction or a document type.
  */
-internal class XmlReader private constructor(text: String, private var htmlEntities: Boolean) {
+internal class XmlReader private constructor(text: String, private var htmlEntities: Boolean, private val lenient: Boolean = false) {
 
     /** A document type declaration: its name and its public and system ids, empty when absent. */
     class Doctype(val name: String, val publicId: String, val systemId: String)
 
-    /** The first well-formedness error, and where it is: line and column count from 1. */
-    class Error(val message: String, val line: Int, val column: Int) {
+    /**
+     * The first well-formedness error, and where it is: line and column count from 1. A fragment's
+     * attribute in a prefix that is not declared is a [namespace] error, which a browser reports apart.
+     */
+    class Error(val message: String, val line: Int, val column: Int, val namespace: Boolean = false) {
         override fun toString(): String = "line $line, column $column: $message"
     }
 
@@ -40,7 +43,7 @@ internal class XmlReader private constructor(text: String, private var htmlEntit
         val declaration: String? = null,
     )
 
-    private class Failure(val at: Int, override val message: String) : Exception(message)
+    private class Failure(val at: Int, override val message: String, val namespace: Boolean = false) : Exception(message)
 
     /** The prefixes in scope, and the default namespace, null for none. */
     private class Scope(val prefixes: Map<String, String>, val default: String?)
@@ -66,7 +69,7 @@ internal class XmlReader private constructor(text: String, private var htmlEntit
         failure?.let { f ->
             val at = f.at.coerceIn(0, s.length)
             val lineStart = s.lastIndexOf('\n', at - 1) + 1
-            Error(f.message, s.count('\n', at) + 1, at - lineStart + 1)
+            Error(f.message, s.count('\n', at) + 1, at - lineStart + 1, f.namespace)
         },
         declaration,
     )
@@ -365,20 +368,27 @@ internal class XmlReader private constructor(text: String, private var htmlEntit
         // Namespaces in XML 1.0, 3: the declarations first, then the names they scope.
         var prefixes = outer.prefixes
         var default = outer.default
+        // A fragment drops a declaration that is wrong, as libxml2 does in a browser, where a document stops at it.
+        val dropped = HashSet<String>()
         for ((name, value) in raw) {
             when {
                 name == "xmlns" -> {
-                    if (value == XML_NS || value == XMLNS_NS) fail("the default namespace may not be $value", start)
-                    default = value.ifEmpty { null }
+                    val wrong = if (value == XML_NS || value == XMLNS_NS) "the default namespace may not be $value" else null
+                    if (wrong == null) default = value.ifEmpty { null } else if (lenient) dropped += name else fail(wrong, start)
                 }
                 name.startsWith("xmlns:") -> {
                     val prefix = name.substring(6)
-                    qualified(prefix, start)
-                    when {
-                        prefix == "xmlns" -> fail("the prefix xmlns may not be declared", start)
-                        prefix == "xml" && value != XML_NS -> fail("the prefix xml may not be bound to another namespace", start)
-                        prefix != "xml" && (value == XML_NS || value == XMLNS_NS) -> fail("the namespace $value may not be bound to $prefix", start)
-                        value.isEmpty() -> fail("the prefix $prefix may not be undeclared", start)
+                    val wrong = when {
+                        !isQualified(prefix) -> "$prefix is not a qualified name"
+                        prefix == "xmlns" -> "the prefix xmlns may not be declared"
+                        prefix == "xml" && value != XML_NS -> "the prefix xml may not be bound to another namespace"
+                        prefix != "xml" && (value == XML_NS || value == XMLNS_NS) -> "the namespace $value may not be bound to $prefix"
+                        value.isEmpty() -> "the prefix $prefix may not be undeclared"
+                        else -> null
+                    }
+                    if (wrong != null) {
+                        if (lenient) dropped += name else fail(wrong, start)
+                        continue
                     }
                     if (prefixes === outer.prefixes) prefixes = HashMap(outer.prefixes)
                     (prefixes as HashMap)[prefix] = value
@@ -387,23 +397,42 @@ internal class XmlReader private constructor(text: String, private var htmlEntit
         }
         val scope = if (prefixes === outer.prefixes && default == outer.default) outer else Scope(prefixes, default)
 
-        qualified(qualifiedName, start)
-        val prefix = qualifiedName.substringBefore(':', "").ifEmpty { null }
-        val localName = qualifiedName.substringAfter(':')
-        val namespace = if (prefix == null) scope.default else resolve(prefix, scope, start)
+        if (!lenient) qualified(qualifiedName, start)
+        var prefix = qualifiedName.substringBefore(':', "").ifEmpty { null }
+        var localName = qualifiedName.substringAfter(':')
+        val namespace = when {
+            // A fragment's element of a name that is not qualified is in the default namespace, and one
+            // in a prefix not declared is in none, each with the whole name as its local name.
+            lenient && !isQualified(qualifiedName) -> scope.default.also { prefix = null; localName = qualifiedName }
+            prefix == null -> scope.default
+            lenient -> lookup(prefix, scope) ?: null.also { prefix = null; localName = qualifiedName }
+            else -> resolve(prefix, scope, start)
+        }
+        // The declarations come first, as a browser's parser hands them over apart from the other attributes.
         val list = ArrayList<Attribute>(raw.size)
+        for ((name, value) in raw) when {
+            name in dropped -> {}
+            name == "xmlns" -> list += Attribute(XMLNS_NS, null, name, value)
+            name.startsWith("xmlns:") -> list += Attribute(XMLNS_NS, "xmlns", name.substring(6), value)
+        }
         for ((name, value) in raw) {
+            if (name == "xmlns" || name.startsWith("xmlns:")) continue
             list += when {
-                name == "xmlns" -> Attribute(XMLNS_NS, null, name, value)
-                name.startsWith("xmlns:") -> Attribute(XMLNS_NS, "xmlns", name.substring(6), value)
+                lenient && !isQualified(name) && name.indexOf(':') in 1 until name.length - 1 ->
+                    throw Failure(start, "the prefix ${name.substringBefore(':')} is not declared", namespace = true)
+                lenient && !isQualified(name) -> Attribute(null, null, name, value)
                 else -> {
-                    qualified(name, start)
+                    if (!lenient) qualified(name, start)
                     val p = name.substringBefore(':', "").ifEmpty { null }
-                    if (p == null) Attribute(null, null, name, value) else Attribute(resolve(p, scope, start), p, name.substringAfter(':'), value)
+                    when {
+                        p == null -> Attribute(null, null, name, value)
+                        lenient -> Attribute(lookup(p, scope) ?: throw Failure(start, "the prefix $p is not declared", namespace = true), p, name.substringAfter(':'), value)
+                        else -> Attribute(resolve(p, scope, start), p, name.substringAfter(':'), value)
+                    }
                 }
             }
         }
-        for (a in list.indices) for (b in 0 until a) {
+        if (!lenient) for (a in list.indices) for (b in 0 until a) {
             if (list[a].namespace != null && list[a].namespace == list[b].namespace && list[a].localName == list[b].localName) {
                 fail("the attribute ${list[a].localName} appears twice in the namespace ${list[a].namespace}", start)
             }
@@ -417,6 +446,9 @@ internal class XmlReader private constructor(text: String, private var htmlEntit
         attributes[element] = list
         return StartTag(element, qualifiedName, scope, empty)
     }
+
+    /** The namespace of [prefix] in [scope], or null where none is declared. */
+    private fun lookup(prefix: String, scope: Scope): String? = if (prefix == "xml") XML_NS else scope.prefixes[prefix]
 
     private fun resolve(prefix: String, scope: Scope, at: Int): String = when (prefix) {
         "xml" -> XML_NS
@@ -530,9 +562,14 @@ internal class XmlReader private constructor(text: String, private var htmlEntit
 
     /** Namespaces in XML 1.0, 4: no colon, or one between two non-empty parts. */
     private fun qualified(name: String, at: Int) {
+        if (!isQualified(name)) fail("$name is not a qualified name", at)
+    }
+
+    /** Namespaces in XML 1.0, 4: [name], a name, is a local name or one prefix and one local name. */
+    private fun isQualified(name: String): Boolean {
         val colon = name.indexOf(':')
-        if (colon == 0 || colon == name.length - 1 || (colon > 0 && name.indexOf(':', colon + 1) >= 0)) fail("$name is not a qualified name", at)
-        if (colon > 0 && !isNameStart(name[colon + 1])) fail("$name is not a qualified name", at)
+        if (colon < 0) return true
+        return colon != 0 && colon != name.length - 1 && name.indexOf(':', colon + 1) < 0 && isNameStart(name[colon + 1])
     }
 
     private fun quoted(what: String): String {
@@ -573,11 +610,12 @@ internal class XmlReader private constructor(text: String, private var htmlEntit
 
         /**
          * Parses [text] as the content of an element, with [prefixes] declared and [default] as
-         * the default namespace, as HTML's XML fragment parsing algorithm does (13.4). HTML's named
-         * characters are read when [htmlEntities], as in a document of a known XHTML type.
+         * the default namespace, as HTML's XML fragment parsing algorithm does (13.4). As in a
+         * browser, a fragment reads none of HTML's named characters, and a mistake of namespaces
+         * alone is no error, but for an attribute in a prefix that is not declared.
          */
-        fun fragment(text: String, prefixes: Map<String, String>, default: String?, htmlEntities: Boolean): Result =
-            XmlReader(text, htmlEntities).fragment(prefixes, default)
+        fun fragment(text: String, prefixes: Map<String, String>, default: String?): Result =
+            XmlReader(text, htmlEntities = false, lenient = true).fragment(prefixes, default)
 
         /** HTML 13.2: the public ids of the document types whose documents read HTML's named characters. */
         val XHTML_PUBLIC_IDS = setOf(

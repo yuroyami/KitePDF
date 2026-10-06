@@ -477,13 +477,39 @@ Element.prototype.closest = function (selectors) {
   var id = idOf(this), what = "Failed to execute 'closest' on 'Element'";
   return wrap(closestId(id, selectorsArg(arguments, what), what));
 };
-def(Element.prototype, 'innerHTML', function () { return K.html(idOf(this), false); }, function (v) { K.setHtml(idOf(this), v == null ? '' : String(v)); });
-def(Element.prototype, 'outerHTML', function () { return K.html(idOf(this), true); }, function (v) {
-  var p = K.parent(idOf(this)); if (p == null) return;
-  check(K.insertHtml(this.__id, 'beforebegin', v == null ? '' : String(v)), 'outerHTML');
-  removeNode(p, this, 'outerHTML');
+/* In an XML document, markup goes in and out as XML, as in a browser, and markup that is not
+   well-formed is refused with a SyntaxError (DOM Parsing and Serialization, 2.3; #548). */
+function inXmlDocument(id) { return !isHtmlDocument(ownerDocId(id)); }
+function checkMarkup(error, what) {
+  if (error === 'SyntaxError') throw new DOMException(what + ': The provided markup is invalid XML, and therefore cannot be inserted into an XML document.', error);
+  if (error === 'NamespaceError') throw new DOMException(what + ': An attribute of the provided markup is in a namespace prefix that is not declared.', error);
+  check(error, what);
+}
+def(Element.prototype, 'innerHTML', function () {
+  var id = idOf(this);
+  return inXmlDocument(id) ? K.xml(id, true) : K.html(id, false);
+}, function (v) {
+  var id = idOf(this);
+  checkMarkup(K.setHtml(id, v == null ? '' : String(v), inXmlDocument(id)), "Failed to set the 'innerHTML' property on 'Element'");
 });
-Element.prototype.insertAdjacentHTML = function (position, html) { check(K.insertHtml(idOf(this), String(position), String(html)), 'insertAdjacentHTML'); };
+def(Element.prototype, 'outerHTML', function () {
+  var id = idOf(this);
+  return inXmlDocument(id) ? K.xml(id, false) : K.html(id, true);
+}, function (v) {
+  var id = idOf(this), p = K.parent(id); if (p == null) return;
+  var what = "Failed to set the 'outerHTML' property on 'Element'";
+  checkMarkup(K.insertHtml(id, 'beforebegin', v == null ? '' : String(v), inXmlDocument(id)), what);
+  removeNode(p, this, what);
+});
+var ADJACENT_POSITIONS = nameSet(['beforebegin', 'afterbegin', 'beforeend', 'afterend']);
+Element.prototype.insertAdjacentHTML = function (position, html) {
+  var id = idOf(this), what = "Failed to execute 'insertAdjacentHTML' on 'Element'";
+  position = String(position);
+  if (!ADJACENT_POSITIONS[StringToLowerCase(position)]) {
+    throw new DOMException(what + ": The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", 'SyntaxError');
+  }
+  checkMarkup(K.insertHtml(id, position, String(html), inXmlDocument(id)), what);
+};
 /* Puts [node] at [position] of [el], as insertAdjacentElement does; null where el has no parent to put it by. */
 function insertAdjacent(el, position, node, what) {
   var id = idOf(el), p = K.parent(id);

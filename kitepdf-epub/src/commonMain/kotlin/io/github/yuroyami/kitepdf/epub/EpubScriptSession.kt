@@ -390,7 +390,7 @@ public class EpubScriptSession(
             def("createDocument") { dom.idOf(dom.createDocument()) }
             // A document that DOMParser parsed, as HTML or else as XML (#543).
             def("parseDocument") { args -> dom.idOf(dom.parseDocument(string(args, 0), args.getOrNull(1) == true).first) }
-            def("xml") { args -> node(args, 0)?.let(dom::xml).orEmpty() }
+            def("xml") { args -> node(args, 0)?.let { if (args.getOrNull(1) == true && it is KiteXmlNode.Element) dom.xmlChildren(it) else dom.xml(it) }.orEmpty() }
             def("target") { args -> node(args, 0)?.let(dom::target) }
             def("doctype") { args -> node(args, 0)?.let(dom::doctype)?.let { listOf(it.name, it.publicId, it.systemId) } }
             def("createText") { args -> dom.idOf(KiteXmlNode.Text(string(args, 0))) }
@@ -414,8 +414,8 @@ public class EpubScriptSession(
             def("matches") { args -> element(args, 0)?.let { dom.matches(it, string(args, 1)) } }
             def("closest") { args -> element(args, 0)?.let { dom.closest(it, string(args, 1))?.map(dom::idOf) } }
             def("html") { args -> node(args, 0)?.let { dom.html(it, args.getOrNull(1) == true) }.orEmpty() }
-            def("setHtml") { args -> element(args, 0)?.let { dom.setHtml(it, string(args, 1)) }; null }
-            def("insertHtml") { args -> element(args, 0)?.let { dom.insertHtml(it, string(args, 1), string(args, 2)) } }
+            def("setHtml") { args -> element(args, 0)?.let { dom.setHtml(it, string(args, 1), args.getOrNull(2) == true) } }
+            def("insertHtml") { args -> element(args, 0)?.let { dom.insertHtml(it, string(args, 1), string(args, 2), args.getOrNull(3) == true) } }
             def("write") { args ->
                 val script = node(args, 0) ?: return@def null
                 val scriptId = dom.idOf(script)

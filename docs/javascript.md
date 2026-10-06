@@ -326,6 +326,10 @@ element is `parsererror`, as the HTML standard names it. A document of an XHTML 
 HTML's named characters, as browsers do. `XMLSerializer` writes any node as XML, with the
 namespace declarations its elements need. The scripts of a parsed document do not run.
 
+In an XHTML chapter, as in any XML document, `innerHTML`, `outerHTML` and `insertAdjacentHTML`
+read and write XML, as browsers do. Each element they write declares its namespace, and markup
+that is not well-formed XML throws a `SyntaxError` and changes nothing.
+
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`

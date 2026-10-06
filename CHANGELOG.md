@@ -255,6 +255,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In an XHTML chapter, a script's `innerHTML`, `outerHTML` and `insertAdjacentHTML` read and write
+  XML, as in a browser, where they used HTML. Each element they write declares its namespace, an
+  empty element closes itself, and markup that is not well-formed throws a `SyntaxError`. An
+  attribute value written as XML keeps its tabs and line breaks as character references, in
+  `XMLSerializer` too (#548).
 - A Type 1 font whose `/lenIV` is -1 runs its charstrings and subroutines as they are, as
   FreeType does, where every glyph threw while it was decrypted and drew nothing (#597).
 - An embedded Type 1 font decrypts each of its subroutines before a glyph calls it, as it already

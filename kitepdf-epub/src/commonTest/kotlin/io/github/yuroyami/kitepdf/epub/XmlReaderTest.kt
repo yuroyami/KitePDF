@@ -53,13 +53,27 @@ class XmlReaderTest {
 
     @Test
     fun a_fragment_reads_the_prefixes_of_its_context() {
-        val result = XmlReader.fragment("<q:a/>text<b/>", mapOf("q" to "urn:q"), "urn:d", htmlEntities = false)
+        val result = XmlReader.fragment("<q:a/>text<b/>", mapOf("q" to "urn:q"), "urn:d")
         assertNull(result.error)
         val (a, _, b) = result.nodes
         assertEquals("urn:q", result.names.getValue(a as KiteXmlNode.Element).namespace)
         assertEquals("urn:d", result.names.getValue(b as KiteXmlNode.Element).namespace)
-        assertNotNull(XmlReader.fragment("<a></b>", emptyMap(), null, htmlEntities = false).error)
-        assertNotNull(XmlReader.fragment("</a>", emptyMap(), null, htmlEntities = false).error)
+        assertNotNull(XmlReader.fragment("<a></b>", emptyMap(), null).error)
+        assertNotNull(XmlReader.fragment("</a>", emptyMap(), null).error)
+    }
+
+    @Test
+    fun a_fragment_salvages_a_namespace_mistake_but_an_attribute_prefix() {
+        val result = XmlReader.fragment("<zz:x/><a:b:c/><p:y xmlns:p='urn:p' xmlns:q=''/>", emptyMap(), "urn:d")
+        assertNull(result.error)
+        val (x, abc, y) = result.nodes.map { result.names.getValue(it as KiteXmlNode.Element) }
+        assertEquals(listOf(null, null, "zz:x"), listOf(x.namespace, x.prefix, x.localName))
+        assertEquals(listOf("urn:d", null, "a:b:c"), listOf(abc.namespace, abc.prefix, abc.localName))
+        assertEquals("urn:p", y.namespace)
+        assertEquals(listOf("p"), result.attributes.getValue(result.nodes[2] as KiteXmlNode.Element).map { it.localName })
+        assertTrue(assertNotNull(XmlReader.fragment("<x zz:a='1'/>", emptyMap(), null).error).namespace)
+        assertNotNull(XmlReader.document("<zz:x/>").error)
+        assertNotNull(XmlReader.fragment("a&nbsp;b", emptyMap(), null).error)
     }
 
     @Test
