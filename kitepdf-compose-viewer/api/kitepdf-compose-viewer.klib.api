@@ -17,6 +17,17 @@ final enum class io.github.yuroyami.kitepdf.compose/KiteMarkerSide : kotlin/Enum
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.compose/KiteMarkerSide> // io.github.yuroyami.kitepdf.compose/KiteMarkerSide.values|values#static(){}[0]
 }
 
+final enum class io.github.yuroyami.kitepdf.compose/KitePageFit : kotlin/Enum<io.github.yuroyami.kitepdf.compose/KitePageFit> { // io.github.yuroyami.kitepdf.compose/KitePageFit|null[0]
+    enum entry PAGE // io.github.yuroyami.kitepdf.compose/KitePageFit.PAGE|null[0]
+    enum entry WIDTH // io.github.yuroyami.kitepdf.compose/KitePageFit.WIDTH|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.compose/KitePageFit.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.compose/KitePageFit> // io.github.yuroyami.kitepdf.compose/KitePageFit.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.compose/KitePageFit // io.github.yuroyami.kitepdf.compose/KitePageFit.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.compose/KitePageFit> // io.github.yuroyami.kitepdf.compose/KitePageFit.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.compose/KitePageRenderState : kotlin/Enum<io.github.yuroyami.kitepdf.compose/KitePageRenderState> { // io.github.yuroyami.kitepdf.compose/KitePageRenderState|null[0]
     enum entry Failed // io.github.yuroyami.kitepdf.compose/KitePageRenderState.Failed|null[0]
     enum entry Loading // io.github.yuroyami.kitepdf.compose/KitePageRenderState.Loading|null[0]
@@ -74,8 +85,10 @@ sealed interface io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github
     }
 
     final class Paged : io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged|null[0]
-        constructor <init>(androidx.compose.foundation.gestures/Orientation = ..., kotlin/Int = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.<init>|<init>(androidx.compose.foundation.gestures.Orientation;kotlin.Int;kotlin.Boolean){}[0]
+        constructor <init>(androidx.compose.foundation.gestures/Orientation = ..., kotlin/Int = ..., kotlin/Boolean = ..., io.github.yuroyami.kitepdf.compose/KitePageFit = ...) // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.<init>|<init>(androidx.compose.foundation.gestures.Orientation;kotlin.Int;kotlin.Boolean;io.github.yuroyami.kitepdf.compose.KitePageFit){}[0]
 
+        final val fit // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.fit|{}fit[0]
+            final fun <get-fit>(): io.github.yuroyami.kitepdf.compose/KitePageFit // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.fit.<get-fit>|<get-fit>(){}[0]
         final val offscreenPages // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.offscreenPages|{}offscreenPages[0]
             final fun <get-offscreenPages>(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.offscreenPages.<get-offscreenPages>|<get-offscreenPages>(){}[0]
         final val orientation // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.orientation|{}orientation[0]
@@ -86,7 +99,8 @@ sealed interface io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github
         final fun component1(): androidx.compose.foundation.gestures/Orientation // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.component1|component1(){}[0]
         final fun component2(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.component2|component2(){}[0]
         final fun component3(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.component3|component3(){}[0]
-        final fun copy(androidx.compose.foundation.gestures/Orientation = ..., kotlin/Int = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.copy|copy(androidx.compose.foundation.gestures.Orientation;kotlin.Int;kotlin.Boolean){}[0]
+        final fun component4(): io.github.yuroyami.kitepdf.compose/KitePageFit // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.component4|component4(){}[0]
+        final fun copy(androidx.compose.foundation.gestures/Orientation = ..., kotlin/Int = ..., kotlin/Boolean = ..., io.github.yuroyami.kitepdf.compose/KitePageFit = ...): io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.copy|copy(androidx.compose.foundation.gestures.Orientation;kotlin.Int;kotlin.Boolean;io.github.yuroyami.kitepdf.compose.KitePageFit){}[0]
         final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged.toString|toString(){}[0]
@@ -131,6 +145,7 @@ sealed interface io.github.yuroyami.kitepdf.compose/KiteDocLayout { // io.github
         final val Default // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Companion.Default|{}Default[0]
             final fun <get-Default>(): io.github.yuroyami.kitepdf.compose/KiteDocLayout // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Companion.Default.<get-Default>|<get-Default>(){}[0]
 
+        final fun forDocument(io.github.yuroyami.kitepdf.core/KiteDocument): io.github.yuroyami.kitepdf.compose/KiteDocLayout // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Companion.forDocument|forDocument(io.github.yuroyami.kitepdf.core.KiteDocument){}[0]
         final fun pagedFor(io.github.yuroyami.kitepdf.core/KiteDocument): io.github.yuroyami.kitepdf.compose/KiteDocLayout.Paged // io.github.yuroyami.kitepdf.compose/KiteDocLayout.Companion.pagedFor|pagedFor(io.github.yuroyami.kitepdf.core.KiteDocument){}[0]
     }
 }

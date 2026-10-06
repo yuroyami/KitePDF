@@ -585,6 +585,9 @@ public class EpubDocument internal constructor(
         /** The size every page of the chapter has, so a page answers it without its pages. */
         val pageWidth: Double,
         val pageHeight: Double,
+        /** The margin of the chapter's pages, and whether they are in vertical writing. */
+        val margin: Double,
+        val vertical: Boolean,
         /** What the chapter's pages cost in memory, by [estimateBytes]. */
         val bytes: Long,
     )
@@ -871,7 +874,9 @@ public class EpubDocument internal constructor(
                 }
                 4 -> if (!checkNotNull(run).step()) return false
                 else -> {
-                    val pages = Paginator.paginate(
+                    val pages = if (!vertical && isScrolled(chapter)) {
+                        listOf(Paginator.paginateScrolled(checkNotNull(root), settings.pageWidth, settings.pageHeight, settings.margin, hits))
+                    } else Paginator.paginate(
                         checkNotNull(root), settings.pageWidth, settings.pageHeight, settings.margin,
                         vertical = vertical, verticalLr = verticalLr, hits = hits,
                     )
@@ -888,6 +893,15 @@ public class EpubDocument internal constructor(
             stage++
             return false
         }
+    }
+
+    /**
+     * True when reflowable [chapter] scrolls as one page: [EpubSettings.scrolled] when the reader
+     * set it, else the chapter's `rendition:flow`, its spine entry's over the book's (#505).
+     */
+    internal fun isScrolled(chapter: Int): Boolean = settings.scrolled ?: when (renditionOf(chapter).flow) {
+        EpubFlow.SCROLLED_CONTINUOUS, EpubFlow.SCROLLED_DOC -> true
+        EpubFlow.AUTO, EpubFlow.PAGINATED -> false
     }
 
     /** One chapter's pages with the box tree they came from, for its anchors. */
@@ -1071,6 +1085,8 @@ public class EpubDocument internal constructor(
             rootY = laid.root.y,
             pageWidth = pages.firstOrNull()?.pageWidth ?: settings.pageWidth,
             pageHeight = pages.firstOrNull()?.pageHeight ?: settings.pageHeight,
+            margin = pages.firstOrNull()?.margin ?: settings.margin,
+            vertical = pages.firstOrNull()?.vertical ?: false,
             bytes = estimateBytes(pages),
         )
     }
@@ -1426,6 +1442,20 @@ public class EpubDocument internal constructor(
         return KiteLocation(chapter, last)
     }
 
+    /**
+     * The height of the element that [bookmark]'s fragment names, from the top of the page that
+     * [locate] gives for it, or null without a fragment, for an id the chapter lacks, and in
+     * vertical writing (#505).
+     */
+    override fun topOf(bookmark: KiteBookmark): Double? {
+        val flow = bookmark as? KiteBookmark.Flow ?: return null
+        val id = flow.fragment ?: return null
+        val summary = summaryOf(flow.chapter.coerceIn(0, (chapterCount - 1).coerceAtLeast(0))) ?: return null
+        if (summary.vertical || summary.pageCount == 0) return null
+        val y = anchorYIn(summary, id) ?: return null
+        return summary.margin + (y - summary.startYs[localPageOf(summary, y)])
+    }
+
     /** Chapter-local y of an element id, or null when the chapter has no such id. */
     private fun anchorYIn(summary: ChapterSummary, id: String): Double? =
         summary.anchors.firstOrNull { it.first == id }?.second
@@ -1765,6 +1795,13 @@ public data class EpubSettings(
      * for when the bytes count.
      */
     val resourceFetcher: EpubResourceFetcher? = null,
+    /**
+     * Whether a reflowable chapter scrolls instead of being cut into pages: true lays each one out
+     * as a single page as wide as [pageWidth] and as tall as its content, false always cuts it into
+     * pages, and null follows the book's `rendition:flow` (EPUB 3.3, #505). A chapter in vertical
+     * writing is always cut into pages, and a pre-paginated chapter is always one page.
+     */
+    val scrolled: Boolean? = null,
 ) {
     init {
         require(layoutCacheBytes >= 0L) { "layoutCacheBytes must be >= 0" }

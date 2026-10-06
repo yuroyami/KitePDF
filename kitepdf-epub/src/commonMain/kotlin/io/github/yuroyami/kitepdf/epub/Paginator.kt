@@ -73,6 +73,36 @@ internal object Paginator {
         )
     }
 
+    /**
+     * A scrolled chapter (EPUB 3.3 `rendition:flow`, #505): one page of [pageWidth], as tall as the
+     * content with [margin] above and below it, and never shorter than [minHeight]. Breaks do not
+     * cut it, as a browser ignores them on screen.
+     */
+    fun paginateScrolled(root: BlockBox, pageWidth: Double, minHeight: Double, margin: Double, hits: Boolean = false): PageRender {
+        numberPaintOrder(root)
+        val lines = ArrayList<PositionedLine>()
+        val images = ArrayList<ImageBox>()
+        val deco = ArrayList<LayoutBox>()
+        val links = ArrayList<LayoutBox>()
+        val embeds = ArrayList<LayoutBox>()
+        val effects = ArrayList<LayoutBox>()
+        val hitBoxes = if (hits) ArrayList<LayoutBox>() else null
+        collect(root, lines, images, deco, links, embeds, effects, hitBoxes)
+        val units = ArrayList<Unit_>()
+        gatherUnits(root, emptyList(), units)
+        // The content ends at the lowest box that paints, which a float or a positioned box can push past the root.
+        var bottom = root.bottom
+        for (u in units) bottom = maxOf(bottom, u.bottom)
+        for (box in deco) bottom = maxOf(bottom, box.bottom)
+        for (box in effects) bottom = maxOf(bottom, box.bottom)
+        for (box in embeds) bottom = maxOf(bottom, box.bottom)
+        val height = maxOf(minHeight, bottom + 2 * margin)
+        return PageRender(
+            0.0, lines, images, deco, pageWidth, height, margin, linkBoxes = links, embedBoxes = embeds, effectBoxes = effects,
+            hitBoxes = hitBoxes.orEmpty(),
+        )
+    }
+
     fun paginate(
         root: BlockBox, pageWidth: Double, pageHeight: Double, margin: Double,
         vertical: Boolean = false,

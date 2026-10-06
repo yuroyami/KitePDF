@@ -253,4 +253,11 @@ public interface KiteDocument {
         is KiteBookmark.Page -> KiteLocation(0, bookmark.pageIndex)
         is KiteBookmark.Flow -> KiteLocation(0, 0)
     }
+
+    /**
+     * The display-space height where [bookmark]'s place starts on the page that [locate] gives,
+     * or null when the place is the top of that page. A viewer scrolls there, so a link to an
+     * element in a long scrolled chapter shows the element, not the start of the chapter (#505).
+     */
+    public fun topOf(bookmark: KiteBookmark): Double? = null
 }

@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 127 | 9 | 4 |
-| should | 38 | 31 | 6 | 1 |
+| must | 140 | 128 | 8 | 4 |
+| should | 38 | 34 | 3 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 183 | 17 | 6 |
+| all | 206 | 187 | 13 | 6 |
 
 ## How the results are known
 
@@ -195,8 +195,8 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`scr-support_iframe`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_iframe) | should | Passes | Checked: The iframe's box draws its document, whose script says scripting works. |
 | [`scr-support_origin`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin) | must | Passes | Checked: After the scripts run, both chapters show the same origin, `epub://` and a host. |
 | [`scr-support_origin_unique`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_origin_unique) | must | Passes | Checked: After the scripts run, the book shows an origin other than `scr-support_origin`'s. |
-| [`scr-support_scrolled-continuous`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_scrolled-continuous) | should | Fails ([#505](https://github.com/yuroyami/KitePDF/issues/505)) | Checked: With `flow scrolled-continuous`, a chapter is one scrolling column; today it is cut into pages. |
-| [`scr-support_scrolled-doc`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_scrolled-doc) | must | Fails ([#505](https://github.com/yuroyami/KitePDF/issues/505)) | Checked: With `flow scrolled-doc`, a chapter is one scrolling column; today it is cut into pages. |
+| [`scr-support_scrolled-continuous`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_scrolled-continuous) | should | Passes | Checked: Each chapter is one page as tall as its content, and `KiteDocLayout.forDocument` shows the book as one continuous strip. |
+| [`scr-support_scrolled-doc`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_scrolled-doc) | must | Passes | Checked: Each chapter is one page as tall as its content, and `KiteDocLayout.forDocument` shows the book in a pager whose chapters fill the width and scroll down. |
 | [`scr-support_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-support_svg) | should | Passes | Checked: After the scripts run in the SVG chapter, it draws the pass text and not the fail text. |
 
 ## Fixed Layout
@@ -206,8 +206,8 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`lay-page-layout-both`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-page-layout-both) | should | Passes | Checked: The reflowable chapter flows over pages between the fixed ones, each one page of its viewport. |
 | [`lay-page-layout-both-spread`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-page-layout-both-spread) | must | Passes | Checked: The last page, which asks for the left, sits alone in the left half of its spread. |
 | [`lay-pkg-flow-paginated`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pkg-flow-paginated) | should | Passes | Checked: With `flow paginated`, the chapters are cut into pages. |
-| [`lay-pkg-flow-scrolled-continuous`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pkg-flow-scrolled-continuous) | should | Fails ([#505](https://github.com/yuroyami/KitePDF/issues/505)) | Checked: With `flow scrolled-continuous`, a chapter is one scrolling column; today it is cut into pages. |
-| [`lay-pkg-flow-scrolled-doc`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pkg-flow-scrolled-doc) | should | Fails ([#505](https://github.com/yuroyami/KitePDF/issues/505)) | Checked: With `flow scrolled-doc`, a chapter is one scrolling column; today it is cut into pages. |
+| [`lay-pkg-flow-scrolled-continuous`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pkg-flow-scrolled-continuous) | should | Passes | Checked: Each chapter is one page as tall as its content, and `KiteDocLayout.forDocument` shows the book as one continuous strip. |
+| [`lay-pkg-flow-scrolled-doc`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-pkg-flow-scrolled-doc) | should | Passes | Checked: Each chapter is one page as tall as its content, and `KiteDocLayout.forDocument` shows the book in a pager whose chapters fill the width and scroll down. |
 | [`lay-reflow-align-x-center`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-reflow-align-x-center) | must | Not applicable | Judged: `rendition:align-x-center` is not supported, and the test applies only to a reading system that supports it. |
 | [`lay-rendition-flow-pre-pag`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-rendition-flow-pre-pag) | must | Passes | Checked: The fixed chapters of a scrolled book are one page each of their viewport. |
 | [`lay-viewport-meta-prop`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-viewport-meta-prop) | must | Passes | Checked: All four pages take the same 900 by 600 viewport whatever their scale keys say; the viewer's zoom follows its own settings. |

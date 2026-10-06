@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book whose `rendition:flow` is `scrolled-continuous` or `scrolled-doc` now scrolls: each
+  reflowable chapter is one page as tall as its content (EPUB 3.3). `EpubSettings.scrolled` turns
+  this on or off for every book. `KiteDocLayout.forDocument` picks the layout the book asks for, and
+  the new `KiteDocLayout.Paged.fit` option `KitePageFit.WIDTH` shows a chapter that fills the width
+  and scrolls down. `KiteDocument.topOf` gives the height of a bookmark's place on its page, so a
+  link to an element far down a tall page shows that element. Four more W3C EPUB tests pass (#505).
+- The wheel moves a page that overflows the view, a zoomed page or a page fit to the width. Once the
+  page is at its edge, the next wheel gesture turns it (#505).
 - `EpubDocument.markupErrors(chapter)` lists where a chapter breaks the rules of XML: a tag that
   never closes, an invalid name, a value without quotes, an undeclared entity or prefix, and
   more. `KiteXml.wellFormednessErrors` in `kitepdf-core` does the check for any XML text, and

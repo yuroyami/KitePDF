@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -1855,11 +1856,13 @@ public class KiteDocViewState(
      * reader's zoom and pan, as a link to a place on a page asks (#433). A vertical strip scrolls
      * there. A horizontal strip turns to the page and pans across it, and a pager does the same
      * once it lands. The view goes as far as the page lets it. Without [y] it turns to the page.
+     * [animate] false jumps there.
      */
-    internal suspend fun animateScrollToPagePoint(slot: Int, y: Double?): Unit = onViewerThread {
+    internal suspend fun scrollToPagePoint(slot: Int, y: Double?, animate: Boolean = true): Unit = onViewerThread {
         val page = pageAt(slot)
+        suspend fun toPage() = if (animate) animateScrollToPage(slot) else scrollToPage(slot)
         if (y == null || !y.isFinite() || page == null || page.displayHeight <= 0.0) {
-            animateScrollToPage(slot)
+            toPage()
             return@onViewerThread
         }
         val continuous = adapter as? LazyListScrollAdapter
@@ -1869,18 +1872,18 @@ public class KiteDocViewState(
                 panToShowAtTop(slot, y)?.let { panOffset = it }
             } else {
                 landing = slot to y
-                animateScrollToPage(slot)
+                toPage()
             }
             return@onViewerThread
         }
         if (stripOrientation == androidx.compose.foundation.gestures.Orientation.Horizontal) {
-            animateScrollToPage(slot)
+            toPage()
             panToShowAtTop(slot, y)?.let { panOffset = it }
             return@onViewerThread
         }
         val length = continuous.verticalSlotLength(kitePageAspect(page)) { pageAt(it)?.let(::kitePageAspect) }
         if (length == null) {
-            animateScrollToPage(slot)
+            toPage()
             return@onViewerThread
         }
         // The zoom scales about the viewport's centre and the pan moves the result, so the top of
@@ -1891,12 +1894,17 @@ public class KiteDocViewState(
         leaveSelectionFor(slot)
         if (offset >= 0) {
             park(slot, offsetPx = offset)
-            continuous.animateScrollToPageOffset(slot, offset)
+            if (animate) continuous.animateScrollToPageOffset(slot, offset) else continuous.scrollToPageOffset(slot, offset)
         } else {
             // The place is nearer the top of its page than that, so the strip goes on into the page before.
             park(slot)
-            continuous.animateScrollToPageOffset(slot, 0)
-            continuous.animateScrollBy(offset.toFloat())
+            if (animate) {
+                continuous.animateScrollToPageOffset(slot, 0)
+                continuous.animateScrollBy(offset.toFloat())
+            } else {
+                continuous.scrollToPageOffset(slot, 0)
+                continuous.scrollBy(offset.toFloat())
+            }
         }
     }
 
@@ -2012,7 +2020,16 @@ public class KiteDocViewState(
         try {
             val location = locateGuarded(bookmark) ?: return@onViewerThread
             publishChapter()
-            scrollTo(location, animate)
+            // A fragment can sit far down a page, as in a long scrolled chapter, so the view goes to its height (#505).
+            val top = if (bookmark is KiteBookmark.Flow && bookmark.fragment != null) {
+                withContext(kitepdfRasterDispatcher()) { runCatching { document.topOf(bookmark) }.getOrNull() }
+            } else null
+            if (top == null) {
+                scrollTo(location, animate)
+            } else {
+                prepareFor(location)
+                scrollToPagePoint(navigableSlot(location), top, animate)
+            }
         } finally {
             navigationTarget = null
         }
@@ -2652,6 +2669,11 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
     /** Scrolls the strip by [px], back toward its start when [px] is negative. */
     suspend fun animateScrollBy(px: Float) {
         listState.animateScrollBy(px)
+    }
+
+    /** Jumps the strip by [px], back toward its start when [px] is negative. */
+    suspend fun scrollBy(px: Float) {
+        listState.scrollBy(px)
     }
 
     /**

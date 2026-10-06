@@ -64,6 +64,24 @@ book: layout, spread, orientation and flow. `book.renditionOf(chapter)` gives
 the values for one chapter, and the side of a spread that its first page asks
 for. `KiteDocLayout.Spread` reads them to pair the pages.
 
+### Scrolled books
+
+A book whose `rendition:flow` is `scrolled-continuous` or `scrolled-doc` is not
+cut into pages. Each reflowable chapter is one page as wide as the reader's
+page and as tall as its content, so `pageCountIn(chapter)` is 1. A page break
+in the book's CSS does not cut it. A chapter shorter than a page keeps the
+page height.
+
+- A spine entry's `rendition:flow-*` property wins over the book's value.
+- `EpubSettings.scrolled` wins over both: `true` scrolls every book, `false`
+  cuts every book into pages, and `null` (the default) follows the book.
+- A chapter in vertical writing is always cut into pages.
+- `book.topOf(bookmark)` gives the height of a bookmark's fragment on its page,
+  so a viewer can show an element far down a tall page.
+
+`KiteDocLayout.forDocument(book)` picks the viewer layout that the flow asks
+for. See [the Compose viewer](compose-viewer.md#the-layout-a-document-asks-for).
+
 ## Rendering pages
 
 `EpubDocument.pages` is a `List<EpubPage>`, and every page renders through

@@ -553,8 +553,8 @@ internal object EpubConformanceChecks {
                 listOf(0, 2, 3).all { doc.renditionOf(it).layout == EpubLayout.PRE_PAGINATED && pages(it) == 1 && sizeIs(it, 675.0, 450.0) }
         }
         check("lay-pkg-flow-paginated") { (1 until chapters).all { pages(it) > 1 } }
-        check("lay-pkg-flow-scrolled-continuous") { pages(1) == 1 }
-        check("lay-pkg-flow-scrolled-doc") { pages(1) == 1 }
+        check("lay-pkg-flow-scrolled-continuous") { pages(1) == 1 && KiteDocLayout.forDocument(doc) == KiteDocLayout.Continuous() }
+        check("lay-pkg-flow-scrolled-doc") { pages(1) == 1 && KiteDocLayout.forDocument(doc) == KiteDocLayout.Paged(fit = KitePageFit.WIDTH) }
         check("lay-pp-embedded-images") { allFixedPages(1255.5, 1033.5) && (0 until chapters).all { images(it).size == 1 } && doc.renditionOf(0).pageSpread == EpubPageSpread.CENTER }
         check("lay-pp-embedded-images-svg") { allFixedPages(1255.5, 1033.5) && (0 until chapters).all { images(it).size == 1 } }
         check("lay-pp-images-in-spine") { doc.chapterPath(0) == "EPUB/fallbacks/Title.xhtml" && "A APPLE PIE" in text(0) && doc.chapterPath(1) == "EPUB/fallbacks/A.xhtml" }
@@ -703,8 +703,8 @@ internal object EpubConformanceChecks {
                 }
             }
         }
-        check("scr-support_scrolled-continuous") { pages(3) == 1 }
-        check("scr-support_scrolled-doc") { pages(3) == 1 }
+        check("scr-support_scrolled-continuous") { pages(3) == 1 && KiteDocLayout.forDocument(doc) == KiteDocLayout.Continuous() }
+        check("scr-support_scrolled-doc") { pages(3) == 1 && KiteDocLayout.forDocument(doc) == KiteDocLayout.Paged(fit = KitePageFit.WIDTH) }
     }
 
     /** Whether a glyph run starts inside [rect], a box in display space whose y runs down. */

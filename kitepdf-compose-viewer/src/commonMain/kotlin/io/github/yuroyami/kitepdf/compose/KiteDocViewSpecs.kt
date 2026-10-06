@@ -54,6 +54,8 @@ public sealed interface KiteDocLayout {
          * index +1. See [pagedFor] for automatic selection.
          */
         val reverseLayout: Boolean = false,
+        /** How each page fits the viewport: whole, or across the width with the rest a pan away. */
+        val fit: KitePageFit = KitePageFit.PAGE,
     ) : KiteDocLayout {
         init {
             require(offscreenPages >= 0) { "offscreenPages must be >= 0 (was $offscreenPages)" }
@@ -116,7 +118,37 @@ public sealed interface KiteDocLayout {
          */
         public fun pagedFor(document: io.github.yuroyami.kitepdf.core.KiteDocument): Paged =
             Paged(reverseLayout = document.metadata.rightToLeft)
+
+        /**
+         * The layout that [document] asks for. An EPUB book whose `rendition:flow` is
+         * `scrolled-continuous` reads as one [Continuous] strip, and one that is `scrolled-doc`
+         * reads in a [Paged] pager whose chapters each fit the width and scroll down (EPUB 3.3,
+         * #505). [io.github.yuroyami.kitepdf.epub.EpubSettings.scrolled] false keeps such a book
+         * in pages. Every other document gets [pagedFor].
+         */
+        public fun forDocument(document: io.github.yuroyami.kitepdf.core.KiteDocument): KiteDocLayout {
+            val book = document as? io.github.yuroyami.kitepdf.epub.EpubDocument ?: return pagedFor(document)
+            if (book.settings.scrolled == false) return pagedFor(document)
+            return when (book.epubMetadata.rendition.flow) {
+                io.github.yuroyami.kitepdf.epub.EpubFlow.SCROLLED_CONTINUOUS -> Continuous()
+                io.github.yuroyami.kitepdf.epub.EpubFlow.SCROLLED_DOC -> pagedFor(document).copy(fit = KitePageFit.WIDTH)
+                else -> if (book.settings.scrolled == true) Continuous() else pagedFor(document)
+            }
+        }
     }
+}
+
+/** How a [KiteDocLayout.Paged] pager fits each page into the viewport. */
+public enum class KitePageFit {
+    /** The whole page shows, centred, with bands on the sides it does not fill. */
+    PAGE,
+
+    /**
+     * The page fills the width. A page taller than the viewport starts at its top, and the
+     * reader drags or turns the wheel down through it; a drag sideways past its edge turns it.
+     * A shorter page shows centred. This is how a scrolled EPUB chapter reads (#505).
+     */
+    WIDTH,
 }
 
 /**

@@ -296,6 +296,7 @@ KiteDocView(
 **Best for:** books, slide decks, comics; anything where users think in "pages" not "scroll position".
 
 - **`offscreenPages`**: pages kept composed and rasterized on each side of the visible page (default 1). Raise to cover faster flinging; set 0 to minimise memory. While idle, the immediate neighbours are pre-rendered so a swipe never stalls.
+- **`fit`**: `KitePageFit.PAGE` (default) shows the whole page. `KitePageFit.WIDTH` fills the width instead. A page taller than the viewport starts at its top, and the reader drags or turns the wheel down through it. A drag sideways past its edge turns the page.
 
 ### `KiteDocLayout.Spread` (two pages side by side)
 
@@ -328,6 +329,22 @@ Exactly one fixed page, letterboxed to fill the viewport:
 ```kotlin
 KiteDocView(state, layout = KiteDocLayout.SinglePage(pageIndex = 3))
 ```
+
+### The layout a document asks for
+
+`KiteDocLayout.forDocument(document)` returns the layout that a document asks for:
+
+| Document | Layout |
+|---|---|
+| EPUB with `rendition:flow` `scrolled-continuous` | `Continuous()`: the chapters follow each other in one strip |
+| EPUB with `rendition:flow` `scrolled-doc` | `Paged(fit = KitePageFit.WIDTH)`: each chapter scrolls down, and a sideways swipe moves to the next one |
+| Any other document | `KiteDocLayout.pagedFor(document)` |
+
+```kotlin
+KiteDocView(state, layout = KiteDocLayout.forDocument(book))
+```
+
+`EpubSettings.scrolled` changes the answer for an EPUB book: `false` keeps it in pages, and `true` gives `Continuous()` to a book that sets no flow.
 
 ## Zoom & gesture configuration
 
@@ -364,6 +381,8 @@ On the desktop and the web, and on a tablet with a mouse or a keyboard, the view
 |---|---|---|
 | Ctrl or Cmd with the wheel, or a trackpad pinch | Zooms about the pointer | `pinchEnabled = false` |
 | Ctrl or Cmd with plus, minus or 0 | Zooms in, zooms out, goes back to fit | `pinchEnabled = false` |
+| The wheel in a horizontal `Paged` or `Spread` layout | Next or previous page, one page for each wheel gesture | `userScrollEnabled = false` |
+| The wheel on a page that overflows the view (zoomed, or `KitePageFit.WIDTH`) | Moves the page. Once the page is at its edge, the next wheel gesture turns it | `userScrollEnabled = false` |
 | Page Down, Space, the down arrow | Next page | `userScrollEnabled = false` |
 | Page Up, Shift with Space, the up arrow | Previous page | `userScrollEnabled = false` |
 | The left and right arrows | Previous and next page; swapped where pages advance to the left | `userScrollEnabled = false` |
