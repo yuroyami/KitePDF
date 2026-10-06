@@ -1,7 +1,11 @@
 package io.github.yuroyami.kitepdf.epub
 
-/** Whether pages reflow or keep the size the author set: `rendition:layout`. */
-public enum class EpubLayout { REFLOWABLE, PRE_PAGINATED }
+/**
+ * Whether pages reflow or keep the size the author set: `rendition:layout`. [ROLL], of EPUB 3.4,
+ * keeps each chapter's size too and shows the chapters as one strip with no gap, as a webtoon or
+ * a scroll reads (#506).
+ */
+public enum class EpubLayout { REFLOWABLE, PRE_PAGINATED, ROLL }
 
 /**
  * When a reader shows two pages side by side: `rendition:spread`. The deprecated value
@@ -35,6 +39,13 @@ public class EpubRendition internal constructor(
     /** The side of a spread that the chapter's first page asks for, or null. Always null for a book. */
     public val pageSpread: EpubPageSpread? = null,
 ) {
+    /**
+     * True for a roll: [EpubLayout.ROLL], or a pre-paginated book whose flow is
+     * `scrolled-continuous`, which EPUB Reading Systems 3.4 asks to read the same way (#506).
+     */
+    public val isRoll: Boolean
+        get() = layout == EpubLayout.ROLL || (layout == EpubLayout.PRE_PAGINATED && flow == EpubFlow.SCROLLED_CONTINUOUS)
+
     override fun toString(): String = "EpubRendition($layout, $spread, $orientation, $flow, $pageSpread)"
 
     internal companion object {
@@ -44,6 +55,7 @@ public class EpubRendition internal constructor(
         fun ofBook(values: Map<String, String>): EpubRendition = EpubRendition(
             layout = when (values["layout"]?.lowercase()) {
                 "pre-paginated" -> EpubLayout.PRE_PAGINATED
+                "roll" -> EpubLayout.ROLL
                 else -> EpubLayout.REFLOWABLE
             },
             spread = spreadOf(values["spread"]) ?: EpubSpread.AUTO,
@@ -53,7 +65,8 @@ public class EpubRendition internal constructor(
 
         /**
          * [book] with the properties of one spine entry, a space-separated list, over it. Of two
-         * overrides of one property, the first counts (EPUB Reading Systems 3.3, 5.5.1, #502).
+         * overrides of one property, the first counts (EPUB Reading Systems 3.3, 5.5.1, #502). A
+         * roll ignores the overrides of its layout (EPUB Reading Systems 3.4, #506).
          */
         fun ofChapter(book: EpubRendition, properties: String?): EpubRendition {
             var layout: EpubLayout? = null
@@ -77,7 +90,7 @@ public class EpubRendition internal constructor(
                 }
             }
             return EpubRendition(
-                layout ?: book.layout, spread ?: book.spread, orientation ?: book.orientation, flow ?: book.flow, pageSpread,
+                if (book.isRoll) book.layout else layout ?: book.layout, spread ?: book.spread, orientation ?: book.orientation, flow ?: book.flow, pageSpread,
             )
         }
 

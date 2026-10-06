@@ -105,10 +105,14 @@ internal class ParsedEpub(
     val blobs = BlobUrlStore()
 
     /** Whether [chapter] keeps the fixed pages its author set, rather than reflowing. */
-    fun isFixed(chapter: Int): Boolean = renditions.getOrNull(chapter)?.layout == EpubLayout.PRE_PAGINATED
+    fun isFixed(chapter: Int): Boolean = renditions.getOrNull(chapter)?.let(::keepsSize) == true
 
     /** Whether every chapter keeps fixed pages. */
-    val allFixed: Boolean = renditions.isNotEmpty() && renditions.all { it.layout == EpubLayout.PRE_PAGINATED }
+    val allFixed: Boolean = renditions.isNotEmpty() && renditions.all(::keepsSize)
+
+    /** A pre-paginated chapter keeps the size its author set, and so does each chapter of a roll (#506). */
+    private fun keepsSize(rendition: EpubRendition): Boolean =
+        rendition.layout == EpubLayout.PRE_PAGINATED || rendition.layout == EpubLayout.ROLL
 
     private val overlayLock = KiteLock()
     private val overlayCache = arrayOfNulls<EpubMediaOverlay>(spinePaths.size)

@@ -104,6 +104,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubFragmentBox {
 public final class io/github/yuroyami/kitepdf/epub/EpubLayout : java/lang/Enum {
 	public static final field PRE_PAGINATED Lio/github/yuroyami/kitepdf/epub/EpubLayout;
 	public static final field REFLOWABLE Lio/github/yuroyami/kitepdf/epub/EpubLayout;
+	public static final field ROLL Lio/github/yuroyami/kitepdf/epub/EpubLayout;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubLayout;
 	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubLayout;
@@ -248,6 +249,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubRendition {
 	public final fun getOrientation ()Lio/github/yuroyami/kitepdf/epub/EpubOrientation;
 	public final fun getPageSpread ()Lio/github/yuroyami/kitepdf/epub/EpubPageSpread;
 	public final fun getSpread ()Lio/github/yuroyami/kitepdf/epub/EpubSpread;
+	public final fun isRoll ()Z
 	public fun toString ()Ljava/lang/String;
 }
 

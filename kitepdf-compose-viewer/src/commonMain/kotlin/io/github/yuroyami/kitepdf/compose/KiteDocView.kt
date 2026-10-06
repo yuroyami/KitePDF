@@ -152,7 +152,8 @@ import kotlinx.coroutines.launch
  *   (bitmap-cached, with quality/memory/crisp-zoom/hairline knobs) or
  *   [KiteRenderSpec.Vectorized] (live vector draw). See [KiteRenderSpec].
  * @param colors page paper + viewport letterbox colours.
- * @param pageSpacing gap between pages (continuous gutter / pager spacing).
+ * @param pageSpacing gap between pages (continuous gutter / pager spacing). A strip shows the
+ *   pages of an EPUB roll with no gap, whatever this says (#506).
  * @param selectionEnabled whether the reader may select text at all. The
  *   default, true, is the long-press-to-select behaviour with draggable
  *   thumbs. False removes the gesture entirely: no long press selects, no wash
@@ -473,7 +474,8 @@ public fun KiteDocView(
                 ) {
                     when (layout) {
                         is KiteDocLayout.Continuous -> ContinuousLayout(
-                            state, layout, zoomSpec, renderSpec, colors, pageSpacing,
+                            // A roll shows its pages with no gap between them (EPUB 3.4, #506).
+                            state, layout, zoomSpec, renderSpec, colors, if (state.document.isRoll()) 0.dp else pageSpacing,
                             userScrollEnabled, settledZoom, onPageRendered, pagePlaceholder,
                             chapterPlaceholder, linkAwareTap,
                         )
@@ -2245,3 +2247,7 @@ internal fun zoomBucket(zoom: Float): Float {
 }
 
 private const val ZOOM_STEPS_PER_OCTAVE = 4.0
+
+/** Whether [this] is an EPUB roll, whose pages show as one strip with no gap (EPUB 3.4, #506). */
+internal fun io.github.yuroyami.kitepdf.core.KiteDocument.isRoll(): Boolean =
+    (this as? EpubDocument)?.epubMetadata?.rendition?.isRoll == true
