@@ -40,6 +40,18 @@ internal class ScriptDom(
     /** The documents a script made, each a tree of its own. */
     private val documents = HashSet<KiteXmlNode.Element>()
 
+    /** The text nodes that are CDATA sections, which the DOM numbers 4 and the layout reads as text (#543). */
+    private val cdataSections = HashSet<KiteXmlNode.Text>()
+
+    /** The comment nodes that stand for a processing instruction, each with its target, which the layout drops as it drops a comment. */
+    private val instructions = HashMap<KiteXmlNode.Comment, String>()
+
+    /** The comment nodes that stand for a document type, which the layout drops as it drops a comment. */
+    private val doctypes = HashMap<KiteXmlNode.Comment, XmlReader.Doctype>()
+
+    /** The XML declaration of each document that a script parsed, which serializing the document writes first, as browsers do. */
+    private val declarations = HashMap<KiteXmlNode.Element, String>()
+
     /**
      * The namespace, prefix and local name of an element (DOM Standard, 4.9), which its tag does
      * not keep: the parser lowercases a name and drops its prefix (#541).
@@ -109,7 +121,13 @@ internal class ScriptDom(
      * names them, with [parent] above it and the namespace prefixes of [scope] declared. Each element
      * whose attributes are named takes the layout's map of them too when [relayout].
      */
-    private fun nameTree(el: KiteXmlNode.Element, parent: KiteXmlNode.Element?, scope: Map<String, String>, relayout: Boolean) {
+    private fun nameTree(
+        el: KiteXmlNode.Element,
+        parent: KiteXmlNode.Element?,
+        scope: Map<String, String>,
+        relayout: Boolean,
+        html: Boolean = this.html,
+    ) {
         val raw = written.remove(el)
         var inScope = scope
         // An XML parser names an element by the declarations of its own attributes, and HTML's names
@@ -118,11 +136,11 @@ internal class ScriptDom(
             inScope = declared(raw, scope)
             attributeLists[el] = xmlAttributes(raw, inScope)
         }
-        val name = parsedName(el, parent)
+        val name = parsedName(el, parent, html)
         names[el] = name
         if (raw != null && html) attributeLists[el] = htmlAttributes(raw, name.namespace)
         if (raw != null && relayout) el.attrs = layoutAttributes(attributes(el))
-        for (c in el.children) if (c is KiteXmlNode.Element) nameTree(c, el, inScope, relayout)
+        for (c in el.children) if (c is KiteXmlNode.Element) nameTree(c, el, inScope, relayout, html)
     }
 
     /** [scope] with the prefixes that the `xmlns:` attributes of [raw] declare, and without those they undeclare. */
@@ -268,7 +286,7 @@ internal class ScriptDom(
      * else its parent's, and HTML's at the top. A name in SVG takes the case of SVG's own names,
      * as HTML's parser gives it them, since the tag here is lowercased.
      */
-    private fun parsedName(el: KiteXmlNode.Element, parent: KiteXmlNode.Element?): Name {
+    private fun parsedName(el: KiteXmlNode.Element, parent: KiteXmlNode.Element?, html: Boolean = this.html): Name {
         val outer = parent?.takeIf { it !== root && it.tag != FRAGMENT && it !in documents }?.let(::nameOf)
         val declared = if (html) null else attr(el, "xmlns", XMLNS_NS)
         val namespace = when {
@@ -296,11 +314,14 @@ internal class ScriptDom(
         is KiteXmlNode.Text, is KiteXmlNode.Comment -> leafParents[node]
     }
 
-    /** 9 for the document, 11 for a fragment, 1 for an element, 3 for text and 8 for a comment, as the DOM numbers them. */
+    /**
+     * 9 for the document, 11 for a fragment, 1 for an element, 3 for text, 4 for a CDATA section, 7 for a
+     * processing instruction, 8 for a comment and 10 for a document type, as the DOM numbers them.
+     */
     fun kind(node: KiteXmlNode): Int = when {
         node === root || node in documents -> 9
-        node is KiteXmlNode.Text -> 3
-        node is KiteXmlNode.Comment -> 8
+        node is KiteXmlNode.Text -> if (node in cdataSections) 4 else 3
+        node is KiteXmlNode.Comment -> if (node in instructions) 7 else if (node in doctypes) 10 else 8
         node in fragments && (node as KiteXmlNode.Element).tag == FRAGMENT -> 11
         else -> 1
     }
@@ -422,8 +443,11 @@ internal class ScriptDom(
 
     /** A copy of [node], with its subtree when [deep], on its own. */
     fun clone(node: KiteXmlNode, deep: Boolean): KiteXmlNode = when (node) {
-        is KiteXmlNode.Text -> KiteXmlNode.Text(node.text)
-        is KiteXmlNode.Comment -> KiteXmlNode.Comment(node.text)
+        is KiteXmlNode.Text -> KiteXmlNode.Text(node.text).also { if (node in cdataSections) cdataSections += it }
+        is KiteXmlNode.Comment -> KiteXmlNode.Comment(node.text).also { copy ->
+            instructions[node]?.let { instructions[copy] = it }
+            doctypes[node]?.let { doctypes[copy] = it }
+        }
         is KiteXmlNode.Element -> {
             val out = KiteXmlNode.Element(if (node === root) FRAGMENT else node.tag, node.attrs)
             fragments.add(out)
@@ -541,7 +565,12 @@ internal class ScriptDom(
                 val raw = leafParents[node]?.tag in RAW_TEXT
                 out.append(if (raw) node.text else escape(node.text, attribute = false))
             }
-            is KiteXmlNode.Comment -> out.append("<!--").append(node.text).append("-->")
+            is KiteXmlNode.Comment -> when {
+                // HTML 13.3: an instruction ends at its first >, and a document type gives its name alone.
+                node in instructions -> out.append("<?").append(instructions.getValue(node)).append(' ').append(node.text).append('>')
+                node in doctypes -> out.append("<!DOCTYPE ").append(doctypes.getValue(node).name).append('>')
+                else -> out.append("<!--").append(node.text).append("-->")
+            }
             is KiteXmlNode.Element -> {
                 out.append('<').append(node.tag)
                 for (a in attributes(node)) out.append(' ').append(serializedName(a)).append("=\"").append(escape(a.value, attribute = true)).append('"')
@@ -560,6 +589,253 @@ internal class ScriptDom(
         XMLNS_NS -> if (a.localName == "xmlns") "xmlns" else "xmlns:" + a.localName
         XLINK_NS -> "xlink:" + a.localName
         else -> a.qualifiedName
+    }
+
+    /** The target of [node] when it is a processing instruction, else null. */
+    fun target(node: KiteXmlNode): String? = (node as? KiteXmlNode.Comment)?.let(instructions::get)
+
+    /** The name and ids of [node] when it is a document type, else null. */
+    fun doctype(node: KiteXmlNode): XmlReader.Doctype? = (node as? KiteXmlNode.Comment)?.let(doctypes::get)
+
+    /**
+     * A new document that holds what [markup] parses to, as `DOMParser` makes one (HTML, 8.5.1): with
+     * HTML's parser, or else with the XML parser. A text that is not well-formed XML gives the
+     * document that HTML names for it, a `parsererror` element in Mozilla's namespace, and the
+     * error comes back beside it.
+     */
+    fun parseDocument(markup: String, xml: Boolean): Pair<KiteXmlNode.Element, XmlReader.Error?> {
+        val doc = createDocument()
+        if (!xml) {
+            for (c in htmlDocument(markup)) append(doc, c)
+            return doc to null
+        }
+        val parsed = XmlReader.document(markup)
+        val error = parsed.error
+        if (error == null) {
+            take(parsed)
+            parsed.declaration?.let { declarations[doc] = it }
+            for (c in parsed.nodes) append(doc, c)
+            return doc to null
+        }
+        val root = KiteXmlNode.Element("parsererror", emptyMap())
+        names[root] = Name(PARSER_ERROR_NS, null, "parsererror")
+        attributeLists[root] = emptyList()
+        append(root, KiteXmlNode.Text("XML Parsing Error: ${error.message}\nLine Number ${error.line}, Column ${error.column}"))
+        append(doc, root)
+        return doc to error
+    }
+
+    /** Takes over the names, attributes and node kinds of [parsed], and the parent of every text node and comment in it. */
+    private fun take(parsed: XmlReader.Result) {
+        names.putAll(parsed.names)
+        attributeLists.putAll(parsed.attributes)
+        cdataSections.addAll(parsed.cdata)
+        instructions.putAll(parsed.instructions)
+        doctypes.putAll(parsed.doctypes)
+        for (c in parsed.nodes) registerTexts(c)
+    }
+
+    /**
+     * The children of a new HTML document for [markup]: what HTML's parser makes of it, with an
+     * `html` element holding a `head` and a `body` when the markup leaves them out (HTML, 13.2.6.4).
+     * The elements that belong in a head go into it until the first that does not, and the rest
+     * goes into the body.
+     */
+    private fun htmlDocument(markup: String): List<KiteXmlNode> {
+        val parsed = HtmlParser.parse(markup, keepComments = true, keepNames = true).children.toList()
+        for (c in parsed) if (c is KiteXmlNode.Element) recordWritten(c)
+        val explicit = parsed.firstOrNull { it is KiteXmlNode.Element && it.tag == "html" } as KiteXmlNode.Element?
+        val html = explicit ?: KiteXmlNode.Element("html", emptyMap())
+        val outside = ArrayList<KiteXmlNode>()
+        val loose = ArrayList<KiteXmlNode>()
+        var seenHtml = false
+        for (c in parsed) when {
+            c === html -> seenHtml = true
+            c is KiteXmlNode.Comment && (explicit == null || !seenHtml) && loose.isEmpty() -> outside += c
+            c is KiteXmlNode.Text && c.text.isBlank() && loose.isEmpty() -> {}
+            else -> loose += c
+        }
+        val inner = html.children.toList() + loose
+        html.children.clear()
+        val head = inner.firstOrNull { it is KiteXmlNode.Element && it.tag == "head" } as KiteXmlNode.Element? ?: KiteXmlNode.Element("head", emptyMap())
+        val body = inner.firstOrNull { it is KiteXmlNode.Element && it.tag == "body" } as KiteXmlNode.Element? ?: KiteXmlNode.Element("body", emptyMap())
+        var inBody = false
+        val between = ArrayList<KiteXmlNode>()
+        for (c in inner) when {
+            c === head -> {}
+            c === body -> inBody = true
+            !inBody && c is KiteXmlNode.Element && c.tag in HEAD_ELEMENTS -> head.children += c
+            !inBody && c is KiteXmlNode.Text && c.text.isBlank() -> if (head in inner) between += c
+            !inBody && c is KiteXmlNode.Comment -> if (head in inner) between += c else head.children += c
+            else -> {
+                inBody = true
+                body.children += c
+            }
+        }
+        html.children += head
+        html.children += between
+        html.children += body
+        fixParents(html, null)
+        if (html !in written) written[html] = emptyMap()
+        if (head !in written) written[head] = emptyMap()
+        if (body !in written) written[body] = emptyMap()
+        nameTree(html, null, emptyMap(), relayout = true, html = true)
+        registerTexts(html)
+        return outside + html
+    }
+
+    /** Sets the parent of [el] and of every element under it, after a move that changed the children lists alone. */
+    private fun fixParents(el: KiteXmlNode.Element, parent: KiteXmlNode.Element?) {
+        el.parent = parent
+        for (c in el.children) if (c is KiteXmlNode.Element) fixParents(c, el)
+    }
+
+    /**
+     * [node] as XML, as `XMLSerializer` gives it (DOM Parsing and Serialization, 3.2.1), with the
+     * namespace declarations each element needs to keep its namespace and prefix. Nothing here
+     * refuses a node that cannot round-trip, as its "require well-formed" flag would.
+     */
+    fun xml(node: KiteXmlNode): String = buildString {
+        XmlWriter(this).node(node, null, hashMapOf(XML_NS to mutableListOf("xml")))
+    }
+
+    /** The XML serialization algorithm, over this tree. [prefixes] is its namespace prefix map. */
+    private inner class XmlWriter(val out: StringBuilder) {
+        var nextPrefix = 1
+
+        fun node(node: KiteXmlNode, context: String?, prefixes: MutableMap<String?, MutableList<String>>) {
+            when (node) {
+                is KiteXmlNode.Text -> if (node in cdataSections) out.append("<![CDATA[").append(node.text).append("]]>") else text(node.text)
+                is KiteXmlNode.Comment -> when {
+                    node in instructions -> out.append("<?").append(instructions.getValue(node)).append(' ').append(node.text).append("?>")
+                    node in doctypes -> doctype(doctypes.getValue(node))
+                    else -> out.append("<!--").append(node.text).append("-->")
+                }
+                is KiteXmlNode.Element ->
+                    if (node === root || node.tag == FRAGMENT || node in documents) {
+                        declarations[node]?.let(out::append)
+                        for (c in node.children) node(c, context, prefixes)
+                    }
+                    else element(node, context, prefixes)
+            }
+        }
+
+        private fun doctype(d: XmlReader.Doctype) {
+            out.append("<!DOCTYPE ").append(d.name)
+            if (d.publicId.isNotEmpty()) out.append(" PUBLIC \"").append(d.publicId).append('"')
+            if (d.systemId.isNotEmpty() && d.publicId.isEmpty()) out.append(" SYSTEM")
+            if (d.systemId.isNotEmpty()) out.append(" \"").append(d.systemId).append('"')
+            out.append('>')
+        }
+
+        private fun element(el: KiteXmlNode.Element, context: String?, outer: MutableMap<String?, MutableList<String>>) {
+            val name = nameOf(el)
+            val ns = name.namespace
+            val prefixes = HashMap<String?, MutableList<String>>(outer.size + 2).apply { for ((k, v) in outer) put(k, v.toMutableList()) }
+            val local = HashMap<String, String>()
+            // Record the namespace information: the declarations of the element's own attributes.
+            var localDefault: String? = null
+            var declaresDefault = false
+            for (a in attributes(el)) if (a.namespace == XMLNS_NS) {
+                if (a.prefix == null) {
+                    declaresDefault = true
+                    localDefault = a.value
+                } else if (prefixes[a.value.ifEmpty { null }]?.contains(a.localName) != true) {
+                    prefixes.getOrPut(a.value.ifEmpty { null }) { ArrayList() } += a.localName
+                    local[a.localName] = a.value
+                }
+            }
+            var inherited = context
+            var ignoreDefault = false
+            val qualified: String
+            val declare = StringBuilder()
+            if (inherited == ns) {
+                if (declaresDefault) ignoreDefault = true
+                qualified = if (ns == XML_NS) "xml:" + name.localName else name.localName
+            } else {
+                val preferred = preferredPrefix(prefixes, ns, name.prefix)
+                when {
+                    name.prefix == "xmlns" -> qualified = "xmlns:" + name.localName
+                    preferred != null -> {
+                        qualified = "$preferred:${name.localName}"
+                        if (declaresDefault && localDefault != XML_NS) inherited = localDefault?.ifEmpty { null }
+                    }
+                    name.prefix != null -> {
+                        val p = if (name.prefix in local) generatePrefix(prefixes, local, ns) else name.prefix.also { prefixes.getOrPut(ns) { ArrayList() } += it }
+                        qualified = "$p:${name.localName}"
+                        declare.append(" xmlns:").append(p).append("=\"").append(attributeValue(ns.orEmpty())).append('"')
+                        if (declaresDefault) inherited = localDefault?.ifEmpty { null }
+                    }
+                    !declaresDefault || localDefault?.ifEmpty { null } != ns -> {
+                        ignoreDefault = true
+                        qualified = name.localName
+                        inherited = ns
+                        declare.append(" xmlns=\"").append(attributeValue(ns.orEmpty())).append('"')
+                    }
+                    else -> {
+                        qualified = name.localName
+                        inherited = ns
+                    }
+                }
+            }
+            out.append('<').append(qualified).append(declare)
+            for (a in attributes(el)) {
+                var prefix: String? = null
+                if (a.namespace != null) {
+                    prefix = preferredPrefix(prefixes, a.namespace, a.prefix)
+                    if (a.namespace == XMLNS_NS) {
+                        if (a.value == XML_NS || (a.prefix == null && ignoreDefault) || (a.prefix != null && local[a.localName] != a.value)) continue
+                        if (a.prefix == "xmlns") prefix = "xmlns"
+                    } else if (prefix == null) {
+                        prefix = generatePrefix(prefixes, local, a.namespace)
+                        out.append(" xmlns:").append(prefix).append("=\"").append(attributeValue(a.namespace)).append('"')
+                    }
+                }
+                out.append(' ')
+                if (prefix != null) out.append(prefix).append(':')
+                out.append(a.localName).append("=\"").append(attributeValue(a.value)).append('"')
+            }
+            val children = el.children
+            if (children.isEmpty() && (ns != XHTML_NS || name.localName in VOID)) {
+                out.append(if (ns == XHTML_NS) " />" else "/>")
+                return
+            }
+            out.append('>')
+            for (c in children) node(c, inherited, prefixes)
+            out.append("</").append(qualified).append('>')
+        }
+
+        /** The prefix [prefixes] holds for [ns]: [preferred] when it is one of them, else the last. */
+        private fun preferredPrefix(prefixes: Map<String?, List<String>>, ns: String?, preferred: String?): String? {
+            val candidates = prefixes[ns] ?: return null
+            return candidates.firstOrNull { it == preferred } ?: candidates.lastOrNull()
+        }
+
+        private fun generatePrefix(prefixes: MutableMap<String?, MutableList<String>>, local: MutableMap<String, String>, ns: String?): String {
+            val prefix = "ns${nextPrefix++}"
+            local[prefix] = ns.orEmpty()
+            prefixes.getOrPut(ns) { ArrayList() } += prefix
+            return prefix
+        }
+
+        private fun text(t: String) {
+            for (c in t) when (c) {
+                '&' -> out.append("&amp;")
+                '<' -> out.append("&lt;")
+                '>' -> out.append("&gt;")
+                else -> out.append(c)
+            }
+        }
+
+        private fun attributeValue(v: String): String = buildString(v.length) {
+            for (c in v) when (c) {
+                '&' -> append("&amp;")
+                '"' -> append("&quot;")
+                '<' -> append("&lt;")
+                '>' -> append("&gt;")
+                else -> append(c)
+            }
+        }
     }
 
     /** Parses [html] and puts what it holds in place of [el]'s children. */
@@ -717,6 +993,12 @@ internal class ScriptDom(
         const val XML_NS = "http://www.w3.org/XML/1998/namespace"
         const val XMLNS_NS = "http://www.w3.org/2000/xmlns/"
         const val XLINK_NS = "http://www.w3.org/1999/xlink"
+
+        /** The namespace of the element that stands for an XML parse error (HTML, 8.5.1). */
+        const val PARSER_ERROR_NS = "http://www.mozilla.org/newlayout/xml/parsererror.xml"
+
+        /** The elements HTML's parser puts in a head that the markup leaves out, until the first other one (13.2.6.4.4). */
+        private val HEAD_ELEMENTS = setOf("base", "basefont", "bgsound", "link", "meta", "noframes", "script", "style", "template", "title")
 
         /** The MathML elements whose content is HTML's, its text integration points. */
         private val MATHML_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")

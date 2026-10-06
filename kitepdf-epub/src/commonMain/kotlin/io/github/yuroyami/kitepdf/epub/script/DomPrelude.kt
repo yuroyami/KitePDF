@@ -443,7 +443,10 @@ function wrap(id) {
   var kind = K.kind(id), proto;
   if (kind === 1) proto = protoFor(id);
   else if (kind === 3) proto = Text.prototype;
+  else if (kind === 4) proto = CDATASection.prototype;
+  else if (kind === 7) proto = ProcessingInstruction.prototype;
   else if (kind === 8) proto = Comment.prototype;
+  else if (kind === 10) proto = DocumentType.prototype;
   else if (kind === 11) proto = DocumentFragment.prototype;
   else if (id === rootId) proto = HTML_DOCUMENT ? HTMLDocument.prototype : XMLDocument.prototype;
   else { proto = MapGet(documentProtos, id); if (proto === undefined) proto = XMLDocument.prototype; }
@@ -1693,6 +1696,11 @@ def(Document.prototype, 'charset', utf8);
 def(Document.prototype, 'inputEncoding', utf8);
 def(Document.prototype, 'contentType', function () { return documentContentType(idOf(this)); });
 def(Document.prototype, 'compatMode', function () { idOf(this); return 'CSS1Compat'; });
+def(Document.prototype, 'doctype', function () {
+  var c = childIds(idOf(this));
+  for (var i = 0; i < c.length; i++) if (K.kind(c[i]) === 10) return wrap(c[i]);
+  return null;
+});
 def(Document.prototype, 'designMode', function () { idOf(this); return 'off'; }, function () { idOf(this); });
 def(Document.prototype, 'visibilityState', function () { idOf(this); return 'visible'; });
 def(Document.prototype, 'hidden', function () { idOf(this); return false; });
@@ -1855,6 +1863,37 @@ DOMImplementation.prototype.createHTMLDocument = function (title) {
 };
 DOMImplementation.prototype.hasFeature = function () { implementationOf(this); return true; };
 defineInterface(DOMImplementation, 'DOMImplementation');
+
+/* DOMParser, of HTML 8.5.1 (#543): a document of its own for a string of markup. Its scripts do
+   not run. XML that is not well-formed gives a document of one parsererror element. */
+function DOMParser() {
+  if (!isA(this, DOMParser)) throw new TypeError("Failed to construct 'DOMParser': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+}
+DOMParser.prototype.parseFromString = function (string, type) {
+  var what = "Failed to execute 'parseFromString' on 'DOMParser'";
+  if (!isA(this, DOMParser)) throw new TypeError('Illegal invocation');
+  needArgs(arguments, 2, what);
+  var markup = domString(string), t = domString(type), html = t === 'text/html';
+  if (!html && t !== 'text/xml' && t !== 'application/xml' && t !== 'application/xhtml+xml' && t !== 'image/svg+xml') {
+    throw new TypeError(what + ": The provided value '" + t + "' is not a valid enum value of type DOMParserSupportedType.");
+  }
+  return madeDocument(K.parseDocument(markup, !html), html ? HTMLDocument.prototype : XMLDocument.prototype, html, t);
+};
+defineInterface(DOMParser, 'DOMParser', undefined, 0);
+
+/* XMLSerializer, of DOM Parsing and Serialization, 3.3 (#543). */
+function XMLSerializer() {
+  if (!isA(this, XMLSerializer)) throw new TypeError("Failed to construct 'XMLSerializer': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+}
+XMLSerializer.prototype.serializeToString = function (root) {
+  var what = "Failed to execute 'serializeToString' on 'XMLSerializer'";
+  if (!isA(this, XMLSerializer)) throw new TypeError('Illegal invocation');
+  needArgs(arguments, 1, what);
+  if (root !== null && typeof root === 'object' && WeakMapGet(attrs, root) !== undefined) return '';
+  if (!isNode(root)) throw new TypeError(what + ": parameter 1 is not of type 'Node'.");
+  return K.xml(root.__id);
+};
+defineInterface(XMLSerializer, 'XMLSerializer', undefined, 0);
 
 /* DocumentFragment, of the DOM Standard, 4.7, which a script may construct. */
 function DocumentFragment() {

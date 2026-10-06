@@ -30,6 +30,9 @@ public sealed class KiteXmlToken {
 
 public object KiteXml {
 
+    /** The text of HTML's named character reference [name], given without `&` and `;`, or null when HTML has no such name. */
+    public fun htmlEntity(name: String): String? = HtmlEntities.lookup(name)
+
     /**
      * The flat token stream: start tags with attributes, end tags, and text.
      * Tag soup is salvaged, never rejected. Use [parse] for a tree; callers

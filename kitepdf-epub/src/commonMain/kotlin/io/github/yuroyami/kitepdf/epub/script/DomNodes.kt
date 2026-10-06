@@ -110,7 +110,8 @@ constants(Node, ['ELEMENT_NODE', 'ATTRIBUTE_NODE', 'TEXT_NODE', 'CDATA_SECTION_N
 def(Node.prototype, 'nodeType', function () { return K.kind(idOf(this)); });
 def(Node.prototype, 'nodeName', function () {
   var id = idOf(this), kind = K.kind(id);
-  return kind === 1 ? tagNameOf(id) : kind === 3 ? '#text' : kind === 8 ? '#comment' : kind === 9 ? '#document' : kind === 11 ? '#document-fragment' : '';
+  return kind === 1 ? tagNameOf(id) : kind === 3 ? '#text' : kind === 4 ? '#cdata-section' : kind === 7 ? K.target(id) : kind === 8 ? '#comment' :
+    kind === 9 ? '#document' : kind === 10 ? K.doctype(id)[0] : kind === 11 ? '#document-fragment' : '';
 });
 def(Node.prototype, 'baseURI', function () { idOf(this); return documentBase(); });
 def(Node.prototype, 'parentNode', function () { return wrap(K.parent(idOf(this))); });
@@ -137,10 +138,12 @@ def(Node.prototype, 'nextSibling', function () { return wrap(siblingId(idOf(this
 def(Node.prototype, 'previousSibling', function () { return wrap(siblingId(idOf(this), -1, false)); });
 def(Node.prototype, 'ownerDocument', function () { var id = idOf(this); return K.kind(id) === 9 ? null : wrap(ownerDocId(id)); });
 def(Node.prototype, 'isConnected', function () { return K.connected(idOf(this)); });
-def(Node.prototype, 'textContent', function () { var id = idOf(this); return K.kind(id) === 9 ? null : K.text(id); },
-  function (v) { var id = idOf(this); if (K.kind(id) !== 9) K.setText(id, v == null ? '' : domString(v)); });
-/* Whether [id] is a CharacterData node: a text node or a comment. */
-function isCharacterData(id) { var kind = K.kind(id); return kind === 3 || kind === 8; }
+/* Whether [id] is a document or a document type, whose text content is null. */
+function hasNoText(id) { var kind = K.kind(id); return kind === 9 || kind === 10; }
+def(Node.prototype, 'textContent', function () { var id = idOf(this); return hasNoText(id) ? null : K.text(id); },
+  function (v) { var id = idOf(this); if (!hasNoText(id)) K.setText(id, v == null ? '' : domString(v)); });
+/* Whether [id] is a CharacterData node: a text node, a CDATA section, a processing instruction or a comment. */
+function isCharacterData(id) { var kind = K.kind(id); return kind === 3 || kind === 4 || kind === 7 || kind === 8; }
 def(Node.prototype, 'nodeValue', function () { return isCharacterData(idOf(this)) ? K.text(this.__id) : null; },
   function (v) { if (isCharacterData(idOf(this))) K.setText(this.__id, v == null ? '' : domString(v)); });
 Node.prototype.hasChildNodes = function () { return childIds(idOf(this)).length > 0; };
@@ -296,6 +299,22 @@ function Comment(data) {
 }
 Comment.prototype = ObjectCreate(CharacterData.prototype);
 defineInterface(Comment, 'Comment', CharacterData, 0);
+/* CDATASection, ProcessingInstruction and DocumentType, of the DOM Standard, 4.11, 4.13 and 4.6,
+   which an XML parse makes (#543). */
+function CDATASection() { illegal('CDATASection'); }
+CDATASection.prototype = ObjectCreate(Text.prototype);
+defineInterface(CDATASection, 'CDATASection', Text);
+function ProcessingInstruction() { illegal('ProcessingInstruction'); }
+ProcessingInstruction.prototype = ObjectCreate(CharacterData.prototype);
+def(ProcessingInstruction.prototype, 'target', function () { return K.target(idOf(this)); });
+defineInterface(ProcessingInstruction, 'ProcessingInstruction', CharacterData);
+function DocumentType() { illegal('DocumentType'); }
+DocumentType.prototype = ObjectCreate(Node.prototype);
+def(DocumentType.prototype, 'name', function () { return K.doctype(idOf(this))[0]; });
+def(DocumentType.prototype, 'publicId', function () { return K.doctype(idOf(this))[1]; });
+def(DocumentType.prototype, 'systemId', function () { return K.doctype(idOf(this))[2]; });
+ChildNode(DocumentType.prototype);
+defineInterface(DocumentType, 'DocumentType', Node);
 
 /* ---- elements ---- */
 

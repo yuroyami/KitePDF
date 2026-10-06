@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts have `DOMParser` and `XMLSerializer`. `parseFromString` makes an HTML document
+  for `text/html` and an XML document for the four XML types, with a `parsererror` document for XML
+  that is not well-formed, and the XML parser stops at the first well-formedness error as a
+  browser's does. A parsed document keeps its document type, processing instructions and CDATA
+  sections as `DocumentType`, `ProcessingInstruction` and `CDATASection` nodes. `serializeToString`
+  writes a node as XML with the namespace declarations it needs. `KiteXml.htmlEntity` looks up one
+  of HTML's named character references (#543).
+
 - EPUB chapters set tate-chu-yoko: `text-combine-upright: all`, EPUB's
   `-epub-text-combine-horizontal: all` and its older `-epub-text-combine: horizontal`, and their
   `-webkit-` names. In vertical text the element's text stands upright and side by side in the

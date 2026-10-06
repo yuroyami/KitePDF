@@ -320,6 +320,12 @@ does, and an XHTML chapter compares them as written. The states of a form contro
 in a paginated book, as `:hover`, matches nothing, as does `:target` while a chapter opens at no
 fragment (#550).
 
+`DOMParser` parses a string into a document of its own: HTML for `text/html`, and XML with
+namespaces for the four XML types. XML that is not well-formed gives a document whose one
+element is `parsererror`, as the HTML standard names it. A document of an XHTML type reads
+HTML's named characters, as browsers do. `XMLSerializer` writes any node as XML, with the
+namespace declarations its elements need. The scripts of a parsed document do not run.
+
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`
@@ -327,9 +333,8 @@ its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `
 Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF/issues/536));
 `postMessage`, which drops each
 message, `MessageChannel` and `structuredClone`
-([#534](https://github.com/yuroyami/KitePDF/issues/534)); `FormData`
-([#531](https://github.com/yuroyami/KitePDF/issues/531)); and `DOMParser` and `XMLSerializer`
-([#543](https://github.com/yuroyami/KitePDF/issues/543)). A script that calls one fails and is
+([#534](https://github.com/yuroyami/KitePDF/issues/534)); and `FormData`
+([#531](https://github.com/yuroyami/KitePDF/issues/531)). A script that calls one fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.
 
 Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,
