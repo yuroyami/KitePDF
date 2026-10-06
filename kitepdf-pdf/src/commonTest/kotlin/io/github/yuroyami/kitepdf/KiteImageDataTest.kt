@@ -11,7 +11,9 @@ import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.core.render.shrinkRgba
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -782,6 +784,43 @@ class KiteImageDataTest {
         assertEquals(4, image.width, "the colour is resampled up onto the mask's grid")
         assertEquals(2, image.height)
         assertEquals(listOf(0, 0, 255, 255, 0, 0, 255, 255), alphas(image))
+    }
+
+    /** A [w] by [h] RGB image of varied colours under [smask]. */
+    private fun rgbBase(w: Int, h: Int, smask: PdfStream) = PdfStream(
+        dict = PdfDictionary(
+            linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(w.toLong()), "Height" to PdfInt(h.toLong()),
+                "BitsPerComponent" to PdfInt(8), "ColorSpace" to PdfName("DeviceRGB"),
+                "Length" to PdfInt(w * h * 3L), "SMask" to smask,
+            ),
+        ),
+        rawBytes = ByteArray(w * h * 3) { ((it * 53) xor (it ushr 2)).toByte() },
+    )
+
+    @Test
+    fun an_image_under_a_finer_mask_keeps_its_own_samples_and_shrinks_as_if_spread() {
+        // The ink of a scan keeps its size under a finer mask, and a draw at a smaller size gives the
+        // pixels of the ink spread over the mask's grid and then shrunk (#476).
+        val (mw, mh) = 29 to 17
+        val alpha = ByteArray(mw * mh) { ((it * 97) xor (it ushr 3)).toByte() }
+        for (matte in listOf(false, true)) {
+            val extra = if (matte) mapOf<String, PdfObject>("Matte" to PdfArray(listOf(PdfReal(0.25), PdfReal(0.5), PdfReal(1.0)))) else emptyMap()
+            val image = KiteImageData.from(rgbBase(7, 5, grayMask(mw, mh, 8, alpha, extra)))
+            assertEquals(mw, image.width)
+            assertEquals(mh, image.height)
+            assertEquals(matte, image.softMaskMatte != null, "the matte was not read")
+            assertEquals(7L * 5 * 3 + mw * mh, image.retainedBytes(), "the ink was copied onto the mask's grid")
+            val spread = image.toRgbaBytes()!!
+            for ((fx, fy) in listOf(2 to 2, 4 to 2, 3 to 5, 8 to 8, 32 to 32)) {
+                assertContentEquals(
+                    shrinkRgba(spread, mw, mh, fx, fy),
+                    image.toShrunkRgbaBytes(fx, fy),
+                    "shrunk by $fx and $fy, matte $matte",
+                )
+            }
+        }
     }
 }
 

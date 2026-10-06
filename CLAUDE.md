@@ -14,6 +14,7 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A Linux host cannot build Apple code, but Kotlin/Native's front end can type-check it: `kotlinc-native -target macos_arm64 -p library -Xmetadata-klib` with `-l` for each platform klib of the macOS distribution and a kitepdf-core klib whose manifest names that target. Only CI runs it (#589).
 - The differential gate averages over synthetic pages, so a slow or blank real document can still pass (#46, #43).
 - A test that returns early instead of calling an assumption reports PASS, not SKIPPED, so a whole feature can be untested and green (#44).
+- A mutation that does not compile leaves the last test results in place, and warnings fail the compile here. Check that the result file is newer than the mutation before you read it.
 - The EPUB corpus cannot catch a block nested inside an inline element, because the HTML parser already splits the common case at parse time. The bug that found it came from an FB2 conversion, a shape the corpus does not cover.
 - The browser test runner cannot run from a checkout whose absolute path contains a hash character. It truncates the URL and dies with a 404 before any test runs. Run `jsBrowserTest` from a `git worktree` whose path has no hash; CI runs it on every push.
 - Hashing a recorded draw call is unstable across runs, because identity hash codes leak in through the image data type. Compare fields, not hashes.

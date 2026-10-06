@@ -118,7 +118,15 @@ public class KiteImageData internal constructor(
     public val interpolate: Boolean = false,
     /** The encoded samples of a [Kind.RAW] image that decodes when a draw needs it, in place of [pixelBytes]. */
     internal val samples: KiteImageSamples? = null,
+    /** The coarser samples of an image that its mask's grid carries, in place of [pixelBytes] (#476). */
+    internal val ink: InkLayer? = null,
 ) {
+
+    /**
+     * The [samples] of an image of [width] by [height] pixels, [components] samples of 8 bits a
+     * pixel, that is drawn on the finer grid of its mask. A pixel of the grid takes the sample under it.
+     */
+    internal class InkLayer(val width: Int, val height: Int, val components: Int, val samples: ByteArray)
 
     /** A non-owning key for platform bitmaps; unrelated factory results start independently. */
     internal var bitmapIdentity: KiteImageIdentity = KiteImageIdentity()
@@ -147,7 +155,24 @@ public class KiteImageData internal constructor(
      * the image at the size it draws (#381).
      * Treat the returned samples as read-only; see the image's identity contract above.
      */
-    public val pixelBytes: ByteArray? get() = storedPixels ?: samples?.decode(1)?.bytes
+    public val pixelBytes: ByteArray? get() = storedPixels ?: samples?.decode(1)?.bytes ?: ink?.let(::spreadInk)
+
+    /** The samples of [ink] spread over this image's grid, each pixel taking the sample under it. */
+    private fun spreadInk(ink: InkLayer): ByteArray {
+        val comps = ink.components
+        val out = ByteArray(width * height * comps)
+        // The source column of each target column, so a pixel costs an array read and no divide.
+        val colMap = IntArray(width) { x -> x * ink.width / width }
+        var o = 0
+        for (y in 0 until height) {
+            val rowBase = (y * ink.height / height) * ink.width
+            for (x in 0 until width) {
+                var s = (rowBase + colMap[x]) * comps
+                repeat(comps) { out[o++] = ink.samples[s++] }
+            }
+        }
+        return out
+    }
 
     /**
      * The bytes that this image holds in memory: its samples, its encoded data and its soft
@@ -155,7 +180,7 @@ public class KiteImageData internal constructor(
      */
     public fun retainedBytes(): Long =
         (if (samples?.holds(encodedBytes) == true) 0 else encodedBytes.size).toLong() +
-            (storedPixels?.size ?: 0) + (samples?.encodedSize ?: 0) + (softMaskAlpha?.size ?: 0)
+            (storedPixels?.size ?: 0) + (samples?.encodedSize ?: 0) + (softMaskAlpha?.size ?: 0) + (ink?.samples?.size ?: 0)
 
     /**
      * This image decoded with each side divided by the largest of 1, 2, 4 and 8 that divides
@@ -206,7 +231,7 @@ public class KiteImageData internal constructor(
         encodedBytes = encodedBytes, pixelBytes = storedPixels,
         softMaskAlpha = softMaskAlpha, softMaskWidth = softMaskWidth, softMaskHeight = softMaskHeight,
         resolvedColorSpace = resolvedColorSpace, decode = decode, isImageMask = isImageMask, maskFill = maskFill,
-        colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = interpolate, samples = samples,
+        colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = interpolate, samples = samples, ink = ink,
     ).also { it.bitmapIdentity = identity }
 
     public enum class Kind {
@@ -780,24 +805,15 @@ public class KiteImageData internal constructor(
             if (mw.toLong() * mh > MAX_ALIGNED_SAMPLES) return this
             val comps = resolvedColorSpace?.componentCount ?: (src.size / (width * height))
             if (comps !in 1..4 || src.size < width.toLong() * height * comps) return this
-            val out = ByteArray(mw * mh * comps)
-            // Precomputed source column per target column: one array read per
-            // pixel instead of an integer divide.
-            val colMap = IntArray(mw) { x -> x * width / mw }
-            var o = 0
-            for (y in 0 until mh) {
-                val rowBase = (y * height / mh) * width
-                for (x in 0 until mw) {
-                    var s = (rowBase + colMap[x]) * comps
-                    repeat(comps) { out[o++] = src[s++] }
-                }
-            }
+            // The ink keeps its own size: a draw spreads it over the mask's grid at the size it
+            // draws, so a page drawn smaller never holds a full copy on that grid (#476).
             return KiteImageData(
                 width = mw, height = mh, bitsPerComponent = 8, colorSpace = colorSpace,
-                kind = Kind.RAW, encodedBytes = ByteArray(0), pixelBytes = out,
+                kind = Kind.RAW, encodedBytes = ByteArray(0),
                 softMaskAlpha = softMaskAlpha, softMaskWidth = mw, softMaskHeight = mh, softMaskMatte = softMaskMatte,
                 resolvedColorSpace = resolvedColorSpace, decode = decode,
                 isImageMask = false, maskFill = maskFill, colorKeyMask = colorKeyMask, interpolate = interpolate,
+                ink = InkLayer(width, height, comps, src),
             )
         }
 
