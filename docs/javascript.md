@@ -186,12 +186,17 @@ attributes, `id`, `className`, `classList`, `dataset`, `hidden`, `style`, `match
 button, a label, a `summary` and a submit button do what a click on them does in a browser.
 `getComputedStyle` answers `display`, `visibility`, `color`, `background-color`, `font-size`,
 `font-weight`, `font-style`, `opacity`, `text-align`, `position`, `float`, `width`, `height`,
-`z-index`, `left` and `top`. An element's `style` answers the CSS properties by their camel-case
+`z-index`, `left`, `top` and `transform`, which it writes as a `matrix()`. An element's `style` answers the CSS properties by their camel-case
 and dashed names, with a number as a browser writes it back, `0.5` for `.5`, and any other name
 is a plain property of the object. `getBoundingClientRect`, `offsetWidth` and their relatives
 answer where the element is on its page, in CSS pixels; when the script changed the chapter
 since it was laid out, it is laid out again first, as a browser does, so an element the script
 just added has its size.
+
+`DOMPoint`, `DOMQuad` and `DOMMatrix` are the Geometry Interfaces', with their read-only
+versions and `WebKitCSSMatrix`. A `DOMMatrix` takes six or sixteen numbers, a matrix dictionary,
+or a CSS transform list such as `getComputedStyle(el).transform`. A length in that list must be
+absolute, so `em` and percentages throw a `SyntaxError`, as in a browser.
 
 Each object of the DOM has the interface a browser gives it, with its class string, so
 `String(document.body)` is `[object HTMLBodyElement]`, and each interface is a property of the

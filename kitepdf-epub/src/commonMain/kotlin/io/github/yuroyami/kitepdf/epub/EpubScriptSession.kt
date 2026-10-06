@@ -7,7 +7,9 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
+import io.github.yuroyami.kitepdf.epub.css.CssTransform
 import io.github.yuroyami.kitepdf.epub.css.FormValues
+import io.github.yuroyami.kitepdf.epub.script.CssMatrixParser
 import io.github.yuroyami.kitepdf.epub.script.DOM_PRELUDE
 import io.github.yuroyami.kitepdf.epub.script.ScriptDom
 import io.github.yuroyami.kitepdf.epub.script.WhatwgDecoder
@@ -16,6 +18,7 @@ import io.github.yuroyami.kitepdf.epub.script.WhatwgMimeType
 import io.github.yuroyami.kitepdf.epub.script.WhatwgUrl
 import io.github.yuroyami.kitepdf.epub.script.byteString
 import io.github.yuroyami.kitepdf.epub.script.bytesOf
+import kotlin.math.pow
 import kotlin.math.roundToLong
 
 /**
@@ -449,6 +452,14 @@ public class EpubScriptSession(
             def("state") { args -> element(args, 0)?.let { dom.state(it, string(args, 1)) } }
             def("setState") { args -> element(args, 0)?.let { dom.setState(it, string(args, 1), args.getOrNull(2) as? String) }; null }
             // A control's value, sanitized by the input type or as a textarea's API value (#605).
+            // A CSS transform list as DOMMatrix reads it: its 16 entries and 1 for a 2D one, "relative", or null (#609).
+            def("matrixParse") { args ->
+                when (val r = CssMatrixParser.parse(string(args, 0))) {
+                    is CssMatrixParser.Result.Matrix -> r.m.toList() + (if (r.is2D) 1.0 else 0.0)
+                    CssMatrixParser.Result.Relative -> "relative"
+                    CssMatrixParser.Result.Invalid -> null
+                }
+            }
             def("sanitize") { args -> element(args, 0)?.let { el -> FormValues.sanitize(string(args, 1), string(args, 2)) { dom.attr(el, it) } } ?: string(args, 2) }
             def("createFragment") { dom.idOf(dom.createFragment()) }
             def("insert") { args ->
@@ -620,8 +631,41 @@ public class EpubScriptSession(
                 "z-index" -> style.zIndex?.toString() ?: "auto"
                 "left" -> style.leftPt?.takeIf { style.position != CssPosition.STATIC }?.let(::px) ?: "auto"
                 "top" -> style.topPt?.takeIf { style.position != CssPosition.STATIC }?.let(::px) ?: "auto"
+                "transform" -> style.transform?.takeIf { it.isNotEmpty() }?.let { transformValue(el, it) } ?: "none"
                 else -> ""
             }
+        }
+
+        /**
+         * The resolved value of `transform` (CSSOM, 9): the matrix of [functions] in CSS pixels, as
+         * Chromium writes it, with six significant digits (#609). A percentage takes the size of
+         * the element's box on the page.
+         */
+        private fun transformValue(el: KiteXmlNode.Element, functions: List<CssTransform>): String {
+            val box = dom.toLayout[el]?.let { document.scriptBoundsOf(chapter, it) }
+            val w = box?.width ?: 0.0
+            val h = box?.height ?: 0.0
+            var m = CssMatrixParser.IDENTITY
+            for (f in functions) {
+                val step = when (f) {
+                    is CssTransform.Translate -> CssMatrixParser.IDENTITY.copyOf().also {
+                        it[12] = f.x.resolve(w) / PT_PER_PX
+                        it[13] = f.y.resolve(h) / PT_PER_PX
+                    }
+                    is CssTransform.Scale -> CssMatrixParser.IDENTITY.copyOf().also { it[0] = f.x; it[5] = f.y }
+                    is CssTransform.Rotate -> CssMatrixParser.rotation(0.0, 0.0, 1.0, f.degrees)
+                    is CssTransform.Skew -> CssMatrixParser.IDENTITY.copyOf().also {
+                        it[4] = kotlin.math.tan(f.x * kotlin.math.PI / 180.0)
+                        it[1] = kotlin.math.tan(f.y * kotlin.math.PI / 180.0)
+                    }
+                    is CssTransform.Matrix -> CssMatrixParser.IDENTITY.copyOf().also {
+                        it[0] = f.m.a; it[1] = f.m.b; it[4] = f.m.c; it[5] = f.m.d
+                        it[12] = f.m.e / PT_PER_PX; it[13] = f.m.f / PT_PER_PX
+                    }
+                }
+                m = CssMatrixParser.multiply(m, step)
+            }
+            return "matrix(" + listOf(m[0], m[1], m[4], m[5], m[12], m[13]).joinToString(", ") { cssNumber(it) } + ")"
         }
     }
 
@@ -681,4 +725,28 @@ public class EpubScriptSession(
             return lines.joinToString("\n")
         }
     }
+}
+
+/** [v] as C's `%.6g` writes it, which is how Chromium writes a number of a computed matrix (#609). */
+private fun cssNumber(v: Double): String {
+    if (v == 0.0) return "0"
+    if (!v.isFinite()) return v.toString()
+    val a = kotlin.math.abs(v)
+    var exp = kotlin.math.floor(kotlin.math.log10(a)).toInt()
+    var digits = kotlin.math.round(a / 10.0.pow(exp - 5)).toLong()
+    if (digits >= 1_000_000L) { digits /= 10; exp += 1 }
+    if (digits < 100_000L) { digits *= 10; exp -= 1 }
+    val s = digits.toString()
+    val body = when {
+        exp < -4 || exp >= 6 -> {
+            val mantissa = (s.substring(0, 1) + "." + s.substring(1)).trimEnd('0').trimEnd('.')
+            mantissa + "e" + (if (exp < 0) "-" else "+") + kotlin.math.abs(exp).toString().padStart(2, '0')
+        }
+        exp >= 0 -> {
+            val fraction = s.substring(exp + 1).trimEnd('0')
+            if (fraction.isEmpty()) s.substring(0, exp + 1) else s.substring(0, exp + 1) + "." + fraction
+        }
+        else -> ("0." + "0".repeat(-exp - 1) + s).trimEnd('0')
+    }
+    return if (v < 0) "-$body" else body
 }

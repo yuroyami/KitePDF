@@ -22,6 +22,7 @@ internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_STREAMS)
     append(DOM_PRELUDE_STREAMS_WRITABLE)
     append(DOM_PRELUDE_STREAMS_TRANSFER)
+    append(DOM_PRELUDE_GEOMETRY)
     append(DOM_PRELUDE_REFLECTION)
     append(DOM_PRELUDE_ELEMENTS)
     append(DOM_PRELUDE_FORMS)
@@ -58,6 +59,7 @@ var ObjectCreate = Object.create, ObjectDefineProperty = Object.defineProperty, 
   ObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor, ObjectGetPrototypeOf = Object.getPrototypeOf,
   ObjectKeys = Object.keys, ObjectSetPrototypeOf = Object.setPrototypeOf, ObjectHasOwn = uncurry(Object.prototype.hasOwnProperty);
 var MathCeil = Math.ceil, MathFloor = Math.floor, MathMax = Math.max, MathMin = Math.min, MathRound = Math.round, MathPow = Math.pow;
+var MathSin = Math.sin, MathCos = Math.cos, MathTan = Math.tan, MathAtan2 = Math.atan2, MathSqrt = Math.sqrt, MathPI = Math.PI;
 var ArrayIndexOf = uncurry(Array.prototype.indexOf), ArrayJoin = uncurry(Array.prototype.join),
   ArrayPush = uncurry(Array.prototype.push), ArrayShift = uncurry(Array.prototype.shift), ArraySort = uncurry(Array.prototype.sort);
 /* The iteration methods of Array.prototype, which Web IDL makes the methods of an iterable list such as a NodeList. */
@@ -2388,6 +2390,7 @@ var api = {
 (function () {
   for (var i = 0; i < INTERFACES.length; i++) hidden(global, INTERFACES[i].name, INTERFACES[i].ctor);
   hidden(global, 'webkitURL', URL);
+  hidden(global, 'WebKitCSSMatrix', DOMMatrix);
 })();
 hidden(global, '__listeners', ObjectCreate(null));
 defineHandlers(global, GLOBAL_HANDLERS);

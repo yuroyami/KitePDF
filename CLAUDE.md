@@ -51,6 +51,7 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - `ImageComposeScene` and the desktop take `NoOpPlatformPrefetchScheduler` in Compose 1.12, so lazy-list prefetch and a `LazyLayoutCacheWindow` never run there. A prefetch that a scene test can see must be the viewer's own (#437).
 - Homebrew's `mutool` is built without OpenSSL, so `mutool sign -v` cannot check a signature and `mutool sign -s` cannot make one. Poppler's `pdfsig` can check one, and `SignatureOracleTest` runs it (#203).
 - Kotlin/JS prints a whole `Double` as `1`, while the JVM prints `1.0`. A golden text built with `toString()` on a `Double` passes on the JVM and fails on JS. Round to a `Long` first.
+- Kotlin/JS keeps a `Float` as a double, so `toFloat().toDouble()` rounds nothing there. Round to float32 with `Float.fromBits(x.toFloat().toBits())` (#609).
 - A lone surrogate in a string literal becomes `?` on Kotlin/JS. Build it from `Char` values with `charArrayOf(...).concatToString()`.
 - The publish plugin's HTTP client times out after 60 seconds, which is too short for a 430 MB bundle, and the error says only "timeout". Pass `-PSONATYPE_CONNECT_TIMEOUT_SECONDS=1800` to `publishAndReleaseToMavenCentral`.
 - A debug build for Kotlin/Native takes about 10 KB of stack for each level of EPUB layout, three times a release build, and a secondary thread on Apple platforms has 512 KB. Measure a nesting limit there, not on the JVM (#450).
