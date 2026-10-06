@@ -794,6 +794,7 @@ function attributeChanged(el, name, set) {
   // async ends the forced async of a script element a script made (HTML, 4.12.1).
   if (name === 'nonce') WeakMapSet(nonces, el, set ? K.attr(el.__id, 'nonce') : '');
   if (name === 'async' && set) WeakMapSet(forceAsync, el, false);
+  if (name === 'type') inputTypeChanged(el);
   handlerAttributeChanged(el, name, set);
 }
 function handlerAttributeChanged(el, name, set) {

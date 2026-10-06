@@ -261,6 +261,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A script reads an input's `value` sanitized by its type, as HTML says and Chromium does. A
+  number that is not valid reads as empty, a range is clamped and rounded to its step, a colour
+  reads as `#rrggbb`, and a date, month, week or time that is not valid reads as empty. A
+  textarea's `value` has LF line breaks. `:placeholder-shown`, `:in-range`, `:out-of-range` and
+  `:invalid` read the same value (#605).
+
 - A colour written with `hsl()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()` or `color()`
   paints, where KitePDF dropped the declaration. `rgb()` takes the space syntax with `none` and a
   slash before the alpha, and every CSS named colour is read. A colour outside sRGB is clipped to

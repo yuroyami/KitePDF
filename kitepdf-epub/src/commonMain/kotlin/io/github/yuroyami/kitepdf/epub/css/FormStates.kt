@@ -19,9 +19,15 @@ internal object FormStates {
     private fun checkedness(el: KiteXmlNode.Element, tree: SelectorTree): Boolean =
         tree.state(el, "checked")?.let { it == "1" } ?: (tree.attr(el, "checked") != null)
 
-    /** The value of an input or a textarea: what a script set, else its `value` attribute or its text. */
-    private fun value(el: KiteXmlNode.Element, local: String?, tree: SelectorTree): String? = tree.state(el, "value")
-        ?: if (local == "textarea") el.children.filterIsInstance<KiteXmlNode.Text>().joinToString("") { it.text } else tree.attr(el, "value")
+    /**
+     * The value of an input or a textarea: what a script set, else its `value` attribute or its text,
+     * sanitized by the input's type as a script reads it (#605).
+     */
+    private fun value(el: KiteXmlNode.Element, local: String?, tree: SelectorTree): String {
+        val raw = tree.state(el, "value")
+            ?: if (local == "textarea") el.children.filterIsInstance<KiteXmlNode.Text>().joinToString("") { it.text } else tree.attr(el, "value")
+        return FormValues.sanitize(if (local == "textarea") "textarea" else inputType(el, tree), raw.orEmpty()) { tree.attr(el, it) }
+    }
 
     fun matches(kind: PseudoKind, el: KiteXmlNode.Element, tree: SelectorTree): Boolean {
         val local = html(el, tree)
@@ -51,8 +57,8 @@ internal object FormStates {
             PseudoKind.READ_WRITE -> readWrite(el, local, tree)
             PseudoKind.READ_ONLY -> !readWrite(el, local, tree)
             PseudoKind.PLACEHOLDER_SHOWN -> tree.attr(el, "placeholder") != null && when (local) {
-                "input" -> inputType(el, tree) in PLACEHOLDER_TYPES && value(el, local, tree).isNullOrEmpty()
-                "textarea" -> value(el, local, tree).isNullOrEmpty()
+                "input" -> inputType(el, tree) in PLACEHOLDER_TYPES && value(el, local, tree).isEmpty()
+                "textarea" -> value(el, local, tree).isEmpty()
                 else -> false
             }
             PseudoKind.VALID -> validity(el, local, tree) == true
@@ -191,9 +197,9 @@ internal object FormStates {
                 "input" -> when (inputType(el, tree)) {
                     "checkbox" -> !checkedness(el, tree)
                     "radio" -> (radioGroup(el, tree) + el).none { checkedness(it, tree) }
-                    else -> value(el, local, tree).isNullOrEmpty()
+                    else -> value(el, local, tree).isEmpty()
                 }
-                "textarea" -> value(el, local, tree).isNullOrEmpty()
+                "textarea" -> value(el, local, tree).isEmpty()
                 "select" -> {
                     val options = options(el, tree)
                     val chosen = options.filter { selected(it, tree) }
@@ -224,7 +230,7 @@ internal object FormStates {
                 val min = tree.attr(el, "min")?.trim()?.toDoubleOrNull()
                 val max = tree.attr(el, "max")?.trim()?.toDoubleOrNull()
                 if ((min == null && max == null) || !candidate(el, local, tree)) return null
-                val number = value(el, local, tree)?.trim()?.toDoubleOrNull() ?: return true
+                val number = value(el, local, tree).toDoubleOrNull() ?: return true
                 !(min != null && number < min) && !(max != null && number > max)
             }
             else -> null

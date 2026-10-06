@@ -278,6 +278,13 @@ function* resetSteps(form) {
     if (isHtml(all[i], 'select')) { var o = optionIds(all[i]); for (var j = 0; j < o.length; j++) K.setState(o[j], 'selected', null); }
   }
 }
+/* A new type of [input] sanitizes the value a script set by that type (HTML, 4.10.5). */
+function inputTypeChanged(input) {
+  var id = idOf(input);
+  if (!isHtml(id, 'input')) return;
+  var v = dirtyValue(input), type = inputType(input);
+  if (v !== undefined && valueMode(type) === 'value') K.setState(id, 'value', K.sanitize(id, type, v));
+}
 /* The dirty value of a control, or undefined while it has none. */
 function dirtyValue(el) { var v = K.state(el.__id, 'value'); return v == null ? undefined : v; }
 function setDirtyValue(el, v) { K.setState(el.__id, 'value', v === null ? '' : domString(v)); }
@@ -304,14 +311,15 @@ var HTMLInputElement = elementInterface('HTMLInputElement', HTMLElement, 'accept
   sizeAttribute(p, 'width', 2);
   sizeAttribute(p, 'height', 3);
   def(p, 'value', function () {
-    var el = wrap(idOf(this)), mode = valueMode(inputType(el)), v;
-    if (mode === 'value') { v = dirtyValue(el); if (v !== undefined) return v; }
+    var el = wrap(idOf(this)), type = inputType(el), mode = valueMode(type), v;
     if (mode === 'filename') return '';
-    v = K.attr(el.__id, 'value');
+    if (mode === 'value') v = dirtyValue(el);
+    if (v === undefined) v = K.attr(el.__id, 'value');
+    if (mode === 'value') return K.sanitize(el.__id, type, v == null ? '' : v);
     return v != null ? v : mode === 'default/on' ? 'on' : '';
   }, function (v) {
-    var el = wrap(idOf(this)), mode = valueMode(inputType(el));
-    if (mode === 'value') setDirtyValue(el, v);
+    var el = wrap(idOf(this)), type = inputType(el), mode = valueMode(type);
+    if (mode === 'value') setDirtyValue(el, K.sanitize(el.__id, type, v === null ? '' : domString(v)));
     else if (mode === 'filename') {
       if (domString(v) !== '') throw new DOMException("Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.", 'InvalidStateError');
     } else setAttr(el, 'value', v === null ? '' : domString(v));
@@ -483,7 +491,7 @@ var HTMLTextAreaElement = elementInterface('HTMLTextAreaElement', HTMLElement, '
   'minLength=minlength:L name placeholder readOnly=readonly:b required:b rows:F2 wrap', function (p) {
   formControl(p); labelable(p); validationMembers(p); selectionMembers(p); autocompleteMember(p);
   def(p, 'type', function () { idOf(this); return 'textarea'; });
-  def(p, 'value', function () { var el = wrap(idOf(this)), v = dirtyValue(el); return v !== undefined ? v : textOf(el); },
+  def(p, 'value', function () { var el = wrap(idOf(this)), v = dirtyValue(el); return K.sanitize(el.__id, 'textarea', v !== undefined ? v : textOf(el)); },
     function (v) { setDirtyValue(wrap(idOf(this)), v); });
   def(p, 'defaultValue', function () { return textOf(this); }, function (v) { setTextOf(this, v); });
   def(p, 'textLength', function () { return domString(this.value).length; });
