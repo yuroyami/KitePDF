@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The media elements of a book share a `KiteMediaSession`. An element keeps its place while its
+  book is open, and shows that place, paused, when the page comes back. Starting one
+  element pauses any other that plays. When the app leaves the screen on Android or iOS, a video
+  pauses, and an audio element follows `KiteMediaSession.audioInBackground`. `KiteMediaOverlay`
+  and `EpubMediaPlayer` take a `session`, and `EpubMediaPlayer` a `place` to keep (#481).
 - The transport bar of a media element seeks: a tap on its line goes there, and a drag scrubs.
   A screen reader moves the line as a slider, five seconds a step. The bar shows the elapsed and
   the total time (#479).
