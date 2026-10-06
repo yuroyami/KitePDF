@@ -260,6 +260,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty element closes itself, and markup that is not well-formed throws a `SyntaxError`. An
   attribute value written as XML keeps its tabs and line breaks as character references, in
   `XMLSerializer` too (#548).
+- An HTML chapter that leaves out `<html>`, `<head>` or `<body>` gets them, as HTML's parser makes
+  them, so its scripts find `document.body` and `document.head`. The elements that belong in a head
+  go into it, the rest into the body, a second `<html>` or `<body>` adds its attributes to the first,
+  and comments and white space go where HTML puts them. `DOMParser` makes HTML documents the same
+  way, and `innerHTML` on an `html` element makes a head and a body. The layout reads the same tree, so such a chapter now has the body's default margin, as in a
+  browser (#547).
 - A script's insert or replace that would make no valid document throws a `HierarchyRequestError`,
   as the DOM's pre-insert checks say, where it put text, a second root element or a misplaced
   document type into the document. `replaceChild` checks the replace rules, and `append`, `prepend`,

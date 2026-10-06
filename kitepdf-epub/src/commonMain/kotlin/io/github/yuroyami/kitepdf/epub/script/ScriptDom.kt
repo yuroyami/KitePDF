@@ -113,7 +113,7 @@ internal class ScriptDom(
     init {
         val from = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()
         val to = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()
-        val parsed = commented ?: markup?.let { HtmlParser.parse(it, keepComments = true, keepNames = true).also(::resolveSwitches) }
+        val parsed = commented ?: markup?.let { HtmlParser.parse(it, keepComments = true, keepNames = true, html = html).also(::resolveSwitches) }
         root = copy(source, null, from, to, link = true, commented = parsed)
         fromLayout = from
         toLayout = to
@@ -808,53 +808,17 @@ internal class ScriptDom(
         for (c in parsed.nodes) registerTexts(c)
     }
 
-    /**
-     * The children of a new HTML document for [markup]: what HTML's parser makes of it, with an
-     * `html` element holding a `head` and a `body` when the markup leaves them out (HTML, 13.2.6.4).
-     * The elements that belong in a head go into it until the first that does not, and the rest
-     * goes into the body.
-     */
+    /** The children of a new HTML document for [markup]: what HTML's parser makes of it, `html`, `head` and `body` included (#547). */
     private fun htmlDocument(markup: String): List<KiteXmlNode> {
-        val parsed = HtmlParser.parse(markup, keepComments = true, keepNames = true).children.toList()
-        for (c in parsed) if (c is KiteXmlNode.Element) recordWritten(c)
-        val explicit = parsed.firstOrNull { it is KiteXmlNode.Element && it.tag == "html" } as KiteXmlNode.Element?
-        val html = explicit ?: KiteXmlNode.Element("html", emptyMap())
-        val outside = ArrayList<KiteXmlNode>()
-        val loose = ArrayList<KiteXmlNode>()
-        var seenHtml = false
-        for (c in parsed) when {
-            c === html -> seenHtml = true
-            c is KiteXmlNode.Comment && (explicit == null || !seenHtml) && loose.isEmpty() -> outside += c
-            c is KiteXmlNode.Text && c.text.isBlank() && loose.isEmpty() -> {}
-            else -> loose += c
+        val parsed = HtmlParser.parse(markup, keepComments = true, keepNames = true, html = true).children.toList()
+        for (c in parsed) {
+            if (c !is KiteXmlNode.Element) continue
+            fixParents(c, null)
+            recordWritten(c)
+            nameTree(c, null, emptyMap(), relayout = true, html = true)
+            registerTexts(c)
         }
-        val inner = html.children.toList() + loose
-        html.children.clear()
-        val head = inner.firstOrNull { it is KiteXmlNode.Element && it.tag == "head" } as KiteXmlNode.Element? ?: KiteXmlNode.Element("head", emptyMap())
-        val body = inner.firstOrNull { it is KiteXmlNode.Element && it.tag == "body" } as KiteXmlNode.Element? ?: KiteXmlNode.Element("body", emptyMap())
-        var inBody = false
-        val between = ArrayList<KiteXmlNode>()
-        for (c in inner) when {
-            c === head -> {}
-            c === body -> inBody = true
-            !inBody && c is KiteXmlNode.Element && c.tag in HEAD_ELEMENTS -> head.children += c
-            !inBody && c is KiteXmlNode.Text && c.text.isBlank() -> if (head in inner) between += c
-            !inBody && c is KiteXmlNode.Comment -> if (head in inner) between += c else head.children += c
-            else -> {
-                inBody = true
-                body.children += c
-            }
-        }
-        html.children += head
-        html.children += between
-        html.children += body
-        fixParents(html, null)
-        if (html !in written) written[html] = emptyMap()
-        if (head !in written) written[head] = emptyMap()
-        if (body !in written) written[body] = emptyMap()
-        nameTree(html, null, emptyMap(), relayout = true, html = true)
-        registerTexts(html)
-        return outside + html
+        return parsed
     }
 
     /** Sets the parent of [el] and of every element under it, after a move that changed the children lists alone. */
@@ -1072,7 +1036,7 @@ internal class ScriptDom(
     fun writeAfter(cursor: KiteXmlNode, html: String): KiteXmlNode? {
         val parent = parentOf(cursor) ?: return null
         var at = cursor
-        for (node in parse(html, parent)) {
+        for (node in parse(html, parent, fragment = false)) {
             val next = parent.children.getOrNull(parent.children.indexOfFirst { it === at } + 1)
             insert(parent, node, next)
             at = node
@@ -1116,9 +1080,21 @@ internal class ScriptDom(
         return prefixes to default
     }
 
-    /** The nodes [html] holds, their elements and attributes named as the parser names them under [context]. */
-    private fun parse(html: String, context: KiteXmlNode.Element?): List<KiteXmlNode> {
-        val parsed = HtmlParser.parse(html, keepComments = true, keepNames = true).children.toList()
+    /**
+     * The nodes [html] holds, their elements and attributes named as the parser names them under [context].
+     * Under an `html` element of an HTML document, the parser starts before the head, so it makes a
+     * head and a body (HTML, 13.4), as it does for a document (#547), unless the markup is no [fragment]
+     * but more of the document, as `document.write` writes.
+     */
+    private fun parse(html: String, context: KiteXmlNode.Element?, fragment: Boolean = true): List<KiteXmlNode> {
+        val underHtml = fragment && context != null && nameOf(context).let { it.namespace == XHTML_NS && it.localName == "html" }
+        val parsed = if (underHtml) {
+            val document = HtmlParser.parse("<html>$html", keepComments = true, keepNames = true, html = true)
+            // A fragment ignores `</html>`, so a comment after it stays in the html element.
+            document.children.flatMap { if (it is KiteXmlNode.Element) it.children else listOf(it) }
+        } else {
+            HtmlParser.parse(html, keepComments = true, keepNames = true).children.toList()
+        }
         val scope = if (this.html) emptyMap() else scopeAt(context)
         for (c in parsed) {
             if (c is KiteXmlNode.Element) {
@@ -1229,9 +1205,6 @@ internal class ScriptDom(
 
         /** The namespace of the element that stands for an XML parse error (HTML, 8.5.1). */
         const val PARSER_ERROR_NS = "http://www.mozilla.org/newlayout/xml/parsererror.xml"
-
-        /** The elements HTML's parser puts in a head that the markup leaves out, until the first other one (13.2.6.4.4). */
-        private val HEAD_ELEMENTS = setOf("base", "basefont", "bgsound", "link", "meta", "noframes", "script", "style", "template", "title")
 
         /** The MathML elements whose content is HTML's, its text integration points. */
         private val MATHML_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")

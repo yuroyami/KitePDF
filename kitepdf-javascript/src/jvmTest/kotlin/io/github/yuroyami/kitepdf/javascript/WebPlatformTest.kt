@@ -67,27 +67,12 @@ class WebPlatformTest {
             "typeof ReadableStream === 'undefined'",
             names = Regex("^Blob\\.(stream|textStream)\\(\\)|^Reading Blob\\.stream|^textStream method existence"),
         ),
-        // Each element is made twice, by createElement and by parsing a document; the second needs DOMParser.
-        Gap("#543, DOMParser is missing", "typeof DOMParser === 'undefined'", names = Regex(": useParser$")),
         // The frame loads its document at #target, and a chapter opens at no fragment. A fragment or a
         // detached element has no target in a browser either, so those tests pass.
         Gap(
             "#550, a chapter has no fragment and no target",
             "typeof HashChangeEvent === 'undefined'",
             names = Regex("^(Document|In-document Element)\\.[A-Za-z]+: :target pseudo-class"),
-        ),
-        // The page has no body element, and an HTML parser makes one. The probe asks for the head and body that
-        // the fragment parser makes for an html element of an HTML document.
-        Gap(
-            "#547, a page without a body element has no document.body",
-            "(function () { var h = document.implementation.createHTMLDocument('').documentElement; h.innerHTML = '<p>x</p>'; " +
-                "return h.firstChild.localName !== 'head'; })()",
-            setOf("First set attribute is returned with mapped attribute set first"),
-        ),
-        Gap(
-            "#546, a script cannot make a doctype",
-            "(function () { try { document.implementation.createDocumentType('html', '', ''); return false; } catch (e) { return true; } })()",
-            setOf("Valid and invalid characters in createDocumentType."),
         ),
     )
 
