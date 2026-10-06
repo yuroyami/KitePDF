@@ -71,8 +71,9 @@ internal class BoxLayout(
      * BCP-47 language tag of the spine document being laid out (its own
      * `xml:lang`/`lang`, else the OPF `dc:language`); selects the hyphenation
      * pattern set, so each spine item can hyphenate in its own language.
-     * Null/unknown languages hyphenate with the en-US set, preserving the old
-     * behaviour.
+     * A null language hyphenates with the en-US set; a language with no
+     * bundled set is not hyphenated, since English breaks would be wrong
+     * breaks in it (#615).
      */
     private val language: String? = null,
     /**
@@ -92,7 +93,7 @@ internal class BoxLayout(
     /** Whether an image's path names an SVG, by its name or by the type of a blob it names (#533). */
     private val isSvg: (String) -> Boolean = ::namesSvg,
 ) {
-    private val hyphenator by lazy { Hyphenator.forLanguage(language) ?: Hyphenator.enUs() }
+    private val hyphenator by lazy { if (language.isNullOrBlank()) Hyphenator.enUs() else Hyphenator.forLanguage(language) }
 
     /** Logical pen advance of [gid] in 1/1000 em, honouring vertical mode for upright glyphs. */
     private fun penAdvance1000(face: EmbeddedFace, gid: Int, cp: Int, orientation: TextOrientation = TextOrientation.MIXED): Int =
@@ -2212,11 +2213,8 @@ internal class BoxLayout(
                 // break-all applies no hyphenation (CSS Text 3, 5.2).
                 val pts = if (ligated || isRuby || wordBreaksAll) emptyList() else {
                     val s = LinkedHashSet(softHyphens)
-                    // Hyphenation points index chars, so a word outside the BMP is not hyphenated.
-                    if (hyphensAuto && word.size >= 5 && word.all { it.cp < 0x10000 && it.cp.toChar().isLetter() }) {
-                        val text = buildString { word.forEach { append(it.cp.toChar()) } }
-                        s.addAll(hyphenator.hyphenate(text))
-                    }
+                    val h = hyphenator
+                    if (hyphensAuto && h != null) s.addAll(hyphenPoints(word, h))
                     s.sorted()
                 }
                 // A reading wider than its base pads the base's envelope
@@ -2776,6 +2774,34 @@ internal class BoxLayout(
         return lines
     }
 
+    /**
+     * The hyphenation points of [word], as cell indices: those of the letters between its leading
+     * and trailing punctuation, so that `Krankenhaus,` and `«Bonjour»` hyphenate (#618). A letter
+     * here is also a combining mark, such as an Indic vowel sign (#617), and an apostrophe or a
+     * joiner may stand between two. Points index chars, so a word outside the BMP is not hyphenated.
+     */
+    private fun hyphenPoints(word: List<Cell>, hyphenator: Hyphenator): List<Int> {
+        if (word.any { it.cp >= 0x10000 }) return emptyList()
+        var from = 0
+        var to = word.size
+        while (from < to && !isWordLetter(word[from].cp)) from++
+        while (to > from && !isWordLetter(word[to - 1].cp)) to--
+        if (to - from < 5) return emptyList()
+        for (i in from until to) {
+            if (!isWordLetter(word[i].cp) && word[i].cp !in WORD_JOINERS) return emptyList()
+        }
+        val text = buildString { for (i in from until to) append(word[i].cp.toChar()) }
+        return hyphenator.hyphenate(text).map { it + from }
+    }
+
+    private fun isWordLetter(cp: Int): Boolean {
+        val c = cp.toChar()
+        return c.isLetter() || when (c.category) {
+            CharCategory.NON_SPACING_MARK, CharCategory.COMBINING_SPACING_MARK, CharCategory.ENCLOSING_MARK -> true
+            else -> false
+        }
+    }
+
     private fun hyphenWidth(c: Cell): Double = c.face?.let { it.advance1000(it.gidFor('-'.code)) * c.fontSize / 1000.0 }
         ?: FontMetrics.advancePt('-'.code, c.fontSize, c.spec.bold, c.spec.italic, genericOf(c.spec))
 
@@ -3184,6 +3210,9 @@ internal class BoxLayout(
         ) + (0x31F0..0x31FF) // small katakana extensions ㇰ to ㇿ
         // The CJK hyphens, which only `strict` keeps off the start.
         val CJK_HYPHENS = setOf(0x301C, 0x30A0) // 〜 ゠
+        // What may stand between two letters of a word that hyphenates: the apostrophes, which the
+        // French, Italian and Ukrainian patterns know, and the joiners of the Indic scripts (#618).
+        val WORD_JOINERS = setOf(0x0027, 0x2019, 0x200C, 0x200D)
         // JIS X 4051 no-break-after set: an opener binds to what follows it.
         val CJK_OPENERS = setOf(
             0x300C, 0x300E, 0x3010, 0x3014, 0x3008, 0x300A, 0x3016, // 「 『 【 〔 〈 《 〖

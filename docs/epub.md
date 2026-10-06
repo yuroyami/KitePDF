@@ -507,11 +507,16 @@ The layout engine covers what real books use:
   never shows tofu. An embedded font is always measured from its own tables;
   text on the fallback path is measured with the exact Standard-14 metrics,
   Cyrillic included.
-- **Hyphenation**: Knuth-Liang patterns for English, German, French,
-  Spanish, Italian, Portuguese, Dutch, and Russian, selected per spine
-  item from its own language tag, else from the book's `dc:language`. Seven of those languages ship a full
-  pattern set. English ships a small common-word set rather than the full
-  `hyph-en-us` data.
+- **Hyphenation**: the Knuth-Liang patterns and exception lists of the
+  hyph-utf8 project, 71 sets for more than 60 languages, selected per spine
+  item from its own language tag, else from the book's `dc:language`. The
+  rest of the tag picks among a language's sets: `en-GB` British English,
+  `de-1901` the traditional German spelling, `el-polyton` polytonic Greek,
+  `sr-Latn` or `sr-Cyrl` an alphabet of Serbian. A chapter with no language
+  hyphenates as American English; a language with no bundled set, such as
+  Czech, whose patterns are GPL only, is not hyphenated. Punctuation next to
+  a word does not stop it hyphenating, and `tools/generate_hyphenation.py`
+  regenerates the sets from a hyph-utf8 checkout.
 - **CJK**: inter-character justification with kinsoku line-break rules, ruby
   annotations, and vertical writing (`vertical-rl` and `vertical-lr`) with
   upright CJK and rotated Latin. Selection, search and link rectangles follow
