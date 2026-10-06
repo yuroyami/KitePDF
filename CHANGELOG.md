@@ -400,6 +400,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A number inside right-to-left text draws as a paragraph of the text draws it. A canvas without
+  a layout of its own forced the digits right to left with the letters, so the text engine
+  shaped them with the letters, and on macOS they drew differently from a paragraph of the same
+  text. Such a part now goes to the engine in logical order (#600).
 - A script reads an input's `value` sanitized by its type, as HTML says and Chromium does. A
   number that is not valid reads as empty, a range is clamped and rounded to its step, a colour
   reads as `#rrggbb`, and a date, month, week or time that is not valid reads as empty. A
