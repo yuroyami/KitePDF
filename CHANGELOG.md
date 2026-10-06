@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts can move a `ReadableStream`, a `WritableStream` or a `TransformStream`
+  through `postMessage` and `structuredClone` by naming it in the `transfer` list. The new
+  stream reads from or writes to the original, which stays locked (#608).
+
 - A book's scripts have the Streams Standard: `ReadableStream` with default and byte readers,
   `tee`, `pipeTo`, `pipeThrough`, async iteration and `ReadableStream.from`, `WritableStream`,
   `TransformStream`, `CountQueuingStrategy`, `ByteLengthQueuingStrategy`, `TextEncoderStream`

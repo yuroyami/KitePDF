@@ -21,6 +21,7 @@ internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_MESSAGING)
     append(DOM_PRELUDE_STREAMS)
     append(DOM_PRELUDE_STREAMS_WRITABLE)
+    append(DOM_PRELUDE_STREAMS_TRANSFER)
     append(DOM_PRELUDE_REFLECTION)
     append(DOM_PRELUDE_ELEMENTS)
     append(DOM_PRELUDE_FORMS)

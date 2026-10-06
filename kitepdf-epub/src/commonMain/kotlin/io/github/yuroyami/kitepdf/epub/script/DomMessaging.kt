@@ -9,7 +9,7 @@ internal const val DOM_PRELUDE_MESSAGING: String = """/* ---- structured cloning
    deserializes it. A transferred buffer is copied into its clone and then detached, so a clone
    that throws halfway detaches nothing. Each message arrives in a task of its own. */
 
-function cloneError(what, message) { return new DOMException(what + ': ' + message, 'DataCloneError'); }
+function cloneError(what, message) { return new DOMException(what === null ? message : what + ': ' + message, 'DataCloneError'); }
 /* Whether [check], a built-in that throws for a value without its internal slots, takes [v]. */
 function branded(check, v) {
   if (!check) return false;
@@ -74,6 +74,8 @@ function cloneValue(v, memory, what) {
   if (v === global) throw cloneError(what, '#<Window> could not be cloned.');
   var out, data;
   if (WeakMapHas(messagePorts, v)) throw cloneError(what, 'A MessagePort could not be cloned because it was not transferred.');
+  var kind = streamKind(v);
+  if (kind !== null) throw cloneError(what, 'A ' + kind + ' could not be cloned because it was not transferred.');
   if ((data = WeakMapGet(blobs, v)) !== undefined) {
     var file = WeakMapGet(files, v);
     out = ObjectCreate(file === undefined ? Blob.prototype : File.prototype);
@@ -153,12 +155,16 @@ function cloneErrorValue(v, memory, what) {
   return out;
 }
 /* The clone of [value] with the objects of [transfer] moved into it (HTML, 2.7.4): its value and
-   the new ports. [source] is the port that posts it, which cannot move with its own message. */
+   the new ports. [source] is the port that posts it, which cannot move with its own message. As
+   Chromium does, a locked stream fails the clone after the value cloned and before a buffer detaches. */
 function cloneWithTransfer(value, transfer, what, source) {
-  var memory = new Map(), buffers = [], movedPorts = [], newPorts = [];
+  var memory = new Map(), buffers = [], movedPorts = [], newPorts = [], streams = [], shells = [], kind;
   for (var i = 0; i < transfer.length; i++) {
     var t = transfer[i];
-    if (WeakMapHas(messagePorts, t)) {
+    if ((kind = streamKind(t)) !== null) {
+      if (ArrayIndexOf(streams, t) >= 0) throw cloneError(what, kind + ' at index ' + i + ' is a duplicate of an earlier ' + kind + '.');
+      ArrayPush(streams, t);
+    } else if (WeakMapHas(messagePorts, t)) {
       if (t === source) throw cloneError(what, 'Port at index ' + i + ' contains the source port.');
       if (ArrayIndexOf(movedPorts, t) >= 0) throw cloneError(what, 'Message port at index ' + i + ' is a duplicate of an earlier port.');
       if (portOf(t).neutered) throw cloneError(what, 'Port at index ' + i + ' is already neutered.');
@@ -176,7 +182,16 @@ function cloneWithTransfer(value, transfer, what, source) {
     ArrayPush(newPorts, made);
     MapSet(memory, movedPorts[p], made);
   }
+  for (var n = 0; n < streams.length; n++) {
+    var shell = streamShell(streams[n]);
+    ArrayPush(shells, shell);
+    MapSet(memory, streams[n], shell);
+  }
   var out = cloneValue(value, memory, what);
+  for (var l = 0; l < streams.length; l++) {
+    if (streamTransferLocked(streams[l])) throw cloneError(what, 'A ' + streamKind(streams[l]) + ' could not be cloned because it was locked');
+  }
+  for (var m = 0; m < streams.length; m++) moveStream(streams[m], shells[m]);
   for (var b = 0; b < buffers.length; b++) if (ArrayBufferTransfer) ArrayBufferTransfer(buffers[b]);
   for (var q = 0; q < movedPorts.length; q++) movePort(movedPorts[q], newPorts[q]);
   return { __proto__: null, value: out, ports: newPorts };
@@ -213,7 +228,7 @@ function portOf(p) {
 }
 function makePort() {
   var p = ObjectCreate(MessagePort.prototype);
-  WeakMapSet(messagePorts, p, { __proto__: null, other: null, queue: [], enabled: false, neutered: false });
+  WeakMapSet(messagePorts, p, { __proto__: null, other: null, queue: [], enabled: false, neutered: false, handler: null });
   return p;
 }
 function MessagePort() { illegal('MessagePort'); }
@@ -236,6 +251,8 @@ function queuePortTask(port) {
     var s = portOf(port);
     if (!s.queue.length) return;
     var m = ArrayShift(s.queue);
+    // A port of a moved stream hands its messages to the stream, not to listeners.
+    if (s.handler !== null) { var handle = s.handler; handle(m.value); return; }
     var e = new MessageEvent('message', { __proto__: null, data: m.value, ports: m.ports });
     e.isTrusted = true;
     for (var g = dispatchSteps(port, e); !GeneratorNext(g).done;) yield;
@@ -252,20 +269,25 @@ function startPort(port) {
 MessagePort.prototype.postMessage = function (message) {
   var what = "Failed to execute 'postMessage' on 'MessagePort'", s = portOf(this);
   needArgs(arguments, 1, what);
-  var r = cloneWithTransfer(message, transferOf(arguments[1], what, true), what, this);
+  postToPort(this, cloneWithTransfer(message, transferOf(arguments[1], what, true), what, this));
+};
+/* Hands [r], a clone, to the partner of [port], if it has one. */
+function postToPort(port, r) {
+  var s = portOf(port);
   if (!s.other) return;
   var target = portOf(s.other);
   ArrayPush(target.queue, r);
   if (target.enabled) queuePortTask(s.other);
-};
+}
 MessagePort.prototype.start = function () { startPort(this); };
-MessagePort.prototype.close = function () {
-  var s = portOf(this);
+MessagePort.prototype.close = function () { closePort(this); };
+function closePort(port) {
+  var s = portOf(port);
   if (s.other) portOf(s.other).other = null;
   s.other = null;
   s.queue = [];
-  dropTasks(this);
-};
+  dropTasks(port);
+}
 // The first time a script sets onmessage, the port starts (HTML, 9.4.4).
 def(MessagePort.prototype, 'onmessage', function () { portOf(this); return handlerValue(this, 'message'); }, function (v) {
   portOf(this);
