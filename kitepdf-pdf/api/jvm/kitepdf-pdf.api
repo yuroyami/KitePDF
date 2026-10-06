@@ -648,6 +648,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun setFontCacheBudgetBytes (J)V
 	public final fun setImageCacheBudgetBytes (J)V
 	public final fun setOperationCacheBudgetBytes (J)V
+	public fun topOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfDocument$Companion {

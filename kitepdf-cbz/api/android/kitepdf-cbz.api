@@ -18,6 +18,7 @@ public final class io/github/yuroyami/kitepdf/cbz/CbzDocument : io/github/yuroya
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
 	public fun prepareChapter (ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun topOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 }
 
 public final class io/github/yuroyami/kitepdf/cbz/CbzDocument$Companion {

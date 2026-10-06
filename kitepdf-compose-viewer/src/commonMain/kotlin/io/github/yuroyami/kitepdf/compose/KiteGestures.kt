@@ -420,7 +420,11 @@ internal suspend fun KiteDocViewState.turn(forward: Boolean, spread: Boolean) {
  * and up goes back, whichever way the pages advance. One wheel gesture turns one page: the
  * events of a spun wheel or of a trackpad flick and its slowing tail come close together, so
  * the next turn waits for a pause of [WHEEL_TURN_PAUSE_MILLIS]. A gesture that goes more
- * sideways than down is the pager's, and a zoomed page keeps the wheel. [enabled] turns it off.
+ * sideways than down is the pager's. [enabled] turns it off.
+ *
+ * In a pager or a single page, the wheel moves a page that overflows the view, a zoomed page or
+ * a page fit to the width ([KitePageFit.WIDTH], #505). Once the page is at its edge, the next
+ * wheel gesture turns it, so the reader scrolls down a chapter and then on into the next one.
  */
 internal fun Modifier.kiteWheelPaging(
     state: KiteDocViewState,
@@ -433,8 +437,11 @@ internal fun Modifier.kiteWheelPaging(
         is KiteDocLayout.Spread -> true.takeIf { layout.orientation == Orientation.Horizontal }
         else -> null
     }
-    if (!enabled || spread == null) return this
-    return pointerInput(state, spread) {
+    // A continuous strip scrolls with the wheel itself.
+    val pans = layout !is KiteDocLayout.Continuous
+    if (!enabled || (spread == null && !pans)) return this
+    return pointerInput(state, spread, pans) {
+        val step = WHEEL_PAN_PER_NOTCH.toPx() / wheelUnitsPerNotch
         var last = -1L
         var armed = true
         var sumX = 0f
@@ -452,8 +459,18 @@ internal fun Modifier.kiteWheelPaging(
                     sumY = 0f
                 }
                 last = time
-                if (change.isConsumed || state.isZoomed) continue
+                if (change.isConsumed) continue
                 if (event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed) continue
+                if (pans && state.overflows) {
+                    change.consume()
+                    val moved = state.panBy(Offset(-change.scrollDelta.x * step, -change.scrollDelta.y * step))
+                    // A gesture that moved the page does not turn it too, even once the page stops at its edge.
+                    if (moved != Offset.Zero) {
+                        armed = false
+                        continue
+                    }
+                } else if (state.isZoomed) continue
+                if (spread == null) continue
                 sumX += change.scrollDelta.x
                 sumY += change.scrollDelta.y
                 if (abs(sumY) <= abs(sumX)) continue
@@ -485,6 +502,9 @@ internal fun Modifier.kitePointerKind(state: KiteDocViewState): Modifier =
             }
         }
     }
+
+/** How far one wheel notch moves a page that overflows the view. */
+private val WHEEL_PAN_PER_NOTCH = 64.dp
 
 /** The quiet time after which the wheel can turn the next page. */
 private const val WHEEL_TURN_PAUSE_MILLIS = 150L

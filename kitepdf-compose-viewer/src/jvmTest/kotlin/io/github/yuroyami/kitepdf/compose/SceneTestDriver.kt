@@ -340,14 +340,20 @@ internal fun multiSpineEpub(bodies: List<String>): ByteArray {
         "OEBPS/chapter${i + 1}.xhtml" to
             """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>$body</body></html>""".encodeToByteArray()
     }
-    val out = ByteArrayOutputStream()
-    ZipOutputStream(out).use { zip ->
-        zip.setMethod(ZipOutputStream.STORED)
-        val entries = listOf(
+    return storedZipOf(
+        listOf(
             "mimetype" to "application/epub+zip".encodeToByteArray(),
             "META-INF/container.xml" to container.encodeToByteArray(),
             "OEBPS/content.opf" to opf.encodeToByteArray(),
-        ) + files
+        ) + files,
+    )
+}
+
+/** A zip of [entries] in their order, every one stored, as an EPUB's mimetype must be. */
+internal fun storedZipOf(entries: List<Pair<String, ByteArray>>): ByteArray {
+    val out = ByteArrayOutputStream()
+    ZipOutputStream(out).use { zip ->
+        zip.setMethod(ZipOutputStream.STORED)
         for ((name, data) in entries) {
             zip.putNextEntry(
                 ZipEntry(name).apply {

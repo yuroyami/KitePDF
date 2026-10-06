@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
@@ -580,7 +581,7 @@ private fun linkTap(
                     navigates && targetPage != null -> {
                         // A link to a place on the page scrolls to that place, not to the top (#433).
                         val y = state.pageAt(targetPage)?.let { destination.displayY(it) }
-                        scope.launch { state.animateScrollToPagePoint(targetPage, y) }
+                        scope.launch { state.scrollToPagePoint(targetPage, y) }
                     }
                     // A page turn that a link names, the viewer performs itself (#433).
                     navigates && turn != null -> scope.launch { state.turnPage(turn) }
@@ -635,7 +636,7 @@ private fun linkTap(
                     if (target is KiteBookmark.Page) {
                         // The height can mean reading the target page, so it is found off the main thread.
                         val top = withContext(kitepdfRasterDispatcher()) { runCatching { link.targetY }.getOrNull() }
-                        state.animateScrollToPagePoint(target.pageIndex, top)
+                        state.scrollToPagePoint(target.pageIndex, top)
                     } else {
                         state.scrollTo(target, animate = true)
                     }
@@ -1085,6 +1086,7 @@ private fun PagedLayout(
             pagePlaceholder = pagePlaceholder,
             state = state,
             geometryInto = if (isCurrent) state else null,
+            fitWidth = layout.fit == KitePageFit.WIDTH,
         )
     }
     // While the zoomed page overflows the viewport, the pager's own swipe is off so
@@ -1216,6 +1218,8 @@ private fun PageBox(
     state: KiteDocViewState,
     /** The state to report hit-test geometry into (the on-screen slot only). */
     geometryInto: KiteDocViewState? = null,
+    /** Fits the page to the width, its top at the top when it is taller than the slot ([KitePageFit.WIDTH]). */
+    fitWidth: Boolean = false,
 ) {
     if (geometryInto != null) {
         DisposableEffect(geometryInto, pageIndex) {
@@ -1237,21 +1241,28 @@ private fun PageBox(
         contentAlignment = Alignment.Center,
     ) {
         val density = LocalDensity.current
-        val fit = fitWithin(constraints.maxWidth, constraints.maxHeight, kitePageAspect(page))
+        val aspect = kitePageAspect(page)
+        val fit = if (fitWidth && constraints.maxWidth > 0 && constraints.maxHeight > 0) {
+            // As a Float first: a very long page overflows an Int.
+            IntSize(constraints.maxWidth, (constraints.maxWidth / aspect).coerceIn(1f, Int.MAX_VALUE / 2f).toInt())
+        } else fitWithin(constraints.maxWidth, constraints.maxHeight, aspect)
+        // A page taller than the slot starts at its top, so the pan that centres a page shows its top (#505).
+        val tall = fit.height > constraints.maxHeight
         if (geometryInto != null && fit != IntSize.Zero) {
             // Centered letterbox: the page rect in untransformed viewport
             // space follows directly from the constraints, no coordinates
             // walk needed (the layer above never affects it).
             val left = (constraints.maxWidth - fit.width) / 2f
-            val top = (constraints.maxHeight - fit.height) / 2f
+            val top = if (tall) 0f else (constraints.maxHeight - fit.height) / 2f
             val rect = Rect(left, top, left + fit.width, top + fit.height)
             SideEffect { geometryInto.pageGeometry[pageIndex] = rect }
         }
         if (fit != IntSize.Zero) {
             val dpSize = with(density) { DpSize(fit.width.toDp(), fit.height.toDp()) }
+            val placed = if (tall) Modifier.wrapContentSize(Alignment.TopCenter, unbounded = true) else Modifier
             PageSlotContent(
                 state, page, pageIndex, fit, settledZoom, renderSpec, colors,
-                onPageRendered, pagePlaceholder, Modifier.size(dpSize),
+                onPageRendered, pagePlaceholder, placed.size(dpSize),
             )
         }
     }

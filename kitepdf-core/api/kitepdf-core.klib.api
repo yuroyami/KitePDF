@@ -227,6 +227,7 @@ abstract interface io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.y
     open fun pageCountIn(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteDocument.pageCountIn|pageCountIn(kotlin.Int){}[0]
     open fun pageIndexOf(io.github.yuroyami.kitepdf.core/KiteLocation): kotlin/Int? // io.github.yuroyami.kitepdf.core/KiteDocument.pageIndexOf|pageIndexOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     open fun prepareChapter(kotlin/Int) // io.github.yuroyami.kitepdf.core/KiteDocument.prepareChapter|prepareChapter(kotlin.Int){}[0]
+    open fun topOf(io.github.yuroyami.kitepdf.core/KiteBookmark): kotlin/Double? // io.github.yuroyami.kitepdf.core/KiteDocument.topOf|topOf(io.github.yuroyami.kitepdf.core.KiteBookmark){}[0]
     open suspend fun prepareChapter(kotlin/Int, kotlin.coroutines/SuspendFunction0<kotlin/Unit>) // io.github.yuroyami.kitepdf.core/KiteDocument.prepareChapter|prepareChapter(kotlin.Int;kotlin.coroutines.SuspendFunction0<kotlin.Unit>){}[0]
 }
 
