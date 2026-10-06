@@ -34,6 +34,7 @@ final enum class io.github.yuroyami.kitepdf.epub/EpubFlow : kotlin/Enum<io.githu
 final enum class io.github.yuroyami.kitepdf.epub/EpubLayout : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubLayout> { // io.github.yuroyami.kitepdf.epub/EpubLayout|null[0]
     enum entry PRE_PAGINATED // io.github.yuroyami.kitepdf.epub/EpubLayout.PRE_PAGINATED|null[0]
     enum entry REFLOWABLE // io.github.yuroyami.kitepdf.epub/EpubLayout.REFLOWABLE|null[0]
+    enum entry ROLL // io.github.yuroyami.kitepdf.epub/EpubLayout.ROLL|null[0]
 
     final val entries // io.github.yuroyami.kitepdf.epub/EpubLayout.entries|#static{}entries[0]
         final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.epub/EpubLayout> // io.github.yuroyami.kitepdf.epub/EpubLayout.entries.<get-entries>|<get-entries>#static(){}[0]
@@ -405,6 +406,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
 final class io.github.yuroyami.kitepdf.epub/EpubRendition { // io.github.yuroyami.kitepdf.epub/EpubRendition|null[0]
     final val flow // io.github.yuroyami.kitepdf.epub/EpubRendition.flow|{}flow[0]
         final fun <get-flow>(): io.github.yuroyami.kitepdf.epub/EpubFlow // io.github.yuroyami.kitepdf.epub/EpubRendition.flow.<get-flow>|<get-flow>(){}[0]
+    final val isRoll // io.github.yuroyami.kitepdf.epub/EpubRendition.isRoll|{}isRoll[0]
+        final fun <get-isRoll>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubRendition.isRoll.<get-isRoll>|<get-isRoll>(){}[0]
     final val layout // io.github.yuroyami.kitepdf.epub/EpubRendition.layout|{}layout[0]
         final fun <get-layout>(): io.github.yuroyami.kitepdf.epub/EpubLayout // io.github.yuroyami.kitepdf.epub/EpubRendition.layout.<get-layout>|<get-layout>(){}[0]
     final val orientation // io.github.yuroyami.kitepdf.epub/EpubRendition.orientation|{}orientation[0]

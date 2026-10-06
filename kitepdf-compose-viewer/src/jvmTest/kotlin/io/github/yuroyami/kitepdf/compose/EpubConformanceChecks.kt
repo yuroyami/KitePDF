@@ -609,9 +609,12 @@ internal object EpubConformanceChecks {
     }
 
     private fun rollLayout() {
-        // KitePDF has no roll layout: a roll book reads as reflowable, one letterboxed plate a page.
+        // Each plate is one page at its own aspect, and the viewer shows them as one strip with no gap (#506).
         for (id in listOf("lay-roll-embedded-images", "lay-roll-embedded-images-svg", "lay-roll-images-in-spine", "lay-roll-images-mixed")) {
-            check(id) { (0 until chapters).all { c -> pages(c) == 1 && abs(page(c).height / page(c).width - 1378.0 / 1674.0) < 0.02 } }
+            check(id) {
+                doc.epubMetadata.rendition.isRoll && KiteDocLayout.forDocument(doc) == KiteDocLayout.Continuous() &&
+                    (0 until chapters).all { c -> pages(c) == 1 && abs(page(c).height / page(c).width - 1378.0 / 1674.0) < 0.02 }
+            }
         }
     }
 

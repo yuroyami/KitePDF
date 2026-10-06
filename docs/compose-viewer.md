@@ -336,6 +336,7 @@ KiteDocView(state, layout = KiteDocLayout.SinglePage(pageIndex = 3))
 
 | Document | Layout |
 |---|---|
+| EPUB roll (`rendition:layout roll`) | `Continuous()`: the plates fill the width with no gap between them |
 | EPUB with `rendition:flow` `scrolled-continuous` | `Continuous()`: the chapters follow each other in one strip |
 | EPUB with `rendition:flow` `scrolled-doc` | `Paged(fit = KitePageFit.WIDTH)`: each chapter scrolls down, and a sideways swipe moves to the next one |
 | Any other document | `KiteDocLayout.pagedFor(document)` |

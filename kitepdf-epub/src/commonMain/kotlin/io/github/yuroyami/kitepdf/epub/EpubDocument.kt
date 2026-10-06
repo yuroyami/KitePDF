@@ -129,8 +129,9 @@ public class EpubDocument internal constructor(
     private val pageContentHeight: Double get() = settings.pageHeight - 2 * settings.margin
 
     /**
-     * True for a pre-paginated (fixed-layout) book: one page per chapter, no reflow. A book that
-     * mixes fixed and reflowable chapters is false, and [renditionOf] tells its chapters apart.
+     * True for a pre-paginated (fixed-layout) book, a roll included: one page per chapter, no
+     * reflow. A book that mixes fixed and reflowable chapters is false, and [renditionOf] tells its
+     * chapters apart.
      */
     public val isFixedLayout: Boolean get() = parsed.allFixed
 

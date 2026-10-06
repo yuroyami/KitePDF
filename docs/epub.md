@@ -82,6 +82,19 @@ page height.
 `KiteDocLayout.forDocument(book)` picks the viewer layout that the flow asks
 for. See [the Compose viewer](compose-viewer.md#the-layout-a-document-asks-for).
 
+### Rolls
+
+A roll, `rendition:layout roll` of EPUB 3.4, is a webtoon or a scroll: a strip
+of plates with no gap between them. Each chapter of a roll is one page at the
+size its viewport sets, as in a fixed-layout book, and `book.isFixedLayout` is
+true. `book.epubMetadata.rendition.isRoll` tells a roll apart. It is also true
+for a pre-paginated book whose flow is `scrolled-continuous`, which EPUB Reading
+Systems 3.4 asks to read the same way. A roll ignores the `rendition:layout-*`
+properties of its spine entries.
+
+`KiteDocLayout.forDocument(book)` gives a roll a `Continuous` strip, and the
+strip shows a roll's pages with no gap, whatever `pageSpacing` says.
+
 ## Rendering pages
 
 `EpubDocument.pages` is a `List<EpubPage>`, and every page renders through

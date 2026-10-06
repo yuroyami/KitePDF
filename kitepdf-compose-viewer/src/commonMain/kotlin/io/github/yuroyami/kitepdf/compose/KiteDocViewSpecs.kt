@@ -124,10 +124,12 @@ public sealed interface KiteDocLayout {
          * `scrolled-continuous` reads as one [Continuous] strip, and one that is `scrolled-doc`
          * reads in a [Paged] pager whose chapters each fit the width and scroll down (EPUB 3.3,
          * #505). [io.github.yuroyami.kitepdf.epub.EpubSettings.scrolled] false keeps such a book
-         * in pages. Every other document gets [pagedFor].
+         * in pages. A roll reads as a [Continuous] strip whose pages fill the width with no gap
+         * between them (EPUB 3.4, #506). Every other document gets [pagedFor].
          */
         public fun forDocument(document: io.github.yuroyami.kitepdf.core.KiteDocument): KiteDocLayout {
             val book = document as? io.github.yuroyami.kitepdf.epub.EpubDocument ?: return pagedFor(document)
+            if (book.epubMetadata.rendition.isRoll) return Continuous()
             if (book.settings.scrolled == false) return pagedFor(document)
             return when (book.epubMetadata.rendition.flow) {
                 io.github.yuroyami.kitepdf.epub.EpubFlow.SCROLLED_CONTINUOUS -> Continuous()

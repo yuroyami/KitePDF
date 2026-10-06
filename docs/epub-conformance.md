@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 128 | 8 | 4 |
+| must | 140 | 132 | 4 | 4 |
 | should | 38 | 34 | 3 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 187 | 13 | 6 |
+| all | 206 | 191 | 9 | 6 |
 
 ## How the results are known
 
@@ -273,10 +273,10 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 
 | Test | Level | Result | How it is known |
 |---|---|---|---|
-| [`lay-roll-embedded-images`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-roll-embedded-images) | must | Fails ([#506](https://github.com/yuroyami/KitePDF/issues/506)) | Checked: Each plate is one page of the full width at its own aspect; today a roll book reads as reflowable, one letterboxed plate a page. |
-| [`lay-roll-embedded-images-svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-roll-embedded-images-svg) | must | Fails ([#506](https://github.com/yuroyami/KitePDF/issues/506)) | Checked: Each plate is one page of the full width at its own aspect; today a roll book reads as reflowable, one letterboxed plate a page. |
-| [`lay-roll-images-in-spine`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-roll-images-in-spine) | must | Fails ([#506](https://github.com/yuroyami/KitePDF/issues/506)) | Checked: Each plate is one page of the full width at its own aspect; today a roll book reads as reflowable, one text page a plate. |
-| [`lay-roll-images-mixed`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-roll-images-mixed) | must | Fails ([#506](https://github.com/yuroyami/KitePDF/issues/506)) | Checked: Each plate is one page of the full width at its own aspect; today a roll book reads as reflowable, one letterboxed plate a page. |
+| [`lay-roll-embedded-images`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-roll-embedded-images) | must | Passes | Checked: Each plate is one page at its own aspect, and `KiteDocLayout.forDocument` shows the book as one strip whose pages fill the width with no gap. |
+| [`lay-roll-embedded-images-svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-roll-embedded-images-svg) | must | Passes | Checked: Each plate is one page at its own aspect, and `KiteDocLayout.forDocument` shows the book as one strip whose pages fill the width with no gap. |
+| [`lay-roll-images-in-spine`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-roll-images-in-spine) | must | Passes | Checked: Each plate is one page at its own aspect, and `KiteDocLayout.forDocument` shows the book as one strip whose pages fill the width with no gap. |
+| [`lay-roll-images-mixed`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/lay-roll-images-mixed) | must | Passes | Checked: Each plate is one page at its own aspect, and `KiteDocLayout.forDocument` shows the book as one strip whose pages fill the width with no gap. |
 
 ## Media Overlays
 
