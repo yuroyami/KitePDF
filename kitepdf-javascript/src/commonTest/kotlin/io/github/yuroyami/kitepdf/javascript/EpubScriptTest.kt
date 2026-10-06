@@ -363,7 +363,8 @@ class EpubScriptTest {
             "\"title\":\"Scripted\"",
             "\"paragraphs\":2",
             "\"second\":\"Two\"",
-            "\"html\":\"<b>bold</b> text\"",
+            // An XHTML chapter writes its markup as XML, each element with its namespace, as a browser does (#548).
+            "\"html\":\"<b xmlns=\\\"http://www.w3.org/1999/xhtml\\\">bold</b> text\"",
             "\"first\":\"b\"",
             "\"order\":\"em,b,#text\"",
             "\"after\":2",
