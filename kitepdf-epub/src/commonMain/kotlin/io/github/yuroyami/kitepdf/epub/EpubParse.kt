@@ -278,6 +278,25 @@ internal class ParsedEpub(
         treeChanges.update { it + 1 }
     }
 
+    /** The fragment of each chapter's URL, normalized, or null before the reader reached one (#550). */
+    private val fragments = arrayOfNulls<String>(spinePaths.size)
+
+    /** How many script sessions hold each chapter's live tree, where they mark the target themselves (#550). */
+    private val treeHolders = IntArray(spinePaths.size)
+
+    fun fragment(chapter: Int): String? = spineLock.withLock { fragments[chapter] }
+
+    /** Sets [chapter]'s fragment, and answers whether it changed. */
+    fun setFragment(chapter: Int, fragment: String): Boolean = spineLock.withLock {
+        if (fragments[chapter] == fragment) false else { fragments[chapter] = fragment; true }
+    }
+
+    fun holdTree(chapter: Int, held: Boolean) {
+        spineLock.withLock { treeHolders[chapter] += if (held) 1 else -1 }
+    }
+
+    fun treeHeld(chapter: Int): Boolean = spineLock.withLock { treeHolders[chapter] > 0 }
+
     /** How many stylesheet files have been parsed. One per file, never one per chapter. */
     val sheetsParsed: Int get() = sheetLock.withLock { sheetCount }
 

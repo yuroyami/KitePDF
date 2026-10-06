@@ -300,6 +300,39 @@ public class EpubDocument internal constructor(
     }
 
     /**
+     * The fragment of [chapter]'s URL without its `#`, percent-encoded as a URL keeps it, or null
+     * before the reader reached one (#550). The chapter's scripts read it as `location.hash`, and
+     * the element it names is the one `:target` matches.
+     */
+    public fun fragmentOf(chapter: Int): String? {
+        require(chapter in parsed.spineIndices) { "no chapter $chapter" }
+        return parsed.fragment(chapter)
+    }
+
+    /**
+     * Makes [fragment] the fragment of [chapter]'s URL, as a viewer does when the reader goes to a
+     * place in the chapter through a link, the table of contents or a bookmark (#550). The element
+     * it names becomes the chapter's target. A chapter whose style sheets use `:target` is laid
+     * out again, and [chapterChanges] moves; any other chapter keeps its pages. A script session
+     * takes the new fragment the next time [EpubScriptHandler.chapterOpened] runs for the chapter,
+     * and its scripts get `popstate` and `hashchange` then. Lays out the chapter.
+     */
+    public fun setFragment(chapter: Int, fragment: String) {
+        require(chapter in parsed.spineIndices) { "no chapter $chapter" }
+        val normalized = normalizedFragment(fragment)
+        if (!parsed.setFragment(chapter, normalized)) return
+        // A script session marks the target in its own tree, which it gives the layout.
+        if (parsed.treeHeld(chapter) || !usesTarget(chapter)) return
+        replaceChapterTree(chapter, withTarget(parsed.layoutSpine(chapter).tree, normalized))
+    }
+
+    /** Whether a style rule of [chapter] holds a `:target`, so that a change of target restyles it (#550). */
+    internal fun usesTarget(chapter: Int): Boolean = parsed.layoutSpine(chapter).rules.any { rule -> rule.selectors.any { it.usesTarget } }
+
+    /** A script session holds [chapter]'s live tree while [held], and marks its target itself (#550). */
+    internal fun holdTree(chapter: Int, held: Boolean): Unit = parsed.holdTree(chapter, held)
+
+    /**
      * [chapter]'s media overlay: the clips of its synchronised narration, in document order, or
      * null when the chapter has none (#36). Parsed on first use, without laying the chapter out.
      * [locateFragment] finds each clip's text on the page.

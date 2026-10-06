@@ -358,8 +358,9 @@ public fun KiteDocView(
     // The book's scripts: a scripted chapter's run when the reader reaches it, and a change of
     // location that one asks for goes the way of a link (#41).
     LaunchedEffect(epubScripts, state.document) {
-        val handler = epubScripts ?: return@LaunchedEffect
         val book = state.document as? EpubDocument ?: return@LaunchedEffect
+        // Without scripts the book still takes the fragment the reader goes to, for `:target` (#550).
+        val handler = epubScripts ?: return@LaunchedEffect state.followChapters(book, null, scriptLane)
         scriptCall("prepare", Unit) { handler.prepare() }
         preparedEpubScripts = handler
         val stop = handler.onNavigate { href ->
@@ -367,7 +368,7 @@ public fun KiteDocView(
         }
         try {
             backOnComposeThread()
-            state.runChapterScripts(book, handler, scriptLane)
+            state.followChapters(book, handler, scriptLane)
         } finally {
             stop()
         }

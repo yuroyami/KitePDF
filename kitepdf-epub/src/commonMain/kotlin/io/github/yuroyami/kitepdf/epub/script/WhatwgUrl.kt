@@ -125,6 +125,15 @@ internal class WhatwgUrl private constructor() {
         return true
     }
 
+    /**
+     * Sets the fragment as the `hash` setter of `Location` does (HTML, 7.10.5.1): one leading `#`
+     * goes, and an empty value leaves an empty fragment, where the URL class removes it (#550).
+     */
+    fun setLocationHash(value: String) {
+        fragment = ""
+        basicParse(value.removePrefix("#"), null, this, State.FRAGMENT)
+    }
+
     private fun assign(other: WhatwgUrl) {
         scheme = other.scheme; username = other.username; password = other.password; host = other.host; port = other.port
         path.clear(); path += other.path; opaquePath = other.opaquePath; query = other.query; fragment = other.fragment

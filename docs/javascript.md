@@ -260,6 +260,15 @@ Each book has an origin of its own, shared by its chapters: `epub://` and a host
 package's unique identifier, so the book has it each time it opens. `self.origin` and
 `location.origin` answer it, and `location.href` is the origin and the chapter's path.
 
+The fragment that the reader went to in a chapter, through a link, the table of contents or a
+bookmark, is the fragment of its URL, so `location.hash` gives it. `EpubDocument.fragmentOf`
+answers it outside the scripts, and `KiteDocView` passes the fragment to the book with
+`EpubDocument.setFragment`. The element that the fragment names matches `:target` from the
+moment the chapter is parsed, before its `readystatechange` to `complete`, as in Chromium. A
+move to another fragment of the chapter fires `popstate` at once and `hashchange` as a task, with
+the old and new URL. A link the reader follows makes such a move, and so does a script that sets
+`location.hash` or clicks a link.
+
 `URL` and `URLSearchParams` are the WHATWG URL Standard's, with every getter and setter,
 `URL.canParse`, `URL.parse` and `toJSON`, and a `searchParams` that writes itself back to the
 query. A URL against the chapter's address resolves inside the book, and `..` stops at the
@@ -319,8 +328,7 @@ does, and an XHTML chapter compares them as written. The states of a form contro
 `:checked`, `:placeholder-shown` and `:indeterminate`, follow what the reader or a script made of
 the control, its checkedness, selectedness and value, as in a browser, and the page restyles when
 they change. Setting `checked` or `selected` never writes an attribute. A pseudo-class that never holds
-in a paginated book, as `:hover`, matches nothing, as does `:target` while a chapter opens at no
-fragment (#550).
+in a paginated book, as `:hover`, matches nothing.
 
 `DOMParser` parses a string into a document of its own: HTML for `text/html`, and XML with
 namespaces for the four XML types. XML that is not well-formed gives a document whose one

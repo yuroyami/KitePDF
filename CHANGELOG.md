@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `EpubDocument.setFragment` and `fragmentOf` hold the fragment the reader reached in each
+  chapter. The element that the fragment names matches `:target` in the layout, so a book can
+  style the note a link lands on. Only a chapter whose style sheets use `:target` is laid out
+  again. `KiteDocView` calls `setFragment` for each link, table of contents entry and bookmark
+  the reader follows (#550).
+
 - A book's scripts have `DOMParser` and `XMLSerializer`. `parseFromString` makes an HTML document
   for `text/html` and an XML document for the four XML types, with a `parsererror` document for XML
   that is not well-formed, and the XML parser stops at the first well-formedness error as a
@@ -254,6 +260,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a rebuild (#472).
 
 ### Fixed
+
+- A chapter's scripts see the fragment the reader reached it at. `location.hash` gives it, the
+  element it names matches `:target` once the chapter is parsed, and a move to another fragment
+  fires `popstate` and then `hashchange`, as in Chromium. A script that sets `location.hash` or
+  clicks a link of its own chapter moves at once. `HashChangeEvent` and `PopStateEvent` are new
+  (#550).
 
 - In an XHTML chapter, a script's `innerHTML`, `outerHTML` and `insertAdjacentHTML` read and write
   XML, as in a browser, where they used HTML. Each element they write declares its namespace, an
