@@ -892,6 +892,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A chapter without its own `dir`, CSS `direction` or `lang` now reads left to right. Before, it
+  took its direction from the package's `dc:language`, so a chapter of an Arabic book read right to
+  left. EPUB Reading Systems 3.3, 3.7 asks a reading system not to take a document's direction from
+  the package. Hyphenation still falls back to `dc:language`, since it runs only when the book or
+  the reader asks for it (#564).
 - A file in the book's zip that the manifest does not list no longer loads: an image, a style
   sheet, a font, a frame or a media file that a chapter names there draws nothing, and
   `EpubDocument.resource` answers null for it. EPUB Reading Systems 3.3 asks a reading system not

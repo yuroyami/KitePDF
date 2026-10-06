@@ -390,9 +390,9 @@ public class EpubDocument internal constructor(
 
     private fun layFrame(chapter: Int, path: String, width: Double, height: Double): PageRender? {
         val sp = parsed.frameLayoutSpine(chapter, path) ?: return null
-        val language = languageOf(sp.tree)
+        val language = ownLanguageOf(sp.tree) ?: parsed.metadata.language?.takeIf { it.isNotBlank() }
         val resolver = StyleResolver(
-            sp.rules, settings.fontSize, width, if (isRightToLeftLanguage(language)) Direction.RTL else Direction.LTR, height,
+            sp.rules, settings.fontSize, width, directionOf(sp.tree), height,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
         val build = BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, true, canvasImages::get, parsed::hasFile) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
@@ -439,8 +439,7 @@ public class EpubDocument internal constructor(
     internal fun frameStyleOf(chapter: Int, path: String, el: KiteXmlNode.Element): ComputedStyle {
         val (width, height) = frameViewportOf(chapter, path)
         val sp = parsed.frameLayoutSpine(chapter, path)
-        val direction = if (isRightToLeftLanguage(sp?.tree?.let(::languageOf))) Direction.RTL else Direction.LTR
-        return styleIn(sp?.rules.orEmpty(), width, height, direction, el)
+        return styleIn(sp?.rules.orEmpty(), width, height, directionOf(sp?.tree), el)
     }
 
     /** Where [element] of the frame's laid-out tree is in the frame, in the frame's display space (#528). */
@@ -732,14 +731,20 @@ public class EpubDocument internal constructor(
      * own, so a bilingual anthology hyphenates each chapter with its own
      * patterns. The chapter is already parsed by every caller (pagination has
      * its tree in hand), so this reads nothing new.
+     *
+     * The fallback to `dc:language` goes beyond EPUB Reading Systems 3.3, 3.7, which says a
+     * reading system must not assume a document's language from the package. It stays for
+     * hyphenation alone, which runs only when the book or the reader asks for it, so a book
+     * whose chapters forgot their `lang` still hyphenates in its language (#564). The base
+     * direction does not use it: see [directionFor].
      */
     internal fun languageFor(chapter: Int): String? {
         val tree = if (chapter !in 0 until parsed.spineCount) null else parsed.spine(chapter).tree
-        return tree?.let(::languageOf) ?: parsed.metadata.language?.takeIf { it.isNotBlank() }
+        return tree?.let(::ownLanguageOf) ?: parsed.metadata.language?.takeIf { it.isNotBlank() }
     }
 
-    /** The `lang` or `xml:lang` that [tree] gives its `html` or `body` element, else the book's. */
-    private fun languageOf(tree: KiteXmlNode.Element): String? {
+    /** The `lang` or `xml:lang` that [tree] gives its `html` or `body` element, or null. */
+    private fun ownLanguageOf(tree: KiteXmlNode.Element): String? {
         val html = tree.children.filterIsInstance<KiteXmlNode.Element>()
             .firstOrNull { it.tag == "html" }
         val body = html?.children?.filterIsInstance<KiteXmlNode.Element>()
@@ -748,15 +753,21 @@ public class EpubDocument internal constructor(
             ?: html?.attrs?.get("xml:lang")?.takeIf { it.isNotBlank() }
             ?: body?.attrs?.get("lang")?.takeIf { it.isNotBlank() }
             ?: body?.attrs?.get("xml:lang")?.takeIf { it.isNotBlank() }
-            ?: parsed.metadata.language?.takeIf { it.isNotBlank() }
     }
 
     /**
-     * The direction [chapter] reads in where it declares none, by `dir` or CSS: its language's,
-     * else the book's. The spine's page progression orders the pages and has no say (#512).
+     * The direction [chapter] reads in where it declares none, by `dir` or CSS: its own language's,
+     * else left to right. The package's `dc:language` has no say, as EPUB Reading Systems 3.3,
+     * 3.7 forbids a reading system to assume a document's base direction from the package
+     * (#564). The spine's page progression orders the pages and has no say either (#512).
      */
-    private fun directionFor(chapter: Int): Direction =
-        if (isRightToLeftLanguage(languageFor(chapter))) Direction.RTL else Direction.LTR
+    private fun directionFor(chapter: Int): Direction = directionOf(
+        if (chapter !in 0 until parsed.spineCount) null else parsed.spine(chapter).tree,
+    )
+
+    /** The direction of a document whose tree is [tree] where it declares none: see [directionFor]. */
+    private fun directionOf(tree: KiteXmlNode.Element?): Direction =
+        if (isRightToLeftLanguage(tree?.let(::ownLanguageOf))) Direction.RTL else Direction.LTR
 
     /**
      * The faces [chapter] lays out with: the book's embedded fonts, plus any
