@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A video shows its subtitle and caption tracks. The track that the element marks `default`
+  shows over the picture at once, and a menu on the transport bar picks another track or none.
+  `EpubMedia.tracks` lists the `<track>` elements of a media element, with their kind, language
+  and label. `KiteMediaLabels` gains `subtitles` and `subtitlesOff` (#483).
 - The media elements of a book share a `KiteMediaSession`. An element keeps its place while its
   book is open, and shows that place, paused, when the page comes back. Starting one
   element pauses any other that plays. When the app leaves the screen on Android or iOS, a video

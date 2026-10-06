@@ -7,7 +7,7 @@
 
 // Library unique name: <io.github.yuroyami:kitepdf-media>
 final class io.github.yuroyami.kitepdf.media/KiteMediaLabels { // io.github.yuroyami.kitepdf.media/KiteMediaLabels|null[0]
-    constructor <init>(kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.media/KiteMediaLabels.<init>|<init>(kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String){}[0]
+    constructor <init>(kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.media/KiteMediaLabels.<init>|<init>(kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String){}[0]
 
     final val exitFullScreen // io.github.yuroyami.kitepdf.media/KiteMediaLabels.exitFullScreen|{}exitFullScreen[0]
         final fun <get-exitFullScreen>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.exitFullScreen.<get-exitFullScreen>|<get-exitFullScreen>(){}[0]
@@ -23,6 +23,10 @@ final class io.github.yuroyami.kitepdf.media/KiteMediaLabels { // io.github.yuro
         final fun <get-seek>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.seek.<get-seek>|<get-seek>(){}[0]
     final val speed // io.github.yuroyami.kitepdf.media/KiteMediaLabels.speed|{}speed[0]
         final fun <get-speed>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.speed.<get-speed>|<get-speed>(){}[0]
+    final val subtitles // io.github.yuroyami.kitepdf.media/KiteMediaLabels.subtitles|{}subtitles[0]
+        final fun <get-subtitles>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.subtitles.<get-subtitles>|<get-subtitles>(){}[0]
+    final val subtitlesOff // io.github.yuroyami.kitepdf.media/KiteMediaLabels.subtitlesOff|{}subtitlesOff[0]
+        final fun <get-subtitlesOff>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.subtitlesOff.<get-subtitlesOff>|<get-subtitlesOff>(){}[0]
     final val unmute // io.github.yuroyami.kitepdf.media/KiteMediaLabels.unmute|{}unmute[0]
         final fun <get-unmute>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.unmute.<get-unmute>|<get-unmute>(){}[0]
 }

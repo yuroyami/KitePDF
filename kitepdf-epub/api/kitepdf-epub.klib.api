@@ -119,6 +119,20 @@ final enum class io.github.yuroyami.kitepdf.epub/EpubTargetKind : kotlin/Enum<io
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubTargetKind> // io.github.yuroyami.kitepdf.epub/EpubTargetKind.values|values#static(){}[0]
 }
 
+final enum class io.github.yuroyami.kitepdf.epub/EpubTrackKind : kotlin/Enum<io.github.yuroyami.kitepdf.epub/EpubTrackKind> { // io.github.yuroyami.kitepdf.epub/EpubTrackKind|null[0]
+    enum entry CAPTIONS // io.github.yuroyami.kitepdf.epub/EpubTrackKind.CAPTIONS|null[0]
+    enum entry CHAPTERS // io.github.yuroyami.kitepdf.epub/EpubTrackKind.CHAPTERS|null[0]
+    enum entry DESCRIPTIONS // io.github.yuroyami.kitepdf.epub/EpubTrackKind.DESCRIPTIONS|null[0]
+    enum entry METADATA // io.github.yuroyami.kitepdf.epub/EpubTrackKind.METADATA|null[0]
+    enum entry SUBTITLES // io.github.yuroyami.kitepdf.epub/EpubTrackKind.SUBTITLES|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.epub/EpubTrackKind.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.epub/EpubTrackKind> // io.github.yuroyami.kitepdf.epub/EpubTrackKind.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubTrackKind // io.github.yuroyami.kitepdf.epub/EpubTrackKind.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.epub/EpubTrackKind> // io.github.yuroyami.kitepdf.epub/EpubTrackKind.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.epub/ReaderFontFamily : kotlin/Enum<io.github.yuroyami.kitepdf.epub/ReaderFontFamily> { // io.github.yuroyami.kitepdf.epub/ReaderFontFamily|null[0]
     enum entry MONOSPACE // io.github.yuroyami.kitepdf.epub/ReaderFontFamily.MONOSPACE|null[0]
     enum entry SANS_SERIF // io.github.yuroyami.kitepdf.epub/ReaderFontFamily.SANS_SERIF|null[0]
@@ -296,6 +310,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubMedia { // io.github.yuroyami.ki
         final fun <get-rect>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.epub/EpubMedia.rect.<get-rect>|<get-rect>(){}[0]
     final val sources // io.github.yuroyami.kitepdf.epub/EpubMedia.sources|{}sources[0]
         final fun <get-sources>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubMediaSource> // io.github.yuroyami.kitepdf.epub/EpubMedia.sources.<get-sources>|<get-sources>(){}[0]
+    final val tracks // io.github.yuroyami.kitepdf.epub/EpubMedia.tracks|{}tracks[0]
+        final fun <get-tracks>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubMediaTrack> // io.github.yuroyami.kitepdf.epub/EpubMedia.tracks.<get-tracks>|<get-tracks>(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubMediaOverlay { // io.github.yuroyami.kitepdf.epub/EpubMediaOverlay|null[0]
@@ -310,6 +326,19 @@ final class io.github.yuroyami.kitepdf.epub/EpubMediaSource { // io.github.yuroy
         final fun <get-href>(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubMediaSource.href.<get-href>|<get-href>(){}[0]
     final val type // io.github.yuroyami.kitepdf.epub/EpubMediaSource.type|{}type[0]
         final fun <get-type>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMediaSource.type.<get-type>|<get-type>(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.epub/EpubMediaTrack { // io.github.yuroyami.kitepdf.epub/EpubMediaTrack|null[0]
+    final val href // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.href|{}href[0]
+        final fun <get-href>(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.href.<get-href>|<get-href>(){}[0]
+    final val isDefault // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.isDefault|{}isDefault[0]
+        final fun <get-isDefault>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.isDefault.<get-isDefault>|<get-isDefault>(){}[0]
+    final val kind // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.kind|{}kind[0]
+        final fun <get-kind>(): io.github.yuroyami.kitepdf.epub/EpubTrackKind // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.kind.<get-kind>|<get-kind>(){}[0]
+    final val label // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.label|{}label[0]
+        final fun <get-label>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.label.<get-label>|<get-label>(){}[0]
+    final val language // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.language|{}language[0]
+        final fun <get-language>(): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubMediaTrack.language.<get-language>|<get-language>(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubMetadata { // io.github.yuroyami.kitepdf.epub/EpubMetadata|null[0]

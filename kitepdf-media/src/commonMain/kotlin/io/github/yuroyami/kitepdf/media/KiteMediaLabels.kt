@@ -16,6 +16,8 @@ package io.github.yuroyami.kitepdf.media
  * @property speed the button that opens the menu of playback speeds.
  * @property fullScreen the button that shows a video over the whole window.
  * @property exitFullScreen the button that brings the video back to its page.
+ * @property subtitles the button that opens the menu of subtitle and caption tracks.
+ * @property subtitlesOff the entry of that menu that shows no track.
  */
 public class KiteMediaLabels(
     public val play: String = "Play",
@@ -26,4 +28,6 @@ public class KiteMediaLabels(
     public val speed: String = "Playback speed",
     public val fullScreen: String = "Full screen",
     public val exitFullScreen: String = "Exit full screen",
+    public val subtitles: String = "Subtitles",
+    public val subtitlesOff: String = "Off",
 )

@@ -3151,7 +3151,7 @@ public class EpubPage internal constructor(
             imageRect(page, box),
             info.kind,
             info.sources.map { EpubMediaSource(it.href, it.type ?: doc.resourceType(it.href)) },
-            info.poster, info.controls, info.autoplay, info.loop, info.muted, info.id,
+            info.poster, info.controls, info.autoplay, info.loop, info.muted, info.id, info.tracks,
         )
     }
 

@@ -66,6 +66,9 @@ import io.github.yuroyami.kiteplayer.KitePlayerPlatform
 import io.github.yuroyami.kiteplayer.LoopMode
 import io.github.yuroyami.kiteplayer.PlaybackStatus
 import io.github.yuroyami.kiteplayer.SeekMode
+import io.github.yuroyami.kiteplayer.TrackId
+import io.github.yuroyami.kiteplayer.TrackKind
+import io.github.yuroyami.kiteplayer.Tracks
 import io.github.yuroyami.kiteplayer.compose.KitePlayerVideo
 import io.github.yuroyami.kiteplayer.session.BackgroundPolicy
 import io.github.yuroyami.kiteplayer.compose.KiteRenderPath
@@ -150,7 +153,10 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  * The bar shows the elapsed and the total time around a line of how far playback has gone. A tap
  * on the line seeks there and a drag scrubs, and a screen reader moves it as a slider (#479). The
  * bar ends with a mute button and a menu of speeds from 0.5 to 2, which keep the pitch (#484).
- * Where the box is too narrow, the times and then the speed leave the bar.
+ * Where the box is too narrow, the times and then the menus leave the bar.
+ *
+ * The subtitle and caption tracks of the element load with it, and the one it marks `default`
+ * shows over the video at once. A menu on the bar picks another track or none (#483).
  *
  * The bar of a video has a full-screen button (#482). Full screen shows the same player over the
  * whole window, in a [Dialog], so playback goes on without a break, and the button, a back gesture
@@ -375,9 +381,9 @@ private fun PlayButton(label: String, modifier: Modifier, onClick: () -> Unit) {
 
 /**
  * A play or pause toggle, the elapsed time, a line of how far playback has gone that seeks, the
- * total time, a mute button and a speed menu. A video's bar ends with a button that enters full
- * screen, or leaves it while [fullScreen] is true. Null leaves it out. A narrow bar drops the
- * times first, then the speed.
+ * total time, a mute button, a menu of the subtitle tracks when there are any, and a speed menu.
+ * A video's bar ends with a button that enters full screen, or leaves it while [fullScreen] is
+ * true. Null leaves it out. A narrow bar drops the times first, then the two menus.
  */
 @Composable
 private fun TransportBar(
@@ -417,6 +423,9 @@ private fun TransportBar(
             if (roomy && duration != null) BasicText(clock(duration), style = TIME_STYLE)
             BarButton(if (snapshot.muted) labels.unmute else labels.mute, { player.setMuted(!snapshot.muted) }) {
                 drawSpeakerGlyph(muted = snapshot.muted)
+            }
+            if (withSpeed && snapshot.tracks.subtitles.isNotEmpty()) {
+                SubtitleMenu(snapshot.tracks, labels) { track -> scope.launch { runCatching { player.selectTrack(TrackKind.Subtitle, track) } } }
             }
             if (withSpeed) SpeedMenu(snapshot.speed, labels.speed) { speed -> runCatching { player.setSpeed(speed) } }
             if (fullScreen != null) {
@@ -539,6 +548,50 @@ private fun SpeedMenu(speed: Double, label: String, onSpeed: (Double) -> Unit) {
     }
 }
 
+/**
+ * A button that opens a menu of the subtitle and caption tracks in [tracks], with an entry that
+ * shows none first (#483). [onTrack] gets the track the reader picks, or null for none.
+ */
+@Composable
+private fun SubtitleMenu(tracks: Tracks, labels: KiteMediaLabels, onTrack: (TrackId?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val chosen = tracks.selectedSubtitle
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .padding(horizontal = 8.dp)
+            .semantics {
+                contentDescription = labels.subtitles
+                stateDescription = chosen?.let { tracks.find(it) }?.label ?: labels.subtitlesOff
+            }
+            .clickable(role = Role.Button) { open = !open },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(GLYPH_SIZE)) { drawSubtitleGlyph(on = chosen != null) }
+        if (open) {
+            Popup(alignment = Alignment.BottomCenter, onDismissRequest = { open = false }) {
+                Column(Modifier.background(MENU).padding(vertical = 4.dp)) {
+                    for (track in listOf(null) + tracks.subtitles) {
+                        val picked = track?.id == chosen
+                        Box(
+                            Modifier
+                                .widthIn(min = 96.dp)
+                                .semantics { selected = picked }
+                                .clickable(role = Role.Button) {
+                                    open = false
+                                    onTrack(track?.id)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            BasicText(track?.label ?: labels.subtitlesOff, style = if (picked) TIME_STYLE.copy(color = ACCENT) else TIME_STYLE)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** [speed] as a player shows it, such as `1.25×`. */
 internal fun speedText(speed: Double): String {
     val hundredths = kotlin.math.round(speed * 100).toLong()
@@ -583,6 +636,20 @@ private fun DrawScope.drawSpeakerGlyph(muted: Boolean) {
             )
         }
     }
+}
+
+/** A white frame with two lines of text in it, filled while a track shows ([on]), as players draw subtitles. */
+private fun DrawScope.drawSubtitleGlyph(on: Boolean) {
+    val stroke = size.minDimension * 0.1f
+    val w = size.width
+    val h = size.height
+    val frame = Size(w - stroke, h * 0.7f - stroke)
+    val corner = CornerRadius(stroke * 1.5f)
+    val topLeft = Offset(stroke / 2f, h * 0.15f + stroke / 2f)
+    val ink = if (on) Color.Black else Color.White
+    if (on) drawRoundRect(Color.White, topLeft, frame, corner) else drawRoundRect(Color.White, topLeft, frame, corner, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+    drawLine(ink, Offset(w * 0.2f, h * 0.48f), Offset(w * 0.8f, h * 0.48f), stroke)
+    drawLine(ink, Offset(w * 0.2f, h * 0.66f), Offset(w * 0.6f, h * 0.66f), stroke)
 }
 
 /** A white play triangle of [height], its left edge at [topLeft]. */

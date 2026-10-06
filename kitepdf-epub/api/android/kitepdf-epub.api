@@ -148,6 +148,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMedia {
 	public final fun getPoster ()Ljava/lang/String;
 	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public final fun getSources ()Ljava/util/List;
+	public final fun getTracks ()Ljava/util/List;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubMediaKind : java/lang/Enum {
@@ -166,6 +167,14 @@ public final class io/github/yuroyami/kitepdf/epub/EpubMediaOverlay {
 public final class io/github/yuroyami/kitepdf/epub/EpubMediaSource {
 	public final fun getHref ()Ljava/lang/String;
 	public final fun getType ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubMediaTrack {
+	public final fun getHref ()Ljava/lang/String;
+	public final fun getKind ()Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getLanguage ()Ljava/lang/String;
+	public final fun isDefault ()Z
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubMetadata {
@@ -364,6 +373,17 @@ public final class io/github/yuroyami/kitepdf/epub/EpubTargetKind : java/lang/En
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubTargetKind;
 	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubTargetKind;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/EpubTrackKind : java/lang/Enum {
+	public static final field CAPTIONS Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
+	public static final field CHAPTERS Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
+	public static final field DESCRIPTIONS Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
+	public static final field METADATA Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
+	public static final field SUBTITLES Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/OpenFileKt {

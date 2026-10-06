@@ -1,8 +1,8 @@
 public final class io/github/yuroyami/kitepdf/media/KiteMediaLabels {
 	public static final field $stable I
 	public fun <init> ()V
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getExitFullScreen ()Ljava/lang/String;
 	public final fun getFullScreen ()Ljava/lang/String;
 	public final fun getMute ()Ljava/lang/String;
@@ -10,6 +10,8 @@ public final class io/github/yuroyami/kitepdf/media/KiteMediaLabels {
 	public final fun getPlay ()Ljava/lang/String;
 	public final fun getSeek ()Ljava/lang/String;
 	public final fun getSpeed ()Ljava/lang/String;
+	public final fun getSubtitles ()Ljava/lang/String;
+	public final fun getSubtitlesOff ()Ljava/lang/String;
 	public final fun getUnmute ()Ljava/lang/String;
 }
 
