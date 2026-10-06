@@ -862,9 +862,11 @@ class EpubScriptTest {
                 "log: blob 3 text/plain 2 x/y f.txt 5 3 |",
                 "log: exception SyntaxError 12 true 8 0",
                 "log: doc New title|a=1; b=2|v|block|loading|2",
+                // An XHTML chapter is an XML document, which refuses document.write as a browser's does (#603).
+                "log: write InvalidStateError",
                 "log: features true undefined false",
                 "log: micro",
-                "log: loaded interactive true",
+                "log: loaded interactive false",
                 "log: window load",
                 "log: reader start:false load:2/2:true bc",
                 "log: timer x",
@@ -984,7 +986,7 @@ class EpubScriptTest {
             queueMicrotask(function () { log('micro'); });
             document.addEventListener('DOMContentLoaded', function () { log('loaded ' + document.readyState + ' ' + (document.getElementById('written') !== null)); });
             window.addEventListener('load', function () { log('window load'); });
-            document.writeln('<i id="written">w</i>');
+            try { document.writeln('<i id="written">w</i>'); } catch (e) { log('write ' + e.name); }
 
             var reader = new FileReader(), events = '';
             reader.addEventListener('loadstart', function (e) { events += 'start:' + e.bubbles + ' '; });
