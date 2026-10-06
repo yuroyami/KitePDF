@@ -151,9 +151,7 @@ Node.prototype.appendChild = function (child) { return insertNode(idOf(this), ch
 Node.prototype.insertBefore = function (child, ref) { return insertNode(idOf(this), child, ref, 'insertBefore'); };
 Node.prototype.removeChild = function (child) { return removeNode(idOf(this), child, 'removeChild'); };
 Node.prototype.replaceChild = function (child, old) {
-  var id = idOf(this);
-  insertNode(id, child, old, 'replaceChild');
-  removeNode(id, old, 'replaceChild');
+  check(K.replace(idOf(this), idOf(child), idOf(old)), 'replaceChild');
   return old;
 };
 Node.prototype.cloneNode = function (deep) { return wrap(K.clone(idOf(this), !!deep)); };
@@ -174,29 +172,41 @@ function nodesFrom(args) {
   for (var i = 0; i < args.length; i++) ArrayPush(out, isNode(args[i]) ? args[i] : textNode(args[i]));
   return out;
 }
+/* [nodes] as one node, of the DOM Standard, 4.2.6: the node itself, or a fragment that holds them all,
+   so the checks of an insert run once for all of them (#604). */
+function convertNodes(nodes, what) {
+  if (nodes.length === 1) return nodes[0];
+  var fragment = wrap(K.createFragment());
+  for (var i = 0; i < nodes.length; i++) insertNode(fragment.__id, nodes[i], null, what);
+  return fragment;
+}
+/* The nearest sibling of [id] in the direction [step] that is none of [nodes], as an id, or null. */
+function viableSibling(id, step, nodes) {
+  var ids = listMap(nodes, function (n) { return n.__id; });
+  for (var s = siblingId(id, step, false); s != null; s = siblingId(s, step, false)) if (ArrayIndexOf(ids, s) < 0) return s;
+  return null;
+}
 function ChildNode(proto) {
   proto.remove = function () { var p = K.parent(idOf(this)); if (p != null) K.remove(p, this.__id); };
   proto.before = function () {
-    var p = K.parent(idOf(this)); if (p == null) return;
-    var nodes = nodesFrom(arguments);
-    for (var i = 0; i < nodes.length; i++) insertNode(p, nodes[i], this, 'before');
+    var id = idOf(this), p = K.parent(id); if (p == null) return;
+    var nodes = nodesFrom(arguments), previous = viableSibling(id, -1, nodes), node = convertNodes(nodes, 'before');
+    var c = childIds(p), ref = previous == null ? c[0] : siblingId(previous, 1, false);
+    insertNode(p, node, wrap(ref == null ? null : ref), 'before');
   };
   proto.after = function () {
-    var p = K.parent(idOf(this)); if (p == null) return;
-    var next = wrap(siblingId(this.__id, 1, false)), nodes = nodesFrom(arguments);
-    for (var i = 0; i < nodes.length; i++) insertNode(p, nodes[i], next, 'after');
+    var id = idOf(this), p = K.parent(id); if (p == null) return;
+    var nodes = nodesFrom(arguments), next = viableSibling(id, 1, nodes);
+    insertNode(p, convertNodes(nodes, 'after'), wrap(next), 'after');
   };
   proto.replaceWith = function () {
-    var p = K.parent(idOf(this)); if (p == null) return;
-    var nodes = nodesFrom(arguments);
-    for (var i = 0; i < nodes.length; i++) insertNode(p, nodes[i], this, 'replaceWith');
-    removeNode(p, this, 'replaceWith');
+    var id = idOf(this), p = K.parent(id); if (p == null) return;
+    var nodes = nodesFrom(arguments), next = viableSibling(id, 1, nodes), node = convertNodes(nodes, 'replaceWith');
+    if (K.parent(id) === p) check(K.replace(p, idOf(node), id), 'replaceWith');
+    else insertNode(p, node, wrap(next), 'replaceWith');
   };
 }
-function appendNodes(id, args, what) {
-  var nodes = nodesFrom(args);
-  for (var i = 0; i < nodes.length; i++) insertNode(id, nodes[i], null, what);
-}
+function appendNodes(id, args, what) { insertNode(id, convertNodes(nodesFrom(args), what), null, what); }
 /* The elements under [id] whose qualified name is [name], of the DOM Standard, 4.4: in an HTML
    document, an HTML element matches the name lowercased. A plain name is looked up by the host's
    selectors, whose type selector finds every element of that name and more, and the rest among
@@ -237,10 +247,15 @@ function ParentNode(proto, iface) {
   def(proto, 'lastElementChild', function () { var c = elementIds(idOf(this)); return c.length ? wrap(c[c.length - 1]) : null; });
   proto.append = function () { appendNodes(idOf(this), arguments, 'append'); };
   proto.prepend = function () {
-    var id = idOf(this), c = childIds(id), first = c.length ? wrap(c[0]) : null, nodes = nodesFrom(arguments);
-    for (var i = 0; i < nodes.length; i++) insertNode(id, nodes[i], first, 'prepend');
+    var id = idOf(this), node = convertNodes(nodesFrom(arguments), 'prepend'), c = childIds(id);
+    insertNode(id, node, c.length ? wrap(c[0]) : null, 'prepend');
   };
-  proto.replaceChildren = function () { var id = idOf(this); K.setText(id, ''); appendNodes(id, arguments, 'replaceChildren'); };
+  proto.replaceChildren = function () {
+    var id = idOf(this), node = convertNodes(nodesFrom(arguments), 'replaceChildren');
+    check(K.insertError(id, node.__id, null), 'replaceChildren');
+    K.setText(id, '');
+    insertNode(id, node, null, 'replaceChildren');
+  };
   proto.querySelector = function (selectors) {
     var id = idOf(this), what = "Failed to execute 'querySelector' on '" + iface + "'";
     return wrap(queryFirst(id, selectorsArg(arguments, what), what));
