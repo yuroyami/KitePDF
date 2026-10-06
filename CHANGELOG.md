@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An `<img>` in a book's scripts loads its picture as in a browser: `load` and `error` fire, and
+  `complete`, `naturalWidth`, `naturalHeight` and `decode()` follow the load. A canvas draws an
+  image once it has loaded, and throws for a broken one. Before this change, every image was
+  complete at once, `load` never fired, and the natural size read the `width` and `height`
+  attributes (#611).
+
 - A book's scripts can read and write the pixels of a `<canvas>`: `ImageData`,
   `createImageData`, `getImageData`, `putImageData`, `toDataURL` and `toBlob` work, in sRGB or
   Display P3 and in 8-bit or float16 pixels. The pixels are the same on every target and round as

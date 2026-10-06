@@ -65,7 +65,9 @@ class CanvasReadbackTest {
     fun a_book_image_drawn_into_a_canvas_reads_back(): TestResult = scriptTest {
         val png = KiteRaster(2, 1, intArrayOf(0xFFFF0000.toInt(), 0x800000FF.toInt())).encodePng()
         val (log) = run(
-            "x.drawImage(document.getElementById('i'), 0, 0); console.log(Array.prototype.join.call(x.getImageData(0, 0, 3, 1).data, ','));",
+            // The image draws once it has loaded, before the window's load event.
+            "window.onload = function () { x.drawImage(document.getElementById('i'), 0, 0);" +
+                " console.log(Array.prototype.join.call(x.getImageData(0, 0, 3, 1).data, ',')); };",
             files = mapOf("pic.png" to png),
             before = """<img id="i" src="pic.png" alt=""/>""",
         )

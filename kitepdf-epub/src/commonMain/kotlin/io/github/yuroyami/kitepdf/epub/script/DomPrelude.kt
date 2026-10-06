@@ -863,6 +863,10 @@ function attributeChanged(el, name, set) {
   if (name === 'nonce') WeakMapSet(nonces, el, set ? K.attr(el.__id, 'nonce') : '');
   if (name === 'async' && set) WeakMapSet(forceAsync, el, false);
   if (name === 'type') inputTypeChanged(el);
+  if (name === 'src' && isImageElement(el.__id) && ownerDocId(el.__id) === rootId) {
+    var r = MapGet(imageRequests, el.__id);
+    if (r === undefined) imageRequest(el.__id); else updateImageData(el.__id, r, true);
+  }
   handlerAttributeChanged(el, name, set);
 }
 function handlerAttributeChanged(el, name, set) {
@@ -1901,7 +1905,7 @@ function writeHtml(doc, html) {
   var at = doc.__script;
   if (at) { K.write(at.__id, html); return; }
   var body = bodyOf(idOf(doc));
-  if (body !== null) check(K.insertHtml(body.__id, 'beforeend', html), 'write');
+  if (body !== null) { check(K.insertHtml(body.__id, 'beforeend', html), 'write'); startParsedImages(body.__id); }
 }
 /* HTML, 8.4: an XML document, such as an XHTML chapter, refuses to be written, opened or closed (#603). */
 function htmlOnly(doc, method, what) {
@@ -1918,7 +1922,11 @@ Document.prototype.elementsFromPoint = function () { idOf(this); return []; };
 Document.prototype.execCommand = function () { idOf(this); return false; };
 Document.prototype.queryCommandSupported = function () { idOf(this); return false; };
 Document.prototype.getSelection = function () { return idOf(this) === rootId ? selection : null; };
-Document.prototype.importNode = function (node, deep) { return madeBy(idOf(this), K.clone(idOf(node), !!deep)); };
+Document.prototype.importNode = function (node, deep) {
+  var copy = madeBy(idOf(this), K.clone(idOf(node), !!deep));
+  startParsedImages(copy.__id);
+  return copy;
+};
 Document.prototype.adoptNode = function (node) {
   var docId = idOf(this), id = idOf(node);
   if (K.kind(id) === 9) throw new DOMException("Failed to execute 'adoptNode' on 'Document': The node provided is a document, which may not be adopted.", 'NotSupportedError');
@@ -2424,6 +2432,9 @@ function* loadedSteps() {
   for (var b = dispatchSteps(document, new Event('DOMContentLoaded', { __proto__: null, bubbles: true })); !GeneratorNext(b).done;) yield;
   // The fragment's element becomes the target once the document is parsed, before it completes, as in Blink (#550).
   K.indicate();
+  // The images of the document load before the window does (HTML, 8.4.7).
+  startParsedImages(rootId);
+  for (var f = pendingImageSteps(); !GeneratorNext(f).done;) yield;
   document.__ready = 'complete';
   for (var c = dispatchSteps(document, new Event('readystatechange')); !GeneratorNext(c).done;) yield;
   var load = new Event('load');

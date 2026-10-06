@@ -154,7 +154,11 @@ Node.prototype.replaceChild = function (child, old) {
   check(K.replace(idOf(this), idOf(child), idOf(old)), 'replaceChild');
   return old;
 };
-Node.prototype.cloneNode = function (deep) { return wrap(K.clone(idOf(this), !!deep)); };
+Node.prototype.cloneNode = function (deep) {
+  var copy = K.clone(idOf(this), !!deep);
+  startParsedImages(copy);
+  return wrap(copy);
+};
 Node.prototype.contains = function (other) {
   if (other == null) return false;
   var self = idOf(this);
@@ -506,6 +510,7 @@ def(Element.prototype, 'innerHTML', function () {
 }, function (v) {
   var id = idOf(this);
   checkMarkup(K.setHtml(id, v == null ? '' : String(v), inXmlDocument(id)), "Failed to set the 'innerHTML' property on 'Element'");
+  startParsedImages(id);
 });
 def(Element.prototype, 'outerHTML', function () {
   var id = idOf(this);
@@ -515,6 +520,7 @@ def(Element.prototype, 'outerHTML', function () {
   var what = "Failed to set the 'outerHTML' property on 'Element'";
   checkMarkup(K.insertHtml(id, 'beforebegin', v == null ? '' : String(v), inXmlDocument(id)), what);
   removeNode(p, this, what);
+  startParsedImages(p);
 });
 var ADJACENT_POSITIONS = nameSet(['beforebegin', 'afterbegin', 'beforeend', 'afterend']);
 Element.prototype.insertAdjacentHTML = function (position, html) {
@@ -524,6 +530,7 @@ Element.prototype.insertAdjacentHTML = function (position, html) {
     throw new DOMException(what + ": The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", 'SyntaxError');
   }
   checkMarkup(K.insertHtml(id, position, String(html), inXmlDocument(id)), what);
+  startParsedImages(K.parent(id) == null ? id : K.parent(id));
 };
 /* Puts [node] at [position] of [el], as insertAdjacentElement does; null where el has no parent to put it by. */
 function insertAdjacent(el, position, node, what) {

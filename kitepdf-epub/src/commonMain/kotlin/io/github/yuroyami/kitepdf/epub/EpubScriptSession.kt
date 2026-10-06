@@ -417,6 +417,17 @@ public class EpubScriptSession(
             commit()
         }
 
+        /** The HTML `img` elements with a `src` at and under [node], in tree order. */
+        private fun imagesIn(node: KiteXmlNode): List<KiteXmlNode.Element> {
+            val out = ArrayList<KiteXmlNode.Element>()
+            fun walk(e: KiteXmlNode.Element) {
+                if (isHtml(e, "img") && dom.attr(e, "src") != null) out.add(e)
+                for (c in e.children) if (c is KiteXmlNode.Element) walk(c)
+            }
+            if (node is KiteXmlNode.Element) walk(node)
+            return out
+        }
+
         /** The [tag] elements under [el], in tree order, not looking inside one. */
         private fun elementsIn(el: KiteXmlNode.Element, tag: String): List<KiteXmlNode.Element> {
             val out = ArrayList<KiteXmlNode.Element>()
@@ -513,6 +524,10 @@ public class EpubScriptSession(
             // A CSS transform list as DOMMatrix reads it: its 16 entries and 1 for a 2D one, "relative", or null (#609).
             // A canvas's 2D context, its paths, gradients and patterns (#501).
             def("cv") { args -> canvases.call(args) }
+            // The natural size of the picture an image element names, or null when it does not decode (#611).
+            def("imageSize") { args -> element(args, 0)?.let(::canvasImage)?.let { listOf(it.width, it.height) } }
+            // The img elements with a src at and under a node, which start to load when markup makes them (#611).
+            def("images") { args -> node(args, 0)?.let { n -> imagesIn(n).map(dom::idOf) } ?: emptyList<Int>() }
             def("matrixParse") { args ->
                 when (val r = CssMatrixParser.parse(string(args, 0))) {
                     is CssMatrixParser.Result.Matrix -> r.m.toList() + (if (r.is2D) 1.0 else 0.0)
