@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whose flow is `scrolled-continuous`, as EPUB Reading Systems 3.4 asks. A roll ignores the layout
   overrides of its spine. `KiteDocLayout.forDocument` picks the strip. Four more W3C EPUB tests
   pass (#506).
+- An image that the spine lists, a PNG, JPEG or GIF, shows as a page of its own at its pixel
+  size. Its fallback document gives the image its alternative text. Before, the page showed the
+  fallback document's text (#614).
 - A book whose `rendition:flow` is `scrolled-continuous` or `scrolled-doc` now scrolls: each
   reflowable chapter is one page as tall as its content (EPUB 3.3). `EpubSettings.scrolled` turns
   this on or off for every book. `KiteDocLayout.forDocument` picks the layout the book asks for, and

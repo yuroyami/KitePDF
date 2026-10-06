@@ -94,6 +94,11 @@ internal class ParsedEpub(
     private val overlays: List<Pair<String, Double?>?> = List(spinePaths.size) { null },
     /** Whether the manifest marks each spine document `remote-resources`, parallel to [spinePaths] (#38). */
     private val manifestRemote: List<Boolean> = List(spinePaths.size) { false },
+    /**
+     * For each spine entry that is an image shown as a page, the zip path of its fallback document,
+     * or an empty string without one, parallel to [spinePaths]; null for a document (#614).
+     */
+    private val imageFallbacks: List<String?> = List(spinePaths.size) { null },
 ) {
 
     val spineCount: Int get() = spinePaths.size
@@ -146,7 +151,7 @@ internal class ParsedEpub(
         if (manifestScripted[chapter]) return true
         scriptLock.withLock { scriptFound[chapter] }?.let { return it }
         val path = spinePaths[chapter]
-        val found = runsScripts(zip.readText(path).orEmpty(), dirOf(path), setOf(path))
+        val found = runsScripts(chapterText(chapter), dirOf(path), setOf(path))
         scriptLock.withLock { scriptFound[chapter] = found }
         return found
     }
@@ -247,7 +252,43 @@ internal class ParsedEpub(
     }
 
     /** The text of [chapter]'s document, which a chapter's scripts parse again for what the layout's tree drops (#544, #546). */
-    fun chapterText(chapter: Int): String = zip.readText(spinePaths[chapter]) ?: ""
+    fun chapterText(chapter: Int): String {
+        val fallback = imageFallbacks[chapter] ?: return zip.readText(spinePaths[chapter]) ?: ""
+        return imagePageText(chapter, fallback)
+    }
+
+    private val imagePages = arrayOfNulls<String>(spinePaths.size)
+
+    /**
+     * The document of [chapter], an image that the spine lists: the image alone at its own size,
+     * with the text of [fallback], its fallback document, as its alternative text (#614). Built on
+     * first use, so opening a book reads no image.
+     */
+    private fun imagePageText(chapter: Int, fallback: String): String {
+        spineLock.withLock { imagePages[chapter] }?.let { return it }
+        val path = spinePaths[chapter]
+        // A JPEG can hold a long header before its frame, so a short prefix that misses it reads the whole file.
+        val size = zip.readPrefix(path, IMAGE_HEADER_BYTES)?.let(ImagePage::size) ?: zip.read(path)?.let(ImagePage::size)
+        val alt = fallback.takeIf { it.isNotEmpty() }?.let { readTextAt(it) }
+            ?.let { plainText(HtmlParser.parse(it, html = mediaTypeOf(fallback)?.lowercase() == "text/html")) }.orEmpty()
+        val text = ImagePage.document(path.substringAfterLast('/'), size?.first, size?.second, alt)
+        return spineLock.withLock { imagePages[chapter] ?: text.also { imagePages[chapter] = it } }
+    }
+
+    /** The text of [root]'s body, its white space folded. */
+    private fun plainText(root: KiteXmlNode.Element): String {
+        val out = StringBuilder()
+        fun walk(el: KiteXmlNode.Element) {
+            if (el.tag == "head" || el.tag == "script" || el.tag == "style") return
+            for (c in el.children) when (c) {
+                is KiteXmlNode.Element -> walk(c)
+                is KiteXmlNode.Text -> out.append(c.text).append(' ')
+                is KiteXmlNode.Comment -> {}
+            }
+        }
+        walk(root)
+        return out.toString().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+    }
 
     /** Whether [chapter]'s document has been parsed yet. For tests and diagnostics. */
     fun isSpineParsed(chapter: Int): Boolean =
@@ -652,6 +693,13 @@ internal class ParsedEpub(
             val chains = opf.spineIdrefs.map { opf.fallbackChain(it) }
             if (chains.all { it.isEmpty() }) throw EpubFormatException("spine is empty in $opfPath")
             val spine = chains.indices.mapNotNull { index ->
+                // An image that every target decodes shows as itself, and its fallback gives its alternative text (#614).
+                val image = chains[index].firstOrNull()?.takeIf { it.mediaType?.lowercase() in ImagePage.TYPES }
+                if (image != null) {
+                    val fallback = opf.contentDocument(opf.spineIdrefs[index])
+                        ?: chains[index].drop(1).firstOrNull { looksLikeMarkup(zip.readPrefix(pathOf(it), MARKUP_SNIFF_BYTES)) }
+                    return@mapNotNull SpineDocument(pathOf(image), index, image, fallback?.let(::pathOf).orEmpty())
+                }
                 val item = opf.contentDocument(opf.spineIdrefs[index])
                     ?: chains[index].firstOrNull { looksLikeMarkup(zip.readPrefix(pathOf(it), MARKUP_SNIFF_BYTES)) }
                     ?: return@mapNotNull null
@@ -677,14 +725,22 @@ internal class ParsedEpub(
                     val item = opf.itemsById[overlayId] ?: return@map null
                     EpubDocument.resolvePath(opf.baseDir, item.href) to opf.overlayDurations[overlayId]
                 },
+                imageFallbacks = present.map { it.imageFallback },
             )
         }
 
-        /** The file a spine entry shows: its zip [path], the [index] of the entry, and the manifest [item]. */
-        private class SpineDocument(val path: String, val index: Int, val item: OpfItem)
+        /**
+         * The file a spine entry shows: its zip [path], the [index] of the entry, and the manifest
+         * [item]. For an image shown as a page, [imageFallback] is the zip path of its fallback
+         * document, or an empty string without one (#614).
+         */
+        private class SpineDocument(val path: String, val index: Int, val item: OpfItem, val imageFallback: String? = null)
 
         /** How far into a spine file without a document type [looksLikeMarkup] reads. */
         private const val MARKUP_SNIFF_BYTES = 512
+
+        /** How much of a spine image [ImagePage.size] reads first for its size. */
+        private const val IMAGE_HEADER_BYTES = 65_536
 
         /**
          * Whether [bytes] begin as markup does: past a byte order mark and white space, a `<`, in
