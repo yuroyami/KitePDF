@@ -677,7 +677,11 @@ var HTMLMapElement = elementInterface('HTMLMapElement', HTMLElement, 'name', fun
 var HTMLAreaElement = elementInterface('HTMLAreaElement', HTMLElement, 'alt coords shape target download ping rel relList=rel:trel ' +
   'referrerPolicy:ereferrer hreflang type noHref=nohref:b', hyperlinkUtils);
 var HTMLCanvasElement = elementInterface('HTMLCanvasElement', HTMLElement, 'width:U300 height:U150', function (p) {
-  p.getContext = function () { idOf(this); return null; };
+  p.getContext = function getContext(contextId, options) {
+    idOf(this);
+    needArgs(arguments, 1, "Failed to execute 'getContext' on 'HTMLCanvasElement'");
+    return canvasContext(this, domString(contextId), options);
+  };
   p.toDataURL = function () { idOf(this); return 'data:,'; };
   p.toBlob = function () { idOf(this); };
 });

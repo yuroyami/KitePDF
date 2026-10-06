@@ -87,8 +87,8 @@ internal object SvgGradient {
                     colorSpace = KiteColorSpace.DeviceRGB,
                     background = null,
                     bbox = null,
-                    // The focal point (fx, fy) is the inner circle's centre, radius 0.
-                    coords = doubleArrayOf(n("fx", cx), n("fy", cy), 0.0, cx, cy, r),
+                    // The focal circle (fx, fy, fr) is the inner circle, with a radius of 0 unless fr gives one (SVG 2, 14.3.3).
+                    coords = doubleArrayOf(n("fx", cx), n("fy", cy), n("fr", 0.0).coerceAtLeast(0.0), cx, cy, r),
                     domain = doubleArrayOf(0.0, 1.0),
                     function = function,
                     extendStart = true,

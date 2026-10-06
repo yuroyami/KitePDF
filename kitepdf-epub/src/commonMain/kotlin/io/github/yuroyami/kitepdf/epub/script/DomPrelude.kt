@@ -26,6 +26,7 @@ internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_REFLECTION)
     append(DOM_PRELUDE_ELEMENTS)
     append(DOM_PRELUDE_FORMS)
+    append(DOM_PRELUDE_CANVAS)
     append(DOM_PRELUDE_TAIL)
 }
 
@@ -105,6 +106,8 @@ var ObjectCtor = Object, ArrayIsArray = Array.isArray, ObjectToString = uncurry(
   DataViewCtor = DataView, WeakSetHas = typeof WeakSet === 'function' ? uncurry(WeakSet.prototype.has) : null,
   WeakRefDeref = typeof WeakRef === 'function' ? uncurry(WeakRef.prototype.deref) : null,
   RegistryUnregister = typeof FinalizationRegistry === 'function' ? uncurry(FinalizationRegistry.prototype.unregister) : null,
+  RegistryRegister = typeof FinalizationRegistry === 'function' ? uncurry(FinalizationRegistry.prototype.register) : null,
+  FinalizationRegistryCtor = typeof FinalizationRegistry === 'function' ? FinalizationRegistry : null,
   ErrorIsError = typeof Error.isError === 'function' ? Error.isError : null;
 /* The flags of a regular expression, each by the getter that checks it is one. */
 var REGEXP_FLAGS = (function (names) {

@@ -229,12 +229,17 @@ public class SvgImage private constructor(
         // one offscreen group, so where two of its shapes overlap no darker seam
         // shows (#91). A single shape's own opacity stays a per-paint alpha.
         val groupAlpha = if (container) (styleOrAttr(el, "opacity")?.toDoubleOrNull() ?: 1.0).coerceIn(0.0, 1.0) else 1.0
+        // Compositing and Blending 1, 3.2 and 3.3: mix-blend-mode blends what the element draws
+        // with what is under it, and isolation stops the blends inside a group at its edge.
+        val blend = blendModeOf(styleOrAttr(el, "mix-blend-mode"))
+        val group = groupAlpha < 1.0 || blend != KiteBlendMode.Normal ||
+            (container && styleOrAttr(el, "isolation")?.trim()?.lowercase() == "isolate")
         val clip = clipPathOf(el, ctm, paint)
         if (clip != null) canvas.pushClip(clip, KiteMatrix.IDENTITY, evenOdd = false)
-        if (groupAlpha < 1.0) {
+        if (group) {
             canvas.beginTransparencyGroup(
                 KiteRectangle(0.0, 0.0, width, height), parent.viewport,
-                isolated = true, knockout = false, alpha = groupAlpha, blendMode = KiteBlendMode.Normal,
+                isolated = true, knockout = false, alpha = groupAlpha, blendMode = blend,
             )
         }
         // A link pass notes each link and each element with an id around what it draws (#433).
@@ -262,7 +267,7 @@ public class SvgImage private constructor(
             }
         } finally {
             if (noted) links?.close()
-            if (groupAlpha < 1.0) canvas.endTransparencyGroup()
+            if (group) canvas.endTransparencyGroup()
             if (clip != null) canvas.popClip()
         }
     }
@@ -533,14 +538,55 @@ public class SvgImage private constructor(
             if (!run.paint.visible) continue
             if (links != null) for (id in run.ids) links.open(null, id)
             // Text space is y-up; SVG is y-down, so the run is flipped in place.
-            canvas.drawGlyphs(
-                run.glyphs, run.paint.fontSize, unitsPerEm = 1000, hasOutlines = false,
-                fontSpec = run.paint.fontSpec,
-                textToDevice = compose(ctm, compose(turnOf(run), KiteMatrix(1.0, 0.0, 0.0, -1.0, run.x, run.y))),
-                color = run.paint.fill ?: RgbColor.BLACK, alpha = run.paint.opacity * run.paint.fillOpacity,
+            val toUser = compose(turnOf(run), KiteMatrix(1.0, 0.0, 0.0, -1.0, run.x, run.y))
+            val p = run.paint
+            val plainFill = p.fill != null && p.fillRef == null
+            val stroked = p.strokeW > 0.0 && (p.stroke != null || p.strokeRef != null)
+            fun glyphs(color: RgbColor, alpha: Double) = canvas.drawGlyphs(
+                run.glyphs, p.fontSize, unitsPerEm = 1000, hasOutlines = false,
+                fontSpec = p.fontSpec, textToDevice = compose(ctm, toUser), color = color, alpha = alpha,
             )
+            if (plainFill) glyphs(p.fill!!, p.opacity * p.fillOpacity)
+            if (p.fillRef != null || stroked) {
+                // A paint server fill and a stroke need the outline of the text, which the host face gives.
+                val outline = runOutline(run, canvas)
+                when {
+                    outline != null -> paintShape(
+                        transformPath(outline, toUser), ctm,
+                        if (plainFill) p.copy(fill = null, fillRef = null) else p, canvas,
+                    )
+                    // With no outline, the text paints filled, as a stroked PDF run does.
+                    stroked -> glyphs(p.stroke ?: p.current, p.opacity * p.strokeOpacity)
+                    else -> glyphs(RgbColor.BLACK, p.opacity * p.fillOpacity)
+                }
+            }
             if (links != null) repeat(run.ids.size) { links.close() }
         }
+    }
+
+    /**
+     * The outline of [run] in text space, y up from the start of its baseline, from the host
+     * face [canvas] draws it in. Null when the canvas has no outlines for that face.
+     */
+    private fun runOutline(run: TextRun, canvas: KiteCanvas): KitePath? {
+        if (!canvas.resolvesGlyphOutlines) return null
+        val size = run.paint.fontSize
+        val b = KitePath.Builder()
+        var pen = 0.0
+        for (glyph in run.glyphs) {
+            if (glyph.text.isNotBlank()) {
+                val outline = canvas.hostGlyphOutline(glyph.text, run.paint.fontSpec) ?: return null
+                for (seg in transformPath(outline, KiteMatrix(size / 1000, 0.0, 0.0, size / 1000, pen, 0.0)).segments) when (seg) {
+                    is KitePath.Segment.MoveTo -> b.moveTo(seg.x, seg.y)
+                    is KitePath.Segment.LineTo -> b.lineTo(seg.x, seg.y)
+                    is KitePath.Segment.CurveTo -> b.curveTo(seg.x1, seg.y1, seg.x2, seg.y2, seg.x3, seg.y3)
+                    is KitePath.Segment.QuadTo -> b.quadTo(seg.x1, seg.y1, seg.x2, seg.y2)
+                    KitePath.Segment.Close -> b.close()
+                }
+            }
+            pen += glyph.advanceWidth * size / 1000 + glyph.advanceAdjust
+        }
+        return b.build()
     }
 
     /** The clip path an element's `clip-path="url(#id)"` names, already in device space. */
@@ -1573,21 +1619,6 @@ public class SvgImage private constructor(
         return if (values.size % 2 == 1) values + values else values
     }
 
-    private fun fontSpecOf(family: String?, weight: String?, style: String?, inherited: FontSpec): FontSpec {
-        if (family == null && weight == null && style == null) return inherited
-        val fam = family?.lowercase()?.let { f ->
-            when {
-                "mono" in f || "courier" in f -> KiteFontFamily.Monospace
-                "sans" in f || "arial" in f || "helvetica" in f -> KiteFontFamily.SansSerif
-                "serif" in f || "times" in f || "georgia" in f -> KiteFontFamily.Serif
-                else -> null
-            }
-        } ?: inherited.family
-        val bold = weight?.let { it == "bold" || (it.toIntOrNull() ?: 400) >= 600 } ?: inherited.bold
-        val italic = style?.let { it == "italic" || it == "oblique" } ?: inherited.italic
-        return FontSpec(fam, bold, italic, family ?: inherited.name)
-    }
-
     private fun paintValue(raw: String?, inherited: RgbColor?, current: RgbColor): RgbColor? = when {
         raw == null -> inherited
         raw == "none" -> null
@@ -1689,6 +1720,26 @@ public class SvgImage private constructor(
 
         /** The light sources of feDiffuseLighting and feSpecularLighting. */
         private val LIGHT_SOURCES = setOf("fedistantlight", "fepointlight", "fespotlight")
+
+        /** The blend mode a CSS `mix-blend-mode` names, or normal for a name it does not know. */
+        private fun blendModeOf(raw: String?): KiteBlendMode = when (raw?.trim()?.lowercase()) {
+            "multiply" -> KiteBlendMode.Multiply
+            "screen" -> KiteBlendMode.Screen
+            "overlay" -> KiteBlendMode.Overlay
+            "darken" -> KiteBlendMode.Darken
+            "lighten" -> KiteBlendMode.Lighten
+            "color-dodge" -> KiteBlendMode.ColorDodge
+            "color-burn" -> KiteBlendMode.ColorBurn
+            "hard-light" -> KiteBlendMode.HardLight
+            "soft-light" -> KiteBlendMode.SoftLight
+            "difference" -> KiteBlendMode.Difference
+            "exclusion" -> KiteBlendMode.Exclusion
+            "hue" -> KiteBlendMode.Hue
+            "saturation" -> KiteBlendMode.Saturation
+            "color" -> KiteBlendMode.Color
+            "luminosity" -> KiteBlendMode.Luminosity
+            else -> KiteBlendMode.Normal
+        }
 
         /** Elements whose opacity composites their children as one group. */
         private val CONTAINERS = setOf("svg", "g", "a", "switch", "use")
@@ -1870,6 +1921,31 @@ public class SvgImage private constructor(
             }
             return m
         }
+
+        internal fun fontSpecOf(family: String?, weight: String?, style: String?, inherited: FontSpec): FontSpec {
+            if (family == null && weight == null && style == null) return inherited
+            val fam = family?.lowercase()?.let { f ->
+                when {
+                    "mono" in f || "courier" in f -> KiteFontFamily.Monospace
+                    "sans" in f || "arial" in f || "helvetica" in f -> KiteFontFamily.SansSerif
+                    "serif" in f || "times" in f || "georgia" in f -> KiteFontFamily.Serif
+                    else -> null
+                }
+            } ?: inherited.family
+            val bold = weight?.let { it == "bold" || (it.toIntOrNull() ?: 400) >= 600 } ?: inherited.bold
+            val italic = style?.let { it == "italic" || it == "oblique" } ?: inherited.italic
+            return FontSpec(fam, bold, italic, family ?: inherited.name)
+        }
+
+        /** The commands of an SVG path's `d` attribute, up to the first one in error (SVG 2, 9.5.4). */
+        public fun parsePathData(d: String): KitePath = parsePath(d)
+
+        /**
+         * The advance of [text] at [fontSize] in user units, as `<text>` lays it out: in the standard-font
+         * metrics for the family, weight and style that `font-family`, `font-weight` and `font-style` name.
+         */
+        public fun textAdvance(text: String, fontFamily: String?, fontWeight: String?, fontStyle: String?, fontSize: Double): Double =
+            SvgText.width(SvgText.glyphs(text, fontSpecOf(fontFamily, fontWeight, fontStyle, FontSpec.SansSerif)), fontSize)
 
         // ---- SVG path `d` parser --------------------------------------------
 

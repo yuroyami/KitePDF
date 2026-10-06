@@ -198,6 +198,16 @@ versions and `WebKitCSSMatrix`. A `DOMMatrix` takes six or sixteen numbers, a ma
 or a CSS transform list such as `getComputedStyle(el).transform`. A length in that list must be
 absolute, so `em` and percentages throw a `SyntaxError`, as in a browser.
 
+A `<canvas>` gives a script its 2D context, `CanvasRenderingContext2D`, with `Path2D`,
+`CanvasGradient`, `CanvasPattern` and `TextMetrics`. What a script draws shows on the page where
+the canvas sits, and a later drawing paints the page again. The context keeps what it draws as
+SVG, so a canvas looks the same on every target. Paths, fills, strokes, dashes, clips,
+transforms, gradients (linear, radial and conic), patterns, images and other canvases, text,
+shadows, `filter`, every `globalCompositeOperation` and every blend mode work.
+`isPointInPath` and `isPointInStroke` answer as Chromium does, a point on an edge included. Text
+uses the metrics of the standard fonts, so `measureText` is near a browser's but not equal. A
+context other than `2d` answers `null`.
+
 Each object of the DOM has the interface a browser gives it, with its class string, so
 `String(document.body)` is `[object HTMLBodyElement]`, and each interface is a property of the
 window, so `document.body instanceof HTMLBodyElement` holds. An element of HTML has the interface HTML
@@ -382,8 +392,9 @@ document.
 
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
-its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`
-([#501](https://github.com/yuroyami/KitePDF/issues/501)). A script that calls one fails and is
+its value and checkedness; the pixels of a `<canvas>`, since `getImageData`, `putImageData`,
+`toDataURL` and `toBlob` are missing ([#610](https://github.com/yuroyami/KitePDF/issues/610)).
+A script that calls one fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.
 
 Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts can draw on a `<canvas>`. `getContext('2d')` answers a
+  `CanvasRenderingContext2D`, with `Path2D`, gradients, patterns, text, shadows, filters, every
+  composite operation and every blend mode. The drawing shows on the page where the canvas sits,
+  and a later drawing paints the page again. Before this change, `getContext` answered `null`
+  (#501).
+
+- SVG images take `mix-blend-mode` and `isolation`, and paint the stroke of text and a
+  gradient or pattern fill of text through the outlines of the host font. Before this change,
+  such text painted filled in black, and text with `fill="none"` painted black too.
+
+- A gradient in an SVG image takes the `fr` radius of SVG 2, so its focal circle can have a size.
+
 - A book's scripts have `DOMPoint`, `DOMPointReadOnly`, `DOMQuad`, `DOMMatrix`,
   `DOMMatrixReadOnly` and `WebKitCSSMatrix`. A `DOMMatrix` reads a CSS transform list, with 3D
   functions and `calc()`. `getComputedStyle` answers `transform` as a `matrix()` (#609).
