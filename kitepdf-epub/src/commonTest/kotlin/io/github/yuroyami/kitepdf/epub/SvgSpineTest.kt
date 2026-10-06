@@ -22,6 +22,7 @@ class SvgSpineTest {
                 <item id="c1" href="one.xhtml" media-type="application/xhtml+xml"/>
                 <item id="p" href="plate.svg" media-type="image/svg+xml"/>
                 <item id="c3" href="three.xhtml" media-type="application/xhtml+xml"/>
+                ${EpubFixtures.manifestItems(extra.map { (name, text) -> name to text.encodeToByteArray() })}
               </manifest>
               <spine><itemref idref="c1"/><itemref idref="p"/><itemref idref="c3"/></spine>
             </package>"""

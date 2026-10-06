@@ -391,6 +391,14 @@ left of a page moves whole to the next one. Only an object taller than a page
 goes on from page to page, and its `isWhole` is false there. `book.chapterPath(chapter)`
 names the zip path of a chapter's own document.
 
+### Files the manifest leaves out
+
+A book lists every file it uses in the manifest of its package. A chapter that
+names a file of the zip that the manifest leaves out gets nothing: the image does
+not draw, the style sheet does not apply, and `book.resource(path)` answers null.
+EPUB Reading Systems 3.3 asks a reading system not to use such a file. Install a
+`KiteWarnings.sink` to see each file that the book refuses.
+
 ### Resources inside the markup
 
 A document can carry a small resource in itself as a `data:` URL: an image
