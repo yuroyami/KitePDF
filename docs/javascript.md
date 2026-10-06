@@ -319,6 +319,11 @@ delivers the message, and any other origin drops it. `MessageChannel` makes two 
 `MessagePort` objects. A port holds its messages until `start()` runs or a script sets
 `onmessage`, and a port that moves in a transfer takes its held messages with it.
 
+`AbortController` and `AbortSignal` are the DOM Standard's, with `AbortSignal.abort`, `timeout`
+and `any`. A listener added with a `signal` goes away when the signal aborts. A signal that `any`
+makes follows its sources, and an abort sets every follower's reason before any `abort` event
+fires.
+
 `URL.createObjectURL` gives a blob a `blob:` URL of the book's origin, and the reader loads an
 image, a style sheet, an `@import` or a font from it as it loads a file of the book.
 `URL.revokeObjectURL` takes it away from the scripts, but what the chapter shows keeps it, as a

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts have `AbortController` and `AbortSignal`, with `AbortSignal.abort`, `timeout`
+  and `any`. `addEventListener` takes a `signal`, and an abort removes the listener (#607).
+
 - A book's scripts have `structuredClone`, `window.postMessage`, `MessageChannel`, `MessagePort`
   and `MessageEvent`. A clone keeps what HTML keeps, and a `transfer` list detaches buffers and
   moves ports. `postMessage` delivers to the chapter's own window in a task, when the target

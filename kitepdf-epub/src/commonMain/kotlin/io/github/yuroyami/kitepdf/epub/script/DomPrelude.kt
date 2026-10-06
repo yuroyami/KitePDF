@@ -17,6 +17,7 @@ internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_URL)
     append(DOM_PRELUDE_ENCODING)
     append(DOM_PRELUDE_FILE)
+    append(DOM_PRELUDE_ABORT)
     append(DOM_PRELUDE_MESSAGING)
     append(DOM_PRELUDE_REFLECTION)
     append(DOM_PRELUDE_ELEMENTS)
@@ -547,12 +548,15 @@ function tagOf(el) { return K.kind(idOf(el)) === 1 ? K.tag(el.__id) : ''; }
 
 /* ---- events ---- */
 
+/* Adds a listener, unless one with the same callback and capture is there; answers its entry, or null. */
 function addListener(t, type, fn, capture, once) {
   settleTarget(t);
   var all = listenersOf(t);
   var entries = all[type] || (all[type] = []);
-  for (var i = 0; i < entries.length; i++) if (entries[i].fn === fn && entries[i].capture === capture) return;
-  ArrayPush(entries, { __proto__: null, fn: fn, handler: null, capture: capture, once: once, removed: false });
+  for (var i = 0; i < entries.length; i++) if (entries[i].fn === fn && entries[i].capture === capture) return null;
+  var entry = { __proto__: null, fn: fn, handler: null, capture: capture, once: once, removed: false };
+  ArrayPush(entries, entry);
+  return entry;
 }
 function removeListener(t, type, fn, capture) {
   var entries = listenersOf(t)[type];
@@ -571,11 +575,22 @@ function EventTarget() {
   needNew(this, EventTarget, 'EventTarget', function (t) { return isNode(t) || ObjectHasOwn(t, '__listeners'); });
   hidden(this, '__listeners', ObjectCreate(null));
 }
+/* The members of the options are read in their lexicographic order, before the steps run. A
+   listener added with a signal goes when the signal aborts, and an aborted one adds nothing (#607). */
 EventTarget.prototype.addEventListener = function (type, fn, options) {
+  var capture = options === true, once = false, signal;
+  if (options && typeof options === 'object') {
+    capture = !!options.capture;
+    once = !!options.once;
+    signal = options.signal;
+    if (signal !== undefined && !isSignal(signal)) {
+      throw new TypeError("Failed to execute 'addEventListener' on 'EventTarget': Failed to read the 'signal' property from 'AddEventListenerOptions': Failed to convert value to 'AbortSignal'.");
+    }
+  }
   if (fn == null) return;
-  var capture = options === true || !!(options && typeof options === 'object' && options.capture);
-  var once = !!(options && typeof options === 'object' && options.once);
-  addListener(this, String(type), fn, capture, once);
+  if (signal !== undefined && signalState(signal).aborted) return;
+  var t = this, name = String(type), entry = addListener(t, name, fn, capture, once);
+  if (entry !== null && signal !== undefined) addAbortAlgorithm(signal, function () { if (!entry.removed) removeEntry(t, name, entry); });
 };
 EventTarget.prototype.removeEventListener = function (type, fn, options) {
   var capture = options === true || !!(options && typeof options === 'object' && options.capture);
@@ -2131,9 +2146,19 @@ function timerTask(t) {
     var at = ArrayIndexOf(timers, t);
     if (at < 0) return;
     if (t.every) t.due = pumpNow + t.every; else listRemoveAt(timers, at);
+    if (t.steps) {
+      var make = t.steps;
+      for (var g = make(); !GeneratorNext(g).done;) yield;
+      return;
+    }
     callBack(t.fn, global, t.args);
     yield;
   };
+}
+/* A timer of the reading system, whose task runs the generator that [steps] makes, after [ms]. */
+function scheduleSteps(steps, ms) {
+  ArrayPush(timers, { id: nextTimer++, due: K.now() + ms, fn: null, steps: steps, args: [], every: 0, queued: false });
+  timersChanged();
 }
 function* frameSteps() {
   running = frames;
