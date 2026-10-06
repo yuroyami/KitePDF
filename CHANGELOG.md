@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KiteDocView` opens a web or mail address that `onLinkTap` does not take. It asks the reader
+  in a small prompt first, then opens the address through Compose's `LocalUriHandler`. The new
+  `externalLinks` parameter takes a `KiteExternalLinks`, which sets the schemes the viewer opens
+  (`http`, `https` and `mailto` by default) and whether it asks first. Null opens nothing.
+  `KiteViewerStrings` has three new strings for the prompt. Two more W3C EPUB tests pass. Before
+  this change, such a link did nothing (#519).
+
 - A frame's `contentWindow`, and a frame's `parent` and `top`, are windows of another origin:
   `postMessage` carries a structured clone between the two windows, and a `MessagePort` can
   move to another window and stay entangled. Any other member throws a `SecurityError`. A frame

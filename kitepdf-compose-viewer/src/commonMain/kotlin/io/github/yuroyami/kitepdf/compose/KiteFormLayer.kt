@@ -301,7 +301,10 @@ private suspend fun performInViewer(
     pageIndex: Int,
     box: io.github.yuroyami.kitepdf.core.KiteRectangle,
 ) {
-    fun toHost() = onLinkTap?.invoke(KiteLinkAction.Pdf(action, pageIndex, box, target = null))
+    fun toHost() {
+        val link = KiteLinkAction.Pdf(action, pageIndex, box, target = null)
+        if (onLinkTap?.invoke(link) != true) state.offerExternalLink(link.uri)
+    }
     when (action) {
         is PdfAction.GoTo -> {
             val page = document?.resolveDestination(action.destination)?.pageIndex

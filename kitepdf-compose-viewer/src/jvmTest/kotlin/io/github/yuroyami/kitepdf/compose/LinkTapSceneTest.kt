@@ -233,8 +233,9 @@ class LinkTapSceneTest {
             assertEquals(null, tapped.target)
             assertEquals(KiteLinkKind.LINK, tapped.kind)
             assertEquals(link.rect, tapped.rect)
-            // Declined, a link out of the book does nothing, so the tap goes on to onTap.
-            assertFalse(handleLinkTap(state, scope, { false }, centreOf(link)))
+            // Declined, a link out of the book goes to the viewer, which asks the reader (#519).
+            assertTrue(handleLinkTap(state, scope, { false }, centreOf(link)))
+            assertEquals("https://example.org/out", state.pendingExternalLink)
         }
     }
 
@@ -348,8 +349,8 @@ class LinkTapSceneTest {
             driver.pumpUntil { state.currentPage > 0 }
             assertTrue(state.currentPage > 0, "the viewer moved to chapter two")
 
-            // An address leaves the book: the host sees it, and the viewer cannot follow it.
-            assertFalse(onTestUiThread { overlay!!.followLink("https://example.org/", rect) })
+            // An address leaves the book: the host sees it, and then the viewer asks the reader (#519).
+            assertTrue(onTestUiThread { overlay!!.followLink("https://example.org/", rect) })
             assertEquals("https://example.org/", offered.last().uri)
         }
     }
