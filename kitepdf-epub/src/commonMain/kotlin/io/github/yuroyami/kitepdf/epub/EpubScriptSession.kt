@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
+import io.github.yuroyami.kitepdf.epub.css.FormValues
 import io.github.yuroyami.kitepdf.epub.script.DOM_PRELUDE
 import io.github.yuroyami.kitepdf.epub.script.ScriptDom
 import io.github.yuroyami.kitepdf.epub.script.WhatwgDecoder
@@ -441,6 +442,8 @@ public class EpubScriptSession(
             // A form control's checkedness, selectedness, value and indeterminate flag (#552).
             def("state") { args -> element(args, 0)?.let { dom.state(it, string(args, 1)) } }
             def("setState") { args -> element(args, 0)?.let { dom.setState(it, string(args, 1), args.getOrNull(2) as? String) }; null }
+            // A control's value, sanitized by the input type or as a textarea's API value (#605).
+            def("sanitize") { args -> element(args, 0)?.let { el -> FormValues.sanitize(string(args, 1), string(args, 2)) { dom.attr(el, it) } } ?: string(args, 2) }
             def("createFragment") { dom.idOf(dom.createFragment()) }
             def("insert") { args ->
                 val parent = element(args, 0) ?: return@def "HierarchyRequestError"

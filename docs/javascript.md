@@ -327,7 +327,8 @@ rejects. An HTML chapter compares the names of elements and attributes ignoring 
 does, and an XHTML chapter compares them as written. The states of a form control, as
 `:checked`, `:placeholder-shown` and `:indeterminate`, follow what the reader or a script made of
 the control, its checkedness, selectedness and value, as in a browser, and the page restyles when
-they change. Setting `checked` or `selected` never writes an attribute. A pseudo-class that never holds
+they change. Setting `checked` or `selected` never writes an attribute. A control's value is
+sanitized by its input type, as HTML says, so a script and the selectors read the same value. A pseudo-class that never holds
 in a paginated book, as `:hover`, matches nothing.
 
 `DOMParser` parses a string into a document of its own: HTML for `text/html`, and XML with
