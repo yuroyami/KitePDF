@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts have `structuredClone`, `window.postMessage`, `MessageChannel`, `MessagePort`
+  and `MessageEvent`. A clone keeps what HTML keeps, and a `transfer` list detaches buffers and
+  moves ports. `postMessage` delivers to the chapter's own window in a task, when the target
+  origin is `*`, `/` or the book's. A port holds its messages until it starts. Before this
+  change, `postMessage` dropped every message (#534).
+
 - `EpubScriptRunner` and `EpubScriptSession` take an `instanceKey`, a value the app keeps for its
   reader, which goes into the book's origin. Each reader's copy of a book gets an origin of its
   own, as EPUB 3.3 asks. Without a key each runner makes a random one, so a book no longer has
@@ -117,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the book, so another document over it finds the blob too, and what a chapter shows keeps its
   blob after the script revokes the URL, while a chapter whose engine closes revokes the rest.
   339 tests of web-platform-tests in `FileAPI/` pass in a chapter; the rest wait on
-  `MessageChannel` (#534), streams (#536) and KiteJS, for `async` functions and `Float16Array`
+  streams (#536) and KiteJS, for `async` functions and `Float16Array`
   (#533).
 
 - A book's scripts have `TextEncoder` and `TextDecoder` of the Encoding Standard, with every
@@ -127,8 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Standard. The decoders are `WhatwgEncoding` in `kitepdf-epub`, over the standard's indexes,
   which `tools/generate_encoding_tables.py` packs. 11,249 tests of web-platform-tests in
   `encoding/` pass in a chapter, and all of `atob`'s; the rest wait on KiteJS, for
-  `SharedArrayBuffer`, `Float16Array` and a rest parameter in an arrow function, and on
-  `MessageChannel` (#534) (#532).
+  `SharedArrayBuffer`, `Float16Array` and a rest parameter in an arrow function (#532).
 
 - A book's scripts have `URL` and `URLSearchParams` of the WHATWG URL Standard, over a URL
   parser of its own in `kitepdf-epub`: special schemes and their ports, `..` that stops at the

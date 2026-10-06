@@ -295,8 +295,7 @@ gives it. `fatal`, `ignoreBOM`, `{ stream: true }` across calls and `encodeInto`
 standard says. `atob` and `btoa` are the HTML Standard's, with forgiving base64, and throw an
 `InvalidCharacterError`. The decoders live in Kotlin over the standard's own indexes, and
 `WebPlatformTest` runs the `encoding` tests and the `atob` tests of web-platform-tests in a
-chapter. The `encoding` tests that fail wait on `MessageChannel`
-([#534](https://github.com/yuroyami/KitePDF/issues/534)).
+chapter.
 
 `Blob`, `File` and `FileReader` are the File API's. A blob takes strings, buffers, views and
 other blobs, with `endings` and a `type` kept as the standard keeps it, and `slice`, `text`,
@@ -311,6 +310,15 @@ chosen options, `_charset_` and `dirname`, and fires `formdata` at the form. A c
 button, `requestSubmit` and `submit` fire `submit`, as a `SubmitEvent` with its submitter, and
 `formdata` as a browser does, but the book goes nowhere after them.
 
+`structuredClone` copies a value as HTML does: primitives and their wrappers, `Date`, `RegExp`,
+buffers and views, `Map`, `Set`, errors, `Blob`, `File` and `DOMException`, with cycles kept. A
+function, a node or another platform object throws a `DataCloneError`. A `transfer` list
+detaches its buffers and moves its ports. `window.postMessage` sends a clone to the chapter's own
+window in a task, with the book's origin. A target origin of `*`, `/` or the book's origin
+delivers the message, and any other origin drops it. `MessageChannel` makes two entangled
+`MessagePort` objects. A port holds its messages until `start()` runs or a script sets
+`onmessage`, and a port that moves in a transfer takes its held messages with it.
+
 `URL.createObjectURL` gives a blob a `blob:` URL of the book's origin, and the reader loads an
 image, a style sheet, an `@import` or a font from it as it loads a file of the book.
 `URL.revokeObjectURL` takes it away from the scripts, but what the chapter shows keeps it, as a
@@ -319,8 +327,7 @@ still shows, and still does at another font size. A chapter whose engine closes 
 its scripts made, as a page that unloads does.
 
 `WebPlatformTest` runs the File API tests of web-platform-tests in a chapter. Those that fail wait
-on `MessageChannel` ([#534](https://github.com/yuroyami/KitePDF/issues/534)) or on streams, as
-`Blob.stream()` and `Blob.textStream()` do ([#536](https://github.com/yuroyami/KitePDF/issues/536)).
+on streams, as `Blob.stream()` and `Blob.textStream()` do ([#536](https://github.com/yuroyami/KitePDF/issues/536)).
 
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
@@ -360,10 +367,7 @@ Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes 
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`
 ([#501](https://github.com/yuroyami/KitePDF/issues/501)); `ReadableStream` and the rest of the
-Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF/issues/536));
-`postMessage`, which drops each
-message, `MessageChannel` and `structuredClone`
-([#534](https://github.com/yuroyami/KitePDF/issues/534)). A script that calls one fails and is
+Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF/issues/536)). A script that calls one fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.
 
 Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,
