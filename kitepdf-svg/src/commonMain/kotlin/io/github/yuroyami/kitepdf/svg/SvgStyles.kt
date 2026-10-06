@@ -106,13 +106,17 @@ internal class SvgStyles(root: KiteXmlNode.Element, host: ((KiteXmlNode.Element)
         private val IMPORTANT = Regex("!\\s*important\\s*$", RegexOption.IGNORE_CASE)
         private val IDENT = Regex("-?[_a-zA-Z\\u0080-\\uffff][_a-zA-Z0-9\\u0080-\\uffff-]*")
         private val LENGTH = Regex("[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?(?:px|pt|pc|in|cm|mm|q|em|ex|%)?", RegexOption.IGNORE_CASE)
+        private val BLEND_MODES = setOf(
+            "normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn",
+            "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity",
+        )
         private val PROPERTIES = setOf(
             "color", "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity",
             "fill-rule", "display", "visibility", "transform", "clip-path", "font-size", "font-family",
             "font-weight", "font-style", "text-anchor", "stroke-dasharray", "stroke-dashoffset",
             "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stop-color", "stop-opacity",
             "mask", "mask-type", "filter", "flood-color", "flood-opacity", "lighting-color",
-            "color-interpolation-filters",
+            "color-interpolation-filters", "mix-blend-mode", "isolation",
         )
 
         /** The same declaration grammar for a standalone gradient parser. */
@@ -223,6 +227,8 @@ internal class SvgStyles(root: KiteXmlNode.Element, host: ((KiteXmlNode.Element)
                 "stroke-linejoin" -> lower in setOf("miter", "miter-clip", "arcs", "round", "bevel")
                 "text-anchor" -> lower in setOf("start", "middle", "end")
                 "color-interpolation-filters" -> lower in setOf("auto", "srgb", "linearrgb")
+                "isolation" -> lower in setOf("auto", "isolate")
+                "mix-blend-mode" -> lower in BLEND_MODES
                 "visibility" -> lower in setOf("visible", "hidden", "collapse")
                 "font-style" -> lower in setOf("normal", "italic", "oblique")
                 "font-weight" -> lower in setOf("normal", "bold", "bolder", "lighter") || value.toIntOrNull()?.let { it in 100..900 } == true

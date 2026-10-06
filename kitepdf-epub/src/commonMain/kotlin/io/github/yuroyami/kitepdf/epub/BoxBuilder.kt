@@ -15,6 +15,8 @@ import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
 import io.github.yuroyami.kitepdf.epub.css.WritingMode
 import io.github.yuroyami.kitepdf.epub.css.Edge
+import io.github.yuroyami.kitepdf.epub.css.FormStates
+import io.github.yuroyami.kitepdf.epub.script.ScriptDom
 import io.github.yuroyami.kitepdf.epub.css.Emphasis
 import io.github.yuroyami.kitepdf.epub.css.ListType
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
@@ -258,6 +260,24 @@ internal class BoxBuilder(
                         }
                         // Any other object shows its fallback children, as it did.
                     }
+                    canvasDrawing(child)?.let { drawing ->
+                        // A canvas where scripts run shows what they drew, as an svg shows its picture (#501).
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display == Display.NONE) return null
+                        child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(pendingAnchors::add)
+                        val svg = SvgImage.fromElement(drawing) ?: return null
+                        val w = canvasSizePt(drawing, "width")
+                        val h = canvasSizePt(drawing, "height")
+                        if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) && cs.cssFloat == CssFloat.NONE &&
+                            hasTextBeside(child)
+                        ) {
+                            inl.addImage("", style, cs.widthPt ?: w, cs.heightPt ?: h, alt = "", objectFit = cs.objectFit, svg = svg, element = child.takeIf { tracksElements })
+                        } else {
+                            flush()
+                            children.add(ImageBox(cs, "", svg, attrWidth = w, attrHeight = h).also { it.source = child })
+                        }
+                        return null
+                    }
                     if (child.tag == "svg") { // inline SVG: paint as a vector image box
                         val cs = resolver.compute(child, childAncestors, style)
                         // An svg is inline, as an img is (CSS 2.1, 10.3.2), so one with text beside it flows on
@@ -463,6 +483,15 @@ internal class BoxBuilder(
      * The `width` or `height` attribute of an inline `<svg>` in points: a bare number is
      * CSS pixels, and `em` and `ex` follow the element's own font. Null for a percentage.
      */
+    /** The `<svg>` that a snapshot put inside a canvas where scripts run, or null for any other element (#501). */
+    private fun canvasDrawing(el: KiteXmlNode.Element): KiteXmlNode.Element? {
+        if (el.tag != "canvas" || FormStates.STATE + ScriptDom.CANVAS_STATE !in el.attrs) return null
+        return el.children.firstOrNull { it is KiteXmlNode.Element && it.tag == "svg" } as? KiteXmlNode.Element
+    }
+
+    /** A canvas's size in points: its `width` or `height` in CSS pixels, at 0.75 point each. */
+    private fun canvasSizePt(drawing: KiteXmlNode.Element, name: String): Double? = drawing.attrs[name]?.toDoubleOrNull()?.times(0.75)
+
     private fun svgSizePt(raw: String?, style: ComputedStyle): Double? {
         val s = raw?.trim()?.takeIf { it.isNotEmpty() && !it.endsWith('%') } ?: return null
         val pt = s.toDoubleOrNull()?.times(0.75) ?: CssValues.length(s, style.fontSizePt, resolver.initial().fontSizePt, 0.0)
@@ -795,6 +824,18 @@ internal class BoxBuilder(
                             hoist(linked(listOf(box), inl))
                             continue
                         }
+                    }
+                    val drawing = canvasDrawing(child)
+                    if (drawing != null) {
+                        val cs = resolver.compute(child, childAncestors, style)
+                        if (cs.display != Display.NONE) SvgImage.fromElement(drawing)?.let { svg ->
+                            child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(anchorSink::add)
+                            inl.addImage(
+                                "", style, cs.widthPt ?: canvasSizePt(drawing, "width"), cs.heightPt ?: canvasSizePt(drawing, "height"),
+                                alt = "", objectFit = cs.objectFit, svg = svg, element = child.takeIf { tracksElements },
+                            )
+                        }
+                        continue
                     }
                     if (child.tag == "svg") {
                         // An <svg> in inline content is an inline replaced element, like an

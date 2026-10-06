@@ -113,6 +113,15 @@ internal class ScriptDom(
         version++
     }
 
+    /** Called after a script set or removed an attribute in no namespace, with its local name (#501). */
+    var attributeSet: ((KiteXmlNode.Element, String) -> Unit)? = null
+
+    /**
+     * What a canvas element shows, as an `<svg>` that a snapshot puts inside it in place of its
+     * fallback content, or null for any other element (#501).
+     */
+    var canvasContent: ((KiteXmlNode.Element) -> KiteXmlNode.Element?)? = null
+
     init {
         val from = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()
         val to = HashMap<KiteXmlNode.Element, KiteXmlNode.Element>()
@@ -395,6 +404,7 @@ internal class ScriptDom(
         if (at >= 0) out[at] = Attribute(namespace, if (replace) prefix else list[at].prefix, localName, value)
         else out += Attribute(namespace, prefix, localName, value)
         setAttributes(el, out)
+        if (namespace == null) attributeSet?.invoke(el, localName)
     }
 
     /** Takes [el]'s attribute [localName] in [namespace] off, if it has one. */
@@ -403,6 +413,7 @@ internal class ScriptDom(
         val at = list.indexOfFirst { it.namespace == namespace && it.localName == localName }
         if (at < 0) return
         setAttributes(el, list.filterIndexed { i, _ -> i != at })
+        if (namespace == null) attributeSet?.invoke(el, localName)
     }
 
     private fun setAttributes(el: KiteXmlNode.Element, list: List<Attribute>) {
@@ -1192,6 +1203,13 @@ internal class ScriptDom(
         val out = KiteXmlNode.Element(el.tag, el.attrs)
         out.parent = parent
         if (link) { from[el] = out; to[out] = el } else { from[out] = el; to[el] = out }
+        // A canvas shows its drawing, not its fallback content, where scripts run.
+        if (!link) canvasContent?.invoke(el)?.let { svg ->
+            out.attrs = out.attrs + (FormStates.STATE + CANVAS_STATE to "")
+            svg.parent = out
+            out.children.add(svg)
+            return out
+        }
         if (link && commented != null) written[out] = commented.attrs
         fun add(child: KiteXmlNode) {
             out.children.add(child)
@@ -1232,6 +1250,9 @@ internal class ScriptDom(
     }
 
     companion object {
+        /** The state key that marks a canvas whose drawing a snapshot holds (#501). */
+        const val CANVAS_STATE = "canvas"
+
         const val FRAGMENT = "#document-fragment"
         const val DOCUMENT = "#document"
 

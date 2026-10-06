@@ -1,5 +1,8 @@
 package io.github.yuroyami.kitepdf.svg
 
+import io.github.yuroyami.kitepdf.core.font.FontSpec
+import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
+import io.github.yuroyami.kitepdf.core.render.KiteCanvas
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
@@ -296,6 +299,20 @@ class SvgFeaturesTest {
     }
 
     @Test
+    fun the_focal_radius_of_svg_2_sizes_the_start_circle() {
+        fun coords(fr: String): List<Double> {
+            val svg = """
+                <svg><radialGradient id="g" cx="0.5" cy="0.5" r="0.5" fx="0.4" fr="$fr">
+                  <stop offset="0" stop-color="white"/><stop offset="1" stop-color="black"/>
+                </radialGradient></svg>
+            """.trimIndent()
+            return (SvgGradient.parse(gradient(svg, "g"), byId(svg))!!.shading as KiteShading.Radial).coords.toList()
+        }
+        assertEquals(listOf(0.4, 0.5, 0.1, 0.5, 0.5, 0.5), coords("0.1"))
+        assertEquals(0.0, coords("-0.2")[2], "a negative radius is no circle")
+    }
+
+    @Test
     fun hostile_gradient_coordinates_cannot_inject_non_finite_geometry() {
         val svg = """
             <svg><radialGradient id="g" cx="NaN" cy="Infinity" r="-1">
@@ -475,6 +492,56 @@ class SvgFeaturesTest {
         val push = drawn.indexOf(group)
         val pop = drawn.indexOfFirst { it is RecordingCanvas.Call.PopGroup }
         assertTrue(f.all { drawn.indexOf(it) in push..pop }, "the group brackets both shapes (got $drawn)")
+    }
+
+    @Test
+    fun mix_blend_mode_and_isolation_open_groups() {
+        val drawn = calls(
+            """<svg width="40" height="40"><g style="isolation: isolate">
+                 <rect width="20" height="20" fill="red"/><rect x="5" y="5" width="20" height="20" fill="blue" style="mix-blend-mode: multiply"/>
+               </g></svg>""",
+        )
+        val groups = drawn.filterIsInstance<RecordingCanvas.Call.PushGroup>()
+        assertEquals(listOf(KiteBlendMode.Normal, KiteBlendMode.Multiply), groups.map { it.blendMode })
+        assertTrue(groups.all { it.isolated && it.alpha == 1.0 })
+        val blue = drawn.indexOfFirst { it is RecordingCanvas.Call.Fill && it.color.b > 0.9 }
+        assertTrue(drawn.indexOf(groups[1]) < blue, "the multiply group holds the blue square")
+    }
+
+    @Test
+    fun text_with_no_fill_paints_only_its_stroke() {
+        // A canvas with no host outlines paints the text filled in the stroke colour.
+        val runs = calls("""<svg width="40" height="40"><text y="20" fill="none" stroke="red">Hi</text></svg>""")
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        assertEquals(1, runs.size)
+        assertEquals(1.0, runs.single().color.r, 1e-9)
+        assertEquals(0.0, runs.single().color.b, 1e-9)
+        val none = calls("""<svg width="40" height="40"><text y="20" fill="none">Hi</text></svg>""")
+        assertTrue(none.none { it is RecordingCanvas.Call.Glyphs }, "no fill and no stroke paints nothing")
+    }
+
+    @Test
+    fun stroked_and_gradient_text_paint_the_host_outline() {
+        val rc = RecordingCanvas()
+        // Each glyph of the host face is a square 500 units wide, so the pen reads each one.
+        val square = KitePath.Builder().apply { rectangle(0.0, 0.0, 500.0, 500.0) }.build()
+        val outlined = object : KiteCanvas by rc {
+            override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath = square
+        }
+        val img = SvgImage.parse(
+            """<svg width="100" height="40">
+                 <linearGradient id="g"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>
+                 <text x="10" y="30" font-size="20" fill="url(#g)" stroke="green" stroke-width="2">ab</text>
+               </svg>""".encodeToByteArray(),
+        )
+        assertNotNull(img).render(outlined, KiteMatrix.IDENTITY)
+        assertTrue(rc.calls.none { it is RecordingCanvas.Call.Glyphs }, "no flat-colour glyphs: ${rc.calls}")
+        val stroke = rc.calls.filterIsInstance<RecordingCanvas.Call.Stroke>().single()
+        assertEquals(2.0, stroke.lineWidth, 1e-9)
+        // Squares of 10 user units up from the baseline at 30; the second starts after the 556 unit advance of "a".
+        val b = assertNotNull(stroke.path.bounds(stroke.ctm))
+        assertNear(listOf(10.0, 20.0, 10.0 + 556 * 0.02 + 10.0, 30.0), listOf(b.left, b.bottom, b.right, b.top), "the stroked outline")
+        assertTrue(rc.calls.any { it is RecordingCanvas.Call.PushClip || it is RecordingCanvas.Call.Fill }, "the gradient fills the outline")
     }
 
     @Test

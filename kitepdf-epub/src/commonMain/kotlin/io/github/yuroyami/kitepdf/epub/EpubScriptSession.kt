@@ -9,6 +9,9 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.css.CssPosition
 import io.github.yuroyami.kitepdf.epub.css.CssTransform
 import io.github.yuroyami.kitepdf.epub.css.FormValues
+import io.github.yuroyami.kitepdf.epub.script.CanvasColor
+import io.github.yuroyami.kitepdf.epub.script.CanvasHost
+import io.github.yuroyami.kitepdf.epub.script.CanvasSource
 import io.github.yuroyami.kitepdf.epub.script.CssMatrixParser
 import io.github.yuroyami.kitepdf.epub.script.DOM_PRELUDE
 import io.github.yuroyami.kitepdf.epub.script.ScriptDom
@@ -18,7 +21,10 @@ import io.github.yuroyami.kitepdf.epub.script.WhatwgMimeType
 import io.github.yuroyami.kitepdf.epub.script.WhatwgUrl
 import io.github.yuroyami.kitepdf.epub.script.byteString
 import io.github.yuroyami.kitepdf.epub.script.bytesOf
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
+import io.github.yuroyami.kitepdf.svg.SvgImage
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /**
@@ -237,6 +243,47 @@ public class EpubScriptSession(
         val contentType: String = document.resourceType(document.chapterPath(chapter))?.lowercase() ?: "application/xhtml+xml"
         val dom = ScriptDom(document.sourceChapterTree(chapter), html = contentType == "text/html", markup = document.chapterText(chapter))
 
+        /** The canvases of the chapter's scripts and what they drew (#501). */
+        val canvases = CanvasHost(
+            nodeOf = { dom.node(it) },
+            currentColor = { el ->
+                if (!dom.isConnected(el)) CanvasColor.BLACK
+                else document.scriptStyleOf(chapter, el).color.let { c ->
+                    CanvasColor((c.r * 255).roundToInt(), (c.g * 255).roundToInt(), (c.b * 255).roundToInt(), 255)
+                }
+            },
+            fontBase = { el -> if (dom.isConnected(el)) document.scriptStyleOf(chapter, el).fontSizePt / PT_PER_PX else 10.0 },
+            imageOf = ::canvasImage,
+            isHtml = ::isHtml,
+            changed = { dom.dirty = true },
+        )
+
+        /** The size of each image a canvas drew, by its address, or null for one that does not decode. */
+        private val imageSizes = HashMap<String, Pair<Double, Double>?>()
+
+        private fun isHtml(el: KiteXmlNode.Element, localName: String): Boolean =
+            dom.nameOf(el).let { it.namespace == ScriptDom.XHTML_NS && it.localName == localName }
+
+        /** An `img` or an SVG `image` as a canvas draws it, or null when it has no picture to draw. */
+        private fun canvasImage(el: KiteXmlNode.Element): CanvasSource? {
+            val name = dom.nameOf(el)
+            val href = when {
+                name.namespace == ScriptDom.XHTML_NS && name.localName == "img" -> dom.attr(el, "src")
+                name.namespace == ScriptDom.SVG_NS && name.localName == "image" ->
+                    dom.attr(el, "href") ?: dom.attr(el, "href", "http://www.w3.org/1999/xlink")
+                else -> null
+            }?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            val size = imageSizes.getOrPut(href) {
+                val bytes = if (KiteDataUrl.isDataUrl(href)) KiteDataUrl.decode(href)?.bytes
+                else document.svgResource(document.chapterDir(chapter), href, chapter)
+                bytes?.let { b ->
+                    KiteImageData.fromEncodedImage(b)?.let { it.width.toDouble() to it.height.toDouble() }
+                        ?: SvgImage.parse(b)?.let { it.width to it.height }
+                }
+            } ?: return null
+            return CanvasSource.Image(href, size.first, size.second)
+        }
+
         /** The timers and frames its scripts wait on. */
         var timers = 0
 
@@ -247,6 +294,8 @@ public class EpubScriptSession(
 
         init {
             document.holdTree(chapter, true)
+            dom.attributeSet = canvases::attributeSet
+            dom.canvasContent = { el -> if (isHtml(el, "canvas")) canvases.svgOf(el) else null }
         }
 
         /** The chapter's URL, with its fragment. */
@@ -453,6 +502,8 @@ public class EpubScriptSession(
             def("setState") { args -> element(args, 0)?.let { dom.setState(it, string(args, 1), args.getOrNull(2) as? String) }; null }
             // A control's value, sanitized by the input type or as a textarea's API value (#605).
             // A CSS transform list as DOMMatrix reads it: its 16 entries and 1 for a 2D one, "relative", or null (#609).
+            // A canvas's 2D context, its paths, gradients and patterns (#501).
+            def("cv") { args -> canvases.call(args) }
             def("matrixParse") { args ->
                 when (val r = CssMatrixParser.parse(string(args, 0))) {
                     is CssMatrixParser.Result.Matrix -> r.m.toList() + (if (r.is2D) 1.0 else 0.0)
@@ -728,7 +779,7 @@ public class EpubScriptSession(
 }
 
 /** [v] as C's `%.6g` writes it, which is how Chromium writes a number of a computed matrix (#609). */
-private fun cssNumber(v: Double): String {
+internal fun cssNumber(v: Double): String {
     if (v == 0.0) return "0"
     if (!v.isFinite()) return v.toString()
     val a = kotlin.math.abs(v)

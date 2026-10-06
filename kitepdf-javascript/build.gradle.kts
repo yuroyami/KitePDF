@@ -71,6 +71,11 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
         }
+
+        // The pixel tests of a canvas paint the page with the desktop renderer.
+        jvmTest.dependencies {
+            implementation(project(":kitepdf-native-renderer"))
+        }
     }
 }
 
