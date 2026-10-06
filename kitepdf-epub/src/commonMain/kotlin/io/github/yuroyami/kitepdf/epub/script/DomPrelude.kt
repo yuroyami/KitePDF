@@ -17,6 +17,7 @@ internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_URL)
     append(DOM_PRELUDE_ENCODING)
     append(DOM_PRELUDE_FILE)
+    append(DOM_PRELUDE_MESSAGING)
     append(DOM_PRELUDE_REFLECTION)
     append(DOM_PRELUDE_ELEMENTS)
     append(DOM_PRELUDE_FORMS)
@@ -81,6 +82,38 @@ var FunctionHasInstance = uncurry(Function.prototype[Symbol.hasInstance]);
 var JSONStringify = JSON.stringify, DateNow = Date.now;
 var ErrorCaptureStackTrace = typeof Error.captureStackTrace === 'function' ? Error.captureStackTrace : null;
 var SymbolIterator = Symbol.iterator, SymbolToStringTag = typeof Symbol.toStringTag === 'symbol' ? Symbol.toStringTag : null;
+/* What structured cloning reads of a value and makes of it (#534). */
+var ObjectCtor = Object, ArrayIsArray = Array.isArray, ObjectToString = uncurry(Object.prototype.toString),
+  BooleanValueOf = uncurry(Boolean.prototype.valueOf), NumberValueOf = uncurry(Number.prototype.valueOf),
+  StringValueOf = uncurry(String.prototype.valueOf), SymbolValueOf = uncurry(Symbol.prototype.valueOf),
+  SymbolToString = uncurry(Symbol.prototype.toString), FunctionToString = uncurry(Function.prototype.toString),
+  BigIntValueOf = typeof BigInt === 'function' ? uncurry(BigInt.prototype.valueOf) : null,
+  DateCtor = Date, DateGetTime = uncurry(Date.prototype.getTime), RegExpCtor = RegExp, RegExpPrototype = RegExp.prototype,
+  RegExpSource = getter(RegExp.prototype, 'source'), SetCtor = Set, SetAdd = uncurry(Set.prototype.add),
+  SetSize = getter(Set.prototype, 'size'), SetValues = uncurry(Set.prototype.values), MapSize = getter(Map.prototype, 'size'),
+  MapEntries = uncurry(Map.prototype.entries), MapIteratorNext = uncurry(Object.getPrototypeOf(new Map().entries()).next),
+  SetIteratorNext = uncurry(Object.getPrototypeOf(new Set().values()).next),
+  ArrayBufferCtor = ArrayBuffer, ArrayBufferResizable = getter(ArrayBuffer.prototype, 'resizable'),
+  ArrayBufferMaxByteLength = getter(ArrayBuffer.prototype, 'maxByteLength'), ArrayBufferDetached = getter(ArrayBuffer.prototype, 'detached'),
+  ArrayBufferTransfer = typeof ArrayBuffer.prototype.transfer === 'function' ? uncurry(ArrayBuffer.prototype.transfer) : null,
+  DataViewCtor = DataView, WeakSetHas = typeof WeakSet === 'function' ? uncurry(WeakSet.prototype.has) : null,
+  WeakRefDeref = typeof WeakRef === 'function' ? uncurry(WeakRef.prototype.deref) : null,
+  RegistryUnregister = typeof FinalizationRegistry === 'function' ? uncurry(FinalizationRegistry.prototype.unregister) : null,
+  ErrorIsError = typeof Error.isError === 'function' ? Error.isError : null;
+/* The flags of a regular expression, each by the getter that checks it is one. */
+var REGEXP_FLAGS = (function (names) {
+  var out = [];
+  for (var i = 0; i < names.length; i += 2) { var g = getter(RegExp.prototype, names[i]); if (g) out.push([g, names[i + 1]]); }
+  return out;
+})(['hasIndices', 'd', 'global', 'g', 'ignoreCase', 'i', 'multiline', 'm', 'dotAll', 's', 'unicode', 'u', 'unicodeSets', 'v', 'sticky', 'y']);
+var TYPED_ARRAYS = (function (names) {
+  var out = Object.create(null);
+  for (var i = 0; i < names.length; i++) if (typeof global[names[i]] === 'function') out[names[i]] = global[names[i]];
+  return out;
+})(['Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array', 'Int32Array', 'Uint32Array', 'Float16Array',
+  'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array']);
+var ERROR_TYPES = { __proto__: null, Error: Error, EvalError: EvalError, RangeError: RangeError, ReferenceError: ReferenceError,
+  SyntaxError: SyntaxError, TypeError: TypeError, URIError: URIError };
 /* Whether [v] is an instance of [ctor] by its prototype chain, whatever Symbol.hasInstance of ctor says. */
 function isA(v, ctor) { return FunctionHasInstance(ctor, v); }
 /* A regular expression that runs on the built-ins taken above, whatever a script does to RegExp.prototype. */
@@ -2308,7 +2341,8 @@ var api = {
   stop: function () {}, moveTo: function () {}, moveBy: function () {}, resizeTo: function () {}, resizeBy: function () {},
   open: function (url) { if (url) navigate(url); return null; },
   close: function () {},
-  postMessage: function () {}
+  postMessage: postMessage,
+  structuredClone: structuredClone
 };
 (function (names) { for (var i = 0; i < names.length; i++) global[names[i]] = api[names[i]]; })(ObjectKeys(api));
 /* The interface objects, and the constructors such as Image, are properties of the global that a

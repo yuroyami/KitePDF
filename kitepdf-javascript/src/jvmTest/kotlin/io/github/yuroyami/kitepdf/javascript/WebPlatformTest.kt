@@ -48,19 +48,6 @@ class WebPlatformTest {
     }
 
     private val gaps = listOf(
-        // The tests detach a buffer by transferring it through a port.
-        Gap(
-            "#534, MessageChannel is missing",
-            "typeof MessageChannel === 'undefined'",
-            setOf(
-                "encodeInto() and a detached output buffer",
-                "Blob from a detached ArrayBufferView should be empty",
-                "Blob from a detached ArrayBufferView with offset should be empty",
-                "Blob from a detached ArrayBuffer should be empty",
-                "Blob from a detached ArrayBufferView mixed with string, detached part ignored",
-                "Passing a FrozenArray as the blobParts array should work (FrozenArray<MessagePort>).",
-            ),
-        ),
         Gap(
             "#536, ReadableStream is missing",
             "typeof ReadableStream === 'undefined'",
