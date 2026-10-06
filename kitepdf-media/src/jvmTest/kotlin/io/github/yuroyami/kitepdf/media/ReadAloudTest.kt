@@ -15,12 +15,18 @@ import io.github.yuroyami.kitepdf.compose.KiteDocView
 import io.github.yuroyami.kitepdf.compose.KiteDocViewState
 import io.github.yuroyami.kitepdf.compose.KiteHighlight
 import io.github.yuroyami.kitepdf.core.KiteLocation
+import io.github.yuroyami.kitepdf.core.KiteReadingItem
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.epub.EpubOverlayClip
 import io.github.yuroyami.kitepdf.media.NarratedBooks.Chapter
 import io.github.yuroyami.kitepdf.media.NarratedBooks.book
 import io.github.yuroyami.kitepdf.media.NarratedBooks.par
 import io.github.yuroyami.kiteplayer.KitePlayer
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.util.Collections
 import kotlin.test.AfterTest
@@ -97,12 +103,18 @@ class ReadAloudTest {
         playing: MutableState<Boolean>,
         log: Log,
         jump: MutableState<KiteLocation?> = mutableStateOf(null),
+        bookStyles: Boolean = true,
+        speak: (suspend (EpubOverlayClip, List<KiteReadingItem>) -> Unit)? = null,
+        onClip: (EpubOverlayClip) -> Unit = {},
     ) {
         val start = System.nanoTime()
         setContent {
             KiteDocView(state, Modifier.size(400.dp, 600.dp), layout = KiteDocLayout.Paged())
             jump.value?.let { to -> LaunchedEffect(to) { state.scrollTo(to) } }
-            KiteReadAloud(state, playing.value, newPlayer = ::newPlayer, onClip = { log.clips += it?.id }, onFinished = { log.finished = true })
+            KiteReadAloud(
+                state, playing.value, newPlayer = ::newPlayer, bookStyles = bookStyles, speak = speak,
+                onClip = { clip -> log.clips += clip?.id; clip?.let(onClip) }, onFinished = { log.finished = true },
+            )
             LaunchedEffect(state) {
                 snapshotFlow { state.highlights.firstOrNull { it.id == READ_ALOUD_HIGHLIGHT_ID } }
                     .collect { log.marks += Mark((System.nanoTime() - start) / 1_000_000, it, state.currentLocation) }
@@ -288,5 +300,128 @@ class ReadAloudTest {
         playing.value = true
         waitUntil(timeoutMillis = 30_000) { log.finished }
         assertEquals(listOf("a1", "b", null), log.clips.toList())
+    }
+
+    /** The book's own styles for the element being read and for the document while it plays (#525). */
+    private val styles = """<style>
+        .active-item { color: rgb(255, 0, 0); }
+        .rendered-with-mo { color: rgb(0, 0, 255); }
+        </style>"""
+
+    private val classes = """<meta property="media:active-class">active-item</meta>""" +
+        """<meta property="media:playback-active-class">rendered-with-mo</meta>"""
+
+    private val red = RgbColor(1.0, 0.0, 0.0)
+    private val blue = RgbColor(0.0, 0.0, 1.0)
+    private val black = RgbColor(0.0, 0.0, 0.0)
+
+    /** The colour each word of the first page of [doc] is drawn in. */
+    private fun colors(doc: EpubDocument): Map<String, RgbColor> =
+        RecordingCanvas().also { doc.page(KiteLocation(0, 0)).renderTo(it) }.calls
+            .filterIsInstance<RecordingCanvas.Call.Glyphs>()
+            .flatMap { run -> run.text.split(' ').filter { it.isNotBlank() }.map { it to run.color } }.toMap()
+
+    private fun styledBook(): EpubDocument = book(
+        listOf(Chapter("""<p><span id="s1">One.</span> <span id="s2">Two.</span></p>""", par(1, "s1", "narration.wav", 0.0, 1.0) + par(1, "s2", "narration.wav", 1.0, 2.0))),
+        audio, classes, styles,
+    )
+
+    @Test
+    fun the_element_read_takes_the_book_classes_in_place_of_the_highlight() = runComposeUiTest {
+        // EPUB Reading Systems 3.3, 9.2.3, and the W3C test mol-css.
+        val doc = styledBook()
+        val seen = Collections.synchronizedList(ArrayList<Map<String, RgbColor>>())
+        val log = Log()
+        read(KiteDocViewState(doc), mutableStateOf(true), log, onClip = { seen += colors(doc) })
+        waitUntil(timeoutMillis = 30_000) { log.finished }
+        waitForIdle()
+        assertEquals(listOf("s1", "s2", null), log.clips.toList())
+        assertEquals(
+            listOf(mapOf("One." to red, "Two." to blue), mapOf("One." to blue, "Two." to red)),
+            seen.toList(),
+            "the clip read is red, and the rest of the playing document blue",
+        )
+        assertTrue(log.marks.none { it.highlight != null }, "the book styles the active class, so no highlight: ${log.marks}")
+        assertEquals(mapOf("One." to black, "Two." to black), colors(doc), "the classes go when the reading ends")
+    }
+
+    @Test
+    fun without_book_styles_the_reading_keeps_the_layout_and_highlights() = runComposeUiTest {
+        val doc = styledBook()
+        val changes = doc.chapterChanges.value
+        val log = Log()
+        read(KiteDocViewState(doc), mutableStateOf(true), log, bookStyles = false)
+        waitUntil(timeoutMillis = 30_000) { log.finished }
+        waitForIdle()
+        assertEquals(2, log.marks.count { it.highlight != null })
+        assertEquals(changes, doc.chapterChanges.value, "a chapter was laid out again")
+    }
+
+    /** A book whose overlay reads three sentences, with audio for the second only. */
+    private fun partlySpoken(): EpubDocument = book(
+        listOf(
+            Chapter(
+                """<p id="s1">Call me Ishmael.</p><p id="s2">Two.</p><p id="s3">Some years ago.</p>""",
+                par(1, "s1", null, 0.0, 0.0) + par(1, "s2", "narration.wav", 0.0, 1.0) + par(1, "s3", null, 0.0, 0.0),
+            ),
+        ),
+        audio,
+    )
+
+    @Test
+    fun a_clip_without_audio_goes_to_the_speech_hook_with_its_text() = runComposeUiTest {
+        // EPUB Reading Systems 3.3, text-to-speech for media overlays, and the W3C tests mol-tts_single and mol-tts_multi.
+        val spoken = Collections.synchronizedList(ArrayList<String>())
+        val log = Log()
+        read(
+            KiteDocViewState(partlySpoken()), mutableStateOf(true), log,
+            speak = { clip, text ->
+                delay(300)
+                spoken += "${clip.id}:${text.joinToString(" ") { it.text }}"
+            },
+        )
+        waitUntil(timeoutMillis = 30_000) { log.finished }
+        assertEquals(listOf("s1", "s2", "s3", null), log.clips.toList())
+        assertEquals(listOf("s1:Call me Ishmael.", "s3:Some years ago."), spoken.toList())
+    }
+
+    @Test
+    fun a_pause_cancels_the_speech_and_the_clip_is_spoken_again() = runComposeUiTest {
+        val starts = Collections.synchronizedList(ArrayList<String?>())
+        val cancelled = Collections.synchronizedList(ArrayList<String?>())
+        val playing = mutableStateOf(true)
+        val log = Log()
+        read(
+            KiteDocViewState(partlySpoken()), playing, log,
+            speak = { clip, _ ->
+                starts += clip.id
+                try {
+                    delay(if (starts.size == 1) 10_000 else 100)
+                } catch (stop: CancellationException) {
+                    cancelled += clip.id
+                    throw stop
+                }
+            },
+        )
+        waitUntil(timeoutMillis = 10_000) { starts.isNotEmpty() }
+        playing.value = false
+        waitUntil(timeoutMillis = 10_000) { cancelled.isNotEmpty() }
+        Thread.sleep(500)
+        assertEquals(listOf<String?>("s1"), starts.toList(), "the speech went on while paused")
+        playing.value = true
+        waitUntil(timeoutMillis = 30_000) { log.finished }
+        assertEquals(listOf<String?>("s1", "s1", "s3"), starts.toList())
+        assertEquals(listOf<String?>("s1"), cancelled.toList())
+    }
+
+    @Test
+    fun clips_without_audio_are_spoken_without_a_player() = runComposeUiTest {
+        val doc = book(listOf(Chapter("""<p id="s1">Only speech.</p>""", par(1, "s1", null, 0.0, 0.0))), emptyMap())
+        val spoken = Collections.synchronizedList(ArrayList<String>())
+        val log = Log()
+        read(KiteDocViewState(doc), mutableStateOf(true), log, speak = { _, text -> spoken += text.single().text })
+        waitUntil(timeoutMillis = 30_000) { log.finished }
+        assertEquals(listOf("Only speech."), spoken.toList())
+        assertTrue(players.isEmpty(), "a book that only speaks needs no player")
     }
 }

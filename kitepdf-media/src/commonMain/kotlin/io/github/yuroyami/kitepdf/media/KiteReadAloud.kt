@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import io.github.yuroyami.kitepdf.compose.KiteDocViewState
 import io.github.yuroyami.kitepdf.compose.KiteHighlight
 import io.github.yuroyami.kitepdf.core.KiteLocation
+import io.github.yuroyami.kitepdf.core.KiteReadingItem
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubFragmentBox
@@ -27,10 +28,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.time.Duration
@@ -59,28 +63,38 @@ import kotlin.time.Duration.Companion.seconds
  * reading makes to follow its text do not count, and it turns no page while the reader moves the
  * view.
  *
- * The text of the clip being read gets one entry in [KiteDocViewState.highlights], with the id
- * [READ_ALOUD_HIGHLIGHT_ID], next to the app's own entries, and the viewer turns to the page of
- * that text when the reading reaches another page. The book's `media:active-class` is shown as
- * that highlight and never added to the element, and `media:playback-active-class` is not added
- * either: a class could change the element's style, and a new style lays the chapter out again,
- * where 9.2.3 adds both. Assigning [KiteDocViewState.highlights] while it reads drops the entry
- * until the next clip.
+ * The viewer turns to the page of the clip's text when the reading reaches another page. With
+ * [bookStyles], the element of the clip gets the book's `media:active-class`, and its chapter's
+ * root gets the `media:playback-active-class` while the reading plays, through
+ * [EpubDocument.markNarration] (EPUB Reading Systems 3.3, 9.2.3). A chapter whose style rules use one
+ * of the classes is laid out again for each clip. Where the book's rules do not style the active
+ * class, or without [bookStyles], the text of the clip gets one entry in
+ * [KiteDocViewState.highlights] instead, with the id [READ_ALOUD_HIGHLIGHT_ID], next to the app's
+ * own entries. Assigning [KiteDocViewState.highlights] while it reads drops the entry until the
+ * next clip.
  *
- * A clip without audio, or whose audio the player cannot open, is skipped. Leaving the
- * composition stops the reading, closes the player and takes the highlight away. On a viewer
- * whose document is not an [EpubDocument], it does nothing.
+ * A clip without audio is spoken by [speak], when the app gives one, and skipped otherwise. A clip
+ * whose audio the player cannot open is skipped. Leaving the composition stops the reading, closes
+ * the player and takes the highlight and the classes away. On a viewer whose document is not an
+ * [EpubDocument], it does nothing.
  *
  * @param state the viewer that shows the book, and whose highlights and page follow the reading.
  * @param playing reads while true, and pauses while false.
  * @param color the fill of the highlight. Null paints the viewer's search highlight colour, as a
  *   [KiteHighlight] without a colour does.
- * @param newPlayer makes the player when the reading starts, or returns null where the platform
- *   cannot play, which ends the reading at once. See [KiteMediaOverlay].
+ * @param newPlayer makes the player when the reading reaches the first clip with audio, or returns
+ *   null where the platform cannot play, which ends the reading there. See [KiteMediaOverlay].
+ * @param bookStyles gives the text being read the book's own classes, as above. False keeps every
+ *   chapter's layout as it is and marks the text with the highlight only.
+ * @param speak speaks a clip without audio, from a speech engine of the app, and returns once it
+ *   has said it all. It gets the clip and the text of its element, from
+ *   [EpubDocument.readingOrderOf], with the pronunciation hints of the book. A pause or a move by
+ *   the reader cancels it, and the reading speaks the clip again from its start when it goes on.
+ *   Null skips such clips.
  * @param onClip called with each clip as its reading starts, and with null when the reading ends.
- * @param onFinished called when the reading ends: past the last clip of the book, or at once for a
- *   book without narration from the reader's page on, or without a player. It is not called when
- *   the reading leaves the composition.
+ * @param onFinished called when the reading ends: past the last clip of the book, at once for a
+ *   book without narration from the reader's page on, or at the first clip with audio when there
+ *   is no player. It is not called when the reading leaves the composition.
  */
 @Composable
 public fun KiteReadAloud(
@@ -88,6 +102,8 @@ public fun KiteReadAloud(
     playing: Boolean,
     color: Color? = null,
     newPlayer: () -> KitePlayer? = { KitePlayerPlatform.createOrNull() },
+    bookStyles: Boolean = true,
+    speak: (suspend (clip: EpubOverlayClip, text: List<KiteReadingItem>) -> Unit)? = null,
     onClip: (EpubOverlayClip?) -> Unit = {},
     onFinished: () -> Unit = {},
 ) {
@@ -95,6 +111,8 @@ public fun KiteReadAloud(
     val scope = rememberCoroutineScope()
     val currentColor by rememberUpdatedState(color)
     val currentNewPlayer by rememberUpdatedState(newPlayer)
+    val currentBookStyles by rememberUpdatedState(bookStyles)
+    val currentSpeak by rememberUpdatedState(speak)
     val currentOnClip by rememberUpdatedState(onClip)
     val currentOnFinished by rememberUpdatedState(onFinished)
     val reading = remember(state, book) {
@@ -104,6 +122,8 @@ public fun KiteReadAloud(
             scope = scope,
             color = { currentColor },
             newPlayer = { currentNewPlayer() },
+            bookStyles = { currentBookStyles },
+            speak = { currentSpeak },
             onClip = { currentOnClip(it) },
             onFinished = { currentOnFinished() },
         )
@@ -122,8 +142,8 @@ public const val READ_ALOUD_HIGHLIGHT_ID: String = "kitepdf.read-aloud"
 /**
  * One reading of [KiteReadAloud]: its player, the clip it reads, and the highlight of that clip.
  * Everything but the waits runs on the thread of [scope], the composition's, so [play] and [pause]
- * never race the reading. The waits for the audio, the overlay parse and the layout behind
- * [EpubDocument.locateFragment] run on [Dispatchers.Default].
+ * never race the reading. The waits for the audio, the speech, the overlay parse and the layout
+ * behind [EpubDocument.locateFragment] and [EpubDocument.markNarration] run on [Dispatchers.Default].
  */
 internal class ReadAloud(
     private val view: KiteDocViewState,
@@ -131,10 +151,12 @@ internal class ReadAloud(
     private val scope: CoroutineScope,
     private val color: () -> Color?,
     private val newPlayer: () -> KitePlayer?,
+    private val bookStyles: () -> Boolean,
+    private val speak: () -> (suspend (EpubOverlayClip, List<KiteReadingItem>) -> Unit)?,
     private val onClip: (EpubOverlayClip?) -> Unit,
     private val onFinished: () -> Unit,
 ) {
-    private var wanted = false
+    private val wanted = MutableStateFlow(false)
     private var reading: Job? = null
     private var player: KitePlayer? = null
 
@@ -151,14 +173,23 @@ internal class ReadAloud(
      */
     private var settled: KiteLocation? = null
 
+    /** The text href that should hold the book's classes, or null, and whether the book holds a mark now. */
+    private var markHref: String? = null
+    private var marked = false
+
+    /** Keeps the calls to [EpubDocument.markNarration] in the order the reading made them. */
+    private val marking = Mutex()
+
     fun play() {
-        wanted = true
+        wanted.value = true
         if (reading == null) reading = scope.launch { read() } else if (placed) player?.follow(true)
+        if (marked) scope.launch { applyMark() }
     }
 
     fun pause() {
-        wanted = false
+        wanted.value = false
         if (placed) player?.follow(false)
+        if (marked) scope.launch { applyMark() }
     }
 
     fun close() {
@@ -169,39 +200,58 @@ internal class ReadAloud(
         player = null
         placed = false
         unmark()
+        if (marked) {
+            marked = false
+            // The composition's scope ends with it, and the book outlives the reading.
+            CoroutineScope(Dispatchers.Default).launch { marking.withLock { book.markNarration(null, playing = false) } }
+        }
     }
 
     private suspend fun read() {
         var here = view.currentLocation
         while (true) {
             val start = withContext(Dispatchers.Default) { startAt(here) } ?: break
-            val made = player ?: try {
-                newPlayer()
-            } catch (failure: Exception) {
-                // As in EpubMediaPlayer: a platform without a player stack fails here.
-                null
-            } ?: break
-            player = made
-            here = readUntilMoved(made, start.first, start.second) ?: break
+            here = readUntilMoved(start.first, start.second) ?: break
         }
         player?.close()
         player = null
         placed = false
         reading = null
         unmark()
+        markHref = null
+        if (marked) applyMark()
         onClip(null)
         onFinished()
+    }
+
+    /** The player, made on first use, or null where the platform cannot play. */
+    private fun playerOrNull(): KitePlayer? = player ?: try {
+        newPlayer()
+    } catch (failure: Exception) {
+        // As in EpubMediaPlayer: a platform without a player stack fails here.
+        null
+    }?.also { player = it }
+
+    /**
+     * Gives the book's classes to the text at [markHref], with the playback class while the
+     * reading plays, and answers whether the book's rules style the active class.
+     */
+    private suspend fun applyMark(): Boolean = marking.withLock {
+        val href = markHref
+        val playing = wanted.value
+        marked = href != null
+        withContext(Dispatchers.Default) { book.markNarration(href, playing) }
     }
 
     /**
      * Reads from [firstClip] of [firstChapter] until the book's narration ends, and returns null,
      * or until the reader moves the view, and returns where it settled.
      */
-    private suspend fun readUntilMoved(player: KitePlayer, firstChapter: Int, firstClip: Int): KiteLocation? = coroutineScope {
+    private suspend fun readUntilMoved(firstChapter: Int, firstClip: Int): KiteLocation? = coroutineScope {
         settled = view.currentLocation
         shownPage = null
         val moved = async { awaitReaderMove() }
-        val reading = launch { readFrom(player, firstChapter, firstClip) }
+        val reading = launch { readFrom(firstChapter, firstClip) }
         val to = select<KiteLocation?> {
             reading.onJoin { null }
             moved.onAwait { it }
@@ -211,7 +261,7 @@ internal class ReadAloud(
         if (to != null) {
             // The clip of the place the reader left stops at once, not when the next one opens.
             placed = false
-            player.follow(false)
+            player?.follow(false)
         }
         to
     }
@@ -223,7 +273,7 @@ internal class ReadAloud(
             .first { it != settled && turn?.isActive != true }
 
     /** Reads every clip from [firstClip] of [firstChapter] to the end of the book's narration. */
-    private suspend fun readFrom(player: KitePlayer, firstChapter: Int, firstClip: Int) {
+    private suspend fun readFrom(firstChapter: Int, firstClip: Int) {
         var chapter = firstChapter
         var index = firstClip
         // The audio the player has open, and where in it the last clip ended, null at the end of the file.
@@ -234,8 +284,18 @@ internal class ReadAloud(
             val clips = withContext(Dispatchers.Default) { clipsOf(chapter) }
             while (index < clips.size) {
                 val clip = clips[index++]
-                val href = clip.audioHref ?: continue
+                val href = clip.audioHref
+                if (href == null) {
+                    val say = speak() ?: continue
+                    // The audio of the last clip stops, and the next clip with audio seeks to its start.
+                    placed = false
+                    player?.follow(false)
+                    end = null
+                    speakClip(clip, say)
+                    continue
+                }
                 if (href in unplayable) continue
+                val player = playerOrNull() ?: return
                 try {
                     if (href != audio) {
                         val item = withContext(Dispatchers.Default) { bookItem(book, href) }
@@ -260,7 +320,7 @@ internal class ReadAloud(
                     }
                     show(clip)
                     placed = true
-                    player.follow(wanted)
+                    player.follow(wanted.value)
                     withContext(Dispatchers.Default) { player.awaitPosition(clip.clipEnd?.seconds) }
                     end = clip.clipEnd
                 } catch (cancelled: CancellationException) {
@@ -277,10 +337,53 @@ internal class ReadAloud(
         }
     }
 
-    /** Highlights [clip]'s text, and turns the viewer to its page when the reading reaches a new page. */
+    /**
+     * Speaks [clip] with [say] while the reading plays. A pause cancels the speech, and the clip
+     * is spoken again from its start when the reading goes on. A speech that fails skips the clip.
+     */
+    private suspend fun speakClip(clip: EpubOverlayClip, say: suspend (EpubOverlayClip, List<KiteReadingItem>) -> Unit) {
+        show(clip)
+        val text = withContext(Dispatchers.Default) {
+            try {
+                book.readingOrderOf(clip.textHref)
+            } catch (failure: Exception) {
+                emptyList()
+            }
+        }
+        if (text.isEmpty()) return
+        while (true) {
+            wanted.first { it }
+            val said = try {
+                coroutineScope {
+                    val speaking = launch(Dispatchers.Default) { say(clip, text) }
+                    val paused = async { wanted.first { !it } }
+                    select<Boolean> {
+                        speaking.onJoin { true }
+                        paused.onAwait { false }
+                    }.also {
+                        speaking.cancel()
+                        paused.cancel()
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                true
+            }
+            if (said) return
+        }
+    }
+
+    /**
+     * Marks [clip]'s text with the book's classes or the highlight, and turns the viewer to its
+     * page when the reading reaches a new page.
+     */
     private suspend fun show(clip: EpubOverlayClip) {
+        val styles = bookStyles()
+        if (styles || marked) markHref = if (styles) clip.textHref else null
+        val styled = (styles || marked) && applyMark()
         val box = withContext(Dispatchers.Default) { locate(clip.textHref) }
-        if (box == null || box.rects.isEmpty()) {
+        if (box == null || box.rects.isEmpty() || styled) {
             unmark()
         } else {
             val mark = KiteHighlight(KiteSearchHit(box.location, box.rects, ""), color = color(), id = READ_ALOUD_HIGHLIGHT_ID)

@@ -76,12 +76,29 @@ KiteReadAloud(state, playing, onFinished = { playing = false })
 
 - It starts at the first clip whose text is on the reader's page or after it, and goes on through the next chapters that have an overlay (EPUB Reading Systems 3.3, 9.1).
 - Each clip plays from its `clipBegin` to its `clipEnd`, or to the end of its file without one (9.2.2). Clips that follow on in the same file play without a seek.
-- The text of the clip being read gets one entry in `state.highlights`, with the id `READ_ALOUD_HIGHLIGHT_ID`, next to your own entries. `color` sets its fill.
+- The element of the clip being read gets the book's `media:active-class`, and its chapter's root element gets the `media:playback-active-class` while the reading plays (EPUB Reading Systems 3.3, 9.2.3).
+- When the book's style rules do not style the active class, the text of the clip gets one entry in `state.highlights` instead, with the id `READ_ALOUD_HIGHLIGHT_ID`, next to your own entries. `color` sets its fill.
 - When the reading reaches text on another page, the viewer turns to it.
 - `playing = false` pauses on the clip, and `true` goes on from there.
-- A clip without audio, or whose audio the player cannot open, is skipped.
+- A clip without audio goes to `speak`, when you give one, and is skipped otherwise.
+- A clip whose audio the player cannot open is skipped.
 
-The book's active class shows as that highlight and is never added to the element, since a class could change the element's style and lay the chapter out again. `onClip` reports each clip as it starts, and null at the end. `onFinished` is called past the last clip, and at once for a book with no narration from the reader's page on. Leaving the composition stops the reading and closes its player.
+A class can change the style of an element, so a chapter whose rules use one of the two classes is laid out again for each clip. Pass `bookStyles = false` to keep every chapter as it is and mark the text with the highlight only.
+
+`onClip` reports each clip as it starts, and null at the end. `onFinished` is called past the last clip, and at once for a book with no narration from the reader's page on. Leaving the composition stops the reading, closes its player and takes the classes off.
+
+### Speak clips without audio
+
+Some books leave the audio out of their overlays and expect the reading system to speak the text (EPUB Reading Systems 3.3, the text-to-speech rules for media overlays). `speak` hands each such clip to your speech engine. It gets the clip and the text of its element as `KiteReadingItem` values, with the pronunciation hints of the book, and returns once it has said it all:
+
+```kotlin
+KiteReadAloud(
+    state, playing,
+    speak = { _, text -> for (item in text) mySpeechEngine.say(item.text, phoneme = item.pronunciation) },
+)
+```
+
+A pause or a move by the reader cancels `speak`, so stop the engine when its coroutine is cancelled. The reading speaks the clip again from its start when it goes on. `EpubDocument.readingOrderOf` gives the same text for any element.
 
 ## Your own player settings
 

@@ -34,6 +34,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun locateFragment (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubFragmentBox;
 	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public final fun markNarration (Ljava/lang/String;Z)Z
 	public final fun markupErrors (I)Ljava/util/List;
 	public final fun mediaOverlayOf (I)Lio/github/yuroyami/kitepdf/epub/EpubMediaOverlay;
 	public synthetic fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
@@ -43,6 +44,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public final fun pageOf (Ljava/lang/String;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
 	public fun prepareChapter (ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readingOrderOf (Ljava/lang/String;)Ljava/util/List;
 	public final fun renditionOf (I)Lio/github/yuroyami/kitepdf/epub/EpubRendition;
 	public final fun resource (Ljava/lang/String;)[B
 	public final fun resourceType (Ljava/lang/String;)Ljava/lang/String;

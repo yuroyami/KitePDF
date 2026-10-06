@@ -398,6 +398,12 @@ internal class Selector(
     /** `::before`/`::after` on the subject compound, or null for a normal selector. */
     val pseudoElement: PseudoSide? get() = parts.last().pseudoElement
 
+    /**
+     * Whether a match can depend on the class [name] anywhere in it, so that giving an element
+     * that class can restyle the chapter (#525). An attribute selector on `class` counts.
+     */
+    fun mentionsClass(name: String): Boolean = parts.any { part -> part.conditions.any { it.mentionsClass(name) } }
+
     /** Whether the subject has a pseudo-element other than `::before` and `::after`. */
     val otherPseudoElement: Boolean get() = parts.last().otherPseudoElement != null
 
@@ -571,4 +577,14 @@ internal fun hasToken(list: String, token: String, ignoreCase: Boolean): Boolean
         if (i - start == token.length && i > start && list.regionMatches(start, token, 0, token.length, ignoreCase)) return true
     }
     return false
+}
+
+private fun Condition.mentionsClass(name: String): Boolean = when (this) {
+    is ClassCondition -> this.name == name
+    is AttrCondition -> asciiLower(local) == "class"
+    is IsCondition -> list.any { it.mentionsClass(name) }
+    is NotCondition -> list.any { it.mentionsClass(name) }
+    is HasCondition -> list.any { it.mentionsClass(name) }
+    is NthCondition -> of?.any { it.mentionsClass(name) } == true
+    else -> false
 }

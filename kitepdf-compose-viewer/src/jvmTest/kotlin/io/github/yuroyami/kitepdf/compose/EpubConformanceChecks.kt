@@ -734,5 +734,30 @@ internal object EpubConformanceChecks {
         }
         check("mol-audio-no-clipbegin") { doc.mediaOverlayOf(1)?.clips?.firstOrNull()?.let { it.clipBegin == 0.0 && near(it.clipEnd ?: 0.0, 44.783, 0.001) } == true }
         check("mol-audio-no-clipend") { doc.mediaOverlayOf(1)?.clips?.let { it.size == 2 && it[1].clipEnd == null } == true }
+        // The word being read takes the book's active class, green with light text, and the rest of the playing chapter turns grey (#525).
+        check("mol-css") {
+            fun runs() = glyphRuns(1).map { it.text.trim() to it.color }
+            fun RgbColor.isRgb(r: Int, g: Int, b: Int) = near(this.r, r / 255.0, 0.02) && near(this.g, g / 255.0, 0.02) && near(this.b, b / 255.0, 0.02)
+            val before = runs().none { (_, color) -> color.isRgb(158, 158, 158) }
+            val styled = doc.markNarration(doc.mediaOverlayOf(1)?.clips?.firstOrNull()?.textHref, playing = true)
+            val during = runs()
+            val green = fills(1).any { it.isRgb(13 / 255.0, 146 / 255.0, 95 / 255.0) }
+            doc.markNarration(null, playing = false)
+            before && styled && green &&
+                during.any { (text, color) -> text == "Call" && color.isRgb(241, 241, 220) } &&
+                during.any { (text, color) -> text.startsWith("Ishmael") && color.isRgb(158, 158, 158) }
+        }
+        // A clip without audio gives its element's text for speech: the whole section for the single clip, a sentence each for the four.
+        check("mol-tts_single") {
+            val clip = doc.mediaOverlayOf(1)?.clips?.singleOrNull()
+            val said = clip?.let { doc.readingOrderOf(it.textHref).joinToString(" ") { item -> item.text } }.orEmpty().replace(Regex("\\s+"), " ")
+            clip?.audioHref == null && said.startsWith("Call me Ishmael.") && said.endsWith("ocean with me.")
+        }
+        check("mol-tts_multi") {
+            val clips = doc.mediaOverlayOf(1)?.clips.orEmpty()
+            val said = clips.map { clip -> doc.readingOrderOf(clip.textHref).joinToString(" ") { it.text }.replace(Regex("\\s+"), " ") }
+            clips.size == 4 && clips.all { it.audioHref == null } && said[0].startsWith("Call me Ishmael.") &&
+                said[1].startsWith("It is a way") && said[2].endsWith("pistol and ball.") && said[3].startsWith("With a philosophical flourish")
+        }
     }
 }

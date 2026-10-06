@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KiteReadAloud` speaks a media overlay clip that has no audio through the new `speak` parameter,
+  which hands the app's speech engine the clip and its text with the book's pronunciation hints.
+  A book that only speaks needs no player. `EpubDocument.readingOrderOf(href)` gives the text of
+  any element in reading order. Two more W3C EPUB tests pass (#525).
+- `EpubDocument.markNarration(href, playing)` gives an element the book's
+  `media:active-class` and its chapter's root the `media:playback-active-class`, as EPUB Reading
+  Systems 3.3, 9.2.3 asks. A chapter whose rules use one of the classes is laid out again (#525).
+
 - A roll book, `rendition:layout roll` of EPUB 3.4, reads as one strip: each chapter is one page at
   the size its viewport sets, and the strip shows the pages across the full width with no gap
   between them. `EpubRendition.isRoll` is true for such a book, and also for a pre-paginated book
@@ -906,6 +914,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `KiteReadAloud` now gives the element it reads the book's own active classes, so the text being
+  read shows the style the book chose, and the rest of the chapter the style it sets while
+  playing. Its own highlight now marks the text only where the book's rules do not style the
+  active class. Pass `bookStyles = false` to keep the old behavior. The new parameters come before
+  `onClip`, so a call that passes `onClip` by position must name it. One more W3C EPUB test
+  passes (#525).
 - A chapter without its own `dir`, CSS `direction` or `lang` now reads left to right. Before, it
   took its direction from the package's `dc:language`, so a chapter of an Arabic book read right to
   left. EPUB Reading Systems 3.3, 3.7 asks a reading system not to take a document's direction from
