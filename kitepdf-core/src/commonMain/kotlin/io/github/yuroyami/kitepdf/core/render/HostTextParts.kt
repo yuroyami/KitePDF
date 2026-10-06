@@ -64,7 +64,7 @@ public fun drawOrderParts(piece: List<TextGlyph>): List<DrawOrderPart> {
     fun close(end: Int) {
         val glyphs = piece.subList(start, end)
         val text = if (direction == RIGHT_TO_LEFT) {
-            glyphs.asReversed().joinToString("", prefix = "‮", postfix = "‬") { it.text }
+            withNumbers(glyphs) ?: glyphs.asReversed().joinToString("", prefix = "‮", postfix = "‬") { it.text }
         } else {
             glyphs.joinToString("", prefix = "‭", postfix = "‬") { it.text }
         }
@@ -80,6 +80,59 @@ public fun drawOrderParts(piece: List<TextGlyph>): List<DrawOrderPart> {
     }
     close(piece.size)
     return parts
+}
+
+/**
+ * [glyphs], a right-to-left part in the order it draws, as logical text inside a right-to-left
+ * embedding when it holds a number, else null (#600). An override would force the digits right to
+ * left as well, so the engine would shape them with the letters, and a host can then draw them in
+ * the face of the letters, which a paragraph of the text does not. In the embedding, the engine
+ * runs the bidi algorithm on the number as on any paragraph. The logical text is the part reversed
+ * with each number put back in reading order, and it must reorder to [glyphs], else null.
+ */
+private fun withNumbers(glyphs: List<TextGlyph>): String? {
+    val visual = glyphs.flatMap { codePointsOf(it.text) }.toIntArray()
+    if (visual.none { Bidi.classify(it).let { c -> c == Bidi.EN || c == Bidi.AN } }) return null
+    val logical = visual.reversedArray()
+    // Each run above the paragraph's level is a number, and the reversal turned it around.
+    val levels = Bidi.resolveLevels(logical, 1)
+    var i = 0
+    while (i < logical.size) {
+        if (levels[i] <= 1) { i++; continue }
+        var j = i
+        while (j < logical.size && levels[j] > 1) j++
+        logical.reverse(i, j)
+        i = j
+    }
+    val order = Bidi.reorderVisually(Bidi.resolveLevels(logical, 1))
+    if (order.indices.any { logical[order[it]] != visual[it] }) return null
+    return buildString {
+        append('\u202B')
+        for (cp in logical) appendCodePoint(cp)
+        append('\u202C')
+    }
+}
+
+private fun codePointsOf(text: String): List<Int> {
+    val out = ArrayList<Int>(text.length)
+    var i = 0
+    while (i < text.length) {
+        val high = text[i]
+        val pair = high.isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()
+        out += if (pair) 0x10000 + ((high.code - 0xD800) shl 10) + (text[i + 1].code - 0xDC00) else high.code
+        i += if (pair) 2 else 1
+    }
+    return out
+}
+
+private fun StringBuilder.appendCodePoint(cp: Int) {
+    if (cp < 0x10000) {
+        append(cp.toChar())
+    } else {
+        val v = cp - 0x10000
+        append((0xD800 + (v ushr 10)).toChar())
+        append((0xDC00 + (v and 0x3FF)).toChar())
+    }
 }
 
 /**

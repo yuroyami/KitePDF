@@ -73,4 +73,25 @@ class HostTextPartsTest {
         assertEquals(listOf(0.0, 15.0), parts.map { it.x })
         assertEquals(listOf(false, true), parts.map { it.shaped })
     }
+
+    /** The text of the single part of [visual], a piece in the order it draws, one glyph a character. */
+    private fun partText(visual: String): String = drawOrderParts(glyphs(*visual.map { it.toString() }.toTypedArray())).single().text
+
+    @Test
+    fun a_number_inside_right_to_left_text_goes_to_the_engine_in_logical_order() {
+        // The engine runs the bidi algorithm on the number as on a paragraph, so it shapes the
+        // digits as a paragraph of the text would, not with the letters (#600).
+        assertEquals("\u202Bعام 2024\u202C", partText("2024 ماع"))
+        assertEquals("\u202Bسعر 3.5 اليوم\u202C", partText("مويلا 3.5 رعس"))
+        // After Hebrew the digits stay European numbers, so the percent sign joins the number.
+        // After Arabic letters they become Arabic numbers, and the sign stays apart (UAX #9, W2 and W5).
+        assertEquals("\u202Bמחיר 3.5% היום\u202C", partText("םויה 3.5% ריחמ"))
+        assertEquals("\u202Bسعر %3.5 اليوم\u202C", partText("مويلا 3.5% رعس"))
+        assertEquals("\u202Bרחוב 12, דירה 3\u202C", partText("3 הריד ,12 בוחר"))
+    }
+
+    @Test
+    fun right_to_left_text_without_a_number_keeps_its_override() {
+        assertEquals("\u202Eسلام\u202C", partText("مالس"))
+    }
 }
