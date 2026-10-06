@@ -176,12 +176,22 @@ again its scripts start over from its markup, as a page does when it loads again
 An `<iframe>` whose `src` is a document of the book shows that document, and the document's
 scripts run in a window of their own, with an engine of its own. So does an `<object>` whose
 `data` is an HTML or XHTML document of the book. The frames' documents load
-before the chapter's `load` event. A frame's window has the book's origin and
-`navigator.epubReadingSystem`. Its `parent` and `top` are the frame's own window, so its scripts
-cannot reach or change the chapter around it or the frame's size, as EPUB 3.3 asks of a
-container-constrained script. A tap on a frame goes to the frame's document. A frame's script
-can move to a fragment of its own document, and nothing else: the reader keeps the book's place.
-A chapter whose frames run scripts counts as scripted, even with no script of its own.
+before the chapter's `load` event, and each frame element then gets its own `load` event. A
+frame's window has the book's origin and `navigator.epubReadingSystem`. A frame that a script
+adds loads and runs the same way.
+
+The chapter and its frames see each other as windows of another origin. A frame's
+`contentWindow` and its `parent` and `top` have `postMessage`, `close`, `focus`, `blur`,
+`closed`, `length`, `parent` and `top`. Any other member throws a `SecurityError`, and
+`contentDocument` is null. So a frame's scripts cannot reach or change the chapter around it or
+the frame's size, as EPUB 3.3 asks of a container-constrained script. A message between two
+windows is a structured clone, and a `MessagePort` can move to another window and stay
+entangled with its partner. A stream cannot move to another window.
+
+A tap on a frame goes to the frame's document. A frame's script can move to a fragment of its
+own document, and nothing else: the reader keeps the book's place. A chapter whose frames run
+scripts counts as scripted, even with no script of its own. An engine that cannot share its
+thread, as Rhino's, runs no frame scripts.
 
 They see a DOM over the chapter: `document` with `getElementById`, `querySelector`,
 `querySelectorAll` and the other finders, `createElement` and fragments; nodes and elements with
@@ -415,8 +425,8 @@ that is not well-formed XML throws a `SyntaxError` and changes nothing. `documen
 `writeln`, `open` and `close` throw an `InvalidStateError` there, as a browser's do in an XML
 document.
 
-Not there yet: the `contentWindow` and `contentDocument` of a frame, which are null; a frame that a script adds
-after the chapter loaded, which shows its document but runs no script; form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
+Not there yet: a frame's window does not close when a script removes the frame, and two frames
+that show one document share one window; form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness. A script that calls a missing method fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.
 

@@ -22,6 +22,7 @@ internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_STREAMS)
     append(DOM_PRELUDE_STREAMS_WRITABLE)
     append(DOM_PRELUDE_STREAMS_TRANSFER)
+    append(DOM_PRELUDE_WINDOWS)
     append(DOM_PRELUDE_GEOMETRY)
     append(DOM_PRELUDE_REFLECTION)
     append(DOM_PRELUDE_ELEMENTS)
@@ -86,7 +87,9 @@ var ArrayBufferByteLength = getter(ArrayBuffer.prototype, 'byteLength'), ArrayBu
 var GeneratorNext = uncurry(Object.getPrototypeOf(Object.getPrototypeOf((function* () {})())).next);
 var IteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
 var FunctionHasInstance = uncurry(Function.prototype[Symbol.hasInstance]);
-var JSONStringify = JSON.stringify, DateNow = Date.now;
+var JSONStringify = JSON.stringify, JSONParse = JSON.parse, DateNow = Date.now, MapDelete = uncurry(Map.prototype['delete']);
+var SymbolHasInstance = Symbol.hasInstance, SymbolIsConcatSpreadable = Symbol.isConcatSpreadable,
+  BigIntCtor = typeof BigInt === 'function' ? BigInt : null;
 var ErrorCaptureStackTrace = typeof Error.captureStackTrace === 'function' ? Error.captureStackTrace : null;
 var SymbolIterator = Symbol.iterator, SymbolToStringTag = typeof Symbol.toStringTag === 'symbol' ? Symbol.toStringTag : null;
 /* What structured cloning reads of a value and makes of it (#534). */
@@ -2369,12 +2372,14 @@ ObjectSetPrototypeOf(Window.prototype, WindowProperties);
 ObjectSetPrototypeOf(global, Window.prototype);
 
 var api = {
-  window: global, self: global, top: global, parent: global, frames: global, opener: null, frameElement: null, origin: origin,
+  // The window around a frame is another window's proxy, so a frame's scripts cannot reach the chapter (#528, #613).
+  window: global, self: global, top: windowProxy(WINDOW_IDS[2]), parent: windowProxy(WINDOW_IDS[1]) || global, frames: global,
+  opener: null, frameElement: null, origin: origin,
   document: document, location: location, console: console, atob: atob, btoa: btoa,
   navigator: navigator, clientInformation: navigator, screen: screen, history: history, performance: performance,
   innerWidth: viewport[0], innerHeight: viewport[1], outerWidth: viewport[0], outerHeight: viewport[1],
   devicePixelRatio: 1, scrollX: 0, scrollY: 0, pageXOffset: 0, pageYOffset: 0, screenX: 0, screenY: 0, screenLeft: 0, screenTop: 0,
-  name: '', status: '', closed: false, length: 0, isSecureContext: true, crossOriginIsolated: false,
+  name: '', status: '', closed: false, isSecureContext: true, crossOriginIsolated: false,
   localStorage: storage('local'), sessionStorage: storage('session'),
   setTimeout: function (fn, ms) { return schedule(fn, ms, listSlice(arguments, 2), false); },
   setInterval: function (fn, ms) { return schedule(fn, ms, listSlice(arguments, 2), true); },
@@ -2404,6 +2409,10 @@ var api = {
   hidden(global, 'WebKitCSSMatrix', DOMMatrix);
 })();
 hidden(global, '__listeners', ObjectCreate(null));
+/* The number of the window's frames, a replaceable attribute (HTML, 7.2.1). */
+ObjectDefineProperty(global, 'length', { __proto__: null, enumerable: true, configurable: true,
+  get: function () { return K.windowLength(WINDOW_IDS[0]); },
+  set: function (v) { ObjectDefineProperty(global, 'length', { __proto__: null, value: v, writable: true, enumerable: true, configurable: true }); } });
 defineHandlers(global, GLOBAL_HANDLERS);
 defineHandlers(global, WINDOW_HANDLERS);
 
@@ -2435,6 +2444,8 @@ function* loadedSteps() {
   // The images of the document load before the window does (HTML, 8.4.7).
   startParsedImages(rootId);
   for (var f = pendingImageSteps(); !GeneratorNext(f).done;) yield;
+  // So do its frames, whose documents loaded first (HTML, 4.8.5).
+  for (var h = frameLoadSteps(); !GeneratorNext(h).done;) yield;
   document.__ready = 'complete';
   for (var c = dispatchSteps(document, new Event('readystatechange')); !GeneratorNext(c).done;) yield;
   var load = new Event('load');
