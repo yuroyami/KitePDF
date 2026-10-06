@@ -44,6 +44,9 @@ internal interface SelectorTree {
 
     /** The value of the attribute of [el] named [name] in no namespace, or null. */
     fun attr(el: KiteXmlNode.Element, name: String): String?
+
+    /** The form control state [key] of [el] that a script set, or null while the control follows its attributes (#552). */
+    fun state(el: KiteXmlNode.Element, key: String): String? = el.attrs[FormStates.STATE + key]
 }
 
 /**

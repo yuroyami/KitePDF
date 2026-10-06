@@ -5,10 +5,13 @@ package io.github.yuroyami.kitepdf.epub.script
  * `MathMLElement`, and the interface of each element by its name.
  */
 internal const val DOM_PRELUDE_FORMS: String = """/* ---- forms, of HTML, 4.10 ----
-   What the DOM's own algorithms read of a form control is its state, kept in weak maps, and its
-   attributes, not the properties of its prototype, which a script can redefine. */
+   What the DOM's own algorithms read of a form control is its state and its attributes, not the
+   properties of its prototype, which a script can redefine. The host keeps the state beside the
+   element, where the page and the selectors read it, and an attribute never stands for it (#552). */
 
-var controlValues = new WeakMap(), checkedness = new WeakMap(), selectedness = new WeakMap(), indeterminate = new WeakMap();
+/* The state [key] of the control [el] as a boolean, or undefined while the control follows its attributes. */
+function flagState(el, key) { var s = K.state(el.__id, key); return s == null ? undefined : s === '1'; }
+function setFlagState(el, key, v) { K.setState(el.__id, key, v === undefined ? null : v ? '1' : '0'); }
 /* Whether [id] is an element of HTML named [local]. */
 function isHtml(id, local) { if (K.kind(id) !== 1) return false; var n = nameOf(id); return n.local === local && n.ns === XHTML_NS; }
 /* The listed elements of HTML, 4.10.2, whose form owner a form's elements gather. */
@@ -231,11 +234,10 @@ function autocompleteMember(p) {
 function inputType(el) { return enumState(ENUMS.inputtype, K.attr(el.__id, 'type')); }
 function buttonType(el) { return enumState(ENUMS.buttontype, K.attr(el.__id, 'type')); }
 function disabledOf(el) { return K.attr(el.__id, 'disabled') != null; }
-function checkedOf(el) { var c = WeakMapGet(checkedness, el); return c !== undefined ? c : K.attr(el.__id, 'checked') != null; }
+function checkedOf(el) { var c = flagState(el, 'checked'); return c !== undefined ? c : K.attr(el.__id, 'checked') != null; }
+/* Sets the checkedness of [el], which makes it dirty, so its checked attribute no longer sets it (HTML, 4.10.5). */
 function setChecked(el, v) {
-  WeakMapSet(checkedness, el, !!v);
-  // The rendering follows the checkedness, so a selector and the page see it.
-  if (v) K.setAttr(el.__id, 'checked', ''); else K.removeAttr(el.__id, 'checked');
+  setFlagState(el, 'checked', !!v);
   if (v && inputType(el) === 'radio') uncheckGroup(el);
 }
 /* The value mode of an input, of HTML, 4.10.5.4. */
@@ -262,10 +264,7 @@ function radioGroup(input) {
 }
 function uncheckGroup(input) {
   var group = radioGroup(input);
-  for (var i = 0; i < group.length; i++) {
-    WeakMapSet(checkedness, group[i], false);
-    K.removeAttr(group[i].__id, 'checked');
-  }
+  for (var i = 0; i < group.length; i++) setFlagState(group[i], 'checked', false);
 }
 function* resetSteps(form) {
   var g = dispatchSteps(form, new Event('reset', { __proto__: null, bubbles: true, cancelable: true })), r;
@@ -274,13 +273,14 @@ function* resetSteps(form) {
   var all = formElementIds(form.__id);
   for (var i = 0; i < all.length; i++) {
     var el = wrap(all[i]);
-    WeakMapSet(controlValues, el, undefined);
-    WeakMapSet(checkedness, el, undefined);
-    if (isHtml(all[i], 'select')) { var o = optionIds(all[i]); for (var j = 0; j < o.length; j++) WeakMapSet(selectedness, wrap(o[j]), undefined); }
+    K.setState(all[i], 'value', null);
+    K.setState(all[i], 'checked', null);
+    if (isHtml(all[i], 'select')) { var o = optionIds(all[i]); for (var j = 0; j < o.length; j++) K.setState(o[j], 'selected', null); }
   }
 }
 /* The dirty value of a control, or undefined while it has none. */
-function dirtyValue(el) { return WeakMapGet(controlValues, el); }
+function dirtyValue(el) { var v = K.state(el.__id, 'value'); return v == null ? undefined : v; }
+function setDirtyValue(el, v) { K.setState(el.__id, 'value', v === null ? '' : domString(v)); }
 
 var HTMLFormElement = elementInterface('HTMLFormElement', HTMLElement, 'acceptCharset=accept-charset action:a autocomplete:eautocomplete ' +
   'enctype:eenctype encoding=enctype:eenctype method:emethod name noValidate=novalidate:b target rel relList=rel:trel', function (p) {
@@ -311,14 +311,14 @@ var HTMLInputElement = elementInterface('HTMLInputElement', HTMLElement, 'accept
     return v != null ? v : mode === 'default/on' ? 'on' : '';
   }, function (v) {
     var el = wrap(idOf(this)), mode = valueMode(inputType(el));
-    if (mode === 'value') WeakMapSet(controlValues, el, v === null ? '' : domString(v));
+    if (mode === 'value') setDirtyValue(el, v);
     else if (mode === 'filename') {
       if (domString(v) !== '') throw new DOMException("Failed to set the 'value' property on 'HTMLInputElement': This input element accepts a filename, which may only be programmatically set to the empty string.", 'InvalidStateError');
     } else setAttr(el, 'value', v === null ? '' : domString(v));
   });
   def(p, 'checked', function () { return checkedOf(wrap(idOf(this))); }, function (v) { setChecked(wrap(idOf(this)), v); });
-  def(p, 'indeterminate', function () { return WeakMapGet(indeterminate, wrap(idOf(this))) === true; },
-    function (v) { WeakMapSet(indeterminate, wrap(idOf(this)), !!v); });
+  def(p, 'indeterminate', function () { return K.state(idOf(this), 'indeterminate') === '1'; },
+    function (v) { K.setState(idOf(this), 'indeterminate', v ? '1' : null); });
   def(p, 'files', function () { idOf(this); return null; });
   def(p, 'list', function () {
     var v = K.attr(idOf(this), 'list'), t = v == null ? null : K.byId(v);
@@ -351,13 +351,13 @@ function optionSelect(id) {
   if (p != null && isHtml(p, 'optgroup')) p = K.parent(p);
   return p != null && isHtml(p, 'select') ? p : null;
 }
-function selectedOf(option) { var s = WeakMapGet(selectedness, option); return s !== undefined ? s : K.attr(option.__id, 'selected') != null; }
+function selectedOf(option) { var s = flagState(option, 'selected'); return s !== undefined ? s : K.attr(option.__id, 'selected') != null; }
 function setSelected(option, v) {
-  WeakMapSet(selectedness, option, !!v);
+  setFlagState(option, 'selected', !!v);
   var select = optionSelect(option.__id);
   if (!v || select == null || K.attr(select, 'multiple') != null) return;
   var all = optionIds(select);
-  for (var i = 0; i < all.length; i++) if (all[i] !== option.__id) WeakMapSet(selectedness, wrap(all[i]), false);
+  for (var i = 0; i < all.length; i++) if (all[i] !== option.__id) K.setState(all[i], 'selected', '0');
 }
 function optionText(id) { return ArrayJoin(asciiTokens(K.text(id)), ' '); }
 function optionValue(option) { var v = K.attr(option.__id, 'value'); return v == null ? optionText(option.__id) : v; }
@@ -368,7 +368,7 @@ function selectedIndexOf(select) {
 }
 function setSelectedIndex(select, index) {
   var o = optionIds(select.__id), at = webIdlLong(index);
-  for (var i = 0; i < o.length; i++) WeakMapSet(selectedness, wrap(o[i]), i === at);
+  for (var i = 0; i < o.length; i++) K.setState(o[i], 'selected', i === at ? '1' : '0');
 }
 /* An option or an optgroup that add() of a select takes, or a TypeError. */
 function optionOrGroup(v, what) {
@@ -453,7 +453,7 @@ var HTMLSelectElement = elementInterface('HTMLSelectElement', HTMLElement, 'disa
     return i < 0 ? '' : optionValue(wrap(optionIds(el.__id)[i]));
   }, function (v) {
     var o = optionIds(idOf(this)), s = domString(v), found = false;
-    for (var i = 0; i < o.length; i++) { var opt = wrap(o[i]), hit = !found && optionValue(opt) === s; WeakMapSet(selectedness, opt, hit); if (hit) found = true; }
+    for (var i = 0; i < o.length; i++) { var opt = wrap(o[i]), hit = !found && optionValue(opt) === s; K.setState(o[i], 'selected', hit ? '1' : '0'); if (hit) found = true; }
   });
   p.item = function (index) { var o = optionIds(idOf(this)), at = unsignedLong(index); return at < o.length ? wrap(o[at]) : null; };
   p.namedItem = function (name) { var v = listNamed(listState(optionsOf(wrap(idOf(this)))), domString(name)); return v === undefined ? null : v; };
@@ -484,7 +484,7 @@ var HTMLTextAreaElement = elementInterface('HTMLTextAreaElement', HTMLElement, '
   formControl(p); labelable(p); validationMembers(p); selectionMembers(p); autocompleteMember(p);
   def(p, 'type', function () { idOf(this); return 'textarea'; });
   def(p, 'value', function () { var el = wrap(idOf(this)), v = dirtyValue(el); return v !== undefined ? v : textOf(el); },
-    function (v) { WeakMapSet(controlValues, wrap(idOf(this)), v === null ? '' : domString(v)); });
+    function (v) { setDirtyValue(wrap(idOf(this)), v); });
   def(p, 'defaultValue', function () { return textOf(this); }, function (v) { setTextOf(this, v); });
   def(p, 'textLength', function () { return domString(this.value).length; });
 });
@@ -559,7 +559,7 @@ function Option(text, value, defaultSelected, selected) {
   if (text !== undefined && domString(text) !== '') insertNode(option.__id, textNode(domString(text)), null, 'Option');
   if (value !== undefined) setAttr(option, 'value', domString(value));
   if (defaultSelected) setAttr(option, 'selected', '');
-  WeakMapSet(selectedness, option, !!selected);
+  setFlagState(option, 'selected', !!selected);
   return option;
 }
 legacyFactory(Option, 'Option', 0, HTMLOptionElement);
