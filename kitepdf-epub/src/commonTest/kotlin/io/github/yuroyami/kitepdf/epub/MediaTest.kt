@@ -102,4 +102,33 @@ class MediaTest {
         assertEquals("video/mp4", doc.resourceType("OEBPS/clip.mp4#t=10"))
         assertNull(doc.resource("OEBPS/missing.mp4"))
     }
+
+    @Test
+    fun a_media_element_lists_its_tracks_with_their_kind_language_and_label() {
+        val doc = book(
+            """<video src="clip.mp4" controls="controls">""" +
+                """<track src="captions/en.vtt" kind="captions" srclang="en" label="English" default="default"/>""" +
+                """<track src="fr.vtt" srclang="fr"/>""" +
+                """<track src="desc.vtt" kind="Descriptions"/>""" +
+                """<track src="chapters.vtt" kind="chapters"/>""" +
+                """<track src="data.vtt" kind="sign-language"/>""" +
+                """<track kind="captions" label="No file"/>""" +
+                """<track src="https://example.com/de.vtt" kind="subtitles" srclang="de"/>""" +
+                """</video>""",
+        )
+        val tracks = page(doc).media.single().tracks
+        assertEquals(
+            listOf("OEBPS/captions/en.vtt", "OEBPS/fr.vtt", "OEBPS/desc.vtt", "OEBPS/chapters.vtt", "OEBPS/data.vtt", "https://example.com/de.vtt"),
+            tracks.map { it.href },
+            "a track without a src is left out",
+        )
+        assertEquals(
+            listOf(EpubTrackKind.CAPTIONS, EpubTrackKind.SUBTITLES, EpubTrackKind.DESCRIPTIONS, EpubTrackKind.CHAPTERS, EpubTrackKind.METADATA, EpubTrackKind.SUBTITLES),
+            tracks.map { it.kind },
+            "no kind means subtitles, and a kind HTML does not know means metadata",
+        )
+        assertEquals(listOf("en", "fr", null, null, null, "de"), tracks.map { it.language })
+        assertEquals(listOf("English", null, null, null, null, null), tracks.map { it.label })
+        assertEquals(listOf(true, false, false, false, false, false), tracks.map { it.isDefault })
+    }
 }

@@ -41,7 +41,8 @@ Each media element of a page then gets a player on its box, so it moves and zoom
 - A video plays in its box. With the element's `controls`, a bar along its bottom pauses and plays, and shows how far it is.
 - A tap on the line of the bar seeks there, and a drag scrubs. A screen reader moves the line as a slider, five seconds a step. The elapsed and the total time stand on each side of the line.
 - The bar has a mute button, and a speed menu from 0.5× to 2×. A change of speed keeps the pitch. Volume stays with the device's own buttons.
-- Where the box is narrow, the times leave the bar first, then the speed.
+- A video loads its subtitle and caption tracks, the `<track>` elements of kind `subtitles` or `captions`. The track that the element marks `default` shows over the picture at once. A menu on the bar picks another track or none.
+- Where the box is narrow, the times leave the bar first, then the two menus.
 - The bar of a video ends with a full-screen button. Full screen shows the same player over the whole window, so the video goes on without a break, and the button, a back gesture or Escape brings it back to its box.
 - An audio element shows that bar in its own box.
 - `autoplay` starts the element by itself, muted, since browsers let only muted media start unasked. The first touch of its controls turns the sound on. `muted` mutes it from the start, and `loop` plays it again when it ends.
@@ -92,6 +93,8 @@ pageOverlay = { KiteMediaOverlay(allowRemote = true) }
 ```
 
 A source of any other scheme never plays. A plain `http` stream can be watched and changed on its way, and a `file` URL would reach files on the device, which EPUB Reading Systems 3.3 forbids (3.3 and 3.5).
+
+The file of a subtitle or caption track follows the same rules as a source.
 
 ## Read a book aloud
 

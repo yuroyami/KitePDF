@@ -384,6 +384,14 @@ internal class BoxBuilder(
                 source.attrs["src"]?.takeIf { it.isNotBlank() }?.let { add(EpubMediaSource(href(it), source.attrs["type"])) }
             }
         }
+        val tracks = el.children.mapNotNull { track ->
+            if (track !is KiteXmlNode.Element || track.tag != "track") return@mapNotNull null
+            val src = track.attrs["src"]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            EpubMediaTrack(
+                href(src), trackKind(track.attrs["kind"]), track.attrs["srclang"]?.trim()?.takeIf { it.isNotEmpty() },
+                track.attrs["label"]?.takeIf { it.isNotBlank() }, isDefault = "default" in track.attrs,
+            )
+        }
         val poster = el.attrs["poster"]?.takeIf { video && it.isNotBlank() }?.let { resolveHref(it) }
         val aw = el.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
         val ah = el.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
@@ -391,11 +399,21 @@ internal class BoxBuilder(
             it.media = MediaInfo(
                 if (video) EpubMediaKind.VIDEO else EpubMediaKind.AUDIO, sources, poster,
                 controls = "controls" in el.attrs, autoplay = "autoplay" in el.attrs,
-                loop = "loop" in el.attrs, muted = "muted" in el.attrs, id = el.attrs["id"],
+                loop = "loop" in el.attrs, muted = "muted" in el.attrs, id = el.attrs["id"], tracks = tracks,
             )
             it.semantics = BoxSemantics.of(el.tag, el.attrs, parentSem)
             it.source = el
         }
+    }
+
+    /** The kind of a `<track>`: subtitles without the attribute, metadata for a keyword HTML does not know (HTML, the track element). */
+    private fun trackKind(value: String?): EpubTrackKind = when (value?.trim()?.lowercase()) {
+        null -> EpubTrackKind.SUBTITLES
+        "subtitles" -> EpubTrackKind.SUBTITLES
+        "captions" -> EpubTrackKind.CAPTIONS
+        "descriptions" -> EpubTrackKind.DESCRIPTIONS
+        "chapters" -> EpubTrackKind.CHAPTERS
+        else -> EpubTrackKind.METADATA
     }
 
     /**
