@@ -35,7 +35,7 @@ class HtmlStructureTest {
         });
     """.trimIndent()
 
-    private fun logged(chapter: String): List<String> {
+    private suspend fun logged(chapter: String): List<String> {
         val console = ArrayList<String>()
         val book = ScriptBooks.page(chapter, extraFiles = mapOf("a.js" to script), html = true)
         val runner = EpubScriptRunner(book, onConsole = { _, message -> console += message }).also { runners += it }

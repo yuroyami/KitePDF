@@ -5,6 +5,7 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlinx.coroutines.runBlocking
 
 /**
  * A runner runs a document's own scripts once, however often a viewer reports the document open,
@@ -35,8 +36,8 @@ class RunnerLifecycleTest {
     fun the_document_scripts_run_once_however_often_the_document_opens() {
         val doc = PdfDocument.open(pdf("var f = this.getField\\('log'\\); f.value = f.value + 'x';"))
         PdfScriptRunner(doc).use { runner ->
-            runner.documentOpened()
-            runner.documentOpened()
+            runBlocking { runner.documentOpened() }
+            runBlocking { runner.documentOpened() }
             assertEquals("x", runner.formState.value("log"))
         }
     }
@@ -45,7 +46,7 @@ class RunnerLifecycleTest {
     fun closing_the_runner_stops_a_script_that_never_ends() {
         val doc = PdfDocument.open(pdf("while \\(true\\) {}"))
         val runner = PdfScriptRunner(doc, policy = PdfScriptPolicy.LONG_RUNNING)
-        val opener = thread(isDaemon = true, name = "opener") { runCatching { runner.documentOpened() } }
+        val opener = thread(isDaemon = true, name = "opener") { runCatching { runBlocking { runner.documentOpened() } } }
         // Long enough for the script to be well inside its loop.
         Thread.sleep(500)
         val closer = thread(isDaemon = true, name = "closer") { runner.close() }

@@ -23,6 +23,10 @@ internal class ThreadedScriptEngine(
 
     override fun evaluate(source: String, name: String): String? = thread.call { engine.evaluate(source, name) }
 
+    /** Pauses only where the work runs where it is called, as on the web: a thread of its own cannot hand a pause back. */
+    override suspend fun evaluatePausing(source: String, name: String): String? =
+        if (thread.isOwnThread) evaluate(source, name) else engine.evaluatePausing(source, name)
+
     override fun defineFunction(name: String, function: (List<Any?>) -> Any?): Unit =
         thread.call { engine.defineFunction(name, function) }
 

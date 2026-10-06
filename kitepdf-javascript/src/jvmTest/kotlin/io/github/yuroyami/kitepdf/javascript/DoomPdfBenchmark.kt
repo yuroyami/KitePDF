@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.PdfDocument
 import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -76,11 +77,11 @@ class DoomPdfBenchmark {
 
             // Input: a button on the page and a key typed into the box, which is how the game
             // reads a keyboard. Both go through the widget's own scripts.
-            runner.mouseDown("fire_button")
-            runner.mouseUp("fire_button")
+            runBlocking { runner.mouseDown("fire_button") }
+            runBlocking { runner.mouseUp("fire_button") }
             runner.keystroke("key_input", "w")
             clock += FRAME_STEP
-            runner.pumpTimers(clock)
+            runBlocking { runner.pumpTimers(clock) }
             val afterInput = consoleRows()
             for (line in afterInput.takeLast(4)) note("after input: $line")
             assertTrue(
@@ -94,7 +95,7 @@ class DoomPdfBenchmark {
             var warmup = 0
             while (warmup * FRAME_STEP < TITLE_SCREEN_MS) {
                 clock += FRAME_STEP
-                runner.pumpTimers(clock)
+                runBlocking { runner.pumpTimers(clock) }
                 warmup++
             }
             note("ran $warmup frames to get past the title screen")
@@ -130,7 +131,7 @@ class DoomPdfBenchmark {
                 val before = runner.formState.revision
                 val t = System.nanoTime()
                 clock += FRAME_STEP
-                runner.pumpTimers(clock)
+                runBlocking { runner.pumpTimers(clock) }
                 times += ms(t)
                 writes += runner.formState.revision - before
                 if (frame <= 3 || frame % 20 == 0) note("frame $frame: ${times.last()} ms, ${writes.last()} field writes")

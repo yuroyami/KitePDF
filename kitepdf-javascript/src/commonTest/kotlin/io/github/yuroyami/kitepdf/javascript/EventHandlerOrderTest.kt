@@ -23,7 +23,7 @@ class EventHandlerOrderTest {
     }
 
     /** What the chapter of [book] logs, its tasks run through. */
-    private fun logOf(book: EpubDocument): List<String> {
+    private suspend fun logOf(book: EpubDocument): List<String> {
         val console = ArrayList<String>()
         val scripts = EpubScriptRunner(book, onConsole = { level, message -> console.add("$level: $message") }).also { runners += it }
         scripts.chapterOpened(0)
@@ -43,7 +43,7 @@ class EventHandlerOrderTest {
     )
 
     /** A chapter that runs [script] after a paragraph `p`, which holds `log(...)` to log with. */
-    private fun scripted(script: String, p: String = """<p id="p">Order.</p>"""): List<String> =
+    private suspend fun scripted(script: String, p: String = """<p id="p">Order.</p>"""): List<String> =
         logOf(page(body = "$p<script>var out = []; function log(s) { out.push(s); } var p = document.getElementById('p');\n$script\nconsole.log(out.join(', '));</script>"))
 
     @Test

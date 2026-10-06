@@ -18,7 +18,7 @@ class DomParserTest {
         runners.forEach { it.close() }
     }
 
-    private fun logged(body: String, script: String): List<String> {
+    private suspend fun logged(body: String, script: String): List<String> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter("$body<script src=\"a.js\"></script>", extraFiles = mapOf("a.js" to script))
         val runner = EpubScriptRunner(book, onConsole = { level, message -> console += "$level: $message" }).also { runners += it }

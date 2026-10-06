@@ -168,7 +168,7 @@ class ImageLoadTest {
     /** A PNG of 3 by 2 pixels: a red row over a blue row. */
     private val picture = KiteRaster(3, 2, intArrayOf(RED, RED, RED, BLUE, BLUE, BLUE)).encodePng()
 
-    private fun logged(html: Boolean): List<String> {
+    private suspend fun logged(html: Boolean): List<String> {
         val console = ArrayList<String>()
         var now = 0L
         val files = listOf("a", "d", "r", "i", "b", "p", "g").associate { "v1-$it.png" to picture }

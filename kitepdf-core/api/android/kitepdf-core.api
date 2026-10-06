@@ -2543,10 +2543,14 @@ public abstract interface class io/github/yuroyami/kitepdf/core/script/KiteScrip
 	public abstract fun defineValue (Ljava/lang/String;Ljava/lang/Object;)V
 	public abstract fun evaluate (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun evaluate$default (Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public fun evaluatePausing (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun evaluatePausing$default (Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public final class io/github/yuroyami/kitepdf/core/script/KiteScriptEngine$DefaultImpls {
 	public static synthetic fun evaluate$default (Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public static fun evaluatePausing (Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun evaluatePausing$default (Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public final class io/github/yuroyami/kitepdf/core/script/KiteScriptException : java/lang/Exception {

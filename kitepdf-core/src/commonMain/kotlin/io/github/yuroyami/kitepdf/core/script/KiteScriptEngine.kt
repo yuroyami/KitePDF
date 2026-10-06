@@ -21,6 +21,15 @@ public interface KiteScriptEngine : AutoCloseable {
     public fun evaluate(source: String, name: String = "<script>"): String?
 
     /**
+     * Runs [source] as [evaluate] does, but an engine that can pause in the middle of a script
+     * gives the thread back now and then, so a long script does not freeze a page on the web.
+     * The default runs [evaluate].
+     *
+     * @throws KiteScriptException as [evaluate] does.
+     */
+    public suspend fun evaluatePausing(source: String, name: String = "<script>"): String? = evaluate(source, name)
+
+    /**
      * Makes [function] callable from scripts under [name], which may be a dotted
      * path such as `app.alert`: missing objects on the way are created. Arguments
      * arrive as Kotlin values (String, Double, Boolean, List, Map or null), and

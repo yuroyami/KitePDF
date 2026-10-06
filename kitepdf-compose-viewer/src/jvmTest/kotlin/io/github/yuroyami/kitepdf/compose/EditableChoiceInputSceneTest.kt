@@ -49,7 +49,7 @@ class EditableChoiceInputSceneTest {
         val release = CountDownLatch(if (slow) 1 else 0)
         val keys = ConcurrentLinkedQueue<String>()
         val commits = ConcurrentLinkedQueue<PdfChoiceSelection>()
-        override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
             keys += change
             entered.countDown()
             check(release.await(10, TimeUnit.SECONDS)) { "test did not release the pending keystroke" }
@@ -61,12 +61,12 @@ class EditableChoiceInputSceneTest {
             val end = selectionEnd.coerceIn(start, current.length)
             return current.substring(0, start) + rewritten + current.substring(end)
         }
-        override fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
+        override suspend fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
             val accepted = formState.setChoiceSelection(fieldName, selection, formState.fieldRevision(fieldName))
             if (accepted) commits += selection
             return accepted
         }
-        override fun blur(fieldName: String) { blurred.countDown() }
+        override suspend fun blur(fieldName: String) { blurred.countDown() }
     }
 
     private fun input(scene: ImageComposeScene): SemanticsNode? = onTestUiThread {
@@ -173,15 +173,15 @@ class EditableChoiceInputSceneTest {
         val accepted = java.util.concurrent.atomic.AtomicReference<Boolean>()
         val scripts = object : PdfScriptHandler {
             override val formState = PdfFormState(document)
-            override fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection = selection
-            override fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
+            override suspend fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection = selection
+            override suspend fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
                 // A real runner captures this before final /K and /V, then stores atomically.
                 val revision = formState.fieldRevision(fieldName)
                 entered.countDown()
                 check(release.await(10, TimeUnit.SECONDS)) { "test did not release final validation" }
                 return formState.setChoiceSelection(fieldName, selection, revision).also(accepted::set)
             }
-            override fun blur(fieldName: String) { blurred.countDown() }
+            override suspend fun blur(fieldName: String) { blurred.countDown() }
         }
         lateinit var state: KiteDocViewState
         val (scene, driver) = drivenScene(200, 200, queued) {

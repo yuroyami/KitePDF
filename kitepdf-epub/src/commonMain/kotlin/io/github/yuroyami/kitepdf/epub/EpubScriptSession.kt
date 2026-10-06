@@ -163,13 +163,13 @@ public class EpubScriptSession(
 
     override val hasTimers: Boolean get() = timersWaiting
 
-    override fun chapterOpened(chapter: Int) {
+    override suspend fun chapterOpened(chapter: Int) {
         val windows = open(chapter) ?: return
         windows.main?.followFragment()
         settle()
     }
 
-    override fun tap(page: EpubPage, x: Double, y: Double): Boolean {
+    override suspend fun tap(page: EpubPage, x: Double, y: Double): Boolean {
         if (!page.document.sharesBookWith(document)) return false
         val windows = open(page.chapter) ?: return false
         // A tap on a frame goes to the frame's document, at the point inside the frame (#528).
@@ -198,12 +198,12 @@ public class EpubScriptSession(
         return prevented
     }
 
-    override fun pumpTimers(nowMillis: Long): Long? {
+    override suspend fun pumpTimers(nowMillis: Long): Long? {
         var next: Long? = null
         for (scripts in chapters.values.flatMap { it.all }) {
             if (scripts.timers == 0) continue
             scripts.steps("timers", "__kite_pump(${now()})")
-            val wait = scripts.call("timers") { scripts.engine.evaluate("__kite_wait()", "timers")?.toDoubleOrNull() }
+            val wait = scripts.nextTimer()
             scripts.commit()
             if (wait != null && wait >= 0) next = minOf(next ?: Long.MAX_VALUE, wait.roundToLong())
         }
@@ -252,7 +252,7 @@ public class EpubScriptSession(
      * were closed to make room; null for a chapter the book does not have or where no script
      * runs, which takes no engine and leaves the others open. The chapter becomes the one used last.
      */
-    private fun open(chapter: Int): ChapterWindows? {
+    private suspend fun open(chapter: Int): ChapterWindows? {
         check(!closed) { "the script session is closed" }
         if (chapter !in 0 until document.chapterCount) return null
         chapters.remove(chapter)?.let { windows ->
@@ -277,7 +277,7 @@ public class EpubScriptSession(
         chapters[chapter] = windows
         // A frame's document loads before the load event of the document around it (HTML, 4.8.5).
         // Each window is in place before it starts, so the timers it sets count.
-        val startFrames = {
+        val startFrames: suspend () -> Unit = {
             for (path in frames) ChapterScripts(chapter, path).also { windows.frames[path] = it }.start()
         }
         if (scripted) ChapterScripts(chapter).also { windows.main = it }.start(beforeLoad = startFrames) else startFrames()
@@ -324,7 +324,7 @@ public class EpubScriptSession(
      * to [MAX_DELIVERIES] at a time, then opens the frames that scripts added (#613). It runs after
      * the host's own calls into the scripts, never inside one, so a script that posts goes on first.
      */
-    private fun settle() {
+    private suspend fun settle() {
         var left = MAX_DELIVERIES
         while (!closed) {
             val d = deliveries.removeFirstOrNull()
@@ -348,7 +348,7 @@ public class EpubScriptSession(
      * Starts the window of each scripted frame that a script added to a document, and gives each
      * new frame element its load event. Answers whether anything ran.
      */
-    private fun openAddedFrames(): Boolean {
+    private suspend fun openAddedFrames(): Boolean {
         var ran = false
         for (windows in chapters.values.toList()) {
             for (scripts in windows.all) {
@@ -542,7 +542,7 @@ public class EpubScriptSession(
          * Takes the fragment that the viewer reached in the chapter since its scripts last saw one:
          * the scripts get `popstate`, then `hashchange` as a task (#550).
          */
-        fun followFragment() {
+        suspend fun followFragment() {
             if (frame != null) return
             val reached = document.fragmentOf(chapter) ?: return
             if (reached == fragment) return
@@ -558,7 +558,7 @@ public class EpubScriptSession(
         private var usable = opened != null
 
         /** Runs [block] against the engine; a failure is recorded, and answers null. */
-        fun <T> call(what: String, block: () -> T): T? {
+        inline fun <T> call(what: String, block: () -> T): T? {
             if (!usable) return null
             return try {
                 block()
@@ -573,12 +573,16 @@ public class EpubScriptSession(
          * its own (#535). The engine runs the promise jobs of a call once it returns, so the jobs
          * of each callback run before the next one, as HTML runs a microtask checkpoint after
          * each callback it invokes. Answers what the steps returned, or null when a call failed.
+         * The book's code runs in them, so on the web a long one pauses and lets the page draw (#489).
          */
-        fun steps(what: String, entry: String): String? {
-            var answer = call(what) { engine.evaluate(entry, what) }
-            while (answer == MORE) answer = call(what) { engine.evaluate("__kite_step()", what) }
+        suspend fun steps(what: String, entry: String): String? {
+            var answer = call(what) { engine.evaluatePausing(entry, what) }
+            while (answer == MORE) answer = call(what) { engine.evaluatePausing("__kite_step()", what) }
             return answer
         }
+
+        /** How long until the window's next timer or animation frame, in milliseconds, or null. */
+        fun nextTimer(): Double? = call("timers") { engine.evaluate("__kite_wait()", "timers")?.toDoubleOrNull() }
 
         /**
          * Hands the layout the tree as the scripts left it, when they changed it, and settles the
@@ -602,7 +606,7 @@ public class EpubScriptSession(
         }
 
         /** Runs the document's scripts, then [beforeLoad], then the load event. */
-        fun start(beforeLoad: () -> Unit = {}) {
+        suspend fun start(beforeLoad: suspend () -> Unit = {}) {
             // The layout shows what scripts made of the document before, so it takes this run's
             // tree even when the scripts change nothing.
             val version = if (frame == null) document.chapterVersionOf(chapter) else document.frameVersionOf(chapter, frame)
@@ -669,7 +673,7 @@ public class EpubScriptSession(
          * Runs one classic script, inline or from the zip, once the parser reached the first
          * [reached] elements of the markup with handler attributes. A module and a data block do not run.
          */
-        private fun runScript(script: KiteXmlNode.Element, reached: Int) {
+        private suspend fun runScript(script: KiteXmlNode.Element, reached: Int) {
             val type = dom.attr(script, "type")?.substringBefore(';')?.trim()?.lowercase().orEmpty()
             if (type.isNotEmpty() && type !in SCRIPT_TYPES) return
             val src = dom.attr(script, "src")?.trim()
@@ -690,7 +694,7 @@ public class EpubScriptSession(
             }
             val id = dom.idOf(script)
             call("current") { engine.evaluate("__kite_current($id, $reached)", "current") }
-            call(name) { engine.evaluate(withoutCommentMarks(source), name) }
+            call(name) { engine.evaluatePausing(withoutCommentMarks(source), name) }
             call("current") { engine.evaluate("__kite_current(null)", "current") }
         }
 

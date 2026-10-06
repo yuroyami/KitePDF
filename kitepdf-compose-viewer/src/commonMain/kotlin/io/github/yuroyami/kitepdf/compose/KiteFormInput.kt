@@ -148,14 +148,14 @@ private fun FieldInput(
     LaunchedEffect(Unit) { if (current()) requester.requestFocus() }
 
     DisposableEffect(state, session) {
-        val capture: (KiteDocViewState.ChoiceSession) -> (() -> Unit)? = capture@{ target ->
+        val capture: (KiteDocViewState.ChoiceSession) -> (suspend () -> Unit)? = capture@{ target ->
             if (session !== target || !current() || flushing) return@capture null
             val pending = pipeline.pendingEdits()
             if (pending.isEmpty()) return@capture null
             val confirmed = pipeline.confirmed
             val flight = inFlight
             flushing = true
-            val drain: () -> Unit = {
+            val drain: suspend () -> Unit = {
                 val remaining = KeystrokePipeline(confirmed)
                 pending.forEach(remaining::typed)
                 if (flight != null && flight.completed && remaining.next() == flight.edit) remaining.answered(flight.kept)
@@ -266,7 +266,7 @@ private class InputKeystroke(val edit: Edit) {
     var kept: String? = null
 }
 
-private fun askScript(
+private suspend fun askScript(
     scripts: PdfScriptHandler,
     fieldName: String,
     edit: Edit,

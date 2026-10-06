@@ -30,7 +30,7 @@ class CanvasReadbackTest {
     }
 
     /** Runs [script] on a canvas 40 by 20 pixels, and answers what it logged and the book. */
-    private fun run(
+    private suspend fun run(
         script: String,
         files: Map<String, ByteArray> = emptyMap(),
         fontOutlines: ((String, FontSpec) -> KitePath?)? = null,

@@ -107,13 +107,13 @@ class EffectThreadSceneTest {
 
     /** Stands in for a field script that writes capitals and a button script that writes the field. */
     private class FormScripts(document: PdfDocument) : Scripts(document) {
-        override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
             val current = formState.value(fieldName) ?: ""
             val start = selectionStart.coerceIn(0, current.length)
             return current.substring(0, start) + change.uppercase() + current.substring(selectionEnd.coerceIn(start, current.length))
         }
 
-        override fun mouseUp(fieldName: String, widgetIndex: Int) {
+        override suspend fun mouseUp(fieldName: String, widgetIndex: Int) {
             if (fieldName == "press") formState.setValue("out", "PRESSED")
         }
     }
@@ -205,7 +205,7 @@ class EffectThreadSceneTest {
         val firstFrame = CountDownLatch(1)
         val opened = CountDownLatch(1)
         val scripts = object : Scripts(doc) {
-            override fun documentOpened() {
+            override suspend fun documentOpened() {
                 firstFrame.await(10, TimeUnit.SECONDS)
                 // A change that the next snapshot applies, on the thread that takes it.
                 probe.value = 1
@@ -241,7 +241,7 @@ class EffectThreadSceneTest {
         val inFirstPage = CountDownLatch(1)
         val leaveFirstPage = CountDownLatch(1)
         val scripts = object : Scripts(doc) {
-            override fun pageOpened(pageIndex: Int) {
+            override suspend fun pageOpened(pageIndex: Int) {
                 if (pageIndex != 0) return
                 inFirstPage.countDown()
                 leaveFirstPage.await(10, TimeUnit.SECONDS)

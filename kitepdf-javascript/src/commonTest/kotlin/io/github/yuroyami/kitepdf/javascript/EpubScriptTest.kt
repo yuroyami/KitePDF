@@ -622,7 +622,7 @@ class EpubScriptTest {
                 "two.xhtml" to ScriptBooks.xhtml(body = "<p>Two.</p><script>console.log(location.origin + ' ' + location.pathname);</script>"),
             ),
         )
-        fun originsOf(identifier: String, key: String? = "reader one"): List<String> {
+        suspend fun originsOf(identifier: String, key: String? = "reader one"): List<String> {
             val console = ArrayList<String>()
             val scripts = runner(book(identifier), console = console, instanceKey = key)
             scripts.chapterOpened(0)
@@ -667,7 +667,7 @@ class EpubScriptTest {
     }
 
     /** Runs the tasks that [scripts] queued, and those that they queue, until none is left. */
-    private fun drain(scripts: EpubScriptRunner, now: Long = 0L) {
+    private suspend fun drain(scripts: EpubScriptRunner, now: Long = 0L) {
         var rounds = 0
         while (scripts.hasTimers && rounds++ < 20) scripts.pumpTimers(now)
         assertFalse(scripts.hasTimers, "the tasks ran out")
@@ -814,7 +814,7 @@ class EpubScriptTest {
      * after [POISON] when [poisoned], with a tap on its label. Answers what the chapter logged
      * and the failures of its scripts.
      */
-    private fun runWorkload(poisoned: Boolean): Pair<List<String>, List<String?>> {
+    private suspend fun runWorkload(poisoned: Boolean): Pair<List<String>, List<String?>> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
             """<label id="tapme" for="check2" style="display: block">Tap here</label><input type="checkbox" id="check2"/>""" +

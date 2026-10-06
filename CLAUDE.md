@@ -65,4 +65,6 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - An element's `style` that answers every key as a CSS property hands a string to a script that probes for a method, so jQuery 1.7.1 called `style.removeAttribute` and threw. Answer CSS property names only.
 - The W3C EPUB test suite and its reports key a test by its folder name, and three folders carry another `dc:identifier` (`lay-pp-svg-icb_multi`, `ocf-font_obfuscation_bis`, `pkg-unique-id_duplicate`). Key on the folder.
 - A KitePlayer says Paused before it counts the render its device had started, so its position moves one period after the status changes. Let the position settle before a test holds it (#568).
+- Kotlin/Wasm 2.4.20 wrote an invalid module when a suspend function of an outer class called an inline function of its inner class with a lambda, and the wasm tests failed to load with "CompileError: ... expected type". A plain method in the inner class works around it (#489).
+- Node 24, which the Kotlin plugin picks for JS tests, has no WebAssembly stack switching, so a script never pauses there. The root build pins the JS and wasm tests to Node 26 (#489).
 - A recorded glyph run's text-to-device y runs up the page, while an EPUB page's link and embed rectangles run down it. A check that mixes them looks for a superscript below its base.

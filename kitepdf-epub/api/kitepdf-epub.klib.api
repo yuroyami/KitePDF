@@ -138,12 +138,12 @@ abstract interface io.github.yuroyami.kitepdf.epub/EpubScriptHandler { // io.git
     open val hasTimers // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.hasTimers|{}hasTimers[0]
         open fun <get-hasTimers>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.hasTimers.<get-hasTimers>|<get-hasTimers>(){}[0]
 
-    open fun chapterOpened(kotlin/Int) // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.chapterOpened|chapterOpened(kotlin.Int){}[0]
     open fun onNavigate(kotlin/Function1<kotlin/String, kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.onNavigate|onNavigate(kotlin.Function1<kotlin.String,kotlin.Unit>){}[0]
     open fun onTimersChanged(kotlin/Function0<kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.onTimersChanged|onTimersChanged(kotlin.Function0<kotlin.Unit>){}[0]
-    open fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.pumpTimers|pumpTimers(kotlin.Long){}[0]
-    open fun tap(io.github.yuroyami.kitepdf.epub/EpubPage, kotlin/Double, kotlin/Double): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.tap|tap(io.github.yuroyami.kitepdf.epub.EpubPage;kotlin.Double;kotlin.Double){}[0]
+    open suspend fun chapterOpened(kotlin/Int) // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.chapterOpened|chapterOpened(kotlin.Int){}[0]
     open suspend fun prepare() // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.prepare|prepare(){}[0]
+    open suspend fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.pumpTimers|pumpTimers(kotlin.Long){}[0]
+    open suspend fun tap(io.github.yuroyami.kitepdf.epub/EpubPage, kotlin/Double, kotlin/Double): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.tap|tap(io.github.yuroyami.kitepdf.epub.EpubPage;kotlin.Double;kotlin.Double){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.yuroyami.kitepdf.epub/EpubDocument|null[0]
@@ -427,13 +427,13 @@ final class io.github.yuroyami.kitepdf.epub/EpubScriptSession : io.github.yuroya
     final val liveChapters // io.github.yuroyami.kitepdf.epub/EpubScriptSession.liveChapters|{}liveChapters[0]
         final fun <get-liveChapters>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubScriptSession.liveChapters.<get-liveChapters>|<get-liveChapters>(){}[0]
 
-    final fun chapterOpened(kotlin/Int) // io.github.yuroyami.kitepdf.epub/EpubScriptSession.chapterOpened|chapterOpened(kotlin.Int){}[0]
     final fun close() // io.github.yuroyami.kitepdf.epub/EpubScriptSession.close|close(){}[0]
     final fun onNavigate(kotlin/Function1<kotlin/String, kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.epub/EpubScriptSession.onNavigate|onNavigate(kotlin.Function1<kotlin.String,kotlin.Unit>){}[0]
     final fun onTimersChanged(kotlin/Function0<kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.epub/EpubScriptSession.onTimersChanged|onTimersChanged(kotlin.Function0<kotlin.Unit>){}[0]
-    final fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.epub/EpubScriptSession.pumpTimers|pumpTimers(kotlin.Long){}[0]
-    final fun tap(io.github.yuroyami.kitepdf.epub/EpubPage, kotlin/Double, kotlin/Double): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubScriptSession.tap|tap(io.github.yuroyami.kitepdf.epub.EpubPage;kotlin.Double;kotlin.Double){}[0]
     final fun unloadChapters() // io.github.yuroyami.kitepdf.epub/EpubScriptSession.unloadChapters|unloadChapters(){}[0]
+    final suspend fun chapterOpened(kotlin/Int) // io.github.yuroyami.kitepdf.epub/EpubScriptSession.chapterOpened|chapterOpened(kotlin.Int){}[0]
+    final suspend fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.epub/EpubScriptSession.pumpTimers|pumpTimers(kotlin.Long){}[0]
+    final suspend fun tap(io.github.yuroyami.kitepdf.epub/EpubPage, kotlin/Double, kotlin/Double): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubScriptSession.tap|tap(io.github.yuroyami.kitepdf.epub.EpubPage;kotlin.Double;kotlin.Double){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.epub/EpubScriptSession.Companion|null[0]
         final const val MAX_FAILURES // io.github.yuroyami.kitepdf.epub/EpubScriptSession.Companion.MAX_FAILURES|{}MAX_FAILURES[0]

@@ -10,6 +10,7 @@ import java.io.File
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.runBlocking
 
 /**
  * One test of the W3C EPUB test suite, packed from its folder as the suite's own script packs it,
@@ -39,10 +40,10 @@ internal class W3cTestBook(val folder: File, private val instanceKey: String = "
         var now = 0L
         val scripts = EpubScriptRunner(doc, onConsole = { level, message -> console += "$level: $message" }, clock = { now }, instanceKey = instanceKey)
         runner = scripts
-        for (chapter in doc.scriptedChapters) scripts.chapterOpened(chapter)
+        for (chapter in doc.scriptedChapters) runBlocking { scripts.chapterOpened(chapter) }
         while (scripts.hasTimers && now < millis) {
             now += 16
-            scripts.pumpTimers(now)
+            runBlocking { scripts.pumpTimers(now) }
         }
         return scripts
     }
