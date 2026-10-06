@@ -129,7 +129,7 @@
     "ocf-url_link-path-absolute": true,
     "ocf-url_link-relative": true,
     "ocf-url_manifest": true,
-    "ocf-url_origin": false,
+    "ocf-url_origin": true,
     "ocf-url_parse-leaking-relative": true,
     "ocf-url_parse-path-absolute": true,
     "ocf-url_relative": true,

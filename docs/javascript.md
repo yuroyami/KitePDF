@@ -257,7 +257,10 @@ handlers of the body element, `onload` among them, are the window's, through the
 window alike, and `document.onreadystatechange` runs as the document's state changes.
 
 Each book has an origin of its own, shared by its chapters: `epub://` and a host made from the
-package's unique identifier, so the book has it each time it opens. `self.origin` and
+package's unique identifier and the runner's `instanceKey`. An app that passes the same key, such
+as an install id it keeps, gives the book the same origin each time it opens, and another
+reader's copy gets another origin, as EPUB 3.3 asks. Without a key each runner makes a random
+one. `self.origin` and
 `location.origin` answer it, and `location.href` is the origin and the chapter's path.
 
 The fragment that the reader went to in a chapter, through a link, the table of contents or a

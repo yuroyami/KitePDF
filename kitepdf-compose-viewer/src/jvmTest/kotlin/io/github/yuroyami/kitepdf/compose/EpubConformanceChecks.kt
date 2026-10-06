@@ -128,9 +128,9 @@ internal object EpubConformanceChecks {
             root != null && "${root}media/imgs/monastery.jpg" in text && runScripts().failures.isEmpty()
         }
         check("ocf-url_origin") {
-            // Two readers' copies of one book: their origins must differ.
-            val first = W3cTestBook(folder).also { it.runScripts() }
-            val second = W3cTestBook(folder).also { it.runScripts() }
+            // Two readers' copies of one book, each with its app's instance key: their origins must differ.
+            val first = W3cTestBook(folder, instanceKey = "reader one").also { it.runScripts() }
+            val second = W3cTestBook(folder, instanceKey = "reader two").also { it.runScripts() }
             val origin = Regex("Origin URL: (\\S+)")
             val a = origin.find(first.text(0))?.groupValues?.get(1)
             val b = origin.find(second.text(0))?.groupValues?.get(1)

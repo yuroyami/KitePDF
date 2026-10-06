@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `EpubScriptRunner` and `EpubScriptSession` take an `instanceKey`, a value the app keeps for its
+  reader, which goes into the book's origin. Each reader's copy of a book gets an origin of its
+  own, as EPUB 3.3 asks. Without a key each runner makes a random one, so a book no longer has
+  one origin for every reader (#521).
+
 - A book's scripts have `FormData`, `FormDataEvent` and `SubmitEvent`. `new FormData(form,
   submitter)` takes the entries of the form as HTML builds them, and fires `formdata` at the
   form. A click on a submit button and `requestSubmit` fire `submit` with its submitter and then
