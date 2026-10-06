@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A book's scripts have the Streams Standard: `ReadableStream` with default and byte readers,
+  `tee`, `pipeTo`, `pipeThrough`, async iteration and `ReadableStream.from`, `WritableStream`,
+  `TransformStream`, `CountQueuingStrategy`, `ByteLengthQueuingStrategy`, `TextEncoderStream`
+  and `TextDecoderStream`. `Blob.stream()` and `Blob.textStream()` work, so every File API test
+  of web-platform-tests passes (#536).
+
 - A book's scripts have `AbortController` and `AbortSignal`, with `AbortSignal.abort`, `timeout`
   and `any`. `addEventListener` takes a `signal`, and an abort removes the listener (#607).
 

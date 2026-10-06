@@ -324,6 +324,12 @@ and `any`. A listener added with a `signal` goes away when the signal aborts. A 
 makes follows its sources, and an abort sets every follower's reason before any `abort` event
 fires.
 
+The streams are the Streams Standard's: `ReadableStream` with its default and byte readers and
+controllers, `ReadableStream.from`, `tee`, `pipeTo`, `pipeThrough` and async iteration,
+`WritableStream`, `TransformStream`, the two queuing strategies, `TextEncoderStream` and
+`TextDecoderStream`. `Blob.stream()` gives a byte stream of the blob in chunks of 64 KiB, and
+`Blob.textStream()` decodes it as UTF-8. A stream does not move through `postMessage` yet ([#608](https://github.com/yuroyami/KitePDF/issues/608)).
+
 `URL.createObjectURL` gives a blob a `blob:` URL of the book's origin, and the reader loads an
 image, a style sheet, an `@import` or a font from it as it loads a file of the book.
 `URL.revokeObjectURL` takes it away from the scripts, but what the chapter shows keeps it, as a
@@ -331,8 +337,8 @@ browser keeps an image it loaded: an image whose script revoked its URL right af
 still shows, and still does at another font size. A chapter whose engine closes revokes the URLs
 its scripts made, as a page that unloads does.
 
-`WebPlatformTest` runs the File API tests of web-platform-tests in a chapter. Those that fail wait
-on streams, as `Blob.stream()` and `Blob.textStream()` do ([#536](https://github.com/yuroyami/KitePDF/issues/536)).
+`WebPlatformTest` runs the File API tests of web-platform-tests in a chapter, and each of them
+passes.
 
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
@@ -371,8 +377,7 @@ document.
 Not there yet: the documents of `<iframe>` and `<object>` elements, whose boxes stay as they are;
 form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness; drawing on a `<canvas>`, whose `getContext` answers `null`
-([#501](https://github.com/yuroyami/KitePDF/issues/501)); `ReadableStream` and the rest of the
-Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF/issues/536)). A script that calls one fails and is
+([#501](https://github.com/yuroyami/KitePDF/issues/501)). A script that calls one fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.
 
 Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,

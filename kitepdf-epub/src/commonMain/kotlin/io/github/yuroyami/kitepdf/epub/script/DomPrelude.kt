@@ -19,6 +19,8 @@ internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_FILE)
     append(DOM_PRELUDE_ABORT)
     append(DOM_PRELUDE_MESSAGING)
+    append(DOM_PRELUDE_STREAMS)
+    append(DOM_PRELUDE_STREAMS_WRITABLE)
     append(DOM_PRELUDE_REFLECTION)
     append(DOM_PRELUDE_ELEMENTS)
     append(DOM_PRELUDE_FORMS)
@@ -115,6 +117,16 @@ var TYPED_ARRAYS = (function (names) {
   'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array']);
 var ERROR_TYPES = { __proto__: null, Error: Error, EvalError: EvalError, RangeError: RangeError, ReferenceError: ReferenceError,
   SyntaxError: SyntaxError, TypeError: TypeError, URIError: URIError };
+/* What the streams call of a promise, and the prototype their async iterator inherits (#536). An
+   engine without async generators gets a prototype whose Symbol.asyncIterator answers this. */
+var PromiseThen = uncurry(Promise.prototype.then), PromiseResolve = Promise.resolve,
+  SymbolAsyncIterator = typeof Symbol.asyncIterator === 'symbol' ? Symbol.asyncIterator : null;
+var AsyncIteratorPrototype = (function () {
+  try { return Object.getPrototypeOf(Object.getPrototypeOf(new Function('return async function* () {}')().prototype)); } catch (e) {}
+  var proto = {};
+  if (SymbolAsyncIterator) Object.defineProperty(proto, SymbolAsyncIterator, { __proto__: null, value: function () { return this; }, writable: true, configurable: true });
+  return proto;
+})();
 /* Whether [v] is an instance of [ctor] by its prototype chain, whatever Symbol.hasInstance of ctor says. */
 function isA(v, ctor) { return FunctionHasInstance(ctor, v); }
 /* A regular expression that runs on the built-ins taken above, whatever a script does to RegExp.prototype. */
