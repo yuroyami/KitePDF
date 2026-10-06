@@ -334,7 +334,10 @@ internal class ParsedEpub(
     private fun buildSpine(chapter: Int): ParsedSpine =
         // An entry that will not inflate becomes an empty document: the chapter
         // yields no pages, which is what skipping it used to do.
-        buildSpine(chapter, HtmlParser.parse(zip.readText(spinePaths[chapter]) ?: "").also(::resolveSwitches))
+        buildSpine(chapter, HtmlParser.parse(chapterText(chapter), html = isHtmlChapter(chapter)).also(::resolveSwitches))
+
+    /** Whether the manifest serves [chapter] as `text/html`, which HTML's parser reads, where XHTML's is XML (#547). */
+    fun isHtmlChapter(chapter: Int): Boolean = mediaTypeOf(spinePaths[chapter])?.lowercase() == "text/html"
 
     /** [chapter]'s parse with [tree] as its document: the rules and faces of its style elements and links. */
     private fun buildSpine(chapter: Int, tree: KiteXmlNode.Element): ParsedSpine {

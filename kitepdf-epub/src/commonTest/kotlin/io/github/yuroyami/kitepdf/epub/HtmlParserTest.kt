@@ -161,4 +161,23 @@ class HtmlParserTest {
             KiteWarnings.sink = null
         }
     }
+
+    private fun shape(n: KiteXmlNode): String = when (n) {
+        is KiteXmlNode.Element -> n.tag + (if (n.attrs.isEmpty()) "" else n.attrs.entries.joinToString(",", "[", "]") { "${it.key}=${it.value}" }) +
+            (if (n.children.isEmpty()) "" else n.children.joinToString(" ", "(", ")", transform = ::shape))
+        is KiteXmlNode.Text -> "'" + n.text + "'"
+        is KiteXmlNode.Comment -> "<!--" + n.text + "-->"
+    }
+
+    @Test
+    fun an_html_document_gets_the_html_head_and_body_that_html_makes() {
+        fun parsed(html: String) = HtmlParser.parse(html, keepComments = true, html = true).children.joinToString(" ", transform = ::shape)
+        assertEquals("html(head(title('T')) body(p[id=p]('x')))", parsed("<title>T</title><p id=p>x"))
+        assertEquals("html(head body('a' title('T')))", parsed("a<title>T</title>"))
+        assertEquals(
+            "<!--a--> html[lang=en](head(meta[n=1] meta[n=2]) ' ' <!--b--> body[id=x,class=c]('t u') <!--c-->) <!--d-->",
+            parsed("<!--a--><html lang=en><meta n=1></head> <!--b--><meta n=2><body id=x>t<body class=c id=y> u</body><!--c--></html><!--d-->"),
+        )
+        assertEquals("p", HtmlParser.parse("<p>x").children.filterIsInstance<KiteXmlNode.Element>().single().tag)
+    }
 }
