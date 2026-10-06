@@ -541,6 +541,9 @@ public class KiteDocViewState(
     /** The platform's opener of addresses, from the view's composition. */
     internal var uriHandler: androidx.compose.ui.platform.UriHandler? = null
 
+    /** Whether the first page of a chapter that is not well-formed XML shows a notice, from [KiteDocView] (#517). */
+    internal var showMarkupErrors: Boolean by mutableStateOf(true)
+
     /** The address that the view asks the reader about before it opens it, or null (#519). */
     internal var pendingExternalLink: String? by mutableStateOf(null)
 

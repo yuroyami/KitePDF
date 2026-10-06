@@ -250,6 +250,12 @@ public fun KiteDocView(
      * address through the platform. Null opens nothing. See [KiteExternalLinks].
      */
     externalLinks: KiteExternalLinks? = KiteExternalLinks(),
+    /**
+     * Whether the first page of a book's chapter whose markup is not well-formed XML shows a
+     * notice that says so, as EPUB Reading Systems 3.3 asks (#517). The page still shows what
+     * could be laid out. `EpubDocument.markupErrors` gives the errors themselves.
+     */
+    showMarkupErrors: Boolean = true,
 ) {
     val scriptScope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
@@ -260,6 +266,7 @@ public fun KiteDocView(
         state.scriptScope = scriptScope
         state.scriptLane = scriptLane
         state.externalLinks = externalLinks
+        state.showMarkupErrors = showMarkupErrors
         state.uriHandler = uriHandler
         if (externalLinks == null) state.pendingExternalLink = null
         // The thumbnail strip draws pages as the viewer does: with its theme and its decorator (#419).
@@ -976,6 +983,7 @@ private fun PageSlotContent(
         }
         // What a screen reader finds on the page: its text, links and fields at their places (#427).
         PageSemantics(state, page, pageIndex, Modifier.fillMaxSize())
+        if (page is EpubPage && state.showMarkupErrors) KiteMarkupErrorNotice(state, page, pageIndex)
         // The host's elements, in the page's frame, so the zoom and pan move them with the page (#30).
         if (pageOverlay != null) PageOverlay(page, pageIndex, pageOverlay, Modifier.fillMaxSize())
     }

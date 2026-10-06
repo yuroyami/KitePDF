@@ -196,6 +196,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun locate(io.github.yuroyami.kitepdf.core/KiteBookmark): io.github.yuroyami.kitepdf.core/KiteLocation // io.github.yuroyami.kitepdf.epub/EpubDocument.locate|locate(io.github.yuroyami.kitepdf.core.KiteBookmark){}[0]
     final fun locateFragment(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubFragmentBox? // io.github.yuroyami.kitepdf.epub/EpubDocument.locateFragment|locateFragment(kotlin.String){}[0]
     final fun locationOf(kotlin/Int): io.github.yuroyami.kitepdf.core/KiteLocation? // io.github.yuroyami.kitepdf.epub/EpubDocument.locationOf|locationOf(kotlin.Int){}[0]
+    final fun markupErrors(kotlin/Int): kotlin.collections/List<io.github.yuroyami.kitepdf.core.xml/KiteXmlError> // io.github.yuroyami.kitepdf.epub/EpubDocument.markupErrors|markupErrors(kotlin.Int){}[0]
     final fun mediaOverlayOf(kotlin/Int): io.github.yuroyami.kitepdf.epub/EpubMediaOverlay? // io.github.yuroyami.kitepdf.epub/EpubDocument.mediaOverlayOf|mediaOverlayOf(kotlin.Int){}[0]
     final fun page(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.epub/EpubPage // io.github.yuroyami.kitepdf.epub/EpubDocument.page|page(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     final fun pageCountIn(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubDocument.pageCountIn|pageCountIn(kotlin.Int){}[0]

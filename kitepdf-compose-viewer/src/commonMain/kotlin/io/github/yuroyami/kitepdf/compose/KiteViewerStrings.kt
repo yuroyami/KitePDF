@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.runtime.Immutable
+import io.github.yuroyami.kitepdf.core.xml.KiteXmlError
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 
@@ -32,6 +33,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
  *   document, such as a web page (#519).
  * @param openLink the button that opens that address.
  * @param cancel the button that closes the question and opens nothing.
+ * @param markupErrors the notice on the first page of a chapter whose markup is not well-formed
+ *   XML, from the first error and the count of errors (#517).
  */
 @Immutable
 public class KiteViewerStrings(
@@ -46,6 +49,10 @@ public class KiteViewerStrings(
     public val openLinkQuestion: String = "Open this link?",
     public val openLink: String = "Open",
     public val cancel: String = "Cancel",
+    public val markupErrors: (first: KiteXmlError, count: Int) -> String = { first, count ->
+        "This chapter is not well-formed XML. Line ${first.line}: ${first.message}." +
+            if (count > 1) " ${count - 1} more errors follow." else ""
+    },
 )
 
 /** The [KiteViewerStrings] of the viewer and the widgets below it. */

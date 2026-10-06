@@ -583,7 +583,22 @@ vertical text, a formula reads as its linear text.
 
 ## Books that are not quite right
 
-Three habits of real EPUBs that the engine absorbs rather than rejecting.
+Four habits of real EPUBs that the engine absorbs rather than rejecting.
+
+**Markup that is not well-formed XML.** EPUB 3.3 requires an XHTML or SVG
+chapter to be well-formed XML. A book can still have a tag that never closes,
+or a stray `&`. The engine lays out what it can, and `markupErrors` says what
+is wrong:
+
+```kotlin
+for (error in book.markupErrors(chapter)) {
+    println("line ${error.line}, column ${error.column}: ${error.message}")
+}
+```
+
+`KiteDocView` shows the first error across the top of the chapter's first page,
+as EPUB Reading Systems 3.3 asks. Pass `showMarkupErrors = false` to hide it.
+`KiteXml.wellFormednessErrors` in `kitepdf-core` checks any XML text the same way.
 
 **Encodings.** The spec says UTF-8 or UTF-16. Books ship Windows-1252 anyway,
 sometimes while their own XML declaration claims UTF-8. Every entry is read by

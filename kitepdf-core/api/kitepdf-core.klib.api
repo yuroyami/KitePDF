@@ -1836,6 +1836,25 @@ final class io.github.yuroyami.kitepdf.core.text/Hyphenator { // io.github.yuroy
     }
 }
 
+final class io.github.yuroyami.kitepdf.core.xml/KiteXmlError { // io.github.yuroyami.kitepdf.core.xml/KiteXmlError|null[0]
+    constructor <init>(kotlin/Int, kotlin/Int, kotlin/String) // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.String){}[0]
+
+    final val column // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.column|{}column[0]
+        final fun <get-column>(): kotlin/Int // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.column.<get-column>|<get-column>(){}[0]
+    final val line // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.line|{}line[0]
+        final fun <get-line>(): kotlin/Int // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.line.<get-line>|<get-line>(){}[0]
+    final val message // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.message|{}message[0]
+        final fun <get-message>(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.message.<get-message>|<get-message>(){}[0]
+
+    final fun component1(): kotlin/Int // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.component1|component1(){}[0]
+    final fun component2(): kotlin/Int // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.component2|component2(){}[0]
+    final fun component3(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.component3|component3(){}[0]
+    final fun copy(kotlin/Int = ..., kotlin/Int = ..., kotlin/String = ...): io.github.yuroyami.kitepdf.core.xml/KiteXmlError // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.copy|copy(kotlin.Int;kotlin.Int;kotlin.String){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.toString|toString(){}[0]
+}
+
 final class io.github.yuroyami.kitepdf.core.zip/ZipEntryInfo { // io.github.yuroyami.kitepdf.core.zip/ZipEntryInfo|null[0]
     final val compressedSize // io.github.yuroyami.kitepdf.core.zip/ZipEntryInfo.compressedSize|{}compressedSize[0]
         final fun <get-compressedSize>(): kotlin/Long // io.github.yuroyami.kitepdf.core.zip/ZipEntryInfo.compressedSize.<get-compressedSize>|<get-compressedSize>(){}[0]
@@ -3108,6 +3127,7 @@ final object io.github.yuroyami.kitepdf.core.xml/KiteXml { // io.github.yuroyami
     final fun htmlEntity(kotlin/String): kotlin/String? // io.github.yuroyami.kitepdf.core.xml/KiteXml.htmlEntity|htmlEntity(kotlin.String){}[0]
     final fun parse(kotlin/String, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element // io.github.yuroyami.kitepdf.core.xml/KiteXml.parse|parse(kotlin.String;kotlin.Boolean){}[0]
     final fun tokenize(kotlin/String, kotlin/Boolean = ..., kotlin/Boolean = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core.xml/KiteXmlToken> // io.github.yuroyami.kitepdf.core.xml/KiteXml.tokenize|tokenize(kotlin.String;kotlin.Boolean;kotlin.Boolean){}[0]
+    final fun wellFormednessErrors(kotlin/String, kotlin/Int = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core.xml/KiteXmlError> // io.github.yuroyami.kitepdf.core.xml/KiteXml.wellFormednessErrors|wellFormednessErrors(kotlin.String;kotlin.Int){}[0]
 }
 
 final object io.github.yuroyami.kitepdf.core.zip/Crc32 { // io.github.yuroyami.kitepdf.core.zip/Crc32|null[0]
