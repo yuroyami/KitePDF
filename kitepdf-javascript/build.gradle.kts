@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -62,11 +63,13 @@ kotlin {
         commonMain.dependencies {
             api(project(":kitepdf-pdf"))
             api(project(":kitepdf-epub"))
-            implementation(libs.kitejs)
+            implementation(libs.kitejs.api)
+            implementation(libs.kitejs.quickjs)
         }
 
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
@@ -77,4 +80,22 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree(rootProject.file("corpus/epub")) {
         include { it.isDirectory || it.file.extension.equals("epub", ignoreCase = true) }
     }).withPropertyName("scriptedBookCorpus").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
+// Android's host tests run on the desktop JVM, where the AAR's Android libraries do not load. The
+// JVM artifact of kitejs-quickjs carries a QuickJS library for each desktop platform, and its
+// loader finds the one for this machine on the test's classpath.
+val quickJsDesktop: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    attributes {
+        attribute(KotlinPlatformType.attribute, KotlinPlatformType.jvm)
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+    }
+}
+dependencies { quickJsDesktop(libs.kitejs.quickjs) }
+tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEach {
+    val desktop = quickJsDesktop
+    inputs.files(desktop).withPropertyName("quickJsDesktop")
+    // The Android plugin sets the classpath late, so the jar joins it as the task starts.
+    doFirst { classpath += desktop }
 }

@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.epub.EpubScriptSession
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -53,7 +54,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_tap_on_the_button_runs_its_script_and_the_band_turns_blue() {
+    fun a_tap_on_the_button_runs_its_script_and_the_band_turns_blue(): TestResult = scriptTest {
         val book = ScriptBooks.buttonPage()
         val page = book.page(KiteLocation(0, 0))
         val scripts = runner(book)
@@ -68,7 +69,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_listener_toggles_a_class_that_the_books_stylesheet_paints() {
+    fun a_listener_toggles_a_class_that_the_books_stylesheet_paints(): TestResult = scriptTest {
         val book = ScriptBooks.buttonPage(
             button = """<button id="go" type="button">Go</button>""",
             css = "h1.on { background: ${ScriptBooks.BLUE}; }",
@@ -84,7 +85,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_reflowable_chapter_gains_pages_when_a_script_shows_a_hidden_section() {
+    fun a_reflowable_chapter_gains_pages_when_a_script_shows_a_hidden_section(): TestResult = scriptTest {
         val extra = (0 until 40).joinToString("") { "<p>Extra paragraph $it, which the button shows.</p>" }
         val book = ScriptBooks.chapter(
             """<p>Intro.</p><p><button id="more" type="button">More</button></p><div id="extra" hidden="hidden">$extra</div>""" +
@@ -105,7 +106,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_script_that_prevents_a_link_keeps_the_viewer_from_following_it() {
+    fun a_script_that_prevents_a_link_keeps_the_viewer_from_following_it(): TestResult = scriptTest {
         val book = ScriptBooks.chapter(
             """<p><a id="stay" href="next.xhtml" onclick="return false;">Stay here</a></p><p><a id="go" href="next.xhtml">Go on</a></p>""",
             extraFiles = mapOf("next.xhtml" to ScriptBooks.xhtml(body = "<p>Next.</p>")),
@@ -119,7 +120,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_timer_runs_when_the_viewer_pumps_it_at_its_time() {
+    fun a_timer_runs_when_the_viewer_pumps_it_at_its_time(): TestResult = scriptTest {
         var now = 0L
         val book = ScriptBooks.buttonPage(script = "setTimeout(paint, 1000);")
         val page = book.page(KiteLocation(0, 0))
@@ -141,7 +142,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun the_promise_jobs_of_a_timer_run_before_the_next_timer_does() {
+    fun the_promise_jobs_of_a_timer_run_before_the_next_timer_does(): TestResult = scriptTest {
         var now = 0L
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
@@ -159,7 +160,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun the_promise_jobs_of_a_listener_run_before_the_next_listener_of_a_tap() {
+    fun the_promise_jobs_of_a_listener_run_before_the_next_listener_of_a_tap(): TestResult = scriptTest {
         val console = ArrayList<String>()
         val book = ScriptBooks.buttonPage(
             button = """<button id="go" type="button">Go</button>""",
@@ -178,7 +179,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun the_promise_jobs_of_a_scripts_own_dispatch_wait_until_the_script_is_done() {
+    fun the_promise_jobs_of_a_scripts_own_dispatch_wait_until_the_script_is_done(): TestResult = scriptTest {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
             """<p id="p">Order.</p><script>
@@ -194,7 +195,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun the_promise_jobs_of_a_load_listener_run_before_the_next_listener() {
+    fun the_promise_jobs_of_a_load_listener_run_before_the_next_listener(): TestResult = scriptTest {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
             """<p>Order.</p><script>
@@ -207,7 +208,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_frame_that_an_earlier_callback_of_its_frame_cancels_does_not_run() {
+    fun a_frame_that_an_earlier_callback_of_its_frame_cancels_does_not_run(): TestResult = scriptTest {
         var now = 0L
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
@@ -225,7 +226,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_script_that_never_returns_stops_at_the_budget_and_the_page_still_works() {
+    fun a_script_that_never_returns_stops_at_the_budget_and_the_page_still_works(): TestResult = scriptTest {
         val book = ScriptBooks.buttonPage(script = "while (true) {}")
         val page = book.page(KiteLocation(0, 0))
         val scripts = runner(book, EpubScriptPolicy(budgetMillis = 300))
@@ -238,25 +239,40 @@ class EpubScriptTest {
     }
 
     @Test
-    fun the_budget_leaves_out_the_dom_the_library_sets_up() {
-        // A clock that moves a second each time it is read, so the deadline, asked every so many
-        // instructions, finds a budget of twenty seconds spent at its twenty-first look. Opening
-        // the chapter reads the clock about forty times, most of them while the DOM is set up, and a
-        // tap about ten, the same on every platform, so only the book's loop should be stopped (#554).
+    fun the_budget_leaves_out_the_dom_the_library_sets_up(): TestResult = scriptTest {
+        // The clock moves a second at each read, but a thousand seconds at its second read, which
+        // falls between the start of the chapter's first call and the end of its DOM's setup. The
+        // budget of two hundred seconds is spent before the book's script starts unless the setup
+        // is left out of it, and the loop is stopped either way (#554). It holds on any engine,
+        // however often that engine asks for the time.
         var now = 0L
-        val book = ScriptBooks.buttonPage(script = "while (true) {}")
+        var reads = 0
+        var started = false
+        val book = ScriptBooks.buttonPage(script = "console.log('started'); while (true) {}")
         val page = book.page(KiteLocation(0, 0))
-        val scripts = runner(book, EpubScriptPolicy(budgetMillis = 20_000), clock = { now += 1_000; now })
+        val scripts = EpubScriptRunner(
+            book,
+            EpubScriptPolicy(budgetMillis = 200_000),
+            onConsole = { _, message -> if (message == "started") started = true },
+            clock = {
+                reads++
+                now += if (reads == 2) 1_000_000 else 1_000
+                now
+            },
+        ).also { runners += it }
         scripts.chapterOpened(0)
-        assertEquals(1, scripts.failures.size, "${scripts.failures.map { it.message }}")
-        assertTrue("did not start" !in scripts.failures.single().message.orEmpty(), "${scripts.failures.map { it.message }}")
+        assertTrue(started, "the book's script ran: ${scripts.failures.map { it.message }}")
+        // The loop spends the call's budget, so what the call runs after it, the load event, stops too.
+        val failures = scripts.failures.map { it.message.orEmpty() }
+        assertTrue(failures.first().startsWith("chapter 0, OEBPS/page.xhtml#script:"), "the loop is the first script stopped: $failures")
+        assertTrue(failures.all { "interrupted" in it }, "$failures")
 
         scripts.tap(page, 52.5, 90.0)
         assertTrue(page.paintsBlue(), "the page's own script ran before the loop, and its button works")
     }
 
     @Test
-    fun a_script_outside_the_book_does_not_run() {
+    fun a_script_outside_the_book_does_not_run(): TestResult = scriptTest {
         val book = ScriptBooks.buttonPage(head = """<script src="https://example.org/tracker.js"></script>""")
         val scripts = runner(book)
         scripts.chapterOpened(0)
@@ -264,7 +280,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_script_that_sets_the_location_goes_through_the_viewer() {
+    fun a_script_that_sets_the_location_goes_through_the_viewer(): TestResult = scriptTest {
         val book = ScriptBooks.buttonPage(button = """<button id="go" type="button" onclick="location.href = 'next.xhtml#n'">Go</button>""")
         val scripts = runner(book)
         val asked = ArrayList<String>()
@@ -274,7 +290,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_script_cannot_open_a_data_url_as_a_page() {
+    fun a_script_cannot_open_a_data_url_as_a_page(): TestResult = scriptTest {
         // EPUB Reading Systems 3.3, 3.4: a data URL never opens in a top-level browsing context (#514).
         val book = ScriptBooks.buttonPage(button = """<button id="go" type="button" onclick="location.href = 'data:text/html,%3Cp%3EPhish'">Go</button>""")
         val scripts = runner(book)
@@ -286,7 +302,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun noscript_content_does_not_show_once_scripts_run() {
+    fun noscript_content_does_not_show_once_scripts_run(): TestResult = scriptTest {
         val book = ScriptBooks.chapter("""<p>Always.</p><noscript><p>Only without scripts.</p></noscript><script>var x = 1;</script>""")
         val page = book.page(KiteLocation(0, 0))
         assertTrue("Only without scripts" in page.textContent().plainText)
@@ -296,7 +312,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun the_dom_answers_as_a_browser_does() {
+    fun the_dom_answers_as_a_browser_does(): TestResult = scriptTest {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
             """<h1 id="title" class="big">Heading</h1><div id="box"><p class="a">One</p><p class="b">Two</p></div><span id="target">x</span>""" +
@@ -366,7 +382,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_script_parses_urls_as_the_url_standard_does() {
+    fun a_script_parses_urls_as_the_url_standard_does(): TestResult = scriptTest {
         // URL and URLSearchParams of the WHATWG URL Standard (#520). A path that climbs above the
         // container root stays at the root of the book's origin, as the W3C tests ocf-url_parse-* ask.
         val console = ArrayList<String>()
@@ -442,7 +458,7 @@ class EpubScriptTest {
     )
 
     @Test
-    fun every_scripted_chapter_of_a_book_runs_its_own_scripts() {
+    fun every_scripted_chapter_of_a_book_runs_its_own_scripts(): TestResult = scriptTest {
         // KiteJS holds one open engine per thread, and the second chapter's used to fail to open (#498).
         val book = buttonPages(3)
         val scripts = runner(book)
@@ -459,7 +475,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_chapter_whose_engine_closed_starts_over_from_its_markup() {
+    fun a_chapter_whose_engine_closed_starts_over_from_its_markup(): TestResult = scriptTest {
         val book = ScriptBooks.book(
             items = listOf(
                 ScriptBooks.Item("one.xhtml", "application/xhtml+xml", properties = "scripted", spine = true),
@@ -495,7 +511,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun unloaded_chapters_close_their_engines_and_start_over_when_used_again() {
+    fun unloaded_chapters_close_their_engines_and_start_over_when_used_again(): TestResult = scriptTest {
         val book = ScriptBooks.chapter(
             """<p>Markup.</p><script>var runs = (Number(localStorage.getItem('runs')) || 0) + 1; localStorage.setItem('runs', String(runs));
                 var p = document.createElement('p'); p.textContent = 'Added by run ' + runs + '.'; document.body.appendChild(p);
@@ -536,7 +552,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun an_engine_that_will_not_open_is_a_failure_of_its_chapter() {
+    fun an_engine_that_will_not_open_is_a_failure_of_its_chapter(): TestResult = scriptTest {
         val book = ScriptBooks.chapter("""<p>Plain.</p><script>var x = 1;</script>""")
         val session = EpubScriptSession(book, engineFor = { throw IllegalStateException("no engine here") })
         session.chapterOpened(0)
@@ -547,7 +563,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_script_finds_the_reading_system_and_what_it_supports() {
+    fun a_script_finds_the_reading_system_and_what_it_supports(): TestResult = scriptTest {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
             """<p>Features.</p><script>
@@ -570,7 +586,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_script_measures_an_element_it_just_added_and_restyled() {
+    fun a_script_measures_an_element_it_just_added_and_restyled(): TestResult = scriptTest {
         // A browser lays the page out again when a script measures after a change (#499).
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
@@ -590,7 +606,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun the_chapters_of_a_book_share_its_origin_and_another_book_has_another() {
+    fun the_chapters_of_a_book_share_its_origin_and_another_book_has_another(): TestResult = scriptTest {
         // A reading system gives each book an origin of its own, shared by its chapters (#500).
         fun book(identifier: String) = ScriptBooks.book(
             identifier = identifier,
@@ -621,7 +637,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun an_address_under_the_books_origin_is_a_place_in_the_book() {
+    fun an_address_under_the_books_origin_is_a_place_in_the_book(): TestResult = scriptTest {
         val book = ScriptBooks.buttonPage(button = """<button id="go" type="button" onclick="location.href = location.origin + '/OEBPS/next.xhtml#n'">Go</button>""")
         val scripts = runner(book)
         val asked = ArrayList<String>()
@@ -631,7 +647,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_timer_that_throws_each_time_does_not_grow_the_failures_for_ever() {
+    fun a_timer_that_throws_each_time_does_not_grow_the_failures_for_ever(): TestResult = scriptTest {
         var now = 0L
         val book = ScriptBooks.chapter("""<p>Ticks.</p><script>setInterval(function () { null.save(); }, 10);</script>""")
         val scripts = runner(book, clock = { now })
@@ -652,7 +668,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun an_image_and_a_stylesheet_load_from_blob_urls_that_a_script_made() {
+    fun an_image_and_a_stylesheet_load_from_blob_urls_that_a_script_made(): TestResult = scriptTest {
         // The File API (#533): a blob URL loads as a file of the book does, and what the chapter's
         // tree names stays with it after the script revokes the URL, as an image a browser loaded.
         val book = ScriptBooks.chapter(
@@ -684,7 +700,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_link_that_a_script_sets_up_through_its_properties_loads_its_style_sheet() {
+    fun a_link_that_a_script_sets_up_through_its_properties_loads_its_style_sheet(): TestResult = scriptTest {
         // HTMLLinkElement reflects rel and href (#538). Without the interface, the two assignments
         // set plain properties of the object and no attribute, so the sheet never loaded.
         val book = ScriptBooks.chapter(
@@ -708,7 +724,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_blob_url_names_the_books_origin_and_loads_nothing_once_its_chapter_closes() {
+    fun a_blob_url_names_the_books_origin_and_loads_nothing_once_its_chapter_closes(): TestResult = scriptTest {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
             """<p>Origin.</p><script>
@@ -730,7 +746,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_file_reader_reads_a_blob_in_tasks_of_its_own() {
+    fun a_file_reader_reads_a_blob_in_tasks_of_its_own(): TestResult = scriptTest {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(
             """<p>Reader.</p><script>
@@ -760,7 +776,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun a_book_polyfills_and_patches_the_built_in_objects_as_in_a_browser() {
+    fun a_book_polyfills_and_patches_the_built_in_objects_as_in_a_browser(): TestResult = scriptTest {
         // A bundled script polyfills a method the engine lacks and wraps one it has, as core-js and
         // its like do, and a test of web-platform-tests adds an iterator to a primitive's prototype.
         // A chapter used to run on sealed built-ins, where the first line threw (#537).
@@ -817,7 +833,7 @@ class EpubScriptTest {
     }
 
     @Test
-    fun the_dom_answers_alike_when_a_book_patches_every_built_in_it_calls() {
+    fun the_dom_answers_alike_when_a_book_patches_every_built_in_it_calls(): TestResult = scriptTest {
         // A browser's DOM is native code, which a script that patches a built-in does not reach.
         // This DOM is JavaScript in the book's realm, so it takes the built-ins it calls before the
         // book runs (#540). The poison replaces every method and accessor of the built-ins and the

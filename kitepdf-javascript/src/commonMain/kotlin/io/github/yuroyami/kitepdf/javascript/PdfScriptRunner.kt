@@ -32,12 +32,9 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
  *
  * A runner can be called from any thread. A KiteJS engine belongs to the thread that opened it, so
  * the runner opens its engine on a thread of its own and runs every call there, one at a time and
- * in order. [close] stops that thread. The callbacks below run on it too. JavaScript and
- * WebAssembly have one thread, which holds one open engine, so there the runners of every
- * document take turns (#553): another runner that needs the thread closes this one's engine, and
- * this runner's next script opens it again and runs the document's own scripts again first, since
- * they define what its fields' scripts call. The fields keep their values; what the scripts kept
- * in variables of their own starts over.
+ * in order. [close] stops that thread. The callbacks below run on it too. On JavaScript and
+ * WebAssembly the engine loads before its first use: call [prepare] once and wait for it, as
+ * `KiteDocView` does.
  *
  * Scripts are untrusted input, so [policy] decides whether they run at all and how long they may
  * take, and anything that reaches outside the document arrives at [onRequest] for the host to
@@ -132,19 +129,6 @@ public class PdfScriptRunner(
     /** Every script that failed since the runner opened, newest last. */
     public val failures: List<KiteScriptException> get() = failureCopy
 
-    /**
-     * What the engine did with each `"use asm"` function in the document, one line each. Empty
-     * until the first script runs, and for an engine that does not compile such a function.
-     *
-     * A PDF that carries a program compiled from C, such as DoomPDF, holds one of these. It runs
-     * many times faster when the engine compiles it ahead of time, and the line says whether that
-     * happened and, if not, the first thing in the module that stopped it.
-     */
-    public val asmReports: List<String>
-        get() = onScriptThread {
-            (openEngine as? KiteJsScriptEngine)?.asmReports.orEmpty()
-        }
-
     private val failureList = ArrayList<KiteScriptException>()
 
     /** [failureList] as the other threads may read it: a new list after every failure. */
@@ -186,15 +170,17 @@ public class PdfScriptRunner(
      * Opens the engine and gives it the Acrobat API, unless it is open. False when it would not
      * open, which is recorded, so the script does not run.
      */
-    private fun prepare(): Boolean {
+    private fun ensureEngine(): Boolean {
         if (openEngine != null) return true
         val engine = engineSource ?: try {
+            check(KiteJsScriptEngine.isLoaded) { KiteJsScriptEngine.NOT_LOADED }
             // Where every engine shares one thread, another runner's engine closes first (#553).
             scriptThread.value.makeRoom(engineUser)
             KiteJsScriptEngine(
                 instructionBudget = policy.instructionBudget,
                 deadline = { deadlinePassed() },
                 clock = clock,
+                maxStackBytes = scriptThread.value.stackBytes,
             )
         } catch (failure: RuntimeException) {
             recordFailure(KiteScriptException("the engine did not open: ${failure.message}", failure))
@@ -221,6 +207,9 @@ public class PdfScriptRunner(
      * viewer that reports the document open again runs nothing (#365). [runDocumentOpen] runs
      * them again and returns the scripts that failed.
      */
+    /** Loads the engine, which on JavaScript and WebAssembly has to happen before the first script. */
+    override suspend fun prepare(): Unit = KiteJsScriptEngine.load()
+
     override fun documentOpened() {
         val first = onScriptThread { !documentOpenRan.also { documentOpenRan = true } }
         if (first) runDocumentOpen()
@@ -262,7 +251,7 @@ public class PdfScriptRunner(
         var candidate = field.validateChoiceSelection(selection) ?: return null
         if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return null
         val revision = formState.fieldRevision(fieldName)
-        prepare()
+        ensureEngine()
         val script = keystrokeScript(fieldName)
         if (policy.enabled && script != null) {
             val info = mutableMapOf<String, Any?>(
@@ -323,12 +312,12 @@ public class PdfScriptRunner(
 
     /** Runs one JavaScript action, such as a link's or a button's. */
     public fun run(action: PdfAction.JavaScript): String? = onScriptThread {
-        prepare()
+        ensureEngine()
         if (!policy.enabled) null else evaluate(action.script, "action")
     }
 
     private fun runAction(action: PdfAction.JavaScript, name: String): KiteScriptException? {
-        prepare()
+        ensureEngine()
         if (!policy.enabled) return null
         val before = failureList.size
         evaluate(action.script, name)
@@ -362,7 +351,7 @@ public class PdfScriptRunner(
         selectionEnd: Int = selectionStart,
         commit: Boolean = false,
     ): KeystrokeResult = onScriptThread {
-        prepare()
+        ensureEngine()
         val script = keystrokeScript(fieldName)
         if (script == null || !policy.enabled) {
             KeystrokeResult(true, mergedValue(fieldName, change, selectionStart, selectionEnd))
@@ -391,7 +380,7 @@ public class PdfScriptRunner(
     public fun setFieldValue(fieldName: String, value: String): Boolean = onScriptThread { commitOnThread(fieldName, value) }
 
     private fun commitOnThread(fieldName: String, value: String): Boolean {
-        prepare()
+        ensureEngine()
         val field = document.formField(fieldName) ?: return false
         if (field.type == PdfFormField.FieldType.Choice) {
             val selection = field.choiceSelectionForValue(value) ?: return false
@@ -429,7 +418,7 @@ public class PdfScriptRunner(
         var candidate = field.validateChoiceSelection(selection) ?: return false
         if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return false
         val revision = formState.fieldRevision(fieldName)
-        prepare()
+        ensureEngine()
         if (policy.enabled) {
             keystrokeScript(fieldName)?.let { script ->
                 val result = dispatch(
@@ -491,7 +480,7 @@ public class PdfScriptRunner(
      * A form with no order runs them in the order its fields appear.
      */
     public fun runCalculations(): Unit = onScriptThread {
-        prepare()
+        ensureEngine()
         if (policy.enabled) calculateAll()
     }
 
@@ -517,7 +506,7 @@ public class PdfScriptRunner(
     public fun formattedValue(fieldName: String): String = onScriptThread { formatOnThread(fieldName) }
 
     private fun formatOnThread(fieldName: String): String {
-        prepare()
+        ensureEngine()
         val field = document.formField(fieldName)
         val stored = if (field != null) formState.choiceSelection(fieldName)?.let { choiceEventValue(field, it, face = field.isCombo) }
             ?: formState.value(fieldName).orEmpty() else ""
@@ -563,7 +552,7 @@ public class PdfScriptRunner(
     override fun runWidgetAction(fieldName: String, action: PdfAction): Boolean = when (action) {
         is PdfAction.JavaScript -> {
             onScriptThread {
-                prepare()
+                ensureEngine()
                 if (policy.enabled) fieldEvent(fieldName, "MouseUp", action)
             }
             true
@@ -571,7 +560,7 @@ public class PdfScriptRunner(
         is PdfAction.ResetForm -> {
             onScriptThread {
                 formState.resetForm(action)
-                prepare()
+                ensureEngine()
                 if (policy.enabled) calculateAll()
             }
             true
@@ -586,7 +575,7 @@ public class PdfScriptRunner(
         widgetIndex: Int? = null,
         select: (io.github.yuroyami.kitepdf.PdfWidgetActions) -> PdfAction?,
     ): Unit = onScriptThread {
-        prepare()
+        ensureEngine()
         val field = if (policy.enabled) document.formField(fieldName) else null
         val actions = if (widgetIndex == null) field?.additionalActions else field?.widgets?.getOrNull(widgetIndex)?.additionalActions
         val action = actions?.let(select) as? PdfAction.JavaScript
@@ -651,7 +640,7 @@ public class PdfScriptRunner(
     }
 
     private fun evaluate(source: String, name: String): String? {
-        if (!prepare()) return null
+        if (!ensureEngine()) return null
         if (!policy.enabled) return null
         val engine = openEngine ?: return null
         eventStartedAt = now()

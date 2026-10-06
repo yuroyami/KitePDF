@@ -4,8 +4,8 @@ PDF files carry JavaScript: a form that computes a total, a field that formats w
 button that hides another field, a link that runs a script. EPUB chapters carry it too, as a quiz
 that checks an answer or a page whose button changes a picture. The core library reads those
 scripts and runs none of them. The `kitepdf-javascript` artifact runs them, on
-[KiteJS](https://github.com/yuroyami/KiteJS), a JavaScript engine written in Kotlin. The scripts
-of a PDF are below; those of an EPUB are in [Scripts in an EPUB](#scripts-in-an-epub).
+[KiteJS](https://github.com/yuroyami/KiteJS), on its QuickJS engine. The scripts of a PDF are
+below; those of an EPUB are in [Scripts in an EPUB](#scripts-in-an-epub).
 
 ```kotlin
 commonMain.dependencies {
@@ -119,21 +119,7 @@ Some PDFs hold a program compiled from C, put through Emscripten and dropped int
 open action. DoomPDF is the well known one: the game runs in the script and draws itself into
 two hundred text fields, one per screen row.
 
-Such a program is written in asm.js, a subset of JavaScript whose types are all known before it
-runs, and KiteJS compiles it ahead of time to typed code. That is the difference between a frame
-every few seconds and a frame that a reader would call playable. It happens on its own; nothing
-has to be switched on.
-
-`runner.asmReports` says what the engine did with each module, one line each:
-
-```kotlin
-runner.runPageOpen(0)
-for (report in runner.asmReports) println(report)   // "asm: compiled"
-```
-
-A module that does not compile still runs and still gives the same answers, and the line names the
-first thing in it that asm.js does not allow. The list is empty until the first script runs, and
-for any engine other than KiteJS.
+Such a program runs as any other script does, and nothing has to be switched on.
 
 ## Threads
 
@@ -144,6 +130,11 @@ viewer does exactly that: it keeps a thread for scripts and posts every call to 
 
 `PdfFormState` is the exception, and deliberately so: it is written by the scripts and read by
 whatever draws, so it is safe from two threads.
+
+On JavaScript and WebAssembly the engine is a WebAssembly module that loads before its first use.
+Call `prepare()` on a runner once and wait for it before the first script, as the Compose viewer
+does. A script that runs before then fails with a message that says so. On the other targets
+`prepare()` returns at once.
 
 ## Other engines
 
@@ -174,29 +165,13 @@ engine lacks and a library can wrap one it has
 only its own chapter. The DOM below is JavaScript in the same realm, and it takes every built-in it
 calls before the book's first script runs, as Node takes its primordials, so a patched method or a
 getter that a script hangs on `Object.prototype` changes nothing the DOM does
-([#540](https://github.com/yuroyami/KitePDF/issues/540)). Two holes are in the engine itself, which
-calls what a script can replace: KiteJS takes the prototype of a literal, of a primitive and of an
-error it throws from the global binding of its constructor, so a book that replaces `window.String`
-or `window.Object` changes every literal, the DOM's too
-([yuroyami/kitejs#77](https://github.com/yuroyami/KiteJS/issues/77)), and a method of
-`String.prototype` called on a string reads the string back through `String.prototype.toString`, so
-a book that patches that method runs its patch inside every string method
-([yuroyami/kitejs#78](https://github.com/yuroyami/KiteJS/issues/78)).
+([#540](https://github.com/yuroyami/KitePDF/issues/540)).
 
-At most eight chapters keep their engines open at once (`EpubScriptRunner.LIVE_CHAPTERS`), and
-one on JavaScript and WebAssembly, where every engine shares the page's one thread. Opening one
-more closes the engine of the chapter used least recently, as a reading system unloads the
+At most eight chapters keep their engines open at once (`EpubScriptRunner.LIVE_CHAPTERS`). Opening
+one more closes the engine of the chapter used least recently, as a reading system unloads the
 chapters the reader left. That chapter keeps what its scripts made of it, and when it opens
 again its scripts start over from its markup, as a page does when it loads again.
 `EpubScriptSession.unloadChapters()` unloads them all at once.
-
-On JavaScript and WebAssembly the runners of every book and form take turns on that one thread
-too ([#553](https://github.com/yuroyami/KitePDF/issues/553)), so an app may show two scripted
-documents at once: a runner that needs an engine closes the one another runner has open, unless
-a script of that runner is running. A book's runner unloads its chapters. A `PdfScriptRunner`
-opens its engine again at its next script and runs the document's own scripts again first, since
-they define what its fields' scripts call, so its fields keep their values and what its scripts
-kept in variables of their own starts over.
 
 They see a DOM over the chapter: `document` with `getElementById`, `querySelector`,
 `querySelectorAll` and the other finders, `createElement` and fragments; nodes and elements with
@@ -309,10 +284,7 @@ standard says. `atob` and `btoa` are the HTML Standard's, with forgiving base64,
 `InvalidCharacterError`. The decoders live in Kotlin over the standard's own indexes, and
 `WebPlatformTest` runs the `encoding` tests and the `atob` tests of web-platform-tests in a
 chapter. The `encoding` tests that fail wait on `MessageChannel`
-([#534](https://github.com/yuroyami/KitePDF/issues/534)) or on the engine: `SharedArrayBuffer`
-([KiteJS#72](https://github.com/yuroyami/KiteJS/issues/72)), `Float16Array`
-([KiteJS#73](https://github.com/yuroyami/KiteJS/issues/73)) and a rest parameter in an arrow
-function ([KiteJS#71](https://github.com/yuroyami/KiteJS/issues/71)).
+([#534](https://github.com/yuroyami/KitePDF/issues/534)).
 
 `Blob`, `File` and `FileReader` are the File API's. A blob takes strings, buffers, views and
 other blobs, with `endings` and a `type` kept as the standard keeps it, and `slice`, `text`,
@@ -330,9 +302,8 @@ still shows, and still does at another font size. A chapter whose engine closes 
 its scripts made, as a page that unloads does.
 
 `WebPlatformTest` runs the File API tests of web-platform-tests in a chapter. Those that fail wait
-on `MessageChannel` ([#534](https://github.com/yuroyami/KitePDF/issues/534)), on streams, as
-`Blob.stream()` and `Blob.textStream()` do ([#536](https://github.com/yuroyami/KitePDF/issues/536)),
-or on the engine: `Float16Array` and `async` functions, which nine of the files are written in.
+on `MessageChannel` ([#534](https://github.com/yuroyami/KitePDF/issues/534)) or on streams, as
+`Blob.stream()` and `Blob.textStream()` do ([#536](https://github.com/yuroyami/KitePDF/issues/536)).
 
 Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
 `location`, `window.open` and a script's own click on a link go to the listeners of
@@ -357,12 +328,9 @@ Streams Standard, so `Blob.stream()` ([#536](https://github.com/yuroyami/KitePDF
 `postMessage`, which drops each
 message, `MessageChannel` and `structuredClone`
 ([#534](https://github.com/yuroyami/KitePDF/issues/534)); `FormData`
-([#531](https://github.com/yuroyami/KitePDF/issues/531)); `DOMParser` and `XMLSerializer`
-([#543](https://github.com/yuroyami/KitePDF/issues/543)); and the syntax KiteJS does not have yet, `class`
-([KiteJS#2](https://github.com/yuroyami/KiteJS/issues/2)), `const` in the head of a `for` loop
-([KiteJS#11](https://github.com/yuroyami/KiteJS/issues/11)) and `async`
-([KiteJS#12](https://github.com/yuroyami/KiteJS/issues/12)). A script that uses one fails to
-parse and is listed in `failures`, and the chapter goes on as its other scripts leave it.
+([#531](https://github.com/yuroyami/KitePDF/issues/531)); and `DOMParser` and `XMLSerializer`
+([#543](https://github.com/yuroyami/KitePDF/issues/543)). A script that calls one fails and is
+listed in `failures`, and the chapter goes on as its other scripts leave it.
 
 Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,
 the W3C tests of spine-level scripting and an IDPF sample that drives its pages with jQuery 1.7.1,
@@ -378,8 +346,8 @@ The DOM the library sets up in a chapter's engine before the book's first script
 as it takes a few hundred milliseconds and on a slow device seconds, so a tight budget stops the
 book's scripts and never the DOM they need ([#554](https://github.com/yuroyami/KitePDF/issues/554)).
 `EpubScriptPolicy.DENY` runs nothing. The runner runs its calls on a thread of its own, as
-`PdfScriptRunner` does, and opens each chapter's engine on a thread of its own too, since a
-KiteJS engine holds the thread that opened it. A listener of `onNavigate` or `onTimersChanged`
+`PdfScriptRunner` does, and opens each chapter's engine on a thread of its own too. Call
+`prepare()` once before the first chapter opens, as for a PDF. A listener of `onNavigate` or `onTimersChanged`
 runs on one of them while a script waits for it, so it hands its work on rather than calling the
 runner. `EpubScriptSession` in `kitepdf-epub` is the same thing over any `KiteScriptEngine`, on
 the caller's thread; its `liveChapters` says how many chapters' engines stay open.

@@ -1231,7 +1231,11 @@ TextDecoder.prototype.decode = function () {
   d.doNotFlush = stream;
   var result = K.decode(d.encoding, d.fatal, d.ignoreBOM, d.state, view === null ? '' : byteString(view), !stream);
   d.state = listSlice(result, 1);
-  if (result[0] == null) throw new TypeError("Failed to execute 'decode' on 'TextDecoder': The encoded data was not valid.");
+  if (result[0] == null) {
+    // A fatal error drops the bytes after it, as browsers do; ISO-2022-JP alone keeps the mode it switched to.
+    if (d.encoding !== 'ISO-2022-JP') d.state = null;
+    throw new TypeError("Failed to execute 'decode' on 'TextDecoder': The encoded data was not valid.");
+  }
   return result[0];
 };
 

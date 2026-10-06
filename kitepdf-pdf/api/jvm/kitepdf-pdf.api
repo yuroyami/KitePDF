@@ -1077,6 +1077,7 @@ public abstract interface class io/github/yuroyami/kitepdf/PdfScriptHandler {
 	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
 	public fun pageClosed (I)V
 	public fun pageOpened (I)V
+	public fun prepare (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun pumpTimers (J)Ljava/lang/Long;
 	public fun runAction (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)V
 	public fun runWidgetAction (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfAction;)Z
@@ -1102,6 +1103,7 @@ public final class io/github/yuroyami/kitepdf/PdfScriptHandler$DefaultImpls {
 	public static fun onTimersChanged (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
 	public static fun pageClosed (Lio/github/yuroyami/kitepdf/PdfScriptHandler;I)V
 	public static fun pageOpened (Lio/github/yuroyami/kitepdf/PdfScriptHandler;I)V
+	public static fun prepare (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun pumpTimers (Lio/github/yuroyami/kitepdf/PdfScriptHandler;J)Ljava/lang/Long;
 	public static fun runAction (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)V
 	public static fun runWidgetAction (Lio/github/yuroyami/kitepdf/PdfScriptHandler;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfAction;)Z

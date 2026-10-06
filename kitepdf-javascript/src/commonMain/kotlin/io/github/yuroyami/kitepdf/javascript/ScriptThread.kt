@@ -20,6 +20,9 @@ internal interface ScriptThread {
      */
     val isOwnThread: Boolean get() = true
 
+    /** How deep a script on this thread may recurse, in bytes of stack. */
+    val stackBytes: Long get() = if (isOwnThread) SCRIPT_STACK_LIMIT else KiteJsScriptEngine.DEFAULT_STACK_BYTES
+
     /**
      * Called here before [user] opens an engine. Where every engine shares one thread, the user
      * whose engine is open asks it to close first, unless that user is [user] itself or one of its
@@ -41,3 +44,12 @@ internal fun interface EngineUser {
 
 /** Starts a thread for one runner. JavaScript and WebAssembly have one thread, so there the work runs where it is called. */
 internal expect fun startScriptThread(): ScriptThread
+
+/**
+ * The stack of a script thread, so that a script recurses as deep on every target: twice
+ * [SCRIPT_STACK_LIMIT], which leaves the host's own frames room above it.
+ */
+internal const val SCRIPT_STACK_BYTES: Long = 16L shl 20
+
+/** How deep, in bytes of stack, a script on a script thread may recurse before it gets a RangeError. */
+internal const val SCRIPT_STACK_LIMIT: Long = 8L shl 20

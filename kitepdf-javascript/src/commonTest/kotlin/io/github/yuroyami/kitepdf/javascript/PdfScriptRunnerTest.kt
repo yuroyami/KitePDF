@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.javascript
 import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 
 class PdfScriptRunnerTest {
@@ -30,7 +31,7 @@ class PdfScriptRunnerTest {
     }
 
     @Test
-    fun document_scripts_run_in_name_order_and_reach_the_host() {
+    fun document_scripts_run_in_name_order_and_reach_the_host(): TestResult = scriptTest {
         val printed = ArrayList<String>()
         val alerts = ArrayList<String>()
         val doc = PdfDocument.open(
@@ -50,7 +51,7 @@ class PdfScriptRunnerTest {
     }
 
     @Test
-    fun a_link_javascript_action_runs() {
+    fun a_link_javascript_action_runs(): TestResult = scriptTest {
         val doc = PdfDocument.open(pdf(emptyList(), linkScript = "6 * 7"))
         val action = doc.pages[0].annotations.single().action as PdfAction.JavaScript
         assertEquals("42", PdfScriptRunner(doc).use { it.run(action) })

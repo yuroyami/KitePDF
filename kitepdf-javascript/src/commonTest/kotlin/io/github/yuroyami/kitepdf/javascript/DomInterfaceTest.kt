@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.javascript
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -32,7 +33,7 @@ class DomInterfaceTest {
     }
 
     @Test
-    fun a_collection_is_the_same_object_on_each_read_and_follows_the_tree() {
+    fun a_collection_is_the_same_object_on_each_read_and_follows_the_tree(): TestResult = scriptTest {
         val body = """<p id="p">a<em>b</em><span class="hot">c</span></p><form id="f"><input name="q"/>""" +
             """<select id="s"><option>1</option></select></form><table id="t"><tbody><tr><td>1</td></tr></tbody></table>""" +
             """<map name="m" id="m"><area href="#a"/></map>"""
@@ -92,7 +93,7 @@ class DomInterfaceTest {
     }
 
     @Test
-    fun a_tag_name_is_uppercased_only_for_an_html_element_of_an_html_chapter() {
+    fun a_tag_name_is_uppercased_only_for_an_html_element_of_an_html_chapter(): TestResult = scriptTest {
         val body = """<p id="p">x</p><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><linearGradient id="g"/></svg>"""
         val script = """
             function kind(o) { return Object.prototype.toString.call(o).slice(8, -1); }
@@ -125,7 +126,7 @@ class DomInterfaceTest {
     }
 
     @Test
-    fun each_node_and_element_has_the_class_string_of_its_interface() {
+    fun each_node_and_element_has_the_class_string_of_its_interface(): TestResult = scriptTest {
         val body = """<p id="p" title="t">x</p><svg id="svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">""" +
             """<linearGradient id="grad"/></svg><math id="math" xmlns="http://www.w3.org/1998/Math/MathML"><mi>x</mi></math>"""
         val script = """
@@ -165,7 +166,7 @@ class DomInterfaceTest {
     }
 
     @Test
-    fun a_comment_is_a_node_of_its_own_that_the_page_does_not_show() {
+    fun a_comment_is_a_node_of_its_own_that_the_page_does_not_show(): TestResult = scriptTest {
         // The tree kept no comment, and createComment made a text node (#544).
         val body = """<div id="q">x<!-- c -->y</div><p id="w"><!--first--><span>s</span></p>"""
         val script = """

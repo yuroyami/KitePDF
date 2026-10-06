@@ -40,6 +40,7 @@ final class io.github.yuroyami.kitepdf.javascript/EpubScriptRunner : io.github.y
     final fun onTimersChanged(kotlin/Function0<kotlin/Unit>): kotlin/Function0<kotlin/Unit> // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.onTimersChanged|onTimersChanged(kotlin.Function0<kotlin.Unit>){}[0]
     final fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.pumpTimers|pumpTimers(kotlin.Long){}[0]
     final fun tap(io.github.yuroyami.kitepdf.epub/EpubPage, kotlin/Double, kotlin/Double): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.tap|tap(io.github.yuroyami.kitepdf.epub.EpubPage;kotlin.Double;kotlin.Double){}[0]
+    final suspend fun prepare() // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.prepare|prepare(){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.Companion|null[0]
         final const val LIVE_CHAPTERS // io.github.yuroyami.kitepdf.javascript/EpubScriptRunner.Companion.LIVE_CHAPTERS|{}LIVE_CHAPTERS[0]
@@ -48,10 +49,8 @@ final class io.github.yuroyami.kitepdf.javascript/EpubScriptRunner : io.github.y
 }
 
 final class io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine : io.github.yuroyami.kitepdf.core.script/KiteScriptEngine { // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine|null[0]
-    constructor <init>(kotlin/Int = ..., kotlin/Function0<kotlin/Boolean>? = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.<init>|<init>(kotlin.Int;kotlin.Function0<kotlin.Boolean>?;kotlin.Function0<kotlin.Long>?;kotlin.Boolean;kotlin.Boolean){}[0]
+    constructor <init>(kotlin/Int = ..., kotlin/Function0<kotlin/Boolean>? = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Boolean = ..., kotlin/Long = ...) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.<init>|<init>(kotlin.Int;kotlin.Function0<kotlin.Boolean>?;kotlin.Function0<kotlin.Long>?;kotlin.Boolean;kotlin.Long){}[0]
 
-    final val asmReports // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.asmReports|{}asmReports[0]
-        final fun <get-asmReports>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.asmReports.<get-asmReports>|<get-asmReports>(){}[0]
     final val instructionBudget // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.instructionBudget|{}instructionBudget[0]
         final fun <get-instructionBudget>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.instructionBudget.<get-instructionBudget>|<get-instructionBudget>(){}[0]
 
@@ -63,6 +62,15 @@ final class io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine : io.github
     final object Companion { // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion|null[0]
         final const val DEFAULT_INSTRUCTION_BUDGET // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.DEFAULT_INSTRUCTION_BUDGET|{}DEFAULT_INSTRUCTION_BUDGET[0]
             final fun <get-DEFAULT_INSTRUCTION_BUDGET>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.DEFAULT_INSTRUCTION_BUDGET.<get-DEFAULT_INSTRUCTION_BUDGET>|<get-DEFAULT_INSTRUCTION_BUDGET>(){}[0]
+        final const val DEFAULT_STACK_BYTES // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.DEFAULT_STACK_BYTES|{}DEFAULT_STACK_BYTES[0]
+            final fun <get-DEFAULT_STACK_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.DEFAULT_STACK_BYTES.<get-DEFAULT_STACK_BYTES>|<get-DEFAULT_STACK_BYTES>(){}[0]
+        final const val MEMORY_LIMIT // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.MEMORY_LIMIT|{}MEMORY_LIMIT[0]
+            final fun <get-MEMORY_LIMIT>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.MEMORY_LIMIT.<get-MEMORY_LIMIT>|<get-MEMORY_LIMIT>(){}[0]
+
+        final val isLoaded // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.isLoaded|{}isLoaded[0]
+            final fun <get-isLoaded>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.isLoaded.<get-isLoaded>|<get-isLoaded>(){}[0]
+
+        final suspend fun load() // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.load|load(){}[0]
     }
 }
 
@@ -113,8 +121,6 @@ final class io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt { // io.github
 final class io.github.yuroyami.kitepdf.javascript/PdfScriptRunner : io.github.yuroyami.kitepdf/PdfScriptHandler, kotlin/AutoCloseable { // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner|null[0]
     constructor <init>(io.github.yuroyami.kitepdf/PdfDocument, io.github.yuroyami.kitepdf/PdfFormState = ..., io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy = ..., kotlin/Function1<io.github.yuroyami.kitepdf.javascript/PdfScriptAlert, kotlin/Int> = ..., kotlin/Function1<kotlin/String, kotlin/Unit> = ..., kotlin/Function1<io.github.yuroyami.kitepdf.javascript/PdfScriptRequest, kotlin/Unit> = ..., kotlin/Function1<io.github.yuroyami.kitepdf.javascript/PdfScriptPrompt, kotlin/String?> = ..., kotlin/Function0<kotlin/Long>? = ..., io.github.yuroyami.kitepdf.core.script/KiteScriptEngine? = ...) // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.<init>|<init>(io.github.yuroyami.kitepdf.PdfDocument;io.github.yuroyami.kitepdf.PdfFormState;io.github.yuroyami.kitepdf.javascript.PdfScriptPolicy;kotlin.Function1<io.github.yuroyami.kitepdf.javascript.PdfScriptAlert,kotlin.Int>;kotlin.Function1<kotlin.String,kotlin.Unit>;kotlin.Function1<io.github.yuroyami.kitepdf.javascript.PdfScriptRequest,kotlin.Unit>;kotlin.Function1<io.github.yuroyami.kitepdf.javascript.PdfScriptPrompt,kotlin.String?>;kotlin.Function0<kotlin.Long>?;io.github.yuroyami.kitepdf.core.script.KiteScriptEngine?){}[0]
 
-    final val asmReports // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.asmReports|{}asmReports[0]
-        final fun <get-asmReports>(): kotlin.collections/List<kotlin/String> // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.asmReports.<get-asmReports>|<get-asmReports>(){}[0]
     final val failures // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.failures|{}failures[0]
         final fun <get-failures>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.script/KiteScriptException> // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.failures.<get-failures>|<get-failures>(){}[0]
     final val formState // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.formState|{}formState[0]
@@ -163,6 +169,7 @@ final class io.github.yuroyami.kitepdf.javascript/PdfScriptRunner : io.github.yu
     final fun runPageOpen(kotlin/Int): io.github.yuroyami.kitepdf.core.script/KiteScriptException? // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.runPageOpen|runPageOpen(kotlin.Int){}[0]
     final fun runWidgetAction(kotlin/String, io.github.yuroyami.kitepdf/PdfAction): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.runWidgetAction|runWidgetAction(kotlin.String;io.github.yuroyami.kitepdf.PdfAction){}[0]
     final fun setFieldValue(kotlin/String, kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.setFieldValue|setFieldValue(kotlin.String;kotlin.String){}[0]
+    final suspend fun prepare() // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.prepare|prepare(){}[0]
 
     final class KeystrokeResult { // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.KeystrokeResult|null[0]
         final val accepted // io.github.yuroyami.kitepdf.javascript/PdfScriptRunner.KeystrokeResult.accepted|{}accepted[0]

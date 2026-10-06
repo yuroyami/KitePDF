@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -32,7 +33,7 @@ class WidgetScriptTest {
     private fun script(source: String) = PdfAction.JavaScript(source, PdfDictionary(emptyMap()))
 
     @Test
-    fun each_button_of_a_group_runs_its_own_mouse_up_script() {
+    fun each_button_of_a_group_runs_its_own_mouse_up_script(): TestResult = scriptTest {
         val doc = PdfDocument.open(
             pdf(
                 "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R 7 0 R] >> >>",
@@ -69,7 +70,7 @@ class WidgetScriptTest {
     )
 
     @Test
-    fun a_widget_action_script_runs_as_the_mouse_up_event_of_its_field() {
+    fun a_widget_action_script_runs_as_the_mouse_up_event_of_its_field(): TestResult = scriptTest {
         val doc = PdfDocument.open(buttonsPdf())
         PdfScriptRunner(doc).use { runner ->
             val action = doc.formField("go")?.widgets?.first()?.action
@@ -79,7 +80,7 @@ class WidgetScriptTest {
     }
 
     @Test
-    fun a_reset_action_gives_back_the_defaults_and_recalculates() {
+    fun a_reset_action_gives_back_the_defaults_and_recalculates(): TestResult = scriptTest {
         val doc = PdfDocument.open(buttonsPdf())
         PdfScriptRunner(doc).use { runner ->
             runner.setFieldValue("a", "5")
@@ -93,7 +94,7 @@ class WidgetScriptTest {
     }
 
     @Test
-    fun a_script_reset_gives_back_the_defaults_and_keeps_what_it_hid() {
+    fun a_script_reset_gives_back_the_defaults_and_keeps_what_it_hid(): TestResult = scriptTest {
         val doc = PdfDocument.open(
             pdf(
                 "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R 5 0 R] >> >>",

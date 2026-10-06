@@ -112,6 +112,7 @@ abstract interface io.github.yuroyami.kitepdf/PdfScriptHandler { // io.github.yu
     open fun pumpTimers(kotlin/Long): kotlin/Long? // io.github.yuroyami.kitepdf/PdfScriptHandler.pumpTimers|pumpTimers(kotlin.Long){}[0]
     open fun runAction(io.github.yuroyami.kitepdf/PdfAction.JavaScript) // io.github.yuroyami.kitepdf/PdfScriptHandler.runAction|runAction(io.github.yuroyami.kitepdf.PdfAction.JavaScript){}[0]
     open fun runWidgetAction(kotlin/String, io.github.yuroyami.kitepdf/PdfAction): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfScriptHandler.runWidgetAction|runWidgetAction(kotlin.String;io.github.yuroyami.kitepdf.PdfAction){}[0]
+    open suspend fun prepare() // io.github.yuroyami.kitepdf/PdfScriptHandler.prepare|prepare(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.content/Operation { // io.github.yuroyami.kitepdf.content/Operation|null[0]

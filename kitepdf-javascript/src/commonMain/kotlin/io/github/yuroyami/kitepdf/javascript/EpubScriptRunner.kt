@@ -47,17 +47,15 @@ public class EpubScriptPolicy(
  * The scripts of each chapter run in a window of their own, over the library's own parse and
  * layout: [EpubScriptSession] says what they see. A runner can be called from any thread. It
  * runs every call on a thread of its own, one at a time and in order, as `PdfScriptRunner` does.
- * A KiteJS engine belongs to the thread that opened it, and a thread holds one, so each
- * chapter's engine opens on a thread of its own too, and the call goes there while it runs that
- * chapter's scripts (#498). [close] stops every one of them. A listener of [onNavigate] or
+ * A KiteJS engine belongs to the thread that opened it, and each chapter's engine opens on a
+ * thread of its own, so the call goes there while it runs that chapter's scripts (#498). [close] stops every one of them. A listener of [onNavigate] or
  * [onTimersChanged] runs on one of them while a script waits for it, so it hands its work on, as
  * `KiteDocView` does, rather than calling the runner.
  *
- * At most [LIVE_CHAPTERS] chapters keep their engines open, and on JavaScript and WebAssembly,
- * which have one thread for every engine, one: opening another closes the engine of the chapter
- * used least recently, whose scripts start over from its markup when it opens again. There the
- * runners of every book and document take turns too: a runner that opens an engine first closes
- * the one another runner has open, unless a script of that runner is running.
+ * At most [LIVE_CHAPTERS] chapters keep their engines open: opening another closes the engine of
+ * the chapter used least recently, whose scripts start over from its markup when it opens again.
+ * On JavaScript and WebAssembly the engine loads before its first use: call [prepare] once and
+ * wait for it, as `KiteDocView` does.
  *
  * @param onConsole gets what scripts print with `console`, and what `alert`, `confirm` and
  *   `prompt` would have shown, on one of the runner's threads.
@@ -111,6 +109,9 @@ public class EpubScriptRunner(
 
     override val hasTimers: Boolean get() = session?.hasTimers == true
 
+    /** Loads the engine, which on JavaScript and WebAssembly has to happen before the first script. */
+    override suspend fun prepare(): Unit = KiteJsScriptEngine.load()
+
     override fun chapterOpened(chapter: Int) {
         if (!policy.enabled) return
         call { it.chapterOpened(chapter) }
@@ -155,9 +156,11 @@ public class EpubScriptRunner(
     private fun sessionHere(): EpubScriptSession = session ?: EpubScriptSession(
         document,
         engineFor = {
+            check(KiteJsScriptEngine.isLoaded) { KiteJsScriptEngine.NOT_LOADED }
             // Where every engine shares one thread, another runner's engine closes first (#553).
             scriptThread.value.makeRoom(engineUser)
-            OwnDomFirst(ThreadedScriptEngine(startScriptThread()) {
+            val thread = startScriptThread()
+            OwnDomFirst(ThreadedScriptEngine(thread) {
                 // A book's scripts polyfill and patch the built-ins as in a browser, and each chapter has an
                 // engine of its own, so the seal would guard nothing (#537).
                 KiteJsScriptEngine(
@@ -165,12 +168,13 @@ public class EpubScriptRunner(
                     deadline = ::deadlinePassed,
                     clock = clock,
                     sealBuiltins = false,
+                    maxStackBytes = thread.stackBytes,
                 )
             })
         },
         onConsole = onConsole,
         clock = ::now,
-        liveChapters = if (scriptThread.value.isOwnThread) LIVE_CHAPTERS else 1,
+        liveChapters = if (scriptThread.value.isOwnThread || !KiteJsScriptEngine.oneEnginePerThread) LIVE_CHAPTERS else 1,
     ).also { made ->
         made.onTimersChanged { lock.withLock { timerListeners.toList() }.forEach { it() } }
         made.onNavigate { href -> lock.withLock { navigationListeners.toList() }.forEach { it(href) } }

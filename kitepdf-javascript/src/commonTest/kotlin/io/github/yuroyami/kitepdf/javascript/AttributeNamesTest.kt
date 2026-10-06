@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.javascript
 
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 
 /**
@@ -87,7 +88,7 @@ class AttributeNamesTest {
     """.trimIndent()
 
     @Test
-    fun an_xhtml_chapter_names_attributes_as_xml_does() {
+    fun an_xhtml_chapter_names_attributes_as_xml_does(): TestResult = scriptTest {
         assertEquals(
             listOf(
                 "get noteref||noteref|true|true|||#f",
@@ -114,7 +115,7 @@ class AttributeNamesTest {
     }
 
     @Test
-    fun an_html_chapter_names_attributes_as_html_does() {
+    fun an_html_chapter_names_attributes_as_html_does(): TestResult = scriptTest {
         assertEquals(
             listOf(
                 "get noteref|||true|false||noteref|#f",
@@ -178,7 +179,7 @@ class AttributeNamesTest {
     """.trimIndent()
 
     @Test
-    fun an_xhtml_chapter_parses_attribute_names_as_xml_does() {
+    fun an_xhtml_chapter_parses_attribute_names_as_xml_does(): TestResult = scriptTest {
         assertEquals(
             listOf(
                 "dup id=id=null=null=d title=title=null=null=a TITLE=TITLE=null=null=b data-Ab=data-Ab=null=null=1 data-cD=data-cD=null=null=2 data-X=data-X=null=null=3 data-ok=data-ok=null=null=4",
@@ -194,7 +195,7 @@ class AttributeNamesTest {
     }
 
     @Test
-    fun an_html_chapter_parses_attribute_names_as_html_does() {
+    fun an_html_chapter_parses_attribute_names_as_html_does(): TestResult = scriptTest {
         assertEquals(
             listOf(
                 "dup id=id=null=null=d title=title=null=null=a data-ab=data-ab=null=null=1 data-cd=data-cd=null=null=2 data-x=data-x=null=null=3 data-ok=data-ok=null=null=4",

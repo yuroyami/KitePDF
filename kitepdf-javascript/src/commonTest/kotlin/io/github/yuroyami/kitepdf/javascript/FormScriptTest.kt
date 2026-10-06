@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.javascript
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -61,7 +62,7 @@ class FormScriptTest {
     }
 
     @Test
-    fun a_total_recalculates_when_a_field_changes() {
+    fun a_total_recalculates_when_a_field_changes(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->
             runner.setFieldValue("a", "2")
@@ -72,7 +73,7 @@ class FormScriptTest {
 
     /** The plain shape of a calculation, with no helper library: the example in the issue. */
     @Test
-    fun a_calculate_script_that_adds_two_fields_by_hand() {
+    fun a_calculate_script_that_adds_two_fields_by_hand(): TestResult = scriptTest {
         val doc = PdfDocument.open(
             invoicePdf(
                 calculate = "event.value = this.getField\\('a'\\).value + this.getField\\('b'\\).value",
@@ -86,7 +87,7 @@ class FormScriptTest {
     }
 
     @Test
-    fun the_format_script_decides_what_the_field_shows() {
+    fun the_format_script_decides_what_the_field_shows(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->
             runner.setFieldValue("a", "1200")
@@ -98,7 +99,7 @@ class FormScriptTest {
     }
 
     @Test
-    fun a_keystroke_script_can_refuse_what_is_typed() {
+    fun a_keystroke_script_can_refuse_what_is_typed(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->
             assertTrue(runner.keystroke("digits", "4").accepted)
@@ -112,7 +113,7 @@ class FormScriptTest {
 
     /** The script model itself: the document's members are globals, as they are in Chrome. */
     @Test
-    fun a_script_reaches_the_document_and_its_fields() {
+    fun a_script_reaches_the_document_and_its_fields(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         val messages = mutableListOf<String>()
         PdfScriptRunner(doc, onAlert = { alert -> messages.add(alert.message); 1 }).use { runner ->
@@ -128,7 +129,7 @@ class FormScriptTest {
     }
 
     @Test
-    fun a_script_writes_a_field_and_hides_another() {
+    fun a_script_writes_a_field_and_hides_another(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->
             runner.run(
@@ -144,7 +145,7 @@ class FormScriptTest {
 
     /** `app.setInterval` gives the host a timer to pump; nothing runs on its own. */
     @Test
-    fun a_timer_runs_when_the_host_pumps_it() {
+    fun a_timer_runs_when_the_host_pumps_it(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         var now = 0L
         PdfScriptRunner(doc, clock = { now }).use { runner ->
@@ -165,7 +166,7 @@ class FormScriptTest {
     }
 
     @Test
-    fun a_policy_that_denies_scripts_runs_none_of_them() {
+    fun a_policy_that_denies_scripts_runs_none_of_them(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc, policy = PdfScriptPolicy.DENY).use { runner ->
             runner.setFieldValue("a", "2")
@@ -179,7 +180,7 @@ class FormScriptTest {
 
     /** What a script asks for outside the document reaches the host, and nothing else happens. */
     @Test
-    fun a_request_to_leave_the_document_reaches_the_host() {
+    fun a_request_to_leave_the_document_reaches_the_host(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         val requests = mutableListOf<PdfScriptRequest>()
         PdfScriptRunner(doc, onRequest = { requests.add(it) }).use { runner ->

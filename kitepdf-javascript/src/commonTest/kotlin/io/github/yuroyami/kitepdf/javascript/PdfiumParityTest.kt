@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 
 /**
@@ -69,7 +70,7 @@ class PdfiumParityTest {
     }
 
     @Test
-    fun the_document_members_are_all_reachable() {
+    fun the_document_members_are_all_reachable(): TestResult = scriptTest {
         val members = listOf(
             "ADBE", "author", "baseURL", "bookmarkRoot", "calculate", "Collab", "creationDate",
             "creator", "delay", "dirty", "documentFileName", "external", "filesize", "icons",
@@ -88,7 +89,7 @@ class PdfiumParityTest {
     }
 
     @Test
-    fun the_app_members_are_all_reachable() {
+    fun the_app_members_are_all_reachable(): TestResult = scriptTest {
         val members = listOf(
             "activeDocs", "calculate", "formsVersion", "fs", "fullscreen", "language", "media",
             "platform", "plugIns", "runtimeHighlight", "viewerType", "viewerVariation",
@@ -101,7 +102,7 @@ class PdfiumParityTest {
     }
 
     @Test
-    fun the_field_members_are_all_reachable() {
+    fun the_field_members_are_all_reachable(): TestResult = scriptTest {
         val members = listOf(
             "alignment", "borderStyle", "buttonAlignX", "buttonAlignY", "buttonFitBounds",
             "buttonPosition", "buttonScaleHow", "buttonScaleWhen", "calcOrderIndex", "charLimit",
@@ -123,7 +124,7 @@ class PdfiumParityTest {
     }
 
     @Test
-    fun the_event_members_are_all_reachable() {
+    fun the_event_members_are_all_reachable(): TestResult = scriptTest {
         val members = listOf(
             "change", "changeEx", "commitKey", "fieldFull", "keyDown", "modifier", "name", "rc",
             "richChange", "richChangeEx", "richValue", "selEnd", "selStart", "shift", "source",
@@ -133,7 +134,7 @@ class PdfiumParityTest {
     }
 
     @Test
-    fun the_helper_objects_are_all_reachable() {
+    fun the_helper_objects_are_all_reachable(): TestResult = scriptTest {
         assertEquals(
             emptyList(),
             missingOn("util", listOf("printd", "printf", "printx", "scand", "byteToChar")),
@@ -163,7 +164,7 @@ class PdfiumParityTest {
     }
 
     @Test
-    fun the_helper_library_is_all_reachable() {
+    fun the_helper_library_is_all_reachable(): TestResult = scriptTest {
         val functions = listOf(
             "AFNumber_Format", "AFNumber_Keystroke", "AFPercent_Format", "AFPercent_Keystroke",
             "AFDate_Format", "AFDate_FormatEx", "AFDate_Keystroke", "AFDate_KeystrokeEx",

@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.javascript
 
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 
 /**
@@ -60,7 +61,7 @@ class SelectorQueryTest {
     """.trimIndent()
 
     @Test
-    fun an_xhtml_chapter_queries_as_a_browser_does() {
+    fun an_xhtml_chapter_queries_as_a_browser_does(): TestResult = scriptTest {
         assertEquals(
             listOf(
                 "p:nth-of-type(2) => 1",
@@ -136,7 +137,7 @@ class SelectorQueryTest {
     }
 
     @Test
-    fun an_html_chapter_queries_as_a_browser_does() {
+    fun an_html_chapter_queries_as_a_browser_does(): TestResult = scriptTest {
         assertEquals(
             listOf(
                 "p:nth-of-type(2) => 1",
@@ -225,7 +226,7 @@ class SelectorQueryTest {
     """.trimIndent()
 
     @Test
-    fun an_html_chapter_compares_every_name_ignoring_case_and_an_xhtml_one_none() {
+    fun an_html_chapter_compares_every_name_ignoring_case_and_an_xhtml_one_none(): TestResult = scriptTest {
         assertEquals(
             listOf(
                 "linearGradient=1", "lineargradient=1", "LINEARGRADIENT=1", "svg[viewBox]=1", "svg[viewbox]=1", "svg[VIEWBOX]=1", "P=1",

@@ -13,7 +13,7 @@ private class ExecutorScriptThread : ScriptThread {
     private var thread: Thread? = null
 
     private val executor: ExecutorService = Executors.newSingleThreadExecutor { task ->
-        Thread(task, "kitepdf-scripts").apply { isDaemon = true }.also { thread = it }
+        Thread(null, task, "kitepdf-scripts", SCRIPT_STACK_BYTES).apply { isDaemon = true }.also { thread = it }
     }
 
     override fun <T> call(block: () -> T): T {
