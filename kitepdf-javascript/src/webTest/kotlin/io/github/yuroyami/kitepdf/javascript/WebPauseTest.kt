@@ -20,11 +20,11 @@ private external interface Waitable : JsAny {
 
 private fun timeout(ms: Int): Waitable = js("new Promise(function (resolve) { setTimeout(resolve, ms); })")
 
-private fun startTicking(): JsAny = js("(globalThis.kitePdfTicks = 0, setInterval(function () { globalThis.kitePdfTicks++; }, 1))")
+internal fun startTicking(): JsAny = js("(globalThis.kitePdfTicks = 0, setInterval(function () { globalThis.kitePdfTicks++; }, 1))")
 
-private fun stopTicking(timer: JsAny): Unit = js("clearInterval(timer)")
+internal fun stopTicking(timer: JsAny): Unit = js("clearInterval(timer)")
 
-private fun ticks(): Int = js("globalThis.kitePdfTicks")
+internal fun ticks(): Int = js("globalThis.kitePdfTicks")
 
 /** Waits [ms] of real time, which the test's virtual clock would skip. */
 private suspend fun realWait(ms: Int) = suspendCoroutine { continuation ->
