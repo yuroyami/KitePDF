@@ -2150,3 +2150,143 @@ Blob.prototype.textStream = function textStream() {
   return t.readable.self;
 };
 """
+
+/**
+ * The part of [DOM_PRELUDE] that moves a stream through `postMessage` or `structuredClone`, as the
+ * Streams Standard's transfer steps and cross-realm transforms do (#608).
+ */
+internal const val DOM_PRELUDE_STREAMS_TRANSFER: String = """/* ---- transferring a stream (#608) ----
+   A moved stream leaves a stream behind it that pipes into a hidden message port. The new stream
+   reads from or writes to the other end of that port, as the standard's cross-realm transforms do. */
+
+/* The interface name of [v] when it is a stream, else null. */
+function streamKind(v) {
+  if (v === null || typeof v !== 'object') return null;
+  if (WeakMapHas(readableStreams, v)) return 'ReadableStream';
+  if (WeakMapHas(writableStreams, v)) return 'WritableStream';
+  if (WeakMapHas(transformStreams, v)) return 'TransformStream';
+  return null;
+}
+function streamTransferLocked(v) {
+  var kind = streamKind(v);
+  if (kind === 'ReadableStream') return isLocked(streamOf(v));
+  if (kind === 'WritableStream') return isWritableLocked(writableOf(v));
+  var t = transformOf(v);
+  return isLocked(t.readable) || isWritableLocked(t.writable);
+}
+/* The object that a moved [v] becomes, which moveStream makes a stream once the clone succeeded. */
+function streamShell(v) {
+  var kind = streamKind(v);
+  return ObjectCreate(kind === 'ReadableStream' ? ReadableStream.prototype : kind === 'WritableStream' ? WritableStream.prototype : TransformStream.prototype);
+}
+function moveStream(v, shell) {
+  var kind = streamKind(v);
+  if (kind === 'ReadableStream') {
+    setUpCrossRealmReadable(newReadableRecord(shell), transferReadable(streamOf(v)));
+  } else if (kind === 'WritableStream') {
+    setUpCrossRealmWritable(newWritableRecord(shell), transferWritable(writableOf(v)));
+  } else {
+    var t = transformOf(v);
+    var rp = transferReadable(t.readable), wp = transferWritable(t.writable);
+    var r = newReadableRecord(ObjectCreate(ReadableStream.prototype)), w = newWritableRecord(ObjectCreate(WritableStream.prototype));
+    setUpCrossRealmReadable(r, rp);
+    setUpCrossRealmWritable(w, wp);
+    WeakMapSet(transformStreams, shell, { __proto__: null, self: shell, readable: r, writable: w, backpressure: undefined, backpressureChange: undefined, controller: undefined });
+  }
+}
+function portPair() {
+  var a = makePort(), b = makePort();
+  portOf(a).other = b;
+  portOf(b).other = a;
+  return [a, b];
+}
+/* The transfer steps of a readable stream: it pipes into a writable stream over one port, and
+   answers the other port, which the new stream reads from. */
+function transferReadable(r) {
+  var ports = portPair(), w = newWritableRecord(ObjectCreate(WritableStream.prototype));
+  setUpCrossRealmWritable(w, ports[0]);
+  markHandled(pipeTo(r, w, false, false, false, undefined));
+  return ports[1];
+}
+function transferWritable(w) {
+  var ports = portPair(), r = newReadableRecord(ObjectCreate(ReadableStream.prototype));
+  setUpCrossRealmReadable(r, ports[0]);
+  markHandled(pipeTo(r, w, false, false, false, undefined));
+  return ports[1];
+}
+/* PackAndPostMessage: sends {type, value} to the partner of [port]; throws what the clone throws. */
+function packAndPost(port, type, value) {
+  var message = ObjectCreate(null);
+  putData(message, 'type', type);
+  putData(message, 'value', value);
+  postToPort(port, cloneWithTransfer(message, [], null, port));
+}
+/* PackAndPostMessageHandlingError: answers a record of the error a failed send sent on, or null. */
+function packAndPostHandlingError(port, type, value) {
+  try {
+    packAndPost(port, type, value);
+  } catch (e) {
+    crossRealmSendError(port, e);
+    return { __proto__: null, error: e };
+  }
+  return null;
+}
+function crossRealmSendError(port, error) {
+  try { packAndPost(port, 'error', error); } catch (e) {}
+}
+/* SetUpCrossRealmTransformReadable: [r] reads what the stream at the other end of [port] sends. */
+function setUpCrossRealmReadable(r, port) {
+  var c = newDefaultController();
+  portOf(port).handler = function (data) {
+    var type = data.type, value = data.value;
+    if (type === 'chunk') defaultControllerEnqueue(c, value);
+    else if (type === 'close') { defaultControllerClose(c); closePort(port); }
+    else if (type === 'error') { defaultControllerError(c, value); closePort(port); }
+  };
+  startPort(port);
+  setUpDefaultController(r, c, streamNoop, function () {
+    packAndPost(port, 'pull', undefined);
+    return resolvedWith(undefined);
+  }, function (reason) {
+    var failed = packAndPostHandlingError(port, 'error', reason);
+    closePort(port);
+    return failed === null ? resolvedWith(undefined) : rejected(failed.error);
+  }, 0, function () { return 1; });
+}
+/* SetUpCrossRealmTransformWritable: [w] sends each chunk to the stream at the other end of
+   [port], one at a time, once that stream asked for one. */
+function setUpCrossRealmWritable(w, port) {
+  var c = newWritableController(), backpressure = newDeferred();
+  function release() {
+    if (backpressure === undefined) return;
+    resolveDeferred(backpressure, undefined);
+    backpressure = undefined;
+  }
+  portOf(port).handler = function (data) {
+    var type = data.type, value = data.value;
+    if (type === 'pull') release();
+    else if (type === 'error') { writableErrorIfNeeded(c, value); release(); }
+  };
+  startPort(port);
+  setUpWritableController(w, c, streamNoop, function (chunk) {
+    if (backpressure === undefined) { backpressure = newDeferred(); resolveDeferred(backpressure, undefined); }
+    return transformPromise(backpressure.promise, function () {
+      backpressure = newDeferred();
+      var failed = packAndPostHandlingError(port, 'chunk', chunk);
+      if (failed !== null) {
+        closePort(port);
+        return rejected(failed.error);
+      }
+      return resolvedWith(undefined);
+    });
+  }, function () {
+    packAndPost(port, 'close', undefined);
+    closePort(port);
+    return resolvedWith(undefined);
+  }, function (reason) {
+    var failed = packAndPostHandlingError(port, 'error', reason);
+    closePort(port);
+    return failed === null ? resolvedWith(undefined) : rejected(failed.error);
+  }, 1, function () { return 1; });
+}
+"""

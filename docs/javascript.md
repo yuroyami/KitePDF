@@ -313,7 +313,7 @@ button, `requestSubmit` and `submit` fire `submit`, as a `SubmitEvent` with its 
 `structuredClone` copies a value as HTML does: primitives and their wrappers, `Date`, `RegExp`,
 buffers and views, `Map`, `Set`, errors, `Blob`, `File` and `DOMException`, with cycles kept. A
 function, a node or another platform object throws a `DataCloneError`. A `transfer` list
-detaches its buffers and moves its ports. `window.postMessage` sends a clone to the chapter's own
+detaches its buffers and moves its ports and streams. `window.postMessage` sends a clone to the chapter's own
 window in a task, with the book's origin. A target origin of `*`, `/` or the book's origin
 delivers the message, and any other origin drops it. `MessageChannel` makes two entangled
 `MessagePort` objects. A port holds its messages until `start()` runs or a script sets
@@ -328,7 +328,8 @@ The streams are the Streams Standard's: `ReadableStream` with its default and by
 controllers, `ReadableStream.from`, `tee`, `pipeTo`, `pipeThrough` and async iteration,
 `WritableStream`, `TransformStream`, the two queuing strategies, `TextEncoderStream` and
 `TextDecoderStream`. `Blob.stream()` gives a byte stream of the blob in chunks of 64 KiB, and
-`Blob.textStream()` decodes it as UTF-8. A stream does not move through `postMessage` yet ([#608](https://github.com/yuroyami/KitePDF/issues/608)).
+`Blob.textStream()` decodes it as UTF-8. A stream in the `transfer` list of `postMessage` or
+`structuredClone` moves: the original stays locked, and the new stream reads or writes through it.
 
 `URL.createObjectURL` gives a blob a `blob:` URL of the book's origin, and the reader loads an
 image, a style sheet, an `@import` or a font from it as it loads a file of the book.
