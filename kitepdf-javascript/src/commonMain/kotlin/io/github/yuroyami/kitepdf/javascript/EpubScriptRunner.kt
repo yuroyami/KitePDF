@@ -61,12 +61,15 @@ public class EpubScriptPolicy(
  *   `prompt` would have shown, on one of the runner's threads.
  * @param clock milliseconds on a clock that only goes forward, for the timers, the budget and
  *   `Date.now()`. Leave it unset for the real one; a test sets it so a timer is repeatable.
+ * @param instanceKey a value the app keeps for its reader, such as an install id, which makes the
+ *   book's origin one of this reader's copy (#521). Without one each runner has an origin of its own.
  */
 public class EpubScriptRunner(
     public val document: EpubDocument,
     public val policy: EpubScriptPolicy = EpubScriptPolicy(),
     private val onConsole: (level: String, message: String) -> Unit = { _, _ -> },
     private val clock: (() -> Long)? = null,
+    private val instanceKey: String? = null,
 ) : EpubScriptHandler, AutoCloseable {
 
     private val startMark = kotlin.time.TimeSource.Monotonic.markNow()
@@ -174,6 +177,7 @@ public class EpubScriptRunner(
         },
         onConsole = onConsole,
         clock = ::now,
+        instanceKey = instanceKey,
         liveChapters = if (scriptThread.value.isOwnThread || !KiteJsScriptEngine.oneEnginePerThread) LIVE_CHAPTERS else 1,
     ).also { made ->
         made.onTimersChanged { lock.withLock { timerListeners.toList() }.forEach { it() } }

@@ -15,7 +15,7 @@ import java.util.zip.ZipOutputStream
  * One test of the W3C EPUB test suite, packed from its folder as the suite's own script packs it,
  * and opened the way a reader opens it (#497): what a check of [EpubConformanceChecks] asks of it.
  */
-internal class W3cTestBook(val folder: File) {
+internal class W3cTestBook(val folder: File, private val instanceKey: String = "reader") {
 
     val id: String = folder.name
 
@@ -37,7 +37,7 @@ internal class W3cTestBook(val folder: File) {
     fun runScripts(millis: Long = 2_000): EpubScriptRunner {
         runner?.let { return it }
         var now = 0L
-        val scripts = EpubScriptRunner(doc, onConsole = { level, message -> console += "$level: $message" }, clock = { now })
+        val scripts = EpubScriptRunner(doc, onConsole = { level, message -> console += "$level: $message" }, clock = { now }, instanceKey = instanceKey)
         runner = scripts
         for (chapter in doc.scriptedChapters) scripts.chapterOpened(chapter)
         while (scripts.hasTimers && now < millis) {

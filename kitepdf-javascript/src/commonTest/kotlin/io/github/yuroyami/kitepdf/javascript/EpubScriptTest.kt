@@ -31,8 +31,10 @@ class EpubScriptTest {
         policy: EpubScriptPolicy = EpubScriptPolicy(),
         console: MutableList<String>? = null,
         clock: (() -> Long)? = null,
+        instanceKey: String? = null,
     ): EpubScriptRunner =
-        EpubScriptRunner(book, policy, onConsole = { level, message -> console?.add("$level: $message") }, clock = clock).also { runners += it }
+        EpubScriptRunner(book, policy, onConsole = { level, message -> console?.add("$level: $message") }, clock = clock, instanceKey = instanceKey)
+            .also { runners += it }
 
     private fun fills(page: EpubPage) = RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Fill>()
 
@@ -620,9 +622,9 @@ class EpubScriptTest {
                 "two.xhtml" to ScriptBooks.xhtml(body = "<p>Two.</p><script>console.log(location.origin + ' ' + location.pathname);</script>"),
             ),
         )
-        fun originsOf(identifier: String): List<String> {
+        fun originsOf(identifier: String, key: String? = "reader one"): List<String> {
             val console = ArrayList<String>()
-            val scripts = runner(book(identifier), console = console)
+            val scripts = runner(book(identifier), console = console, instanceKey = key)
             scripts.chapterOpened(0)
             scripts.chapterOpened(1)
             scripts.close()
@@ -635,6 +637,9 @@ class EpubScriptTest {
         assertEquals("$origin /OEBPS/two.xhtml", two, "the second chapter has the same origin")
         assertEquals(origin, originsOf("urn:uuid:one")[0].substringBefore(' '), "the book has it each time it opens")
         assertTrue(origin != originsOf("urn:uuid:two")[0].substringBefore(' '), "another book has another")
+        // EPUB 3.3 gives each reader's copy an origin of its own (#521).
+        assertTrue(origin != originsOf("urn:uuid:one", "reader two")[0].substringBefore(' '), "another reader's copy has another")
+        assertTrue(originsOf("urn:uuid:one", null)[0] != originsOf("urn:uuid:one", null)[0], "a runner without a key has an origin of its own")
     }
 
     @Test

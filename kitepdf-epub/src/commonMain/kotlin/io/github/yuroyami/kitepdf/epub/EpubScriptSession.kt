@@ -62,6 +62,10 @@ import kotlin.math.roundToLong
  *   `prompt` would have shown, with the level or the dialog's name.
  * @param clock milliseconds on a clock that only goes forward, for the timers and
  *   `performance.now()`. Leave it unset for the system's own.
+ * @param instanceKey a value the app keeps for its reader, such as an install id, which goes into
+ *   the book's origin. EPUB 3.3 asks for an origin of each reader's copy, so another reader's
+ *   copy of the book cannot reach this one's storage. Without one the session makes a random key,
+ *   and the origin lasts as long as the session.
  */
 public class EpubScriptSession(
     public val document: EpubDocument,
@@ -69,6 +73,7 @@ public class EpubScriptSession(
     private val onConsole: (level: String, message: String) -> Unit = { _, _ -> },
     clock: (() -> Long)? = null,
     public val liveChapters: Int = Int.MAX_VALUE,
+    instanceKey: String? = null,
 ) : EpubScriptHandler, AutoCloseable {
 
     init {
@@ -87,9 +92,10 @@ public class EpubScriptSession(
 
     /**
      * The book's origin, the same in each chapter and another for another book (#500): a host
-     * made from the package's unique identifier, so the book has it each time it opens.
+     * made from the package's unique identifier and the reader's instance key, so one reader's
+     * copy has it each time it opens and another reader's copy has another (#521).
      */
-    private val origin: String = "epub://" + originHost(document.epubMetadata.identifier)
+    private val origin: String = "epub://" + originHost(document.epubMetadata.identifier, instanceKey)
 
     /** `localStorage` and `sessionStorage`, one each for the whole book. */
     private val stores = mapOf("local" to LinkedHashMap<String, String>(), "session" to LinkedHashMap<String, String>())
@@ -643,14 +649,16 @@ public class EpubScriptSession(
         private const val MORE = "more"
 
         /**
-         * The host of a book's origin: 64 bits of an FNV-1a hash of [identifier], in hex. A book
-         * without one gets a host of its own each time it opens.
+         * The host of a book's origin: 64 bits of an FNV-1a hash of [identifier] and [instanceKey],
+         * in hex. Without a key the session makes a random one, and a book without an identifier
+         * gets a host of its own each time it opens.
          */
-        private fun originHost(identifier: String?): String {
-            val key = identifier?.trim()?.takeIf { it.isNotEmpty() }
+        private fun originHost(identifier: String?, instanceKey: String?): String {
+            val id = identifier?.trim()?.takeIf { it.isNotEmpty() }
                 ?: return "book-" + kotlin.random.Random.nextLong().toULong().toString(16)
+            val key = instanceKey ?: kotlin.random.Random.nextLong().toULong().toString(16)
             var hash = 0xcbf29ce484222325UL
-            for (b in key.encodeToByteArray()) {
+            for (b in (id + "\u0000" + key).encodeToByteArray()) {
                 hash = (hash xor (b.toULong() and 0xFFUL)) * 0x100000001b3UL
             }
             return hash.toString(16).padStart(16, '0')
