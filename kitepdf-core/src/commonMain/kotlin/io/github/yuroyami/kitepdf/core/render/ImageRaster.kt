@@ -113,6 +113,7 @@ internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandByt
     val fx = shrinkX.coerceAtLeast(1)
     val fy = shrinkY.coerceAtLeast(1)
     if (fx == 1 && fy == 1) return toRgbaBytes()
+    ink?.let { return shrinkInk(it, fx, fy) }
     // A JPEG or JPEG 2000 image decodes at a reduced size first, and the bands average the rest (#381).
     reducedFor(fx, fy)?.let { (reduced, r) -> return reduced.toShrunkRgbaBytes(fx / r, fy / r, bandBytes) }
     val w = width
@@ -143,6 +144,88 @@ internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandByt
     }
     return out
 }
+
+/**
+ * [toShrunkRgbaBytes] for an image whose [ink][KiteImageData.ink] is coarser than its mask (#476).
+ * The ink converts to RGBA at its own size, and each output block sums the pixels of the mask's
+ * grid, each with its mask alpha and the colour of the ink under it. The result is the ink spread
+ * over that grid and then shrunk, as before, but the grid never exists at full size.
+ */
+private fun KiteImageData.shrinkInk(ink: KiteImageData.InkLayer, fx: Int, fy: Int): ByteArray? {
+    val w = width
+    val h = height
+    val mask = softMaskAlpha ?: return null
+    if (softMaskWidth != w || softMaskHeight != h) return null
+    val outWidth = (w + fx - 1) / fx
+    val outHeight = (h + fy - 1) / fy
+    if (outWidth.toLong() * outHeight > KITE_DEFAULT_MAX_RASTER_PIXELS) return null
+    // A colour key and an alpha plane never come together, so the ink's colours are all it adds.
+    val colours = KiteImageData(
+        ink.width, ink.height, 8, colorSpace, kind, ByteArray(0), pixelBytes = ink.samples,
+        resolvedColorSpace = resolvedColorSpace, decode = decode, maskFill = maskFill,
+    ).toRgbaBytes() ?: return null
+    val matte = softMaskMatte?.let { doubleArrayOf(it.r * 255.0, it.g * 255.0, it.b * 255.0) }
+    // The ink column under each column of the grid, as KiteImageData spreads the ink.
+    val colMap = IntArray(w) { x -> x * ink.width / w }
+    val sums = LongArray(outWidth * 4)
+    val out = ByteArray(outWidth * outHeight * 4)
+    for (oy in 0 until outHeight) {
+        val y0 = oy * fy
+        val y1 = minOf(h, y0 + fy)
+        sums.fill(0)
+        for (y in y0 until y1) {
+            val inkRow = (y * ink.height / h) * ink.width
+            val maskRow = y.toLong() * w
+            var x = 0
+            var s = 0
+            while (x < w) {
+                val end = minOf(w, x + fx)
+                var r = 0L
+                var g = 0L
+                var b = 0L
+                var a = 0L
+                while (x < end) {
+                    val m = maskRow + x
+                    val alpha = if (m < mask.size) mask[m.toInt()].toInt() and 0xFF else 0xFF
+                    val c = (inkRow + colMap[x]) * 4
+                    var cr = colours[c].toInt() and 0xFF
+                    var cg = colours[c + 1].toInt() and 0xFF
+                    var cb = colours[c + 2].toInt() and 0xFF
+                    if (matte != null && alpha in 1..254) {
+                        cr = unblend(cr, matte[0], alpha)
+                        cg = unblend(cg, matte[1], alpha)
+                        cb = unblend(cb, matte[2], alpha)
+                    }
+                    r += cr.toLong() * alpha
+                    g += cg.toLong() * alpha
+                    b += cb.toLong() * alpha
+                    a += alpha
+                    x++
+                }
+                sums[s] += r
+                sums[s + 1] += g
+                sums[s + 2] += b
+                sums[s + 3] += a
+                s += 4
+            }
+        }
+        for (ox in 0 until outWidth) {
+            val count = (y1 - y0) * (minOf(w, ox * fx + fx) - ox * fx)
+            val a = sums[4 * ox + 3]
+            val o = (oy * outWidth + ox) * 4
+            if (a > 0) {
+                out[o] = ((sums[4 * ox] + a / 2) / a).toInt().toByte()
+                out[o + 1] = ((sums[4 * ox + 1] + a / 2) / a).toInt().toByte()
+                out[o + 2] = ((sums[4 * ox + 2] + a / 2) / a).toInt().toByte()
+            }
+            out[o + 3] = ((a + count / 2) / count).toInt().toByte()
+        }
+    }
+    return out
+}
+
+/** The colour [v] of a sample preblended with matte [m] at [alpha], unblended as [unblendMatte] does. */
+private fun unblend(v: Int, m: Double, alpha: Int): Int = (m + (v - m) * 255.0 / alpha).roundToInt().coerceIn(0, 255)
 
 /**
  * [toShrunkRgbaBytes] for an image of one sample a pixel at 1, 2, 4 or 8 bits, without an alpha plane
@@ -309,7 +392,7 @@ private fun KiteImageData.unblendMatte(rgba: ByteArray) {
         if (a in 1..254) {
             for (c in 0..2) {
                 val v = rgba[i + c].toInt() and 0xFF
-                rgba[i + c] = (m[c] + (v - m[c]) * 255.0 / a).roundToInt().coerceIn(0, 255).toByte()
+                rgba[i + c] = unblend(v, m[c], a).toByte()
             }
         }
         i += 4
