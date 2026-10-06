@@ -7,15 +7,18 @@ public enum class EpubEmbedKind {
     /** An `<iframe>`. Its box paints the document it names, when that document is in the book (#528). */
     FRAME,
 
-    /** An `<object>` of an HTML or XHTML type. Its box paints the element's fallback children. */
+    /**
+     * An `<object>` of an HTML or XHTML type. Its box paints the document it names when that
+     * document is in the book (#612), and else the element's fallback children.
+     */
     OBJECT,
 }
 
 /**
  * An element that embeds a web document on an [EpubPage]: an inline frame, or an object whose
- * type is HTML or XHTML (#40). The page paints a frame's document of the book in the box (#528),
- * and an object's fallback. An app can place a web view of its own over [rect] for what the page
- * does not show: an object's document, or a frame's URL outside the book.
+ * type is HTML or XHTML (#40). The page paints the embedded document in the box when it is a
+ * document of the book (#528, #612), and else an object's fallback. An app can place a web view
+ * of its own over [rect] for a URL outside the book, which the page does not show.
  *
  * Each box stays on one page, as an image does: one that does not fit what is left of a page
  * moves whole to the next (#41). Only an object taller than a page goes on from page to page.

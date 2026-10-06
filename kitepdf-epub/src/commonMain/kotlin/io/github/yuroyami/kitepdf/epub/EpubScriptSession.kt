@@ -158,7 +158,7 @@ public class EpubScriptSession(
         var px = x
         var py = y
         for (embed in page.embeds) {
-            if (embed.kind != EpubEmbedKind.FRAME || x < embed.rect.left || x > embed.rect.right || y < embed.rect.bottom || y > embed.rect.top) continue
+            if (x < embed.rect.left || x > embed.rect.right || y < embed.rect.bottom || y > embed.rect.top) continue
             val path = embed.href.substringBefore('#')
             val frame = windows.frames[path] ?: break
             val (w, h) = document.frameViewportOf(page.chapter, path)

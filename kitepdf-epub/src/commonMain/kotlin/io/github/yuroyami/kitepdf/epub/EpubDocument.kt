@@ -382,7 +382,7 @@ public class EpubDocument internal constructor(
             sp.rules, settings.fontSize, width, if (isRightToLeftLanguage(language)) Direction.RTL else Direction.LTR, height,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
-        val build = BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, true, canvasImages::get) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
+        val build = BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, true, canvasImages::get, parsed::hasFile) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
         while (!build.step()) Unit
         val root = checkNotNull(build.box)
         val fonts = if (sp.localFaces.isEmpty()) parsed.fonts else parsed.fonts.with(sp.localFaces)
@@ -446,15 +446,15 @@ public class EpubDocument internal constructor(
     }
 
     /**
-     * The documents in the book that frames of [chapter] show and whose scripts run, those of
-     * frames inside them included, outermost first (#528). Read from the trees the layout has.
+     * The documents in the book that frames and objects of [chapter] show and whose scripts run,
+     * those inside them included, outermost first (#528, #612). Read from the trees the layout has.
      */
     internal fun scriptedFramesOf(chapter: Int): List<String> {
         val out = ArrayList<String>()
         fun scan(tree: KiteXmlNode.Element, dir: String, ancestors: Set<String>) {
             val found = ArrayList<String>()
             fun walk(e: KiteXmlNode.Element) {
-                if (e.tag == "iframe") e.attrs["src"]?.trim()?.takeIf { it.isNotEmpty() && !FRAME_SCHEME.containsMatchIn(it) }?.let { src ->
+                embeddedSource(e)?.takeIf { !FRAME_SCHEME.containsMatchIn(it) }?.let { src ->
                     val path = resolvePath(dir, src).substringBefore('#')
                     if (path !in ancestors && path !in out && path !in found && ancestors.size < MAX_FRAME_DEPTH) found += path
                 }
@@ -629,7 +629,7 @@ public class EpubDocument internal constructor(
             sp.rules, settings.fontSize, layoutWidth, directionFor(chapter), layoutHeight,
             readerRules = readerRules, useAuthorCss = settings.usePublisherCss,
         )
-        return BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, parsed.tracksElements(chapter), canvasImages::get) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
+        return BoxBuilder(resolver, sp.path, parsed::mediaTypeOf, parsed.tracksElements(chapter), canvasImages::get, parsed::hasFile) { href -> resolvePath(sp.docDir, href) }.start(sp.tree)
     }
 
     /**
@@ -1788,11 +1788,12 @@ public class EpubPage internal constructor(
     }
 
     /**
-     * Paints the frame that [box] embeds into its content box at ([left], [bottom]), clipped to
-     * it, when the frame shows a document of the book (#528). Answers whether [box] is a frame.
+     * Paints the document that [box] embeds into its content box at ([left], [bottom]), clipped to
+     * it, when that is a document of the book: a frame's (#528), or an object's (#612). Answers
+     * whether [box] embeds a document.
      */
     private fun paintFrameBox(canvas: KiteCanvas, ctm: KiteMatrix, box: ImageBox, left: Double, bottom: Double, cancellation: KiteCancellation?): Boolean {
-        val info = box.embed?.takeIf { it.kind == EpubEmbedKind.FRAME } ?: return false
+        val info = box.embed ?: return false
         val inner = doc.framePage(chapter, info.href, box.drawWidth, box.drawHeight, frame?.documents ?: setOf(doc.chapterPath(chapter))) ?: return true
         val clip = KitePath.Builder().apply { rectangle(left, bottom, box.drawWidth, box.drawHeight) }.build()
         canvas.pushClip(clip, ctm, evenOdd = false)
@@ -3417,12 +3418,30 @@ private const val MAX_FRAME_DEPTH = 8
 /** A URL with a scheme, which a frame does not show unless it is a data or blob URL (#528). */
 private val FRAME_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
-/** The content box of the frame showing [path] on [page], in points, or null when the page has none (#528). */
+/**
+ * The address of the document that [e] embeds: an iframe's `src`, or the `data` of an object
+ * whose type is HTML or XHTML, by its `type` or by its name (#528, #612). Null for any other.
+ */
+internal fun embeddedSource(e: KiteXmlNode.Element): String? = embeddedSource(e.tag, e.attrs)
+
+internal fun embeddedSource(tag: String, attrs: Map<String, String>): String? {
+    val src = when (tag) {
+        "iframe" -> attrs["src"]
+        "object" -> attrs["data"]?.takeIf { data ->
+            val type = attrs["type"]?.substringBefore(';')?.trim()?.lowercase()
+            if (type.isNullOrEmpty()) isDocumentPath(data) else type in EMBED_DOCUMENT_TYPES
+        }
+        else -> null
+    }
+    return src?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+/** The content box of the frame or object showing [path] on [page], in points, or null when the page has none (#528). */
 internal fun frameSizeIn(page: PageRender, path: String): Pair<Double, Double>? {
     for (box in page.embedBoxes) {
         if (box !is ImageBox) continue
         val info = box.embed ?: continue
-        if (info.kind == EpubEmbedKind.FRAME && info.href.substringBefore('#') == path) return box.drawWidth to box.drawHeight
+        if (info.href.substringBefore('#') == path) return box.drawWidth to box.drawHeight
     }
     return null
 }

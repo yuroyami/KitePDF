@@ -149,8 +149,8 @@ internal class ParsedEpub(
     fun hasOwnScripts(chapter: Int): Boolean = manifestScripted[chapter] || spine(chapter).hasScript
 
     /**
-     * Whether the markup [text] has a `script` element, or an `iframe` whose document in the book
-     * is marked `scripted` or runs scripts itself. [seen] holds the documents around it.
+     * Whether the markup [text] has a `script` element, or an `iframe` or an `object` whose
+     * document in the book is marked `scripted` or runs scripts itself. [seen] holds the documents around it.
      */
     private fun runsScripts(text: String, dir: String, seen: Set<String>): Boolean {
         val frames = ArrayList<String>()
@@ -158,8 +158,7 @@ internal class ParsedEpub(
             if (token !is KiteXmlToken.Open) continue
             val name = token.name.substringAfterLast(':')
             if (name.equals("script", ignoreCase = true)) return true
-            if (!name.equals("iframe", ignoreCase = true)) continue
-            val src = token.attrs["src"]?.trim()?.takeIf { it.isNotEmpty() && !URL_SCHEME.containsMatchIn(it) } ?: continue
+            val src = embeddedSource(name.lowercase(), token.attrs)?.takeIf { !URL_SCHEME.containsMatchIn(it) } ?: continue
             frames += EpubDocument.resolvePath(dir, src).substringBefore('#')
         }
         return frames.any { path ->
@@ -467,6 +466,13 @@ internal class ParsedEpub(
 
     /** The bytes of the file at [path], of the data URL [path] is (#514), or of the blob a blob URL names (#533). A fragment is ignored. */
     fun read(path: String): ByteArray? = readAt(path)
+
+    /** Whether [read] answers bytes for [path], without reading them (#612). */
+    fun hasFile(path: String): Boolean = when {
+        KiteDataUrl.isDataUrl(path) -> true
+        isBlobUrl(path) -> blobs.resolve(path) != null
+        else -> zip.entry(path.substringBefore('#')) != null
+    }
 
     /** The size in bytes of what [read] answers for [path], without reading it; for a data URL, the length of the URL. */
     fun sizeOf(path: String): Long = when {

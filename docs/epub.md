@@ -372,6 +372,7 @@ page. The box takes the element's `width` and `height`, then its CSS size, and
 else 300 by 150 CSS pixels, as in a browser. A frame's box shows the document
 it names, laid out at the box's size and clipped to it, when that document is in
 the book. A frame that names a URL outside the book stays empty. An object's box
+shows its document in the same way when the book has that document. Otherwise it
 shows the element's fallback children, and grows when they need more room. `EpubPage.embeds` lists the boxes on a page, with the document that
 each one embeds:
 
@@ -382,8 +383,8 @@ for (embed in page.embeds) {
 }
 ```
 
-The scripts of a chapter, and of the documents its frames show, run in
-[Scripts in an EPUB](javascript.md#scripts-in-an-epub). An object's document does not show yet.
+The scripts of a chapter, and of the documents its frames and objects show, run in
+[Scripts in an EPUB](javascript.md#scripts-in-an-epub).
 
 Each box stays on one page, as an image does: a box that does not fit what is
 left of a page moves whole to the next one. Only an object taller than a page
