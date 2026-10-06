@@ -83,6 +83,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -196,8 +197,9 @@ import kotlinx.coroutines.launch
  *   address or show a note in a popup. Return false, or pass null, and the viewer does what the
  *   link asks where it can: it follows a link inside the document, to the place on the page
  *   that the link names, turns the page for a PDF link that names NextPage, PrevPage,
- *   FirstPage or LastPage, and runs a PDF script link in [scripts] when that is set. Anything
- *   else, such as a web address, does nothing, and the tap goes on to [onTap].
+ *   FirstPage or LastPage, and runs a PDF script link in [scripts] when that is set. A web or
+ *   mail address goes to [externalLinks], which asks the reader and opens it. Anything else
+ *   does nothing, and the tap goes on to [onTap].
  *   [KiteDocLayout.SinglePage] cannot move, so there a link inside the document goes on to
  *   [onTap] too. A form widget's action that the viewer does not perform, such as a web
  *   address or a form submit, comes here as well. See [KiteLinkAction] for what a link gives.
@@ -242,14 +244,24 @@ public fun KiteDocView(
      * a page again when a script changed its chapter.
      */
     epubScripts: io.github.yuroyami.kitepdf.epub.EpubScriptHandler? = null,
+    /**
+     * What the viewer does with a link to an address outside the document, such as a web page,
+     * that [onLinkTap] does not take. By default it asks the reader, then opens a web or mail
+     * address through the platform. Null opens nothing. See [KiteExternalLinks].
+     */
+    externalLinks: KiteExternalLinks? = KiteExternalLinks(),
 ) {
     val scriptScope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     val scriptLane = remember { newScriptLane() }
     SideEffect {
         state.scripts = scripts
         state.epubScripts = epubScripts
         state.scriptScope = scriptScope
         state.scriptLane = scriptLane
+        state.externalLinks = externalLinks
+        state.uriHandler = uriHandler
+        if (externalLinks == null) state.pendingExternalLink = null
         // The thumbnail strip draws pages as the viewer does: with its theme and its decorator (#419).
         state.viewerTheme = colors.theme
         state.viewerDecorator = when (renderSpec) {
@@ -477,6 +489,7 @@ public fun KiteDocView(
         }
         KiteChoiceInput(state, scripts)
         overlay?.invoke(this, state)
+        KiteExternalLinkPrompt(state)
     }
 }
 
@@ -569,8 +582,8 @@ private fun linkTap(
                         scriptCall("runAction", Unit) { scripts.runAction(action) }
                         state.scriptsRan()
                     }
-                    // Nothing the viewer can do, such as a web address: the tap goes on to onTap.
-                    else -> return false
+                    // An address outside the document, which the reader may open (#519).
+                    else -> return state.offerExternalLink(link.uri)
                 }
                 return true
             }
@@ -588,8 +601,10 @@ private fun linkTap(
                 val target = if (hasScheme(link.href)) null else (state.document as? EpubDocument)?.bookmarkOf(link.href)
                 val navigates = target != null && state.canNavigate
                 // The host may show a note or an entry in place instead (#277, #444).
-                if (onLinkTap?.invoke(KiteLinkAction.Epub(link, hit.pageIndex, target, navigates)) == true) return true
-                if (target == null || !navigates) return false
+                val action = KiteLinkAction.Epub(link, hit.pageIndex, target, navigates)
+                if (onLinkTap?.invoke(action) == true) return true
+                if (target == null) return state.offerExternalLink(action.uri)
+                if (!navigates) return false
                 scope.launch { state.scrollTo(target, animate = true) }
                 return true
             }
@@ -606,8 +621,9 @@ private fun linkTap(
                 val target = link.target
                 val navigates = target != null && state.canNavigate
                 if (onLinkTap?.invoke(KiteLinkAction.Plain(link, hit.pageIndex, navigates)) == true) return true
+                if (target == null) return state.offerExternalLink(link.uri)
                 // A view of one fixed page cannot move, so the tap goes on to onTap.
-                if (target == null || !navigates) return false
+                if (!navigates) return false
                 scope.launch {
                     if (target is KiteBookmark.Page) {
                         // The height can mean reading the target page, so it is found off the main thread.
@@ -640,14 +656,16 @@ internal fun followOverlayLink(
     if (state.pageAt(pageIndex) is EpubPage) {
         val target = if (hasScheme(href)) null else (state.document as? EpubDocument)?.bookmarkOf(href)
         val navigates = target != null && state.canNavigate
-        if (onLinkTap?.invoke(KiteLinkAction.Epub(EpubLink(rect, href), pageIndex, target, navigates)) == true) return true
-        if (target == null || !navigates) return false
+        val action = KiteLinkAction.Epub(EpubLink(rect, href), pageIndex, target, navigates)
+        if (onLinkTap?.invoke(action) == true) return true
+        if (target == null) return state.offerExternalLink(action.uri)
+        if (!navigates) return false
         scope.launch { state.scrollTo(target, animate = true) }
         return true
     }
     // Another page has no paths of its own to resolve, so only an address goes to the host.
     val link = io.github.yuroyami.kitepdf.core.KiteLink(rect, uri = href.takeIf { hasScheme(it) })
-    return onLinkTap?.invoke(KiteLinkAction.Plain(link, pageIndex)) == true
+    return onLinkTap?.invoke(KiteLinkAction.Plain(link, pageIndex)) == true || state.offerExternalLink(link.uri)
 }
 
 /**

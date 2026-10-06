@@ -535,6 +535,15 @@ public class KiteDocViewState(
     /** The lane this state's view calls the scripts on, one call at a time (#365). */
     internal var scriptLane: kotlinx.coroutines.CoroutineDispatcher? = null
 
+    /** What the view does with a link to an address outside the document, from [KiteDocView] (#519). */
+    internal var externalLinks: KiteExternalLinks? = null
+
+    /** The platform's opener of addresses, from the view's composition. */
+    internal var uriHandler: androidx.compose.ui.platform.UriHandler? = null
+
+    /** The address that the view asks the reader about before it opens it, or null (#519). */
+    internal var pendingExternalLink: String? by mutableStateOf(null)
+
     /**
      * The handler whose document open scripts already ran for this state, so a view that leaves
      * and comes back does not run them again (#365). Written on the script lane.

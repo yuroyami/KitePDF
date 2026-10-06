@@ -28,6 +28,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
  *   and the count of colours.
  * @param formField the name of the input of a form field that has no tooltip and no name.
  * @param link the name of a link that has no text on the page and no address.
+ * @param openLinkQuestion the question the viewer asks before it opens an address outside the
+ *   document, such as a web page (#519).
+ * @param openLink the button that opens that address.
+ * @param cancel the button that closes the question and opens nothing.
  */
 @Immutable
 public class KiteViewerStrings(
@@ -39,6 +43,9 @@ public class KiteViewerStrings(
     public val highlightColor: (number: Int, count: Int) -> String = { number, count -> "Highlight colour $number of $count" },
     public val formField: String = "Form field",
     public val link: String = "Link",
+    public val openLinkQuestion: String = "Open this link?",
+    public val openLink: String = "Open",
+    public val cancel: String = "Cancel",
 )
 
 /** The [KiteViewerStrings] of the viewer and the widgets below it. */

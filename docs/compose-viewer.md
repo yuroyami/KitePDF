@@ -752,8 +752,9 @@ does what the link asks where it can:
 - A PDF script link runs in `scripts`, when you pass a handler.
 - On a page of a scripted EPUB chapter, with `epubScripts`, the scripts see the tap
   first, and a link that a script prevented is not followed.
-- Anything else, such as a web address, does nothing, and the tap goes on to
-  `onTap`.
+- A web or mail address goes to `externalLinks`: the viewer asks the reader in
+  a small prompt, then opens the address through the platform.
+- Anything else does nothing, and the tap goes on to `onTap`.
 
 `KiteDocLayout.SinglePage` cannot move, so there a declined link inside the
 document goes on to `onTap` too. A screen reader that activates a link goes
@@ -776,6 +777,26 @@ KiteDocView(
 
 A document can name any scheme, `file:`, `intent:` and `javascript:` included, so
 open only the ones you trust.
+
+### Addresses outside the document
+
+When `onLinkTap` does not take a link to an `http:`, `https:` or `mailto:`
+address, the viewer asks the reader whether to open it. After the reader taps
+Open, the viewer opens the address through Compose's `LocalUriHandler`: the
+browser, or the mail app for `mailto:`. EPUB Reading Systems 3.3 asks a reading
+system to do this. `KiteExternalLinks` sets which schemes the viewer opens and
+whether it asks first:
+
+```kotlin
+KiteDocView(
+    state = state,
+    externalLinks = KiteExternalLinks(schemes = setOf("https", "mailto"), askFirst = true),
+)
+```
+
+Pass `externalLinks = null` and the viewer opens nothing. The prompt takes its
+words from `LocalKiteViewerStrings`: `openLinkQuestion`, `openLink` and `cancel`.
+To show a prompt of your own, take the link in `onLinkTap` and return `true`.
 
 Every link gives the same facts, whatever its format:
 

@@ -163,7 +163,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewColors {
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteDocViewKt {
-	public static final fun KiteDocView-Hf_F6X8 (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/compose/KiteDocLayout;Lio/github/yuroyami/kitepdf/compose/KiteZoomSpec;Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec;Lio/github/yuroyami/kitepdf/compose/KiteDocViewColors;FZZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function4;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/epub/EpubScriptHandler;Landroidx/compose/runtime/Composer;III)V
+	public static final fun KiteDocView-gqJSuOo (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/compose/KiteDocLayout;Lio/github/yuroyami/kitepdf/compose/KiteZoomSpec;Lio/github/yuroyami/kitepdf/compose/KiteRenderSpec;Lio/github/yuroyami/kitepdf/compose/KiteDocViewColors;FZZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function4;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/PdfScriptHandler;Lkotlin/jvm/functions/Function1;Lio/github/yuroyami/kitepdf/epub/EpubScriptHandler;Lio/github/yuroyami/kitepdf/compose/KiteExternalLinks;Landroidx/compose/runtime/Composer;III)V
 	public static final fun KiteDocView-lryUbJg (Lio/github/yuroyami/kitepdf/core/KiteDocument;Landroidx/compose/ui/Modifier;Ljava/lang/Integer;JLio/github/yuroyami/kitepdf/core/render/ReaderTheme;FZLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V
 }
 
@@ -236,6 +236,22 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewStateKt {
 	public static final fun rememberKiteDocViewState (Lio/github/yuroyami/kitepdf/core/KiteDocument;ILandroidx/compose/runtime/Composer;II)Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;
 	public static final fun rememberKiteDocViewState (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/compose/KiteScrollPosition;Landroidx/compose/runtime/Composer;I)Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;
 	public static final fun rememberKiteDocViewState (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteBookmark;Landroidx/compose/runtime/Composer;I)Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;
+}
+
+public final class io/github/yuroyami/kitepdf/compose/KiteExternalLinks {
+	public static final field $stable I
+	public fun <init> ()V
+	public fun <init> (Ljava/util/Set;Z)V
+	public synthetic fun <init> (Ljava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/util/Set;Z)Lio/github/yuroyami/kitepdf/compose/KiteExternalLinks;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteExternalLinks;Ljava/util/Set;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteExternalLinks;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAskFirst ()Z
+	public final fun getSchemes ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteHighlight {
@@ -521,12 +537,15 @@ public final class io/github/yuroyami/kitepdf/compose/KiteTextSelection {
 public final class io/github/yuroyami/kitepdf/compose/KiteViewerStrings {
 	public static final field $stable I
 	public fun <init> ()V
-	public fun <init> (Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCancel ()Ljava/lang/String;
 	public final fun getFormField ()Ljava/lang/String;
 	public final fun getHighlightColor ()Lkotlin/jvm/functions/Function2;
 	public final fun getLink ()Ljava/lang/String;
 	public final fun getNextPage ()Ljava/lang/String;
+	public final fun getOpenLink ()Ljava/lang/String;
+	public final fun getOpenLinkQuestion ()Ljava/lang/String;
 	public final fun getPage ()Lkotlin/jvm/functions/Function2;
 	public final fun getPreviousPage ()Ljava/lang/String;
 }
