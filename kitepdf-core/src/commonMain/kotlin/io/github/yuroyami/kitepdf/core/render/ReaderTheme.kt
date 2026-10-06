@@ -7,7 +7,8 @@ import io.github.yuroyami.kitepdf.core.font.TextGlyph
 /**
  * A reading theme: a page [background] plus a [mapColor] transform applied to
  * every text / vector / border / CSS-background colour a page paints. Images and
- * gradients pass through untouched, so photos never invert.
+ * gradients pass through untouched, so photos never invert. [withImages] lets the
+ * theme recolour the images that are line art too.
  *
  * [Dark] and [Sepia] keep text readable: a colour with a contrast of 4.5 or more
  * on white paper keeps at least 4.5 on the theme's paper, and a weaker colour keeps
@@ -29,15 +30,34 @@ public class ReaderTheme(
     public val background: RgbColor,
     /** Maps each content colour a page draws. Identity for [Light]. */
     public val mapColor: (RgbColor) -> RgbColor,
+    /** What the theme does to images: [ReaderImages.Unchanged] unless [withImages] says otherwise (#458). */
+    public val images: ReaderImages,
 ) {
+    public constructor(background: RgbColor, mapColor: (RgbColor) -> RgbColor) : this(background, mapColor, ReaderImages.Unchanged)
+
+    /**
+     * This theme, doing [images] to the images of a page. With [ReaderImages.LineArt], a black symbol
+     * on white turns as light as the text on dark paper, and a photo keeps its colours:
+     *
+     * ```kotlin
+     * val dark = ReaderTheme.Dark.withImages(ReaderImages.LineArt)
+     * ```
+     */
+    public fun withImages(images: ReaderImages): ReaderTheme =
+        if (images == this.images) this else ReaderTheme(background, mapColor, images)
+
     /** Decorate [canvas] so its content colours are themed. Returns it unchanged for [Light]. */
     public fun wrap(canvas: KiteCanvas): KiteCanvas =
-        if (this === Light) canvas else ThemedCanvas(canvas, mapColor)
+        if (mapColor === Light.mapColor) canvas else ThemedCanvas(canvas, mapColor, images, key)
+
+    /** A key of this theme for the images it recolours, so two themes never share a bitmap. */
+    private val key: String get() = "$background:${mapColor.hashCode()}"
 
     override fun equals(other: Any?): Boolean =
-        this === other || (other is ReaderTheme && background == other.background && mapColor == other.mapColor)
+        this === other ||
+            (other is ReaderTheme && background == other.background && mapColor == other.mapColor && images == other.images)
 
-    override fun hashCode(): Int = 31 * background.hashCode() + mapColor.hashCode()
+    override fun hashCode(): Int = 31 * (31 * background.hashCode() + mapColor.hashCode()) + images.hashCode()
 
     override fun toString(): String = "ReaderTheme(background=$background)"
 
@@ -176,6 +196,8 @@ internal class ThemeContrast(
 internal class ThemedCanvas(
     private val inner: KiteCanvas,
     private val mapColor: (RgbColor) -> RgbColor,
+    private val images: ReaderImages = ReaderImages.Unchanged,
+    private val key: String = "",
 ) : KiteCanvas {
 
     override val resolvesGlyphOutlines: Boolean get() = inner.resolvesGlyphOutlines
@@ -207,10 +229,13 @@ internal class ThemedCanvas(
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) = inner.pushClip(path, ctm, evenOdd)
     override fun popClip() = inner.popClip()
 
-    // Images are NOT themed. Photos should keep their real colours.
-    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) = inner.drawImage(image, ctm, alpha)
+    // Photos keep their real colours. Only line art takes the theme, and only when the theme asks (#458).
+    override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) = inner.drawImage(themed(image), ctm, alpha)
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) =
-        inner.drawImage(image, ctm, alpha, blendMode)
+        inner.drawImage(themed(image), ctm, alpha, blendMode)
+
+    private fun themed(image: KiteImageData): KiteImageData =
+        if (images == ReaderImages.LineArt) image.themedLineArt(mapColor, key) else image
 
     override fun beginTransparencyGroup(bbox: KiteRectangle, ctm: KiteMatrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode) =
         inner.beginTransparencyGroup(bbox, ctm, isolated, knockout, alpha, blendMode)

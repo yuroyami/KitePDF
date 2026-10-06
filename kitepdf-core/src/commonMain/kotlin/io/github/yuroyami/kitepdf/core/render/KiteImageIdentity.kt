@@ -28,6 +28,9 @@ public class KiteImageIdentity private constructor(
     internal fun rendering(intent: KiteRenderingIntent, blackPointCompensation: Boolean): KiteImageIdentity =
         KiteImageIdentity(namespace, path + "intent:${intent.ordinal}:$blackPointCompensation")
 
+    /** The pixels a reading theme gives the image, under [theme], a key of that theme (#458). */
+    internal fun themed(theme: String): KiteImageIdentity = KiteImageIdentity(namespace, path + "theme:$theme")
+
     override fun equals(other: Any?): Boolean =
         other is KiteImageIdentity && namespace === other.namespace && path == other.path
 

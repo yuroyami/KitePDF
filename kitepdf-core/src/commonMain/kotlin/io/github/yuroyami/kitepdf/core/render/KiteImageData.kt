@@ -222,10 +222,14 @@ public class KiteImageData internal constructor(
         ).also { all[slot] = it }
     }
 
-    private fun copy(
+    /** The image that [themedLineArt] made for a theme, and that theme's colour map, or null before the first. */
+    internal var lineArt: Pair<(RgbColor) -> RgbColor, KiteImageData>? = null
+
+    internal fun copy(
         interpolate: Boolean = this.interpolate,
         resolvedColorSpace: KiteColorSpace? = this.resolvedColorSpace,
         identity: KiteImageIdentity = KiteImageIdentity(),
+        maskFill: RgbColor? = this.maskFill,
     ): KiteImageData = KiteImageData(
         width = width, height = height, bitsPerComponent = bitsPerComponent, colorSpace = colorSpace, kind = kind,
         encodedBytes = encodedBytes, pixelBytes = storedPixels,
