@@ -261,6 +261,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A colour written with `hsl()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()` or `color()`
+  paints, where KitePDF dropped the declaration. `rgb()` takes the space syntax with `none` and a
+  slash before the alpha, and every CSS named colour is read. A colour outside sRGB is clipped to
+  it, as in Chromium. A legacy `rgb()` that mixes numbers and percentages, or commas and spaces, is
+  no colour, as CSS Color 4 says (#606).
+
 - A chapter's scripts see the fragment the reader reached it at. `location.hash` gives it, the
   element it names matches `:target` once the chapter is parsed, and a move to another fragment
   fires `popstate` and then `hashchange`, as in Chromium. A script that sets `location.hash` or

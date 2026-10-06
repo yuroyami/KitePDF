@@ -54,13 +54,14 @@ public object CssValues {
         else -> null
     }
 
-    /** Parse the RGB part of a CSS `<color>` ([alpha] reads the rest); null for `transparent`, `inherit`, or unrecognised. */
+    /**
+     * The RGB part of a CSS `<color>` ([alpha] reads the rest), in sRGB: hex, a named colour, or
+     * `rgb()`, `hsl()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()` or `color()` of CSS Color 4,
+     * clipped to sRGB (#606). Null for `transparent`, `inherit`, `currentcolor`, or unrecognised.
+     */
     public fun color(raw: String): RgbColor? {
-        val s = raw.trim().lowercase()
-        if (s.isEmpty() || s == "transparent" || s == "inherit" || s == "currentcolor" || s == "none") return null
-        if (s.startsWith("#")) return hexColor(s.substring(1))
-        if (s.startsWith("rgb")) return rgbFunc(s)
-        return NAMED[s]
+        if (raw.trim().equals("transparent", ignoreCase = true)) return null
+        return CssColors.parse(raw)?.rgb
     }
 
     /**
@@ -68,95 +69,9 @@ public object CssValues {
      * only the RGB part, so a painter that honours transparency asks for both.
      *
      * CSS Color 4 makes alpha part of the colour: `transparent` is fully transparent
-     * (6.3), `rgb()` and `rgba()` take it as a fourth number or percentage (4.2, 5.1),
-     * and the four- and eight-digit hex forms carry it in their last digits (5.2).
-     * Every other colour is opaque. Null when [raw] is not a colour [color] reads.
+     * (6.3), each function takes it after a slash, or `rgba()` and `hsla()` as a fourth
+     * value (4.2, 5.1), and the four- and eight-digit hex forms carry it in their last
+     * digits (5.2). Every other colour is opaque. Null when [raw] is not a colour.
      */
-    public fun alpha(raw: String): Double? {
-        val s = raw.trim().lowercase()
-        if (s == "transparent") return 0.0
-        if (color(s) == null) return null
-        if (s.startsWith("#")) {
-            val h = s.substring(1)
-            return when (h.length) {
-                4 -> hex(h[3]).takeIf { it >= 0 }?.let { it * 17 / 255.0 }
-                8 -> hex2(h, 6).takeIf { it >= 0 }?.let { it / 255.0 }
-                else -> 1.0
-            }
-        }
-        if (s.startsWith("rgb")) {
-            val a = rgbParts(s)?.getOrNull(3) ?: return 1.0
-            val value = if (a.endsWith("%")) a.dropLast(1).toDoubleOrNull()?.let { it / 100.0 } else a.toDoubleOrNull()
-            return value?.coerceIn(0.0, 1.0)
-        }
-        return 1.0
-    }
-
-    private fun hexColor(h: String): RgbColor? {
-        fun c(v: Int) = v / 255.0
-        return when (h.length) {
-            3 -> {
-                val r = hex(h[0]); val g = hex(h[1]); val b = hex(h[2])
-                if (r < 0 || g < 0 || b < 0) null else RgbColor(c(r * 17), c(g * 17), c(b * 17))
-            }
-            4 -> hexColor(h.substring(0, 3)) // #rgba -> drop alpha
-            6, 8 -> {
-                val r = hex2(h, 0); val g = hex2(h, 2); val b = hex2(h, 4)
-                if (r < 0 || g < 0 || b < 0) null else RgbColor(c(r), c(g), c(b))
-            }
-            else -> null
-        }
-    }
-
-    private fun rgbParts(s: String): List<String>? {
-        val open = s.indexOf('('); val close = s.indexOf(')')
-        if (open < 0 || close < open) return null
-        return s.substring(open + 1, close).split(',', ' ', '/').map { it.trim() }.filter { it.isNotEmpty() }
-    }
-
-    private fun rgbFunc(s: String): RgbColor? {
-        val parts = rgbParts(s) ?: return null
-        if (parts.size < 3) return null
-        fun comp(p: String): Double? =
-            if (p.endsWith("%")) p.dropLast(1).toDoubleOrNull()?.let { it / 100.0 }
-            else p.toDoubleOrNull()?.let { it / 255.0 }
-        val r = comp(parts[0]); val g = comp(parts[1]); val b = comp(parts[2])
-        if (r == null || g == null || b == null) return null
-        return RgbColor(r.coerceIn(0.0, 1.0), g.coerceIn(0.0, 1.0), b.coerceIn(0.0, 1.0))
-    }
-
-    private fun hex(ch: Char): Int = when (ch) {
-        in '0'..'9' -> ch - '0'
-        in 'a'..'f' -> ch - 'a' + 10
-        else -> -1
-    }
-
-    private fun hex2(s: String, i: Int): Int {
-        val hi = hex(s[i]); val lo = hex(s[i + 1])
-        return if (hi < 0 || lo < 0) -1 else hi * 16 + lo
-    }
-
-    private fun rgb(r: Int, g: Int, b: Int) = RgbColor(r / 255.0, g / 255.0, b / 255.0)
-
-    // A pragmatic subset of the CSS named colours (the ones books actually use).
-    private val NAMED: Map<String, RgbColor> = mapOf(
-        "black" to rgb(0, 0, 0), "white" to rgb(255, 255, 255),
-        "red" to rgb(255, 0, 0), "green" to rgb(0, 128, 0), "blue" to rgb(0, 0, 255),
-        "yellow" to rgb(255, 255, 0), "cyan" to rgb(0, 255, 255), "aqua" to rgb(0, 255, 255),
-        "magenta" to rgb(255, 0, 255), "fuchsia" to rgb(255, 0, 255),
-        "gray" to rgb(128, 128, 128), "grey" to rgb(128, 128, 128),
-        "silver" to rgb(192, 192, 192), "lightgray" to rgb(211, 211, 211), "lightgrey" to rgb(211, 211, 211),
-        "darkgray" to rgb(169, 169, 169), "darkgrey" to rgb(169, 169, 169), "dimgray" to rgb(105, 105, 105),
-        "maroon" to rgb(128, 0, 0), "olive" to rgb(128, 128, 0), "lime" to rgb(0, 255, 0),
-        "teal" to rgb(0, 128, 128), "navy" to rgb(0, 0, 128), "purple" to rgb(128, 0, 128),
-        "orange" to rgb(255, 165, 0), "brown" to rgb(165, 42, 42), "pink" to rgb(255, 192, 203),
-        "gold" to rgb(255, 215, 0), "indigo" to rgb(75, 0, 130), "violet" to rgb(238, 130, 238),
-        "beige" to rgb(245, 245, 220), "ivory" to rgb(255, 255, 240), "khaki" to rgb(240, 230, 140),
-        "crimson" to rgb(220, 20, 60), "coral" to rgb(255, 127, 80), "salmon" to rgb(250, 128, 114),
-        "tan" to rgb(210, 180, 140), "tomato" to rgb(255, 99, 71), "orangered" to rgb(255, 69, 0),
-        "darkred" to rgb(139, 0, 0), "darkgreen" to rgb(0, 100, 0), "darkblue" to rgb(0, 0, 139),
-        "lightblue" to rgb(173, 216, 230), "lightgreen" to rgb(144, 238, 144), "lightyellow" to rgb(255, 255, 224),
-        "steelblue" to rgb(70, 130, 180), "royalblue" to rgb(65, 105, 225), "slategray" to rgb(112, 128, 144),
-        "whitesmoke" to rgb(245, 245, 245), "gainsboro" to rgb(220, 220, 220), "snow" to rgb(255, 250, 250),
-    )
+    public fun alpha(raw: String): Double? = CssColors.parse(raw)?.alpha
 }
