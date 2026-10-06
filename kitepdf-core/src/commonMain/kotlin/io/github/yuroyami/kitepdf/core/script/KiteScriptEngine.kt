@@ -33,7 +33,9 @@ public interface KiteScriptEngine : AutoCloseable {
      * Makes [function] callable from scripts under [name], which may be a dotted
      * path such as `app.alert`: missing objects on the way are created. Arguments
      * arrive as Kotlin values (String, Double, Boolean, List, Map or null), and
-     * the return value goes back the same way.
+     * the return value goes back the same way. Binary data crosses as a ByteArray:
+     * an `ArrayBuffer`, a typed array or a `DataView` arrives as a copy of the
+     * bytes it views, and a returned ByteArray reaches the script as a `Uint8Array`.
      */
     public fun defineFunction(name: String, function: (List<Any?>) -> Any?)
 

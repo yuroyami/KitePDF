@@ -1264,7 +1264,7 @@ function bytesCopy(view, from, to) {
 function bytesView(view, from, to) {
   return new Uint8Array(TypedArrayBuffer(view), TypedArrayByteOffset(view) + from, to - from);
 }
-/* Bytes as the host takes them: a string with a code unit for each byte. */
+/* Bytes as a string with a code unit for each byte, as readAsBinaryString and a message give them. */
 function byteString(view) {
   var out = '';
   for (var i = 0, n = TypedArrayLength(view); i < n; i += 8192) {
@@ -1274,7 +1274,7 @@ function byteString(view) {
   }
   return out;
 }
-/* The bytes of a string from the host, a code unit for each byte. */
+/* The bytes of a string that byteString made. */
 function bytesOf(s) {
   var out = new Uint8Array(s.length);
   for (var i = 0; i < s.length; i++) out[i] = StringCharCodeAt(s, i);
@@ -1317,7 +1317,7 @@ TextDecoder.prototype.decode = function () {
   var stream = !!idlDictionary(arguments[1], "Failed to execute 'decode' on 'TextDecoder'", 'TextDecodeOptions').stream;
   if (!d.doNotFlush) d.state = null;
   d.doNotFlush = stream;
-  var result = K.decode(d.encoding, d.fatal, d.ignoreBOM, d.state, view === null ? '' : byteString(view), !stream);
+  var result = K.decode(d.encoding, d.fatal, d.ignoreBOM, d.state, view, !stream);
   d.state = listSlice(result, 1);
   if (result[0] == null) {
     // A fatal error drops the bytes after it, as browsers do; ISO-2022-JP alone keeps the mode it switched to.
@@ -1341,7 +1341,7 @@ def(TextEncoder.prototype, 'encoding', function () { textEncoderOf(this); return
 TextEncoder.prototype.encode = function () {
   textEncoderOf(this);
   var input = arguments[0];
-  return bytesOf(K.encode(input === undefined ? '' : usv(input)));
+  return K.encode(input === undefined ? '' : usv(input));
 };
 TextEncoder.prototype.encodeInto = function (source, destination) {
   textEncoderOf(this);
@@ -1351,8 +1351,10 @@ TextEncoder.prototype.encodeInto = function (source, destination) {
     throw new TypeError("Failed to execute 'encodeInto' on 'TextEncoder': parameter 2 is not of type 'Uint8Array'.");
   }
   var result = K.encodeInto(text, TypedArrayLength(destination)), bytes = result[1];
-  for (var i = 0; i < bytes.length; i++) destination[i] = StringCharCodeAt(bytes, i);
-  return { read: result[0], written: bytes.length };
+  var written = TypedArrayLength(bytes);
+  // A detached destination has room for nothing, and set would throw where nothing is written.
+  if (written > 0) TypedArraySet(destination, bytes);
+  return { read: result[0], written: written };
 };
 
 /* atob and btoa, of the HTML Standard: forgiving base64 between bytes and a string of them. */
@@ -1416,7 +1418,7 @@ function joinParts(parts, endings) {
   var chunks = [], total = 0;
   for (var i = 0; i < parts.length; i++) {
     var p = parts[i];
-    if (typeof p === 'string') p = bytesOf(K.encode(endings === 'native' ? RegExpReplace(RE_CRLF, p, '\n') : p));
+    if (typeof p === 'string') p = K.encode(endings === 'native' ? RegExpReplace(RE_CRLF, p, '\n') : p);
     ArrayPush(chunks, p);
     total += TypedArrayLength(p);
   }
@@ -1476,7 +1478,7 @@ function readBlob(self, packageBytes) {
     queueTask(function* () { resolve(packageBytes(data.bytes)); });
   });
 }
-function utf8Text(bytes) { return K.decode('UTF-8', false, false, null, byteString(bytes), true)[0]; }
+function utf8Text(bytes) { return K.decode('UTF-8', false, false, null, bytes, true)[0]; }
 Blob.prototype.text = function () { return readBlob(this, utf8Text); };
 Blob.prototype.arrayBuffer = function () { return readBlob(this, bufferOf); };
 Blob.prototype.bytes = function () { return readBlob(this, function (bytes) { return bytesCopy(bytes, 0, TypedArrayLength(bytes)); }); };
@@ -1559,8 +1561,8 @@ function packageData(data, kind, label) {
   var bytes = data.bytes;
   if (kind === 'buffer') return bufferOf(bytes);
   if (kind === 'binary') return byteString(bytes);
-  if (kind === 'text') return K.blobText(byteString(bytes), label === undefined ? null : label, data.type);
-  return 'data:' + (data.type || 'application/octet-stream') + ';base64,' + K.btoa(byteString(bytes));
+  if (kind === 'text') return K.blobText(bytes, label === undefined ? null : label, data.type);
+  return 'data:' + (data.type || 'application/octet-stream') + ';base64,' + K.base64(bytes);
 }
 function startRead(reader, args, kind, method) {
   var s = readerOf(reader);
@@ -1615,7 +1617,7 @@ URL.createObjectURL = function (obj) {
   var what = "Failed to execute 'createObjectURL' on 'URL'";
   needArgs(arguments, 1, what);
   var data = blobOf(obj, what);
-  return K.blobUrl(byteString(data.bytes), data.type);
+  return K.blobUrl(data.bytes, data.type);
 };
 URL.revokeObjectURL = function (url) {
   needArgs(arguments, 1, "Failed to execute 'revokeObjectURL' on 'URL'");

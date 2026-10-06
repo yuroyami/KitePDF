@@ -694,9 +694,3 @@ private class ByteBuffer(capacity: Int) {
 
     fun toArray(): ByteArray = items.copyOf(size)
 }
-
-/** The bytes of [text], a string whose code units are bytes, as the prelude passes bytes to the host. */
-internal fun bytesOf(text: String): ByteArray = ByteArray(text.length) { text[it].code.toByte() }
-
-/** [bytes] as a string whose code units are bytes, as the host passes bytes to the prelude. */
-internal fun byteString(bytes: ByteArray): String = CharArray(bytes.size) { (bytes[it].toInt() and 0xFF).toChar() }.concatToString()
