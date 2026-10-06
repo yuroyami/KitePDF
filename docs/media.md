@@ -39,6 +39,9 @@ Each media element of a page then gets a player on its box, so it moves and zoom
 
 - Before it starts, the element shows a play button over its poster. A tap starts it.
 - A video plays in its box. With the element's `controls`, a bar along its bottom pauses and plays, and shows how far it is.
+- A tap on the line of the bar seeks there, and a drag scrubs. A screen reader moves the line as a slider, five seconds a step. The elapsed and the total time stand on each side of the line.
+- The bar has a mute button, and a speed menu from 0.5× to 2×. A change of speed keeps the pitch. Volume stays with the device's own buttons.
+- Where the box is narrow, the times leave the bar first, then the speed.
 - The bar of a video ends with a full-screen button. Full screen shows the same player over the whole window, so the video goes on without a break, and the button, a back gesture or Escape brings it back to its box.
 - An audio element shows that bar in its own box.
 - `autoplay` starts the element by itself, muted, since browsers let only muted media start unasked. The first touch of its controls turns the sound on. `muted` mutes it from the start, and `loop` plays it again when it ends.
@@ -52,6 +55,16 @@ On a phone, full screen does a little more:
 - On iOS 16 and later, a landscape video asks for landscape, and for the orientation it found when full screen ends. The app's supported orientations must include landscape.
 
 The overlay draws nothing on a page that is not an EPUB page, so a viewer that shows PDFs too can keep it on.
+
+### Translate the controls
+
+The controls say English words to a screen reader. Pass `KiteMediaLabels` to say others:
+
+```kotlin
+pageOverlay = {
+    KiteMediaOverlay(labels = KiteMediaLabels(play = "Lire", pause = "Pause", mute = "Couper le son"))
+}
+```
 
 ## Sources outside the book
 

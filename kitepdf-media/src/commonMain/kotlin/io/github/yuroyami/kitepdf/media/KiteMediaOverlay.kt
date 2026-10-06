@@ -3,6 +3,10 @@ package io.github.yuroyami.kitepdf.media
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,7 +19,9 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,11 +42,20 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.Popup
 import io.github.yuroyami.kitepdf.compose.KitePageOverlayScope
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubMedia
@@ -50,6 +65,7 @@ import io.github.yuroyami.kiteplayer.KitePlayer
 import io.github.yuroyami.kiteplayer.KitePlayerPlatform
 import io.github.yuroyami.kiteplayer.LoopMode
 import io.github.yuroyami.kiteplayer.PlaybackStatus
+import io.github.yuroyami.kiteplayer.SeekMode
 import io.github.yuroyami.kiteplayer.compose.KitePlayerVideo
 import io.github.yuroyami.kiteplayer.compose.KiteRenderPath
 import kotlinx.coroutines.CancellationException
@@ -78,11 +94,13 @@ import kotlin.time.Duration.Companion.seconds
  * @param newPlayer makes the player of an element when it starts, or returns null where the platform
  *   cannot play. The default player plays through FFmpeg and the platform's audio output; pass
  *   `{ KitePlayerPlatform.createOrNull(PlayerConfig(...)) }` for settings of your own.
+ * @param labels the words of the controls, which a screen reader says. English by default.
  */
 @Composable
 public fun KitePageOverlayScope.KiteMediaOverlay(
     allowRemote: Boolean = false,
     newPlayer: () -> KitePlayer? = { KitePlayerPlatform.createOrNull() },
+    labels: KiteMediaLabels = KiteMediaLabels(),
 ) {
     val epubPage = page as? EpubPage ?: return
     val media = remember(epubPage) { epubPage.media }
@@ -94,6 +112,7 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
                 modifier = Modifier.displayRect(element.rect),
                 allowRemote = allowRemote,
                 newPlayer = newPlayer,
+                labels = labels,
             )
         }
     }
@@ -113,6 +132,11 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  * ends. The player plays the first source it can, in the element's order, and when it can play none,
  * the poster stays and the button goes.
  *
+ * The bar shows the elapsed and the total time around a line of how far playback has gone. A tap
+ * on the line seeks there and a drag scrubs, and a screen reader moves it as a slider (#479). The
+ * bar ends with a mute button and a menu of speeds from 0.5 to 2, which keep the pitch (#484).
+ * Where the box is too narrow, the times and then the speed leave the bar.
+ *
  * The bar of a video has a full-screen button (#482). Full screen shows the same player over the
  * whole window, in a [Dialog], so playback goes on without a break, and the button, a back gesture
  * or Escape leaves it. While it is up, the box on the page shows what the page paints there, the
@@ -126,6 +150,7 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  *
  * @param allowRemote plays a source that the book names by an `https` URL. See [KiteMediaOverlay].
  * @param newPlayer makes the player when the element starts. See [KiteMediaOverlay].
+ * @param labels the words of the controls. See [KiteMediaOverlay].
  */
 @Composable
 public fun EpubMediaPlayer(
@@ -134,6 +159,7 @@ public fun EpubMediaPlayer(
     modifier: Modifier = Modifier,
     allowRemote: Boolean = false,
     newPlayer: () -> KitePlayer? = { KitePlayerPlatform.createOrNull() },
+    labels: KiteMediaLabels = KiteMediaLabels(),
 ) {
     val scope = rememberCoroutineScope()
     val currentNewPlayer by rememberUpdatedState(newPlayer)
@@ -186,13 +212,13 @@ public fun EpubMediaPlayer(
     Box(modifier) {
         if (open != null && !unplayable) {
             Playing(
-                open, media, scope,
+                open, media, scope, labels,
                 unmuteOnTouch = media.autoplay && !media.muted,
                 fullScreen = fullScreen,
                 onFullScreen = { fullScreen = it },
             )
         } else if (!unplayable) {
-            PlayButton(Modifier.fillMaxSize()) { start(byAutoplay = false) }
+            PlayButton(labels.play, Modifier.fillMaxSize()) { start(byAutoplay = false) }
         }
     }
 }
@@ -208,12 +234,12 @@ private fun Playing(
     player: KitePlayer,
     media: EpubMedia,
     scope: CoroutineScope,
+    labels: KiteMediaLabels,
     unmuteOnTouch: Boolean,
     fullScreen: Boolean,
     onFullScreen: (Boolean) -> Unit,
 ) {
     val snapshot by player.state.collectAsState()
-    val progress by player.progress.collectAsState()
     val active = snapshot.status.isActive
     val toggle: () -> Unit = {
         when {
@@ -227,7 +253,7 @@ private fun Playing(
         }
     }
     if (media.kind != EpubMediaKind.VIDEO) {
-        TransportBar(active, progress.position, snapshot.duration, toggle, Modifier.fillMaxSize())
+        TransportBar(player, scope, labels, toggle, Modifier.fillMaxSize())
         return
     }
     // HTML, 4.8.11 lets a reading system offer controls the element does not ask for, and WCAG 2.2,
@@ -253,12 +279,12 @@ private fun Playing(
             // Compose draws the frames, so the video clips, scrolls and zooms with the page, and the
             // controls over it take clicks: over a native view, macOS sends a click to the view.
             KitePlayerVideo(player, Modifier.fillMaxSize(), path = KiteRenderPath.ComposeCanvas)
-            Box(Modifier.fillMaxSize().clickable(onClickLabel = if (active) "Pause" else "Play", onClick = touched))
+            Box(Modifier.fillMaxSize().clickable(onClickLabel = if (active) labels.pause else labels.play, onClick = touched))
             if (media.controls || revealed) {
                 // Over the whole screen, the bar keeps clear of a notch, a cutout and the home indicator.
                 val clear = if (fullScreen) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)) else Modifier
                 TransportBar(
-                    active, progress.position, snapshot.duration, touched,
+                    player, scope, labels, touched,
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(clear).height(TRANSPORT_HEIGHT),
                     fullScreen = fullScreen,
                     onFullScreen = { onFullScreen(!fullScreen) },
@@ -282,10 +308,10 @@ private fun Playing(
 
 /** A round play button in the middle of the box, as a browser draws over a video that has not started. */
 @Composable
-private fun PlayButton(modifier: Modifier, onClick: () -> Unit) {
+private fun PlayButton(label: String, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier
-            .semantics { contentDescription = "Play" }
+            .semantics { contentDescription = label }
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -297,50 +323,213 @@ private fun PlayButton(modifier: Modifier, onClick: () -> Unit) {
 }
 
 /**
- * A play or pause toggle, then a bar of how far [position] is into [duration]. A video's bar ends with
- * a button that enters full screen, or leaves it while [fullScreen] is true. Null leaves it out.
+ * A play or pause toggle, the elapsed time, a line of how far playback has gone that seeks, the
+ * total time, a mute button and a speed menu. A video's bar ends with a button that enters full
+ * screen, or leaves it while [fullScreen] is true. Null leaves it out. A narrow bar drops the
+ * times first, then the speed.
  */
 @Composable
 private fun TransportBar(
-    active: Boolean,
-    position: Duration,
-    duration: Duration?,
+    player: KitePlayer,
+    scope: CoroutineScope,
+    labels: KiteMediaLabels,
     toggle: () -> Unit,
     modifier: Modifier,
     fullScreen: Boolean? = null,
     onFullScreen: () -> Unit = {},
 ) {
-    Row(modifier.background(SCRIM), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 8.dp)
-                .semantics { contentDescription = if (active) "Pause" else "Play" }
-                .clickable(role = Role.Button, onClick = toggle),
-            contentAlignment = Alignment.Center,
-        ) {
-            Canvas(Modifier.size(GLYPH_SIZE)) {
+    val snapshot by player.state.collectAsState()
+    val progress by player.progress.collectAsState()
+    val active = snapshot.status.isActive
+    val duration = snapshot.duration?.takeIf { it > Duration.ZERO }
+    BoxWithConstraints(modifier.background(SCRIM)) {
+        val roomy = maxWidth >= WIDTH_FOR_TIMES
+        val withSpeed = maxWidth >= WIDTH_FOR_SPEED
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            BarButton(if (active) labels.pause else labels.play, toggle) {
                 if (active) drawPauseGlyph() else drawPlayGlyph(Offset(size.width * 0.15f, 0f), size.minDimension)
             }
-        }
-        val fraction = if (duration != null && duration > Duration.ZERO) (position / duration).toFloat().coerceIn(0f, 1f) else 0f
-        Canvas(Modifier.weight(1f).height(GLYPH_SIZE).padding(end = if (fullScreen == null) 12.dp else 4.dp)) {
-            val y = size.height / 2f
-            val h = 4.dp.toPx()
-            drawRoundRect(TRACK, Offset(0f, y - h / 2f), Size(size.width, h), CornerRadius(h / 2f))
-            drawRoundRect(Color.White, Offset(0f, y - h / 2f), Size(size.width * fraction, h), CornerRadius(h / 2f))
-        }
-        if (fullScreen != null) {
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .padding(horizontal = 8.dp)
-                    .semantics { contentDescription = if (fullScreen) "Exit full screen" else "Full screen" }
-                    .clickable(role = Role.Button, onClick = onFullScreen),
-                contentAlignment = Alignment.Center,
-            ) {
-                Canvas(Modifier.size(GLYPH_SIZE)) { drawFullScreenGlyph(inward = fullScreen) }
+            if (roomy) BasicText(clock(progress.position), style = TIME_STYLE)
+            SeekLine(
+                position = progress.position,
+                duration = duration.takeIf { snapshot.seekable },
+                label = labels.seek,
+                onSeek = { to, final ->
+                    if (final) {
+                        scope.launch { runCatching { player.seek(to, SeekMode.Precise) } }
+                    } else {
+                        runCatching { player.seekLater(to, SeekMode.KeyframeThenRefine) }
+                    }
+                },
+                modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = 8.dp),
+            )
+            if (roomy && duration != null) BasicText(clock(duration), style = TIME_STYLE)
+            BarButton(if (snapshot.muted) labels.unmute else labels.mute, { player.setMuted(!snapshot.muted) }) {
+                drawSpeakerGlyph(muted = snapshot.muted)
             }
+            if (withSpeed) SpeedMenu(snapshot.speed, labels.speed) { speed -> runCatching { player.setSpeed(speed) } }
+            if (fullScreen != null) {
+                BarButton(if (fullScreen) labels.exitFullScreen else labels.fullScreen, onFullScreen) { drawFullScreenGlyph(inward = fullScreen) }
+            } else {
+                Box(Modifier.size(4.dp))
+            }
+        }
+    }
+}
+
+/** A button of the bar: a white glyph that [draw] paints, with [label] for a screen reader. */
+@Composable
+private fun BarButton(label: String, onClick: () -> Unit, draw: DrawScope.() -> Unit) {
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .padding(horizontal = 8.dp)
+            .semantics { contentDescription = label }
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(GLYPH_SIZE), onDraw = draw)
+    }
+}
+
+/**
+ * The line of how far [position] is into [duration]. A tap seeks to the point under it, and a drag
+ * scrubs: [onSeek] gets each point of the drag with false, and its end with true. A screen reader
+ * sees a slider with a step of [SEEK_STEP]. Without a [duration], for a source that cannot seek,
+ * the line only shows.
+ */
+@Composable
+private fun SeekLine(
+    position: Duration,
+    duration: Duration?,
+    label: String,
+    onSeek: (to: Duration, final: Boolean) -> Unit,
+    modifier: Modifier,
+) {
+    // Where a drag holds the line, so it follows the finger and not the player's late position.
+    var scrub by remember { mutableStateOf<Float?>(null) }
+    val fraction = scrub ?: duration?.let { (position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val input = if (duration == null) {
+        Modifier
+    } else {
+        Modifier
+            .pointerInput(duration) {
+                detectTapGestures { onSeek(duration * (it.x / size.width).coerceIn(0f, 1f).toDouble(), true) }
+            }
+            .pointerInput(duration) {
+                detectHorizontalDragGestures(
+                    onDragStart = { scrub = (it.x / size.width).coerceIn(0f, 1f) },
+                    onDragEnd = {
+                        scrub?.let { onSeek(duration * it.toDouble(), true) }
+                        scrub = null
+                    },
+                    onDragCancel = { scrub = null },
+                ) { change, _ ->
+                    change.consume()
+                    val at = (change.position.x / size.width).coerceIn(0f, 1f)
+                    scrub = at
+                    onSeek(duration * at.toDouble(), false)
+                }
+            }
+            .semantics {
+                contentDescription = label
+                stateDescription = "${clock(duration * fraction.toDouble())} / ${clock(duration)}"
+                val steps = (duration / SEEK_STEP).toInt() - 1
+                progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f, steps.coerceIn(0, MAX_SEEK_STEPS))
+                setProgress { target ->
+                    onSeek(duration * target.coerceIn(0f, 1f).toDouble(), true)
+                    true
+                }
+            }
+    }
+    Canvas(modifier.then(input)) {
+        val y = size.height / 2f
+        val h = 4.dp.toPx()
+        drawRoundRect(TRACK, Offset(0f, y - h / 2f), Size(size.width, h), CornerRadius(h / 2f))
+        drawRoundRect(Color.White, Offset(0f, y - h / 2f), Size(size.width * fraction, h), CornerRadius(h / 2f))
+        if (duration != null) drawCircle(Color.White, 6.dp.toPx(), Offset(size.width * fraction, y))
+    }
+}
+
+/** The speed now, as a button that opens a menu of [SPEEDS]; [onSpeed] gets the one the reader picks. */
+@Composable
+private fun SpeedMenu(speed: Double, label: String, onSpeed: (Double) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .padding(horizontal = 6.dp)
+            .semantics { contentDescription = label; stateDescription = speedText(speed) }
+            .clickable(role = Role.Button) { open = !open },
+        contentAlignment = Alignment.Center,
+    ) {
+        BasicText(speedText(speed), style = TIME_STYLE)
+        if (open) {
+            Popup(alignment = Alignment.BottomCenter, onDismissRequest = { open = false }) {
+                Column(Modifier.background(MENU).padding(vertical = 4.dp)) {
+                    for (choice in SPEEDS) {
+                        val chosen = abs(choice - speed) < 0.001
+                        Box(
+                            Modifier
+                                .widthIn(min = 64.dp)
+                                .semantics { selected = chosen }
+                                .clickable(role = Role.Button) {
+                                    open = false
+                                    onSpeed(choice)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            BasicText(speedText(choice), style = if (chosen) TIME_STYLE.copy(color = ACCENT) else TIME_STYLE)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** [speed] as a player shows it, such as `1.25×`. */
+internal fun speedText(speed: Double): String {
+    val hundredths = kotlin.math.round(speed * 100).toLong()
+    val whole = hundredths / 100
+    val rest = (hundredths % 100).toString().padStart(2, '0').trimEnd('0')
+    return if (rest.isEmpty()) "$whole×" else "$whole.$rest×"
+}
+
+/** [time] as `m:ss`, or `h:mm:ss` from an hour on. */
+internal fun clock(time: Duration): String {
+    val total = time.inWholeSeconds.coerceAtLeast(0)
+    val h = total / 3600
+    val m = total / 60 % 60
+    val s = (total % 60).toString().padStart(2, '0')
+    return if (h > 0) "$h:${m.toString().padStart(2, '0')}:$s" else "$m:$s"
+}
+
+/** A white speaker, with sound waves, or with a cross while [muted]. */
+private fun DrawScope.drawSpeakerGlyph(muted: Boolean) {
+    val w = size.width
+    val h = size.height
+    val body = Path().apply {
+        moveTo(0f, h * 0.35f)
+        lineTo(w * 0.22f, h * 0.35f)
+        lineTo(w * 0.5f, h * 0.08f)
+        lineTo(w * 0.5f, h * 0.92f)
+        lineTo(w * 0.22f, h * 0.65f)
+        lineTo(0f, h * 0.65f)
+        close()
+    }
+    drawPath(body, Color.White)
+    val stroke = size.minDimension * 0.1f
+    if (muted) {
+        drawLine(Color.White, Offset(w * 0.62f, h * 0.32f), Offset(w * 0.98f, h * 0.68f), stroke)
+        drawLine(Color.White, Offset(w * 0.62f, h * 0.68f), Offset(w * 0.98f, h * 0.32f), stroke)
+    } else {
+        for (r in listOf(0.22f, 0.4f)) {
+            drawArc(
+                Color.White, -50f, 100f, useCenter = false,
+                topLeft = Offset(w * 0.5f - w * r, h * 0.5f - h * r), size = Size(2 * w * r, 2 * h * r),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+            )
         }
     }
 }
@@ -386,9 +575,24 @@ private fun DrawScope.drawPauseGlyph() {
     drawRect(Color.White, Offset(size.width * 0.58f, 0f), Size(bar, size.height))
 }
 
-/** The dark of the controls over the poster, and the unplayed part of the bar. */
+/** The dark of the controls over the poster, the unplayed part of the bar, and the speed menu. */
 private val SCRIM = Color(0x99000000)
 private val TRACK = Color(0x66FFFFFF)
+private val MENU = Color(0xE6202020)
+private val ACCENT = Color(0xFF8AB4F8)
+
+private val TIME_STYLE = TextStyle(color = Color.White, fontSize = 12.sp)
+
+/** The speeds of the menu, as most players offer them. */
+private val SPEEDS = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
+
+/** How far a screen reader moves the line in one step, and the most steps it gets. */
+private val SEEK_STEP = 5.seconds
+private const val MAX_SEEK_STEPS = 1000
+
+/** The narrowest bar that shows the times, and the narrowest that shows the speed. */
+private val WIDTH_FOR_TIMES = 260.dp
+private val WIDTH_FOR_SPEED = 180.dp
 
 private val PLAY_BUTTON_SIZE = 56.dp
 private val GLYPH_SIZE = 18.dp

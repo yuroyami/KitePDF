@@ -6,9 +6,33 @@
 // - Show declarations: true
 
 // Library unique name: <io.github.yuroyami:kitepdf-media>
+final class io.github.yuroyami.kitepdf.media/KiteMediaLabels { // io.github.yuroyami.kitepdf.media/KiteMediaLabels|null[0]
+    constructor <init>(kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.media/KiteMediaLabels.<init>|<init>(kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String;kotlin.String){}[0]
+
+    final val exitFullScreen // io.github.yuroyami.kitepdf.media/KiteMediaLabels.exitFullScreen|{}exitFullScreen[0]
+        final fun <get-exitFullScreen>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.exitFullScreen.<get-exitFullScreen>|<get-exitFullScreen>(){}[0]
+    final val fullScreen // io.github.yuroyami.kitepdf.media/KiteMediaLabels.fullScreen|{}fullScreen[0]
+        final fun <get-fullScreen>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.fullScreen.<get-fullScreen>|<get-fullScreen>(){}[0]
+    final val mute // io.github.yuroyami.kitepdf.media/KiteMediaLabels.mute|{}mute[0]
+        final fun <get-mute>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.mute.<get-mute>|<get-mute>(){}[0]
+    final val pause // io.github.yuroyami.kitepdf.media/KiteMediaLabels.pause|{}pause[0]
+        final fun <get-pause>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.pause.<get-pause>|<get-pause>(){}[0]
+    final val play // io.github.yuroyami.kitepdf.media/KiteMediaLabels.play|{}play[0]
+        final fun <get-play>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.play.<get-play>|<get-play>(){}[0]
+    final val seek // io.github.yuroyami.kitepdf.media/KiteMediaLabels.seek|{}seek[0]
+        final fun <get-seek>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.seek.<get-seek>|<get-seek>(){}[0]
+    final val speed // io.github.yuroyami.kitepdf.media/KiteMediaLabels.speed|{}speed[0]
+        final fun <get-speed>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.speed.<get-speed>|<get-speed>(){}[0]
+    final val unmute // io.github.yuroyami.kitepdf.media/KiteMediaLabels.unmute|{}unmute[0]
+        final fun <get-unmute>(): kotlin/String // io.github.yuroyami.kitepdf.media/KiteMediaLabels.unmute.<get-unmute>|<get-unmute>(){}[0]
+}
+
 final const val io.github.yuroyami.kitepdf.media/READ_ALOUD_HIGHLIGHT_ID // io.github.yuroyami.kitepdf.media/READ_ALOUD_HIGHLIGHT_ID|{}READ_ALOUD_HIGHLIGHT_ID[0]
     final fun <get-READ_ALOUD_HIGHLIGHT_ID>(): kotlin/String // io.github.yuroyami.kitepdf.media/READ_ALOUD_HIGHLIGHT_ID.<get-READ_ALOUD_HIGHLIGHT_ID>|<get-READ_ALOUD_HIGHLIGHT_ID>(){}[0]
 
-final fun (io.github.yuroyami.kitepdf.compose/KitePageOverlayScope).io.github.yuroyami.kitepdf.media/KiteMediaOverlay(kotlin/Boolean, kotlin/Function0<io.github.yuroyami.kiteplayer/KitePlayer?>?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.media/KiteMediaOverlay|KiteMediaOverlay@io.github.yuroyami.kitepdf.compose.KitePageOverlayScope(kotlin.Boolean;kotlin.Function0<io.github.yuroyami.kiteplayer.KitePlayer?>?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
-final fun io.github.yuroyami.kitepdf.media/EpubMediaPlayer(io.github.yuroyami.kitepdf.epub/EpubMedia, io.github.yuroyami.kitepdf.epub/EpubDocument, androidx.compose.ui/Modifier?, kotlin/Boolean, kotlin/Function0<io.github.yuroyami.kiteplayer/KitePlayer?>?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.media/EpubMediaPlayer|EpubMediaPlayer(io.github.yuroyami.kitepdf.epub.EpubMedia;io.github.yuroyami.kitepdf.epub.EpubDocument;androidx.compose.ui.Modifier?;kotlin.Boolean;kotlin.Function0<io.github.yuroyami.kiteplayer.KitePlayer?>?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
+final val io.github.yuroyami.kitepdf.media/io_github_yuroyami_kitepdf_media_KiteMediaLabels$stableprop // io.github.yuroyami.kitepdf.media/io_github_yuroyami_kitepdf_media_KiteMediaLabels$stableprop|#static{}io_github_yuroyami_kitepdf_media_KiteMediaLabels$stableprop[0]
+
+final fun (io.github.yuroyami.kitepdf.compose/KitePageOverlayScope).io.github.yuroyami.kitepdf.media/KiteMediaOverlay(kotlin/Boolean, kotlin/Function0<io.github.yuroyami.kiteplayer/KitePlayer?>?, io.github.yuroyami.kitepdf.media/KiteMediaLabels?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.media/KiteMediaOverlay|KiteMediaOverlay@io.github.yuroyami.kitepdf.compose.KitePageOverlayScope(kotlin.Boolean;kotlin.Function0<io.github.yuroyami.kiteplayer.KitePlayer?>?;io.github.yuroyami.kitepdf.media.KiteMediaLabels?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
+final fun io.github.yuroyami.kitepdf.media/EpubMediaPlayer(io.github.yuroyami.kitepdf.epub/EpubMedia, io.github.yuroyami.kitepdf.epub/EpubDocument, androidx.compose.ui/Modifier?, kotlin/Boolean, kotlin/Function0<io.github.yuroyami.kiteplayer/KitePlayer?>?, io.github.yuroyami.kitepdf.media/KiteMediaLabels?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.media/EpubMediaPlayer|EpubMediaPlayer(io.github.yuroyami.kitepdf.epub.EpubMedia;io.github.yuroyami.kitepdf.epub.EpubDocument;androidx.compose.ui.Modifier?;kotlin.Boolean;kotlin.Function0<io.github.yuroyami.kiteplayer.KitePlayer?>?;io.github.yuroyami.kitepdf.media.KiteMediaLabels?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
 final fun io.github.yuroyami.kitepdf.media/KiteReadAloud(io.github.yuroyami.kitepdf.compose/KiteDocViewState, kotlin/Boolean, androidx.compose.ui.graphics/Color?, kotlin/Function0<io.github.yuroyami.kiteplayer/KitePlayer?>?, kotlin/Boolean, kotlin.coroutines/SuspendFunction2<io.github.yuroyami.kitepdf.epub/EpubOverlayClip, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteReadingItem>, kotlin/Unit>?, kotlin/Function1<io.github.yuroyami.kitepdf.epub/EpubOverlayClip?, kotlin/Unit>?, kotlin/Function0<kotlin/Unit>?, androidx.compose.runtime/Composer?, kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.media/KiteReadAloud|KiteReadAloud(io.github.yuroyami.kitepdf.compose.KiteDocViewState;kotlin.Boolean;androidx.compose.ui.graphics.Color?;kotlin.Function0<io.github.yuroyami.kiteplayer.KitePlayer?>?;kotlin.Boolean;kotlin.coroutines.SuspendFunction2<io.github.yuroyami.kitepdf.epub.EpubOverlayClip,kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteReadingItem>,kotlin.Unit>?;kotlin.Function1<io.github.yuroyami.kitepdf.epub.EpubOverlayClip?,kotlin.Unit>?;kotlin.Function0<kotlin.Unit>?;androidx.compose.runtime.Composer?;kotlin.Int;kotlin.Int){}[0]
+final fun io.github.yuroyami.kitepdf.media/io_github_yuroyami_kitepdf_media_KiteMediaLabels$stableprop_getter(): kotlin/Int // io.github.yuroyami.kitepdf.media/io_github_yuroyami_kitepdf_media_KiteMediaLabels$stableprop_getter|io_github_yuroyami_kitepdf_media_KiteMediaLabels$stableprop_getter(){}[0]
