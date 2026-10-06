@@ -79,6 +79,6 @@ class XmlReaderTest {
     @Test
     fun a_character_beyond_the_basic_plane_is_a_name_character() {
         assertNull(XmlReader.document("<𠀀 a='😀'/>").error)
-        assertNotNull(XmlReader.document("<r>\uD83D</r>").error)
+        assertNotNull(XmlReader.document("<r>" + charArrayOf(0xD83D.toChar()).concatToString() + "</r>").error)
     }
 }
