@@ -773,6 +773,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `kitepdf-javascript` runs document scripts on KiteJS's QuickJS engine, through `kitejs-api`
+  and `kitejs-quickjs` 0.3.0, where it used KiteJS's Rhino engine. Scripts that Rhino could not
+  run now run: `const` in a `for` head, async functions, `SharedArrayBuffer`, `Float16Array`,
+  and strict code called from sloppy code. The script thread has 16 MiB of stack on the JVM,
+  Android and Kotlin/Native, and a script may use 8 MiB of it. On JavaScript and Wasm the engine
+  is a WebAssembly module that compiles before the first script runs (#598).
+
+- `PdfScriptHandler` and `EpubScriptHandler` have a new `suspend fun prepare()`, which a
+  viewer calls once before any other call. `KiteDocView` sends nothing to a script before it
+  returns. A handler that does not override it keeps working (#598).
+
 - `kitepdf-javascript` depends on `kitepdf-epub`, whose scripts it now runs (#41).
 
 - `KiteXml.tokenize` and `KiteXml.parse` in `kitepdf-core` take `keepComments`, false by
