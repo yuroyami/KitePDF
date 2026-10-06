@@ -9,10 +9,10 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
 | must | 140 | 132 | 4 | 4 |
-| should | 38 | 34 | 3 | 1 |
+| should | 38 | 37 | 0 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 191 | 9 | 6 |
+| all | 206 | 194 | 6 | 6 |
 
 ## How the results are known
 
@@ -286,7 +286,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`mol-audio-exceeding-clipend`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-audio-exceeding-clipend) | must | Passes | Judged: From the code of `KiteReadAloud`: a clip whose `clipEnd` lies past the end of its file ends with the file, and reading goes on. |
 | [`mol-audio-no-clipbegin`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-audio-no-clipbegin) | must | Passes | Checked: A clip with no `clipBegin` starts at 0 s. |
 | [`mol-audio-no-clipend`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-audio-no-clipend) | must | Passes | Checked: A clip with no `clipEnd` plays to the end of its file. |
-| [`mol-css`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-css) | should | Fails ([#525](https://github.com/yuroyami/KitePDF/issues/525)) | Judged: `KiteReadAloud` marks the clip being read with a highlight of its own and never applies the book's active classes, by design. |
+| [`mol-css`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-css) | should | Passes | Checked: With the first clip marked through `EpubDocument.markNarration`, the word `Call` draws light on a green fill and the rest of the chapter grey, as `KiteReadAloud` marks each clip. |
 | [`mol-ignore`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-ignore) | must | Not applicable | Judged: The test is for reading systems without media overlays, and says one with them should skip it. |
 | [`mol-navigation`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-navigation) | must | Passes | Judged: After a jump through the table of contents, `KiteReadAloud` goes on from the first clip of the chapter the reader went to, as `ReadAloudTest` checks on a book of its own. |
 | [`mol-support_xhtml`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-support_xhtml) | must | Passes | Judged: From the code of `KiteReadAloud`: it reads the overlay clip by clip, highlights each piece of text and turns the page with the reading. |
@@ -301,5 +301,5 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 | [`mol-timing-synchronization_multiple_audio-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_multiple_audio-fxl) | must | Passes | Judged: From the code of `KiteReadAloud`: on the fixed page too, the reading goes from the first audio file to the second in clip order. |
 | [`mol-timing-synchronization_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_svg) | must | Passes | Checked: Each clip's text inside the SVG chapter has a place on its page, one rectangle per line it draws. |
 | [`mol-timing-synchronization_svg-fxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-timing-synchronization_svg-fxl) | must | Passes | Checked: Each clip's text inside the SVG page has a place on it, one rectangle per line it draws. |
-| [`mol-tts_multi`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-tts_multi) | should | Fails ([#525](https://github.com/yuroyami/KitePDF/issues/525)) | Judged: Clips without audio are skipped, and there is no text-to-speech fallback, so nothing is read. |
-| [`mol-tts_single`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-tts_single) | should | Fails ([#525](https://github.com/yuroyami/KitePDF/issues/525)) | Judged: The clip without audio is skipped, and there is no text-to-speech fallback, so nothing is read. |
+| [`mol-tts_multi`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-tts_multi) | should | Passes | Checked: Each of the four clips has no audio, and `EpubDocument.readingOrderOf` gives its sentence, which `KiteReadAloud` hands to the app's speech hook. |
+| [`mol-tts_single`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/mol-tts_single) | should | Passes | Checked: The one clip has no audio, and `EpubDocument.readingOrderOf` gives the text of the whole section, which `KiteReadAloud` hands to the app's speech hook. |

@@ -7,9 +7,8 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 /**
  * The media overlay metadata of a book, EPUB 3.3 Media Overlays: how long the narration runs,
- * who reads it, and the classes a reading system gives the element being read (#36). A reader
- * that follows the text shows [activeClass] as a highlight colour, not as a new style, because a
- * new style would lay the page out again.
+ * who reads it, and the classes a reading system gives the element being read (#36).
+ * [EpubDocument.markNarration] gives an element these classes.
  *
  * @property duration the `media:duration` of the whole book, in seconds, or null.
  * @property narrators the `media:narrator` entries, in package order.

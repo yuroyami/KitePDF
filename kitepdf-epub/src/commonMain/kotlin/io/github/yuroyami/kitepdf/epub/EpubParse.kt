@@ -369,6 +369,12 @@ internal class ParsedEpub(
 
     fun treeHeld(chapter: Int): Boolean = spineLock.withLock { treeHolders[chapter] > 0 }
 
+    /** Keeps one change of [narrationMark], and of the trees it marks, at a time (#525). */
+    val narrationLock = KiteLock()
+
+    /** The element that a reading aloud marks, or null. Read and written under [narrationLock]. */
+    var narrationMark: NarrationMark? = null
+
     /** How many stylesheet files have been parsed. One per file, never one per chapter. */
     val sheetsParsed: Int get() = sheetLock.withLock { sheetCount }
 

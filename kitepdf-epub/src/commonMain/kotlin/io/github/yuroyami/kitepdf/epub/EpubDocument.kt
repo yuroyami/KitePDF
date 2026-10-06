@@ -528,6 +528,79 @@ public class EpubDocument internal constructor(
     }
 
     /**
+     * What a speech engine says for the element that [href] names: the text of that element in
+     * reading order, as [EpubPage.readingOrder] gives it, with the pronunciation hints of its
+     * spans (#525). A reading aloud speaks it for a media overlay clip without audio. An element
+     * over several pages gives the items of each page in turn. Images are left out. Empty when
+     * the book has no such chapter or element, or the element has no text. Lays out the chapter.
+     */
+    public fun readingOrderOf(href: String): List<KiteReadingItem> {
+        val id = href.substringAfter('#', "").takeIf { it.isNotEmpty() } ?: return emptyList()
+        val chapter = chapterOfPath(href.substringBefore('#')) ?: return emptyList()
+        return pagesIn(chapter).flatMap { it.readingItems(id) }
+    }
+
+    /**
+     * Marks the element that [href] names as the one being read aloud, as EPUB Reading Systems
+     * 3.3, 9.2.3 asks (#525). The element gets the book's `media:active-class`,
+     * and the root element of its chapter gets the `media:playback-active-class` while
+     * [playing]. One element of the book holds the mark at a time, so a new call takes it off
+     * the last one. Null takes it off. A class that the document gave the element itself stays.
+     *
+     * Only a chapter whose style rules use one of the two classes is laid out again, and
+     * [chapterChanges] moves. A chapter whose tree a script session holds is not marked.
+     *
+     * @return whether the style rules of the chapter use the active class, so the element shows
+     *   the book's own style for it.
+     */
+    public fun markNarration(href: String?, playing: Boolean): Boolean = parsed.narrationLock.withLock {
+        val narration = parsed.metadata.narration
+        val target = href?.let { h ->
+            val id = h.substringAfter('#', "").takeIf { it.isNotEmpty() }
+            val chapter = chapterOfPath(h.substringBefore('#'))
+            if (id == null || chapter == null) null else NarrationMark(chapter, id, playing)
+        }
+        val old = parsed.narrationMark
+        val same = old != null && target != null && old.chapter == target.chapter && old.id == target.id && old.playing == target.playing
+        if (!same && (old != null || target != null)) {
+            if (old != null && old.chapter != target?.chapter) restyleNarration(old.chapter, old, null)
+            parsed.narrationMark = target?.let { restyleNarration(it.chapter, old?.takeIf { o -> o.chapter == it.chapter }, it) }
+        }
+        target != null && usesClass(target.chapter, narration.activeClass)
+    }
+
+    /**
+     * Takes [old] off [chapter] and puts [new] on it, in a new tree when the chapter's rules use
+     * one of the book's narration classes, and returns [new] with what it added.
+     */
+    private fun restyleNarration(chapter: Int, old: NarrationMark?, new: NarrationMark?): NarrationMark? {
+        val narration = parsed.metadata.narration
+        val active = narration.activeClass
+        val playback = narration.playbackActiveClass
+        if (parsed.treeHeld(chapter) || !(usesClass(chapter, active) || usesClass(chapter, playback))) return new
+        val root = copyLayoutTree(parsed.layoutSpine(chapter).tree)
+        val document = documentElement(root)
+        if (old != null) {
+            if (old.activeAdded && active != null) elementWithId(root, old.id)?.let { removeClass(it, active) }
+            if (old.playbackAdded && playback != null) removeClass(document, playback)
+        }
+        val marked = new?.copy(
+            activeAdded = active != null && elementWithId(root, new.id)?.let { addClass(it, active) } == true,
+            playbackAdded = playback != null && new.playing && addClass(document, playback),
+        )
+        replaceChapterTree(chapter, root)
+        return marked
+    }
+
+    /** The `html` element of a layout tree. */
+    private fun documentElement(root: KiteXmlNode.Element): KiteXmlNode.Element =
+        if (root.tag == "html") root else root.children.firstOrNull { it is KiteXmlNode.Element && it.tag == "html" } as? KiteXmlNode.Element ?: root
+
+    /** Whether a style rule of [chapter] can match on the class [name] (#525). */
+    private fun usesClass(chapter: Int, name: String?): Boolean =
+        name != null && parsed.layoutSpine(chapter).rules.any { rule -> rule.selectors.any { it.mentionsClass(name) } }
+
+    /**
      * The reader-origin cascade layer built from [settings]: universal rules
      * that outrank author-important, so the user's font/color/justify choice
      * always wins. Empty for all-default settings (zero cascade impact).
@@ -3234,7 +3307,13 @@ public class EpubPage internal constructor(
      * for (item in page.readingOrder()) speak(item.role, item.text)
      * ```
      */
-    override fun readingOrder(): List<KiteReadingItem> {
+    override fun readingOrder(): List<KiteReadingItem> = readingItems(null)
+
+    /**
+     * The reading order of the page, or with an [id], of the text of the element with that id
+     * only, and of none of its images (#525).
+     */
+    internal fun readingItems(id: String?): List<KiteReadingItem> {
         val page = laidOut()
         val out = ArrayList<Pair<Double, KiteReadingItem>>()
         var owner: TextBlockBox? = null
@@ -3254,10 +3333,12 @@ public class EpubPage internal constructor(
         }
 
         for (line in page.lines) {
+            val lineRuns = if (id == null) line.runs else line.runs.filter { id in it.ids }
+            if (id != null && lineRuns.isEmpty()) continue
             if (line.owner !== owner) { flushText(); owner = line.owner; speech = null; top = line.yTop }
             // A pronunciation splits the text, so its phoneme covers exactly its own span. A block
             // that a label replaces is one item, whatever its runs say (#39).
-            val parts = if (owner?.semantics?.label != null) listOf(null to line.runs) else speechParts(line)
+            val parts = if (owner?.semantics?.label != null) listOf(null to lineRuns) else speechParts(lineRuns)
             for ((hint, runs) in parts) {
                 if (hint !== speech) { flushText(); speech = hint; top = line.yTop }
                 extractLine(page, line, runs)?.let { text ->
@@ -3266,6 +3347,7 @@ public class EpubPage internal constructor(
                     bounds = bounds?.union(box) ?: box
                 }
             }
+            if (id != null) continue
             for (img in line.images) {
                 if (img.alt?.isEmpty() == true) continue   // decorative
                 val box = movedRect(inlineImageRect(page, line, img), displayTransformAt(page, line.paintRank))
@@ -3274,7 +3356,7 @@ public class EpubPage internal constructor(
         }
         flushText()
 
-        for (img in page.images) {
+        if (id == null) for (img in page.images) {
             val sem = img.semantics ?: continue
             if (sem.hidden) continue
             val box = movedRect(imageRect(page, img), displayTransformAt(page, img.contentRank))
@@ -3312,12 +3394,12 @@ public class EpubPage internal constructor(
         )
     }
 
-    /** The runs of [line] in reading order, cut where the pronunciation they belong to changes. */
-    private fun speechParts(line: PositionedLine): List<Pair<SpeechHint?, List<PlacedRun>>> {
+    /** The [runs] of a line in reading order, cut where the pronunciation they belong to changes. */
+    private fun speechParts(runs: List<PlacedRun>): List<Pair<SpeechHint?, List<PlacedRun>>> {
         val parts = ArrayList<Pair<SpeechHint?, List<PlacedRun>>>()
         var current = ArrayList<PlacedRun>()
         var hint: SpeechHint? = null
-        for (run in line.runs.filter { !it.isAnnotation && it.glyphs.isNotEmpty() }.sortedBy { it.x }) {
+        for (run in runs.filter { !it.isAnnotation && it.glyphs.isNotEmpty() }.sortedBy { it.x }) {
             if (current.isNotEmpty() && run.speech !== hint) {
                 parts += hint to current
                 current = ArrayList()

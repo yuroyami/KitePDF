@@ -37,9 +37,10 @@ internal object NarratedBooks {
 
     /**
      * A book of [chapters], `c1.xhtml` onward, with [files] beside them in `OEBPS/`. Its pages are
-     * 300 by 200 points with a margin of 20, so a little text fills a page.
+     * 300 by 200 points with a margin of 20, so a little text fills a page. [metadata] goes into
+     * the package metadata, and [head] into the head of every chapter.
      */
-    fun book(chapters: List<Chapter>, files: Map<String, ByteArray>): EpubDocument {
+    fun book(chapters: List<Chapter>, files: Map<String, ByteArray>, metadata: String = "", head: String = ""): EpubDocument {
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">""" +
             """<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val manifest = StringBuilder()
@@ -54,7 +55,7 @@ internal object NarratedBooks {
             val overlay = if (chapter.pars != null) """ media-overlay="mo$n"""" else ""
             manifest.append("""<item id="c$n" href="c$n.xhtml" media-type="application/xhtml+xml"$overlay/>""")
             spine.append("""<itemref idref="c$n"/>""")
-            texts["OEBPS/c$n.xhtml"] = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>${chapter.body}</body></html>""".encodeToByteArray()
+            texts["OEBPS/c$n.xhtml"] = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head>$head</head><body>${chapter.body}</body></html>""".encodeToByteArray()
             if (chapter.pars != null) {
                 manifest.append("""<item id="mo$n" href="c$n.smil" media-type="application/smil+xml"/>""")
                 texts["OEBPS/c$n.smil"] = ("""<?xml version="1.0"?><smil xmlns="http://www.w3.org/ns/SMIL" version="3.0">""" +
@@ -62,7 +63,7 @@ internal object NarratedBooks {
             }
         }
         val opf = """<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">""" +
-            """<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">narrated</dc:identifier></metadata>""" +
+            """<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">narrated</dc:identifier>$metadata</metadata>""" +
             """<manifest>$manifest${MediaBooks.items(files.keys)}</manifest><spine>$spine</spine></package>"""
         entries["OEBPS/content.opf"] = opf.encodeToByteArray()
         entries.putAll(texts)
