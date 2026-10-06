@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteRole
 
 import io.github.yuroyami.kitepdf.svg.SvgImage
@@ -51,6 +52,8 @@ internal class BoxBuilder(
     private val tracksElements: Boolean = false,
     /** The pixels that scripts wrote into canvases, by the href that a canvas's drawing names (#610). */
     private val canvasImages: (String) -> KiteImageData? = { null },
+    /** Whether the book holds a file at a zip path or data URL, so that an object shows it and not its fallback (#612). */
+    private val hasFile: (String) -> Boolean = { false },
     private val resolveHref: (String) -> String,
 ) {
     fun build(root: KiteXmlNode.Element): BlockBox =
@@ -397,8 +400,9 @@ internal class BoxBuilder(
 
     /**
      * The box of an `<iframe>`, or of an `<object>` that embeds an HTML or XHTML document, else
-     * null (#40). A frame's box paints its document when the page paints (#528). An object's box
-     * holds its fallback children, and is at least as large as the element asks. Both default to
+     * null (#40). A frame's box paints its document when the page paints (#528), and so does the
+     * box of an object whose document is in the book (#612). Any other object's box holds its
+     * fallback children, and is at least as large as the element asks. Both default to
      * 300 by 150 CSS pixels, as in a browser.
      */
     private fun embedBox(
@@ -417,7 +421,10 @@ internal class BoxBuilder(
         val aw = el.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
         val ah = el.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
         val info = EmbedInfo(if (frame) EpubEmbedKind.FRAME else EpubEmbedKind.OBJECT, href, type, el.attrs["id"])
-        if (frame) {
+        // An object whose document is in the book shows it in place of its fallback, as a frame does (HTML, 4.8.7, #612).
+        val inBook = href.isNotEmpty() && (!url || KiteDataUrl.isDataUrl(href)) &&
+            hasFile(if (KiteDataUrl.isDataUrl(href)) href else href.substringBefore('#'))
+        if (frame || inBook) {
             return ImageBox(cs, "", attrWidth = aw, attrHeight = ah).also {
                 it.embed = info
                 it.semantics = BoxSemantics.of(el.tag, el.attrs, parentSem)
@@ -1242,12 +1249,12 @@ internal fun collapsedWins(challenger: Edge, holder: Edge): Boolean = when {
 /** A media source with a scheme, such as https, which stays a URL instead of a zip path. */
 private val MEDIA_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
-/** Whether [href] names an HTML or XHTML document by its extension. */
 /** The emphasis marks [style] puts over its text, or null when it puts none (CSS Text Decoration 3, 3, #508). */
 private fun emphasisOf(style: ComputedStyle): Emphasis? =
     style.emphasisStyle?.let { Emphasis(it, style.emphasisColor, style.emphasisPosition) }
 
-private fun isDocumentPath(href: String): Boolean {
+/** Whether [href] names an HTML or XHTML document by its extension. */
+internal fun isDocumentPath(href: String): Boolean {
     val path = href.substringBefore('#').substringBefore('?').lowercase()
     return path.endsWith(".xhtml") || path.endsWith(".html") || path.endsWith(".htm") || path.endsWith(".xht")
 }

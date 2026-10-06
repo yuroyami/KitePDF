@@ -174,7 +174,8 @@ again its scripts start over from its markup, as a page does when it loads again
 `EpubScriptSession.unloadChapters()` unloads them all at once.
 
 An `<iframe>` whose `src` is a document of the book shows that document, and the document's
-scripts run in a window of their own, with an engine of its own. The frames' documents load
+scripts run in a window of their own, with an engine of its own. So does an `<object>` whose
+`data` is an HTML or XHTML document of the book. The frames' documents load
 before the chapter's `load` event. A frame's window has the book's origin and
 `navigator.epubReadingSystem`. Its `parent` and `top` are the frame's own window, so its scripts
 cannot reach or change the chapter around it or the frame's size, as EPUB 3.3 asks of a
@@ -414,8 +415,7 @@ that is not well-formed XML throws a `SyntaxError` and changes nothing. `documen
 `writeln`, `open` and `close` throw an `InvalidStateError` there, as a browser's do in an XML
 document.
 
-Not there yet: the document of an `<object>` element, whose box shows the object's fallback;
-the `contentWindow` and `contentDocument` of a frame, which are null; a frame that a script adds
+Not there yet: the `contentWindow` and `contentDocument` of a frame, which are null; a frame that a script adds
 after the chapter loaded, which shows its document but runs no script; form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
 its value and checkedness. A script that calls a missing method fails and is
 listed in `failures`, and the chapter goes on as its other scripts leave it.

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An `<object>` whose `data` is an HTML or XHTML document of the book shows that document in
+  place of its fallback, and the document's scripts run, as a frame's do. The fallback shows when
+  the book does not hold the document. Before this change, the object always showed its
+  fallback (#612).
+
 - An `<iframe>` in a chapter shows the document of the book that it names, laid out at the
   frame's size, and the document's scripts run in a window of their own. That window has the
   book's origin and `navigator.epubReadingSystem`, and its `parent` is itself, so it cannot change

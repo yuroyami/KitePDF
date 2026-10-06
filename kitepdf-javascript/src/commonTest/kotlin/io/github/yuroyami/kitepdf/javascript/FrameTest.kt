@@ -14,8 +14,8 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.TestResult
 
 /**
- * An iframe in a chapter (#528): the frame shows its document, and the document's scripts run
- * in a window of their own, which cannot reach the chapter around it. The books follow the W3C
+ * An iframe in a chapter (#528), or an object of a document (#612): the box shows its document,
+ * and the document's scripts run in a window of their own, which cannot reach the chapter around it. The books follow the W3C
  * EPUB tests `scr-support_iframe`, `scr-readingsystem-support_iframe`,
  * `scr-readingsystem-support_iframe_svg`, `scr-not-support_ccscript-modify-host` and
  * `scr-not-support_ccscript-modify-size`.
@@ -213,6 +213,31 @@ class FrameTest {
         scripts.pumpTimers(now)
         assertTrue("Later." in painted(book.first()), painted(book.first()))
         assertFalse(scripts.hasTimers)
+    }
+
+    @Test
+    fun an_object_shows_its_document_of_the_book_in_place_of_its_fallback(): TestResult = scriptTest {
+        val book = book(
+            """<object data="widget.xhtml" type="application/xhtml+xml" width="300" height="100"><p>Fallback words.</p></object>""" +
+                """<object data="gone.xhtml" type="application/xhtml+xml"><p>Missing fallback.</p></object>""",
+            mapOf(
+                "widget.xhtml" to frameDoc(
+                    "window.addEventListener('load', function () { document.getElementById('w').textContent = 'Widget ran.'; });",
+                    """<p id="w">Widget.</p>""",
+                ),
+            ),
+        )
+        val before = painted(book.first())
+        assertTrue("Widget." in before && "Fallback words." !in before, before)
+        assertTrue("Missing fallback." in before, "an object whose document is not in the book shows its fallback: $before")
+        assertTrue(book.isScripted(0), "the object's document has a script")
+        val scripts = open(book)
+        assertEquals(emptyList(), scripts.failures.map { it.message })
+        val text = painted(book.first())
+        assertTrue("Widget ran." in text, text)
+        val widget = book.first().embeds.first { it.kind == EpubEmbedKind.OBJECT }
+        assertEquals(225.0, widget.rect.width, 0.01)
+        assertEquals(75.0, widget.rect.height, 0.01)
     }
 
     @Test
