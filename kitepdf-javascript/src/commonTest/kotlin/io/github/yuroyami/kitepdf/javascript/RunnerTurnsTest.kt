@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -55,7 +56,7 @@ class RunnerTurnsTest {
     private fun PdfDocument.link(): PdfAction.JavaScript = pages[0].annotations.single().action as PdfAction.JavaScript
 
     @Test
-    fun two_books_open_at_once_each_run_their_scripts() {
+    fun two_books_open_at_once_each_run_their_scripts(): TestResult = scriptTest {
         val first = ScriptBooks.buttonPage()
         val firstPage = first.page(KiteLocation(0, 0))
         val second = ScriptBooks.chapter("""<p>Second.</p><script>console.log('second ran');</script>""")
@@ -75,7 +76,7 @@ class RunnerTurnsTest {
     }
 
     @Test
-    fun a_form_and_a_book_open_at_once_each_run_their_scripts() {
+    fun a_form_and_a_book_open_at_once_each_run_their_scripts(): TestResult = scriptTest {
         val form = pdf("function answer() { return 6 * 7; }", "answer()")
         val formScripts = PdfScriptRunner(form).kept()
         val console = ArrayList<String>()
@@ -95,7 +96,7 @@ class RunnerTurnsTest {
     }
 
     @Test
-    fun two_forms_open_at_once_each_run_their_scripts() {
+    fun two_forms_open_at_once_each_run_their_scripts(): TestResult = scriptTest {
         val first = pdf("function name() { return 'first'; }", "name()")
         val second = pdf("function name() { return 'second'; }", "name()")
         val firstScripts = PdfScriptRunner(first).kept()
@@ -112,7 +113,7 @@ class RunnerTurnsTest {
     }
 
     @Test
-    fun a_closed_runner_leaves_the_thread_to_the_next() {
+    fun a_closed_runner_leaves_the_thread_to_the_next(): TestResult = scriptTest {
         val book = ScriptBooks.chapter("""<p>Book.</p><script>console.log('ran');</script>""")
         val console = ArrayList<String>()
         EpubScriptRunner(book, onConsole = { _, message -> console += message }).use { it.chapterOpened(0) }

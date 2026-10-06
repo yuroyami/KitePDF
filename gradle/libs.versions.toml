@@ -23,8 +23,8 @@ skiko = "0.150.1"
 kiteimagecodec = "0.2.0"
 
 # KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
-# so no other module carries a script engine.
-kitejs = "0.2.0"
+# so no other module carries a script engine. Its code sees only kitejs-api; QuickJS runs underneath.
+kitejs = "0.3.0"
 # KitePlayer: the Kite lineage's media player. Used ONLY by :kitepdf-media, the optional
 # EPUB audio and video artifact. It carries FFmpeg through KiteFFmpeg.
 kiteplayer = "0.2.0"
@@ -47,7 +47,8 @@ kotlinxCoroutines = "1.11.0"
 kiteimagecodec = { module = "io.github.yuroyami:kiteimagecodec", version.ref = "kiteimagecodec" }
 
 # KiteJS runs document JavaScript, :kitepdf-javascript only.
-kitejs = { module = "io.github.yuroyami:kitejs", version.ref = "kitejs" }
+kitejs-api = { module = "io.github.yuroyami:kitejs-api", version.ref = "kitejs" }
+kitejs-quickjs = { module = "io.github.yuroyami:kitejs-quickjs", version.ref = "kitejs" }
 kiteplayer = { module = "io.github.yuroyami:kiteplayer", version.ref = "kiteplayer" }
 kiteplayer-compose = { module = "io.github.yuroyami:kiteplayer-compose", version.ref = "kiteplayer" }
 

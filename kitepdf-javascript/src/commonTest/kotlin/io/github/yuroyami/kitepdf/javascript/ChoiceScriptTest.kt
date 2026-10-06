@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.PdfScriptHandler
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -50,7 +51,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun selection_change_commit_validate_calculate_format_use_the_right_values() {
+    fun selection_change_commit_validate_calculate_format_use_the_right_values(): TestResult = scriptTest {
         val trace = ArrayList<String>()
         val document = fixture(
             keystroke = "console.println('K:' + event.willCommit + ':' + event.value + ':' + event.change + ':' + event.changeEx);",
@@ -69,7 +70,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun a_single_list_selection_reports_old_export_then_new_face_then_validates_export() {
+    fun a_single_list_selection_reports_old_export_then_new_face_then_validates_export(): TestResult = scriptTest {
         val trace = ArrayList<String>()
         val document = fixture(
             flags = 0,
@@ -83,7 +84,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun deferred_choices_run_each_selection_event_without_storing_or_repeating_it_on_commit() {
+    fun deferred_choices_run_each_selection_event_without_storing_or_repeating_it_on_commit(): TestResult = scriptTest {
         val trace = ArrayList<String>()
         val document = fixture(
             flags = 0,
@@ -104,7 +105,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun any_refused_stage_keeps_the_old_selection_without_calculating() {
+    fun any_refused_stage_keeps_the_old_selection_without_calculating(): TestResult = scriptTest {
         for (stage in listOf("selection", "commit", "validate")) {
             val trace = ArrayList<String>()
             val document = fixture(
@@ -126,7 +127,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun rewrites_are_resolved_as_display_labels_and_invalid_ones_are_refused() {
+    fun rewrites_are_resolved_as_display_labels_and_invalid_ones_are_refused(): TestResult = scriptTest {
         for (stage in listOf("selection", "commit", "validate")) {
             for (rewrite in listOf("Large", "not an option")) {
                 val script = "event.${if (stage == "selection") "change" else "value"} = '$rewrite';"
@@ -143,7 +144,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun multiple_selection_commits_once_and_calculations_observe_the_whole_array() {
+    fun multiple_selection_commits_once_and_calculations_observe_the_whole_array(): TestResult = scriptTest {
         val trace = ArrayList<String>()
         val document = fixture(
             flags = 1 shl 21,
@@ -167,7 +168,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun field_value_and_indices_preserve_arrays_and_export_display_pairs() {
+    fun field_value_and_indices_preserve_arrays_and_export_display_pairs(): TestResult = scriptTest {
         val trace = ArrayList<String>()
         val document = fixture(flags = 1 shl 21)
         PdfScriptRunner(document, onConsole = { trace += it }).use { runner ->
@@ -183,7 +184,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun scalar_numeric_value_and_value_as_string_keep_their_existing_meanings() {
+    fun scalar_numeric_value_and_value_as_string_keep_their_existing_meanings(): TestResult = scriptTest {
         val trace = ArrayList<String>()
         val document = fixture(options = "[[(020) (Twenty)] [(021) (Twenty one)]]", value = "/V (020)")
         PdfScriptRunner(document, onConsole = { trace += it }).use { runner ->
@@ -194,7 +195,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun corrupted_options_keep_original_indices_in_the_javascript_bridge() {
+    fun corrupted_options_keep_original_indices_in_the_javascript_bridge(): TestResult = scriptTest {
         val trace = ArrayList<String>()
         val document = fixture(options = "[[(S) (Small)] null [(L) (Large)]]")
         PdfScriptRunner(document, onConsole = { trace += it }).use { runner ->
@@ -205,7 +206,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun duplicate_exports_keep_the_typed_identity() {
+    fun duplicate_exports_keep_the_typed_identity(): TestResult = scriptTest {
         val document = fixture(options = "[[(S) (Small)] [(S) (Also small)] [(M) (Medium)]]")
         PdfScriptRunner(document).use { runner ->
             assertTrue(runner.choose("choice", PdfChoiceSelection(listOf(1))))
@@ -215,7 +216,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun a_field_change_during_validation_invalidates_the_pending_choice() {
+    fun a_field_change_during_validation_invalidates_the_pending_choice(): TestResult = scriptTest {
         for (mutation in listOf("readonly = true", "hidden = true", "value = 'L'", "readonly = true; getField('choice').readonly = false")) {
             val document = fixture(validate = "getField('choice').$mutation;")
             PdfScriptRunner(document).use { runner ->
@@ -226,7 +227,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun validation_can_change_another_field_without_invalidating_the_choice() {
+    fun validation_can_change_another_field_without_invalidating_the_choice(): TestResult = scriptTest {
         val document = fixture(validate = "getField('total').value = 'side effect';")
         PdfScriptRunner(document).use { runner ->
             assertTrue(runner.choose("choice", PdfChoiceSelection(listOf(1))))
@@ -236,7 +237,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun denied_scripts_still_enforce_options_flags_and_editable_combo_rules() {
+    fun denied_scripts_still_enforce_options_flags_and_editable_combo_rules(): TestResult = scriptTest {
         val document = fixture()
         PdfScriptRunner(document, policy = PdfScriptPolicy.DENY).use { runner ->
             assertFalse(runner.setFieldValue("choice", "invented"))
@@ -253,7 +254,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun the_first_editable_combo_keystroke_edits_the_face_label() {
+    fun the_first_editable_combo_keystroke_edits_the_face_label(): TestResult = scriptTest {
         val trace = ArrayList<String>()
         val document = fixture(
             flags = (1 shl 17) or (1 shl 18),
@@ -273,7 +274,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun a_legacy_handler_runs_callbacks_and_refuses_unsupported_selection_shapes() {
+    fun a_legacy_handler_runs_callbacks_and_refuses_unsupported_selection_shapes(): TestResult = scriptTest {
         val document = fixture()
         val calls = ArrayList<String>()
         val handler = object : PdfScriptHandler {
@@ -305,7 +306,7 @@ class ChoiceScriptTest {
     }
 
     @Test
-    fun a_legacy_keystroke_adapter_replaces_the_whole_export_when_its_label_is_shorter() {
+    fun a_legacy_keystroke_adapter_replaces_the_whole_export_when_its_label_is_shorter(): TestResult = scriptTest {
         val document = fixture(options = "[[(LONG-EXPORT) (A)] [(NEXT) (B)]]", value = "/V (LONG-EXPORT)")
         val handler = object : PdfScriptHandler {
             override val formState = PdfFormState(document)

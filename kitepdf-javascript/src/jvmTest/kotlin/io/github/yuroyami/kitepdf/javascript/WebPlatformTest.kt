@@ -1,7 +1,6 @@
 package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.epub.EpubDocument
-import org.junit.Assume.assumeTrue
 import java.io.File
 import kotlin.time.TimeSource
 import kotlin.test.AfterTest
@@ -49,31 +48,7 @@ class WebPlatformTest {
     }
 
     private val gaps = listOf(
-        Gap(
-            "kitejs#68, an accessor with set: undefined ignores a strict write",
-            "(function () { 'use strict'; var o = Object.defineProperty({}, 'z', { get: function () { return 1; }, set: undefined }); " +
-                "try { o.z = 2; return true; } catch (e) { return false; } })()",
-            setOf("URL.searchParams setter, invalid values"),
-        ),
-        // The test is strict and the harness that calls it is not, as there. The second function is
-        // the sloppy caller: one written inside the strict function would be strict as well.
-        Gap(
-            "kitejs#69, strict code called by sloppy code runs as sloppy",
-            "(function (call) { 'use strict'; var o = Object.freeze({ z: 1 }); return call(function () { o.z = 2; }); })" +
-                "(function (fn) { try { fn(); return true; } catch (e) { return false; } })",
-            setOf("URL.searchParams setter, invalid values"),
-        ),
         Gap("#531, FormData is missing", "typeof FormData === 'undefined'", setOf("URLSearchParams constructor, FormData.")),
-        // Each test of the encoding folder that takes a buffer runs once over each kind of buffer.
-        Gap("kitejs#72, SharedArrayBuffer is missing", "typeof SharedArrayBuffer === 'undefined'", names = Regex("SharedArrayBuffer")),
-        Gap(
-            "kitejs#73, Float16Array is missing",
-            "typeof Float16Array === 'undefined'",
-            setOf(
-                "Invalid encodeInto() destination: Float16Array, backed by: ArrayBuffer",
-                "Passing a Float16Array as element of the blobParts array should work.",
-            ),
-        ),
         // The tests detach a buffer by transferring it through a port.
         Gap(
             "#534, MessageChannel is missing",
@@ -88,17 +63,6 @@ class WebPlatformTest {
             ),
         ),
         Gap(
-            "kitejs#12, async functions are missing",
-            "(function () { try { Function('return async function () {}'); return false; } catch (e) { return true; } })()",
-            setOf(
-                "FileAPI/blob/Blob-array-buffer.any.js", "FileAPI/blob/Blob-bytes.any.js", "FileAPI/blob/Blob-stream.any.js",
-                "FileAPI/blob/Blob-text.any.js", "FileAPI/blob/Blob-textStream.any.js", "FileAPI/unicode.any.js",
-                "FileAPI/reading-data-section/FileReader-multiple-reads.any.js", "FileAPI/reading-data-section/filereader_events.any.js",
-                "FileAPI/reading-data-section/filereader_result.any.js",
-            ),
-        ),
-        // By test name only: the files that test streams are async functions too, and kitejs#12 keeps them from running.
-        Gap(
             "#536, ReadableStream is missing",
             "typeof ReadableStream === 'undefined'",
             names = Regex("^Blob\\.(stream|textStream)\\(\\)|^Reading Blob\\.stream|^textStream method existence"),
@@ -112,31 +76,6 @@ class WebPlatformTest {
             "typeof HashChangeEvent === 'undefined'",
             names = Regex("^(Document|In-document Element)\\.[A-Za-z]+: :target pseudo-class"),
         ),
-        // An element's attributes are a proxy: the tests of its own properties ask hasOwnProperty of it, and a
-        // for-in over it reaches a key that its ownKeys trap built at run time, which crashes the engine.
-        Gap(
-            "KiteJS 0.2.0 asks a proxy's has trap for hasOwnProperty and crashes on a key its ownKeys trap built (D-91, fixed after it)",
-            "Object.prototype.hasOwnProperty.call(new Proxy({}, { has: function () { return true; }, " +
-                "getOwnPropertyDescriptor: function () { return undefined; } }), 'a')",
-            setOf(
-                "dom/nodes/attributes.html",
-                "Own property correctness with basic attributes",
-                "Own property correctness with non-namespaced attribute before same-name namespaced one",
-                "Own property correctness with namespaced attribute before same-name non-namespaced one",
-                "Own property correctness with two namespaced attributes with the same name-with-prefix",
-            ),
-        ),
-        // Setting style sets cssText, whose setter sits on the prototype of the style's proxy target.
-        Gap(
-            "KiteJS 0.2.0 makes Reflect.set write an own property past an inherited setter (D-89, fixed after it)",
-            "(function () { var o = Object.create({ set x(v) { this.y = v; } }); Reflect.set(o, 'x', 1); return o.y !== 1; })()",
-            setOf("Toggling element with inline style should make inline style disappear"),
-        ),
-        Gap(
-            "kitejs#11, a const in a for head",
-            "(function () { try { Function('for (const x of []) {}'); return false; } catch (e) { return true; } })()",
-            setOf("dom/nodes/Element-matches-namespaced-elements.html", "dom/nodes/Element-setAttributeNodeNS.html", "dom/nodes/name-validation.html"),
-        ),
         // The page has no body element, and an HTML parser makes one. The probe asks for the head and body that
         // the fragment parser makes for an html element of an HTML document.
         Gap(
@@ -146,13 +85,13 @@ class WebPlatformTest {
             setOf("First set attribute is returned with mapped attribute set first"),
         ),
         Gap(
-            "kitejs#71, an arrow function cannot take a rest parameter",
-            "(function () { try { Function('return (...a) => a'); return false; } catch (e) { return true; } })()",
-            setOf("encoding/textdecoder-mistakes.any.js"),
+            "#546, a script cannot make a doctype",
+            "(function () { try { document.implementation.createDocumentType('html', '', ''); return false; } catch (e) { return true; } })()",
+            setOf("Valid and invalid characters in createDocumentType."),
         ),
     )
 
-    /** The test files that KiteJS 0.2.0 cannot parse, as each has a const in a for head (kitejs#11, fixed after it). */
+    /** The URL tests that read their cases from the parser's own test data. */
     private val dataDriven = listOf("url-constructor.any.js", "url-origin.any.js", "url-setters.any.js", "urlsearchparams-foreach.any.js")
         .map { "url/$it" }
 
@@ -450,12 +389,7 @@ class WebPlatformTest {
     fun the_url_tests_pass_but_for_known_gaps() = check(urlFiles, atLeast = 90)
 
     @Test
-    fun the_data_driven_url_tests_pass() {
-        val probe = "console.log('PROBE ' + (function () { try { Function('for (const x of []) {}'); return 'yes'; } catch (e) { return 'no'; } })());"
-        val (console, _) = chapter(mapOf("probe.js" to probe))
-        assumeTrue("The KiteJS in use cannot parse a const in a for head (kitejs#11, fixed after 0.2.0).", "log: PROBE yes" in console)
-        check(dataDriven, atLeast = 1500)
-    }
+    fun the_data_driven_url_tests_pass() = check(dataDriven, atLeast = 1500)
 
     @Test
     fun the_dom_exception_tests_pass() = check(domExceptionFiles, atLeast = 100)

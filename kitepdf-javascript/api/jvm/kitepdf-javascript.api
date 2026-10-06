@@ -25,6 +25,7 @@ public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner : io/g
 	public final fun getPolicy ()Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;
 	public fun onNavigate (Lkotlin/jvm/functions/Function1;)Lkotlin/jvm/functions/Function0;
 	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
+	public fun prepare (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun pumpTimers (J)Ljava/lang/Long;
 	public fun tap (Lio/github/yuroyami/kitepdf/epub/EpubPage;DD)Z
 }
@@ -35,18 +36,21 @@ public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner$Compan
 public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine : io/github/yuroyami/kitepdf/core/script/KiteScriptEngine {
 	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine$Companion;
 	public static final field DEFAULT_INSTRUCTION_BUDGET I
+	public static final field DEFAULT_STACK_BYTES J
+	public static final field MEMORY_LIMIT J
 	public fun <init> ()V
-	public fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZZ)V
-	public synthetic fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZJ)V
+	public synthetic fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZJILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun close ()V
 	public fun defineFunction (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public fun defineValue (Ljava/lang/String;Ljava/lang/Object;)V
 	public fun evaluate (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
-	public final fun getAsmReports ()Ljava/util/List;
 	public final fun getInstructionBudget ()I
 }
 
 public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine$Companion {
+	public final fun isLoaded ()Z
+	public final fun load (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class io/github/yuroyami/kitepdf/javascript/PdfScriptAlert {
@@ -186,7 +190,6 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public fun focus (Ljava/lang/String;)V
 	public fun focus (Ljava/lang/String;I)V
 	public final fun formattedValue (Ljava/lang/String;)Ljava/lang/String;
-	public final fun getAsmReports ()Ljava/util/List;
 	public final fun getCurrentPage ()I
 	public final fun getFailures ()Ljava/util/List;
 	public final fun getFileName ()Ljava/lang/String;
@@ -204,6 +207,7 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
 	public fun pageClosed (I)V
 	public fun pageOpened (I)V
+	public fun prepare (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun pumpTimers (J)Ljava/lang/Long;
 	public final fun run (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)Ljava/lang/String;
 	public fun runAction (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)V

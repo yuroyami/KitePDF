@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -36,7 +37,7 @@ class ScriptTimerTest {
     private fun script(source: String) = PdfAction.JavaScript(source, PdfDictionary(emptyMap()))
 
     @Test
-    fun a_timer_fires_after_its_delay_on_the_runner_clock() {
+    fun a_timer_fires_after_its_delay_on_the_runner_clock(): TestResult = scriptTest {
         var now = 1_000L
         PdfScriptRunner(PdfDocument.open(pdf()), clock = { now }).use { runner ->
             runner.run(script("app.setTimeOut(\"getField('a').value = 'done'\", 5000)"))
@@ -53,7 +54,7 @@ class ScriptTimerTest {
     }
 
     @Test
-    fun a_timer_set_after_an_idle_while_waits_its_full_delay() {
+    fun a_timer_set_after_an_idle_while_waits_its_full_delay(): TestResult = scriptTest {
         var now = 0L
         PdfScriptRunner(PdfDocument.open(pdf()), clock = { now }).use { runner ->
             runner.run(script("app.setTimeOut(\"getField('a').value = 'first'\", 10)"))
@@ -73,7 +74,7 @@ class ScriptTimerTest {
     }
 
     @Test
-    fun setting_and_clearing_a_timer_tells_the_listeners() {
+    fun setting_and_clearing_a_timer_tells_the_listeners(): TestResult = scriptTest {
         PdfScriptRunner(PdfDocument.open(pdf())).use { runner ->
             var told = 0
             val stop = runner.onTimersChanged { told++ }

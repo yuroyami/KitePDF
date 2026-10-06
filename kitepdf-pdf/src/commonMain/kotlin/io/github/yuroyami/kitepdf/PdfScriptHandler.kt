@@ -21,6 +21,13 @@ public interface PdfScriptHandler {
     public val formState: PdfFormState
 
     /**
+     * Gets the script engine ready. A viewer calls it once, before any other call: an engine that
+     * compiles itself on the web does so here, as a browser compiles only asynchronously. Until
+     * it returns, a call that needs the engine runs no script.
+     */
+    public suspend fun prepare() {}
+
+    /**
      * The document opened: run its own scripts and its open action.
      *
      * A viewer calls this once for each handler, however often its view leaves and comes back. A

@@ -33,8 +33,9 @@ providers.gradleProperty("kiteImageCodecPath").orNull?.let { path ->
 providers.gradleProperty("kiteJsPath").orNull?.let { path ->
     includeBuild(path) {
         dependencySubstitution {
-            substitute(module("io.github.yuroyami:kitejs"))
-                .using(project(":kitejs"))
+            for (artifact in listOf("kitejs", "kitejs-api", "kitejs-quickjs", "kitejs-rhino", "kitejs-coroutines")) {
+                substitute(module("io.github.yuroyami:$artifact")).using(project(":$artifact"))
+            }
         }
     }
 }

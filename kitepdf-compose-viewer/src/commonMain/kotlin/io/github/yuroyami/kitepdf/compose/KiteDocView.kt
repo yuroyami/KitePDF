@@ -313,10 +313,17 @@ public fun KiteDocView(
     DisposableEffect(state) { onDispose { state.document.keepChapters(emptySet()) } }
     DisposableEffect(state) { onDispose { state.vectorImageCacheFor(0L) } }
 
+    // The handlers whose engine is ready. A tap reaches a script only once its handler has
+    // prepared, which on the web is the moment the engine has compiled.
+    var preparedScripts by remember { mutableStateOf<io.github.yuroyami.kitepdf.PdfScriptHandler?>(null) }
+    var preparedEpubScripts by remember { mutableStateOf<io.github.yuroyami.kitepdf.epub.EpubScriptHandler?>(null) }
+
     // The document's own scripts: its open action once, then each page's as the reader
     // reaches it, and the timers a script set, pumped a frame at a time.
     LaunchedEffect(scripts, state.document) {
         val handler = scripts ?: return@LaunchedEffect
+        scriptCall("prepare", Unit) { handler.prepare() }
+        preparedScripts = handler
         // A document's own scripts may run for a long time before they show anything, so they
         // run on the script lane and the reader keeps scrolling meanwhile. They run once for each
         // handler, however often this view leaves and comes back (#365).
@@ -344,8 +351,8 @@ public fun KiteDocView(
     val currentHighlightTap by rememberUpdatedState(onHighlightTap)
     val currentLinkTap by rememberUpdatedState(onLinkTap)
     val currentTap by rememberUpdatedState(onTap)
-    val currentScripts by rememberUpdatedState(scripts)
-    val currentEpubScripts by rememberUpdatedState(epubScripts)
+    val currentScripts by rememberUpdatedState(scripts?.takeIf { it === preparedScripts })
+    val currentEpubScripts by rememberUpdatedState(epubScripts?.takeIf { it === preparedEpubScripts })
     val tapScope = rememberCoroutineScope()
 
     // The book's scripts: a scripted chapter's run when the reader reaches it, and a change of
@@ -353,6 +360,8 @@ public fun KiteDocView(
     LaunchedEffect(epubScripts, state.document) {
         val handler = epubScripts ?: return@LaunchedEffect
         val book = state.document as? EpubDocument ?: return@LaunchedEffect
+        scriptCall("prepare", Unit) { handler.prepare() }
+        preparedEpubScripts = handler
         val stop = handler.onNavigate { href ->
             tapScope.launch { followOverlayLink(state, tapScope, currentLinkTap, state.currentPage, href, KiteRectangle(0.0, 0.0, 0.0, 0.0)) }
         }

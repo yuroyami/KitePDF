@@ -2,7 +2,6 @@ package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
-import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import java.io.File
@@ -114,10 +113,16 @@ class ScriptedBookGateTest {
         return out
     }
 
+    /** The books that `corpus/manifest.json` lists: the public corpus, without a developer's own books. */
+    private val listed: Set<String> = Regex("\"path\": \"corpus/epub/([^\"]+)\\.epub\"")
+        .findAll(File(corpus.parentFile, "manifest.json").readText())
+        .map { it.groupValues[1] }
+        .toSet()
+
     @Test
     fun every_scripted_book_of_the_corpus_is_in_the_gate() {
         val scripted = corpus.listFiles().orEmpty()
-            .filter { it.extension == "epub" }
+            .filter { it.extension == "epub" && it.nameWithoutExtension in listed }
             .filter { EpubDocument.open(it.readBytes()).scriptedChapters.isNotEmpty() }
             .map { it.nameWithoutExtension }
             .toSortedSet()
@@ -142,12 +147,6 @@ class ScriptedBookGateTest {
     fun scr_readingsystem_features_lists_each_feature_where_its_script_parses() {
         val run = Run("w3c-scr-readingsystem-features")
         val text = run.text(0)
-        if (!parsesConstInAForHead()) {
-            // Its one script does not parse on KiteJS 0.2.0, so the page keeps its failure text (KiteJS#11).
-            assertTrue("does not implement the epubReadingSystem object" in text, text)
-            run.assertOnlyKnownFailures()
-            return
-        }
         assertTrue("implements the epubReadingSystem object with the following features" in text, text)
         assertFalse("does not implement" in text, "the failure text is hidden: $text")
         val features = listOf(
@@ -156,18 +155,6 @@ class ScriptedBookGateTest {
         )
         for (feature in features) assertTrue(feature in text, "the page lists $feature: $text")
         assertEquals(emptyList(), run.scripts.failures.map { it.message }, "no script fails")
-    }
-
-    /** Whether the engine in use parses a `const` in a `for` head, which KiteJS 0.2.0 does not (KiteJS#11, fixed after it). */
-    private fun parsesConstInAForHead(): Boolean {
-        val engine = KiteJsScriptEngine()
-        return try {
-            engine.evaluate("var n = 0; for (const x of [1, 2]) n += x; n", "probe") == "3"
-        } catch (e: KiteScriptException) {
-            false
-        } finally {
-            engine.close()
-        }
     }
 
     @Test
@@ -220,8 +207,6 @@ class ScriptedBookGateTest {
         )
 
         /** Failures a book is known to hit: a part of the message, and the issue that tracks it. */
-        val KNOWN_FAILURES: Map<String, List<Pair<String, String>>> = mapOf(
-            "w3c-scr-readingsystem-features" to listOf("syntax error" to "yuroyami/KiteJS#11"),
-        )
+        val KNOWN_FAILURES: Map<String, List<Pair<String, String>>> = emptyMap()
     }
 }

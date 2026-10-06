@@ -19,6 +19,13 @@ package io.github.yuroyami.kitepdf.epub
 public interface EpubScriptHandler {
 
     /**
+     * Gets the script engine ready. A viewer calls it once, before any other call: an engine that
+     * compiles itself on the web does so here, as a browser compiles only asynchronously. Until
+     * it returns, a call that needs the engine runs no script.
+     */
+    public suspend fun prepare() {}
+
+    /**
      * The reader reached a page of [chapter]: run its scripts, the first time only, then fire
      * `DOMContentLoaded` and `load`. A viewer calls this for a chapter that
      * [EpubDocument.isScripted] says has scripts.

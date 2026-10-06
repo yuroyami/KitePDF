@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 
 /**
@@ -46,7 +47,7 @@ class EventHandlerOrderTest {
         logOf(page(body = "$p<script>var out = []; function log(s) { out.push(s); } var p = document.getElementById('p');\n$script\nconsole.log(out.join(', '));</script>"))
 
     @Test
-    fun a_handler_set_after_a_listener_runs_after_it() {
+    fun a_handler_set_after_a_listener_runs_after_it(): TestResult = scriptTest {
         assertEquals(
             listOf("listener 1, handler, listener 2"),
             scripted(
@@ -61,7 +62,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun setting_a_handler_again_keeps_its_place_and_null_takes_it_out() {
+    fun setting_a_handler_again_keeps_its_place_and_null_takes_it_out(): TestResult = scriptTest {
         assertEquals(
             listOf("b, listener | listener | listener, c"),
             scripted(
@@ -80,7 +81,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun a_listener_that_stops_the_event_now_keeps_a_later_handler_from_running() {
+    fun a_listener_that_stops_the_event_now_keeps_a_later_handler_from_running(): TestResult = scriptTest {
         assertEquals(
             listOf("listener"),
             scripted(
@@ -94,7 +95,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun a_handler_from_set_attribute_takes_its_place_when_set_and_leaves_when_removed() {
+    fun a_handler_from_set_attribute_takes_its_place_when_set_and_leaves_when_removed(): TestResult = scriptTest {
         assertEquals(
             listOf("listener, attribute | listener | listener, again"),
             scripted(
@@ -112,7 +113,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun a_handler_from_markup_comes_before_the_listeners_of_a_later_script() {
+    fun a_handler_from_markup_comes_before_the_listeners_of_a_later_script(): TestResult = scriptTest {
         assertEquals(
             listOf("markup, listener"),
             scripted(
@@ -126,7 +127,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun a_script_before_the_body_adds_its_load_listener_ahead_of_the_body_handler() {
+    fun a_script_before_the_body_adds_its_load_listener_ahead_of_the_body_handler(): TestResult = scriptTest {
         assertEquals(
             listOf("head listener", "handler", "body listener"),
             logOf(
@@ -140,7 +141,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun the_body_handlers_of_the_window_are_the_window_handlers() {
+    fun the_body_handlers_of_the_window_are_the_window_handlers(): TestResult = scriptTest {
         assertEquals(
             listOf("true,true,false", "window"),
             logOf(
@@ -155,7 +156,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun a_file_reader_runs_its_handler_after_the_listener_added_before_it() {
+    fun a_file_reader_runs_its_handler_after_the_listener_added_before_it(): TestResult = scriptTest {
         assertEquals(
             listOf("listener, handler"),
             logOf(
@@ -172,7 +173,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun the_document_has_a_ready_state_handler() {
+    fun the_document_has_a_ready_state_handler(): TestResult = scriptTest {
         assertEquals(
             listOf("interactive", "complete"),
             logOf(page(body = "<p>Order.</p><script>document.onreadystatechange = function () { console.log(document.readyState); };</script>")),
@@ -180,7 +181,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun a_handler_from_markup_sees_the_form_of_its_control_and_a_window_handler_sees_no_document() {
+    fun a_handler_from_markup_sees_the_form_of_its_control_and_a_window_handler_sees_no_document(): TestResult = scriptTest {
         // HTML compiles an element's handler in the scopes of the document, the form owner and the
         // element, and a window's handler in the global scope alone.
         assertEquals(
@@ -196,7 +197,7 @@ class EventHandlerOrderTest {
     }
 
     @Test
-    fun an_object_is_a_handler_value_and_anything_else_is_null() {
+    fun an_object_is_a_handler_value_and_anything_else_is_null(): TestResult = scriptTest {
         assertEquals(
             listOf("true,null,null", ""),
             scripted(

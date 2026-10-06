@@ -5,6 +5,7 @@ import io.github.yuroyami.kitejs.api.JsObject
 import io.github.yuroyami.kitejs.api.KiteJs
 import io.github.yuroyami.kitejs.api.function
 import io.github.yuroyami.kitejs.api.obj
+import io.github.yuroyami.kitejs.quickjs.QuickJs
 import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
 
@@ -32,36 +33,30 @@ public class KiteJsScriptEngine(
      */
     clock: (() -> Long)? = null,
     /**
-     * Whether a document's `"use asm"` module is compiled ahead of time. On by default, and worth
-     * turning off only to compare the two: a module runs and answers the same either way.
-     */
-    asmJs: Boolean = true,
-    /**
      * Whether the built-in objects are read-only. On by default, so a PDF's scripts, which share
      * one engine, cannot redefine what another relies on. A host that gives each document its own
      * engine and runs web scripts, which polyfill and patch the built-ins as they do in a browser,
      * turns it off.
      */
     sealBuiltins: Boolean = true,
+    /**
+     * Bytes of stack a script may use before deep recursion throws a RangeError it can catch. The
+     * default fits the smallest stack a thread gets, 512 KiB on an Apple secondary thread. The
+     * runners pass more, since their threads have stacks of their own. On JavaScript and
+     * WebAssembly the browser's stack sets a lower cap.
+     */
+    maxStackBytes: Long = DEFAULT_STACK_BYTES,
 ) : KiteScriptEngine {
 
-    private val js = KiteJs {
+    private val js = KiteJs(ENGINE) {
         this.instructionBudget = this@KiteJsScriptEngine.instructionBudget
-        safeBuiltins = true
         this.sealBuiltins = sealBuiltins
         deadline?.let { interruptWhen = it }
         clock?.let { source -> this.clock = { source().toDouble() } }
-        this.asmJs = asmJs
+        // A document cannot take the app's memory: past the limit its allocation fails and the call throws.
+        memoryLimit = MEMORY_LIMIT
+        maxStackSize = maxStackBytes
     }
-
-    /**
-     * What the engine did with each `"use asm"` function it has parsed, one line each.
-     *
-     * A PDF that holds a program compiled from C, such as DoomPDF, carries one of these. It runs
-     * many times faster when the engine can compile it ahead of time, and the line says whether
-     * that happened and, if not, the first thing in the module that stopped it.
-     */
-    public val asmReports: List<String> get() = js.asmReports.map { it.toString() }
 
     override fun evaluate(source: String, name: String): String? = guarded(name) {
         val value = js.evaluate(source, name)
@@ -101,7 +96,32 @@ public class KiteJsScriptEngine(
     }
 
     public companion object {
+        /** The engine underneath. Nothing else in this module names it. */
+        internal val ENGINE = QuickJs
+
+        /**
+         * Gets the engine ready before the first [KiteJsScriptEngine] opens. On JavaScript and
+         * WebAssembly it compiles the engine's WebAssembly, which a browser does only
+         * asynchronously; everywhere else it returns at once. Calling it again costs nothing.
+         */
+        public suspend fun load(): Unit = ENGINE.load()
+
+        /** True once [load] has finished, and from the start on every platform but the web. */
+        public val isLoaded: Boolean get() = ENGINE.isLoaded
+
+        /** Whether a thread holds one open engine at a time, so a runner sharing a thread with another must take turns. */
+        internal val oneEnginePerThread: Boolean get() = ENGINE.oneEnginePerThread
+
+        /** Why a runner ran nothing: the engine has to load first, which only the web asks for. */
+        internal const val NOT_LOADED: String = "the script engine is not loaded yet; call prepare() first, which loads it on the web"
+
         /** Enough for any form script, small enough that a runaway loop stops within about a second. */
-        public const val DEFAULT_INSTRUCTION_BUDGET: Int = 10_000_000
+        public const val DEFAULT_INSTRUCTION_BUDGET: Int = 1_000_000
+
+        /** The most memory one engine may allocate, in bytes: room for a compiled program's heap, and no more. */
+        public const val MEMORY_LIMIT: Long = 512L shl 20
+
+        /** What [maxStackBytes] is unless a caller says otherwise. */
+        public const val DEFAULT_STACK_BYTES: Long = 256L shl 10
     }
 }

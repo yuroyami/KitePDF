@@ -2,13 +2,14 @@ package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.PdfDocument
 import kotlin.test.Test
+import kotlinx.coroutines.test.TestResult
 import kotlin.test.assertEquals
 
 /** A calculation order that points at a missing object falls back to the field order (#441). */
 class FormSalvageScriptTest {
 
     @Test
-    fun a_missing_calculation_order_falls_back_to_the_field_order() {
+    fun a_missing_calculation_order_falls_back_to_the_field_order(): TestResult = scriptTest {
         val sb = StringBuilder("%PDF-1.7\n")
         val offsets = ArrayList<Int>()
         fun add(body: String) {

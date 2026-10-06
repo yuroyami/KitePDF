@@ -52,16 +52,11 @@ class DoomPdfBenchmark {
         var clock = 1_000_000L
         val alerts = ArrayList<String>()
         val console = ArrayList<String>()
-        // The game's asm.js module is compiled ahead of time unless this says otherwise, which
-        // is how the two paths are compared under one harness:
-        // -Dkitepdf.doom.asm=false
-        val asmJs = System.getProperty("kitepdf.doom.asm") != "false"
         PdfScriptRunner(
             doc,
             engine = KiteJsScriptEngine(
                 instructionBudget = PdfScriptPolicy.LONG_RUNNING.instructionBudget,
                 clock = { clock++ },
-                asmJs = asmJs,
             ),
             policy = PdfScriptPolicy.LONG_RUNNING,
             onAlert = { alert -> alerts.add(alert.message); note("alert: ${alert.message}"); 1 },
@@ -71,14 +66,6 @@ class DoomPdfBenchmark {
             val t1 = System.nanoTime()
             runner.runPageOpen(0)
             val startupMs = ms(t1)
-            // Doom is tens of millions of integer operations a frame, and whether its asm.js
-            // module was compiled ahead of time is most of the frame time.
-            for (report in runner.asmReports) note("asm.js: $report")
-            assertTrue(
-                !asmJs || runner.asmReports.any { it.endsWith(": compiled") },
-                "the game's module was not compiled ahead of time, so these times are not the " +
-                    "ones a reader would see: ${runner.asmReports}",
-            )
             val rows = { (199 downTo 0).joinToString("\n") { runner.formState.value("field_$it") ?: "" } }
             val consoleRows = { (24 downTo 0).mapNotNull { runner.formState.value("console_$it") }.filter { it.isNotBlank() } }
             note("start-up: ${startupMs / 1000.0} s, ${runner.formState.changedFields.size} fields written, timers=${runner.hasTimers}")
