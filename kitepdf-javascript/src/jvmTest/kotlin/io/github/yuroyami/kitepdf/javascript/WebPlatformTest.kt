@@ -67,13 +67,6 @@ class WebPlatformTest {
             "typeof ReadableStream === 'undefined'",
             names = Regex("^Blob\\.(stream|textStream)\\(\\)|^Reading Blob\\.stream|^textStream method existence"),
         ),
-        // The frame loads its document at #target, and a chapter opens at no fragment. A fragment or a
-        // detached element has no target in a browser either, so those tests pass.
-        Gap(
-            "#550, a chapter has no fragment and no target",
-            "typeof HashChangeEvent === 'undefined'",
-            names = Regex("^(Document|In-document Element)\\.[A-Za-z]+: :target pseudo-class"),
-        ),
     )
 
     /** The URL tests that read their cases from the parser's own test data. */
@@ -222,7 +215,9 @@ class WebPlatformTest {
      * does and jumps over each wait for a timer, so a test that waits seconds takes none. A call
      * has a minute, as a reflection page runs thousands of tests in the one call that loads it.
      */
-    private fun open(book: EpubDocument): Pair<List<String>, List<String>> {
+    private fun open(book: EpubDocument, fragment: String? = null): Pair<List<String>, List<String>> {
+        // The reader reaches the chapter at [fragment], as a frame loads its document at one.
+        fragment?.let { book.setFragment(0, it) }
         val console = ArrayList<String>()
         val started = TimeSource.Monotonic.markNow()
         var skipped = 0L
@@ -286,6 +281,8 @@ class WebPlatformTest {
      * loads instead: the page's scripts run at the end of that document's body, with `async_test`
      * a stub while they do, so the frame is never made, and then they leave the document, which
      * has none in the frame, and the frame's call starts the tests in an `async_test` of its own.
+     * The chapter opens at `#target` and the call runs on `load`, as a frame loads its document at
+     * that fragment and calls the page once it loaded, so `:target` matches there (#550).
      */
     private fun runPage(path: String, source: String): Pair<List<String>, List<String>> {
         val files = linkedMapOf("harness.js" to resource("harness.js"), "data.js" to harnessData)
@@ -309,12 +306,12 @@ class WebPlatformTest {
             async_test = harnessAsyncTest;
             var harnessScripts = document.getElementsByTagName('script');
             while (harnessScripts.length) harnessScripts[0].parentNode.removeChild(harnessScripts[0]);
-            async_test(function (t) { t.step_func_done(function () { ${frame.start}; })(); }, 'the frame loads');
+            async_test(function (t) { window.addEventListener('load', t.step_func_done(function () { ${frame.start}; })); }, 'the frame loads');
         """.trimIndent()
         val document = resource(frame.document)
         val scripts = files.keys.joinToString("") { "<script src=\"$it\"></script>" }
         val end = document.lastIndexOf("</body>")
-        return open(ScriptBooks.page(document.substring(0, end) + scripts + document.substring(end), files, html = !isXhtml(frame.document)))
+        return open(ScriptBooks.page(document.substring(0, end) + scripts + document.substring(end), files, html = !isXhtml(frame.document)), fragment = "target")
     }
 
     /** Whether the page at [path] is served as XHTML, as web-platform-tests serves a `.xht` or `.xhtml` file. */

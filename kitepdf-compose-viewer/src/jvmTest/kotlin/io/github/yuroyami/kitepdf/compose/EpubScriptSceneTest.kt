@@ -202,6 +202,59 @@ class EpubScriptSceneTest {
         }
     }
 
+    /** A first chapter, then a chapter of notes that styles and logs its target. */
+    private fun notesBook(): EpubDocument = book(
+        fixed = false,
+        items = listOf("first.xhtml" to "application/xhtml+xml", "notes.xhtml" to "application/xhtml+xml"),
+        files = mapOf(
+            "first.xhtml" to """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><p>First.</p></body></html>""",
+            "notes.xhtml" to """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head>
+                <style type="text/css">:target { background: rgb(255, 0, 0); }</style></head><body>
+                <p id="n">Note n.</p><p id="m">Note m.</p>
+                <script>window.onload = function () { console.log('load ' + location.hash + ' ' + document.querySelector(':target').id); };
+                window.onhashchange = function () { console.log('hashchange ' + location.hash + ' ' + document.querySelector(':target').id); };</script>
+                </body></html>""",
+        ),
+        settings = EpubSettings(pageWidth = 300.0, pageHeight = 400.0, margin = 20.0),
+    )
+
+    @Test
+    fun the_view_gives_a_chapter_and_its_scripts_the_fragment_the_reader_goes_to() = forBothEffectOrders { queued ->
+        val doc = notesBook()
+        val log = ArrayList<String>()
+        val scripts = EpubScriptRunner(doc, onConsole = { _, message -> synchronized(log) { log += message } }).also { runners += it }
+        lateinit var state: KiteDocViewState
+        val (scene, driver) = drivenScene(300, 400, queued) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), epubScripts = scripts)
+        }
+        scene.use {
+            driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+            driver.runOnUi { state.scrollTo(assertNotNull(doc.bookmarkOf("OEBPS/notes.xhtml#n"))) }
+            driver.pumpUntilState { synchronized(log) { "load #n n" in log } }
+            assertEquals("n", doc.fragmentOf(1))
+
+            driver.runOnUi { state.scrollTo(assertNotNull(doc.bookmarkOf("OEBPS/notes.xhtml#m"))) }
+            driver.pumpUntilState { synchronized(log) { "hashchange #m m" in log } }
+            assertEquals(emptyList(), scripts.failures.map { it.message })
+        }
+    }
+
+    @Test
+    fun a_view_without_scripts_gives_the_book_the_fragment_the_reader_goes_to() = forBothEffectOrders { queued ->
+        val doc = notesBook()
+        lateinit var state: KiteDocViewState
+        val (scene, driver) = drivenScene(300, 400, queued) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize())
+        }
+        scene.use {
+            driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+            driver.runOnUi { state.scrollTo(assertNotNull(doc.bookmarkOf("OEBPS/notes.xhtml#m"))) }
+            driver.pumpUntilState { doc.fragmentOf(1) == "m" }
+        }
+    }
+
     @Test
     fun a_timer_that_a_script_set_runs_and_shows() {
         val doc = buttonBook(script = "setTimeout(paint, 200);")

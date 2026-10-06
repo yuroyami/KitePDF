@@ -23,6 +23,9 @@ internal class SelectorParser(text: String, private val namespaces: Map<String, 
 
     private var tooDeep = false
 
+    /** Whether a `:target` was read, which makes the layout restyle a chapter when its target changes (#550). */
+    private var usesTarget = false
+
     init {
         val stack = ArrayList<Int>()
         for (k in tokens.indices) {
@@ -107,7 +110,7 @@ internal class SelectorParser(text: String, private val namespaces: Map<String, 
             }
         }
         for (k in 0 until parts.size - 1) if (parts[k].pseudoElement != null || parts[k].otherPseudoElement != null) return null
-        return Selector(parts, combinators, leading)
+        return Selector(parts, combinators, leading, usesTarget)
     }
 
     private fun combinator(t: CssToken): Combinator? = when {
@@ -292,6 +295,7 @@ internal class SelectorParser(text: String, private val namespaces: Map<String, 
     }
 
     private fun pseudoClass(name: String): Condition? {
+        if (name == "target") usesTarget = true
         STRUCTURAL[name]?.let { return PseudoCondition(it) }
         return if (name in NEVER_MATCHING) NeverCondition else null
     }
@@ -439,16 +443,16 @@ internal class SelectorParser(text: String, private val namespaces: Map<String, 
             "disabled" to PseudoKind.DISABLED, "enabled" to PseudoKind.ENABLED, "required" to PseudoKind.REQUIRED,
             "optional" to PseudoKind.OPTIONAL, "read-only" to PseudoKind.READ_ONLY, "read-write" to PseudoKind.READ_WRITE,
             "placeholder-shown" to PseudoKind.PLACEHOLDER_SHOWN, "valid" to PseudoKind.VALID, "invalid" to PseudoKind.INVALID,
-            "in-range" to PseudoKind.IN_RANGE, "out-of-range" to PseudoKind.OUT_OF_RANGE,
+            "in-range" to PseudoKind.IN_RANGE, "out-of-range" to PseudoKind.OUT_OF_RANGE, "target" to PseudoKind.TARGET,
         )
 
         /**
          * The pseudo-classes that are valid and never hold in a paginated book: the user's actions, a
-         * visited link, a target, the states of a full screen, a popover, autofill and media, of a
+         * visited link, the current target of a scroll, the states of a full screen, a popover, autofill and media, of a
          * shadow host, and of a scroll bar's parts.
          */
         val NEVER_MATCHING = setOf(
-            "visited", "hover", "active", "focus", "focus-visible", "focus-within", "target", "target-current", "current", "past", "future",
+            "visited", "hover", "active", "focus", "focus-visible", "focus-within", "target-current", "current", "past", "future",
             "fullscreen", "-webkit-full-screen", "modal", "popover-open", "picture-in-picture", "autofill", "-webkit-autofill",
             "user-valid", "user-invalid", "playing", "paused", "seeking", "buffering", "stalled", "muted", "volume-locked",
             "host", "xr-overlay", "-webkit-drag", "active-view-transition",

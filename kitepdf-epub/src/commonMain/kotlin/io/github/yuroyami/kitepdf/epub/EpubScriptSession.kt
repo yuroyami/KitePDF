@@ -114,7 +114,7 @@ public class EpubScriptSession(
     override val hasTimers: Boolean get() = timersWaiting
 
     override fun chapterOpened(chapter: Int) {
-        open(chapter)
+        open(chapter)?.followFragment()
     }
 
     override fun tap(page: EpubPage, x: Double, y: Double): Boolean {
@@ -230,6 +230,43 @@ public class EpubScriptSession(
         /** The timers and frames its scripts wait on. */
         var timers = 0
 
+        /** The fragment of the chapter's URL, which the book's document keeps for the chapter (#550). */
+        private var fragment: String? = document.fragmentOf(chapter)
+
+        private var holdsTree = true
+
+        init {
+            document.holdTree(chapter, true)
+        }
+
+        /** The chapter's URL, with its fragment. */
+        fun location(): String = "$origin/" + document.chapterPath(chapter) + (fragment?.let { "#$it" } ?: "")
+
+        /**
+         * Moves to [to], a fragment of this chapter, as navigating to a fragment does (HTML, 7.4.6.4):
+         * the URL takes it, the element it indicates becomes the target, and the book's document
+         * keeps it for the chapter. Answers the URL before the move.
+         */
+        fun moveToFragment(to: String): String {
+            val old = location()
+            fragment = normalizedFragment(to)
+            document.setFragment(chapter, to)
+            dom.retarget(fragment, restyle = document.usesTarget(chapter))
+            return old
+        }
+
+        /**
+         * Takes the fragment that the viewer reached in the chapter since its scripts last saw one:
+         * the scripts get `popstate`, then `hashchange` as a task (#550).
+         */
+        fun followFragment() {
+            val reached = document.fragmentOf(chapter) ?: return
+            if (reached == fragment) return
+            val old = moveToFragment(reached)
+            steps("fragment", "__kite_fragment(\"" + old.replace("\\", "\\\\").replace("\"", "\\\"") + "\")")
+            commit()
+        }
+
         /** Where the next `document.write` of each script goes: after what the script wrote last. */
         private val writeCursors = HashMap<Int, KiteXmlNode>()
 
@@ -271,6 +308,7 @@ public class EpubScriptSession(
 
         /** Closes the engine, which revokes the blob URLs its scripts made, as a browser does when a page unloads (#533). */
         fun close() {
+            if (holdsTree) { holdsTree = false; document.holdTree(chapter, false) }
             runCatching { opened?.close() }
             document.blobUrls.closeChapter(chapter)
         }
@@ -467,10 +505,24 @@ public class EpubScriptSession(
                     recordFailure(KiteScriptException("chapter $chapter: a script may not open a data: URL as a page"))
                     return@def null
                 }
-                navigate(resolveLinkHref(href, document.chapterPath(chapter)) { EpubDocument.resolvePath(document.chapterDir(chapter), it) })
-                null
+                val target = resolveLinkHref(href, document.chapterPath(chapter)) { EpubDocument.resolvePath(document.chapterDir(chapter), it) }
+                // A URL of this chapter with a fragment moves within it, at once (HTML, 7.4.2.2, step 15): the
+                // prelude fires popstate and hashchange on the URL that this answers (#550).
+                val hash = href.indexOf('#')
+                val old = if (hash >= 0 && target.substringBefore('#') == document.chapterPath(chapter)) moveToFragment(href.substring(hash + 1)) else null
+                navigate(target)
+                old
             }
-            def("location") { "$origin/" + document.chapterPath(chapter) }
+            def("location") { location() }
+            // The URL that setting location.hash to the argument gives, or null when its fragment stays (HTML, 7.10.5.1).
+            def("hashUrl") { args ->
+                val url = WhatwgUrl.parse(location()) ?: return@def null
+                val old = url.fragment
+                url.setLocationHash(string(args, 0))
+                if (url.fragment == old) null else url.href()
+            }
+            // Scrolls to the fragment once the document is parsed, which makes its element the target (#550).
+            def("indicate") { dom.retarget(fragment, restyle = document.usesTarget(chapter)); null }
             def("origin") { origin }
             // The URL Standard (#520): a parse against an optional base, a setter of the URL class
             // on a serialized URL, and the application/x-www-form-urlencoded parser and serializer

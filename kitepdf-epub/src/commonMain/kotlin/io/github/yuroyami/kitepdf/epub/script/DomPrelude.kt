@@ -622,6 +622,13 @@ var FocusEvent = subEvent(UIEvent, 'FocusEvent', function (init) { this.relatedT
 var InputEvent = subEvent(UIEvent, 'InputEvent', function (init) { this.data = init.data === undefined ? null : init.data; this.inputType = init.inputType || ''; });
 var CustomEvent = subEvent(Event, 'CustomEvent', function (init) { this.detail = init.detail === undefined ? null : init.detail; });
 CustomEvent.prototype.initCustomEvent = function (type, bubbles, cancelable, detail) { initEventOf(this, type, bubbles, cancelable); this.detail = detail; };
+/* HashChangeEvent and PopStateEvent, of HTML, 7.4.6.4, which a move to another fragment fires (#550). */
+var HashChangeEvent = subEvent(Event, 'HashChangeEvent', function (init) {
+  this.oldURL = init.oldURL === undefined ? '' : usv(init.oldURL); this.newURL = init.newURL === undefined ? '' : usv(init.newURL);
+});
+var PopStateEvent = subEvent(Event, 'PopStateEvent', function (init) {
+  this.state = init.state === undefined ? null : init.state; this.hasUAVisualTransition = !!init.hasUAVisualTransition;
+});
 var TouchEvent = subEvent(UIEvent, 'TouchEvent', function (init) {
   this.touches = init.touches || []; this.targetTouches = init.targetTouches || []; this.changedTouches = init.changedTouches || [];
   this.ctrlKey = !!init.ctrlKey; this.shiftKey = !!init.shiftKey; this.altKey = !!init.altKey; this.metaKey = !!init.metaKey;
@@ -1601,7 +1608,8 @@ function* activateSteps(target, click, trusted) {
   } else if (tag === 'button' && formOf(c) && buttonType(c) === 'reset') {
     for (var e = resetSteps(formOf(c)); !GeneratorNext(e).done;) yield;
   } else if (tag === 'a' && !trusted) {
-    K.navigate(K.attr(c.__id, 'href'));
+    var from = K.navigate(K.attr(c.__id, 'href'));
+    if (from != null) for (var h = fragmentSteps(from); !GeneratorNext(h).done;) yield;
   }
   return false;
 }
@@ -1810,7 +1818,7 @@ Document.prototype.createAttributeNS = function (namespace, qualifiedName) {
 var EVENT_INTERFACES = {
   __proto__: null, event: Event, events: Event, htmlevents: Event, svgevents: Event, uievent: UIEvent, uievents: UIEvent,
   mouseevent: MouseEvent, mouseevents: MouseEvent, keyboardevent: KeyboardEvent, focusevent: FocusEvent, customevent: CustomEvent,
-  touchevent: TouchEvent
+  touchevent: TouchEvent, hashchangeevent: HashChangeEvent
 };
 Document.prototype.createEvent = function (interfaceName) {
   idOf(this);
@@ -1947,7 +1955,11 @@ var document = wrap(rootId);
 var Location = abstractInterface('Location');
 defineInterface(Location, 'Location');
 var location = ObjectCreate(Location.prototype);
-function navigate(v) { K.navigate(usv(v)); }
+/* A URL of the chapter with a fragment moves within it at once, and the host answers the URL before the move (#550). */
+function navigate(v) {
+  var old = K.navigate(usv(v));
+  if (old != null) for (var g = fragmentSteps(old); !GeneratorNext(g).done;);
+}
 def(location, 'href', function () { return K.location(); }, navigate);
 def(location, 'protocol', function () { return 'epub:'; });
 /* The book's origin, the same in each of its chapters (#500). */
@@ -1959,11 +1971,12 @@ def(location, 'port', function () { return ''; });
 def(location, 'origin', function () { return origin; });
 def(location, 'pathname', function () { return RegExpReplace(RE_FRAGMENT, StringSubstring(K.location(), origin.length), ''); });
 def(location, 'search', function () { return ''; });
-var locationHash = '';
-def(location, 'hash', function () { return locationHash; }, function (v) {
-  v = domString(v);
-  locationHash = v && StringCharAt(v, 0) !== '#' ? '#' + v : v;
-  navigate(locationHash);
+def(location, 'hash', function () {
+  var url = K.location(), at = StringIndexOf(url, '#');
+  return at < 0 || at === url.length - 1 ? '' : StringSubstring(url, at);
+}, function (v) {
+  var url = K.hashUrl(usv(v));
+  if (url != null) navigate(url);
 });
 hidden(location, 'assign', function (url) { navigate(url); });
 hidden(location, 'replace', function (url) { navigate(url); });
@@ -2328,6 +2341,8 @@ function* loadedSteps() {
   hidden(document, '__ready', 'interactive');
   for (var a = dispatchSteps(document, new Event('readystatechange')); !GeneratorNext(a).done;) yield;
   for (var b = dispatchSteps(document, new Event('DOMContentLoaded', { __proto__: null, bubbles: true })); !GeneratorNext(b).done;) yield;
+  // The fragment's element becomes the target once the document is parsed, before it completes, as in Blink (#550).
+  K.indicate();
   document.__ready = 'complete';
   for (var c = dispatchSteps(document, new Event('readystatechange')); !GeneratorNext(c).done;) yield;
   var load = new Event('load');
@@ -2354,6 +2369,26 @@ function* tapSteps(id, x, y) {
 }
 hostEntry('__kite_step', step);
 hostEntry('__kite_loaded', function () { return begin(loadedSteps()); });
+/* A move to another fragment of the chapter, which the URL and the target have taken (HTML, 7.4.6.4,
+   #550): popstate at once, then hashchange as a task when the fragment changed. */
+function* fragmentSteps(oldURL) {
+  var newURL = K.location();
+  var pop = new PopStateEvent('popstate', { __proto__: null, state: null });
+  pop.isTrusted = true;
+  for (var a = dispatchSteps(global, pop); !GeneratorNext(a).done;) yield;
+  if (fragmentOf(oldURL) === fragmentOf(newURL)) return;
+  queueTask(function* () {
+    var change = new HashChangeEvent('hashchange', { __proto__: null, oldURL: oldURL, newURL: newURL });
+    change.isTrusted = true;
+    for (var b = dispatchSteps(global, change); !GeneratorNext(b).done;) yield;
+  });
+}
+/* The fragment of a URL with its #, or null for a URL without one. */
+function fragmentOf(url) {
+  var at = StringIndexOf(url, '#');
+  return at < 0 ? null : StringSubstring(url, at);
+}
+hostEntry('__kite_fragment', function (oldURL) { return begin(fragmentSteps(oldURL)); });
 hostEntry('__kite_tap', function (id, x, y) { return begin(tapSteps(id, x, y)); });
 /* Queues the timers due by [now], in the order they fell due, and runs what is queued. */
 hostEntry('__kite_pump', function (now) {

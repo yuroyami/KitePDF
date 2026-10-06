@@ -2,6 +2,8 @@ package io.github.yuroyami.kitepdf.epub.script
 
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.epub.HtmlParser
+import io.github.yuroyami.kitepdf.epub.TARGET_STATE
+import io.github.yuroyami.kitepdf.epub.indicatedElement
 import io.github.yuroyami.kitepdf.epub.resolveSwitches
 import io.github.yuroyami.kitepdf.epub.css.FormStates
 import io.github.yuroyami.kitepdf.epub.css.Selector
@@ -344,10 +346,27 @@ internal class ScriptDom(
      * Sets the form control state [key] of [el], or forgets it for null. The state sits in the layout's
      * map, where the page and the selectors read it, and stays out of the DOM's attributes (#552).
      */
-    fun setState(el: KiteXmlNode.Element, key: String, value: String?) {
+    fun setState(el: KiteXmlNode.Element, key: String, value: String?, restyle: Boolean = true) {
         if (el.attrs[FormStates.STATE + key] == value) return
         el.attrs = LinkedHashMap(el.attrs).apply { if (value == null) remove(FormStates.STATE + key) else put(FormStates.STATE + key, value) }
-        changed()
+        if (restyle) changed()
+    }
+
+    /** The element that the fragment of the document's URL indicated when it last changed, which `:target` matches (#550). */
+    var target: KiteXmlNode.Element? = null
+        private set
+
+    /**
+     * Makes the element that [fragment] indicates the target, as scrolling to a fragment does (HTML,
+     * 7.4.6.4), or none for null. The layout sees the change only when [restyle], so that a chapter
+     * whose style sheets have no `:target` is not laid out again.
+     */
+    fun retarget(fragment: String?, restyle: Boolean) {
+        target?.let { setState(it, TARGET_STATE, null, restyle) }
+        target = fragment?.let { f ->
+            indicatedElement(root, f, { attr(it, "id") }) { el -> nameOf(el).takeIf { it.localName == "a" && it.namespace == XHTML_NS }?.let { attr(el, "name") } }
+        }
+        target?.let { setState(it, TARGET_STATE, "", restyle) }
     }
 
     /** The value of [el]'s attribute [localName] in [namespace], null for none, or null when it has none. */
@@ -637,7 +656,8 @@ internal class ScriptDom(
             doctypes[node]?.let { doctypes[copy] = it }
         }
         is KiteXmlNode.Element -> {
-            val out = KiteXmlNode.Element(if (node === root) FRAGMENT else node.tag, node.attrs)
+            // A copy of the target is not the target (#550).
+            val out = KiteXmlNode.Element(if (node === root) FRAGMENT else node.tag, node.attrs - (FormStates.STATE + TARGET_STATE))
             fragments.add(out)
             if (node !== root) {
                 names[out] = nameOf(node)

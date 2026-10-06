@@ -955,21 +955,42 @@ public class KiteDocViewState(
         }
     }
 
+    /** A visit to a fragment of a chapter, which a serial number tells apart from an earlier one to the same fragment (#550). */
+    internal class FragmentVisit(val serial: Int, val chapter: Int, val fragment: String)
+
     /**
-     * Runs the scripts of each scripted chapter that the reader reaches, once a scroll has
-     * settled on it, on [lane] (#41). The handler runs a chapter's scripts the first time only.
+     * The fragment the reader last went to, through a link, the table of contents, a bookmark or a
+     * script (#550). Written only on the composition's thread, by [scrollTo].
      */
-    internal suspend fun runChapterScripts(
+    internal var fragmentVisit: FragmentVisit? by mutableStateOf(null)
+    private var fragmentVisits = 0
+
+    /**
+     * Follows the chapter that the reader reaches, once a scroll has settled on it, on [lane]: gives
+     * the book the fragment the reader went to there, so that `:target` matches its element (#550),
+     * then runs the chapter's scripts when it has some and [handler] is set (#41). The handler runs
+     * a chapter's scripts the first time only, and takes a new fragment each time.
+     */
+    internal suspend fun followChapters(
         book: EpubDocument,
-        handler: io.github.yuroyami.kitepdf.epub.EpubScriptHandler,
+        handler: io.github.yuroyami.kitepdf.epub.EpubScriptHandler?,
         lane: kotlinx.coroutines.CoroutineDispatcher,
     ) {
-        androidx.compose.runtime.snapshotFlow { if (adapter?.isScrollInProgress == true) null else currentLocation.chapter }
+        // A visit counts once: a scroll away and back keeps what a script made of the fragment since.
+        var taken = 0
+        androidx.compose.runtime.snapshotFlow {
+            if (adapter?.isScrollInProgress == true) null
+            else currentLocation.chapter.let { chapter -> chapter to fragmentVisit?.takeIf { it.chapter == chapter } }
+        }
             .filterNotNull()
             .distinctUntilChanged()
-            .collect { chapter ->
+            .collect { (chapter, visit) ->
                 withContext(lane) {
-                    if (scriptCall("isScripted", false) { book.isScripted(chapter) }) {
+                    if (visit != null && visit.serial != taken) {
+                        taken = visit.serial
+                        scriptCall("setFragment", Unit) { book.setFragment(chapter, visit.fragment) }
+                    }
+                    if (handler != null && scriptCall("isScripted", false) { book.isScripted(chapter) }) {
                         scriptCall("chapterOpened", Unit) { handler.chapterOpened(chapter) }
                         epubScriptsRan()
                     }
@@ -1970,7 +1991,10 @@ public class KiteDocViewState(
     public suspend fun scrollTo(bookmark: KiteBookmark, animate: Boolean = false): Unit = onViewerThread {
         // Cover the locate window too: a publication during locate() must
         // already correct toward the bookmark's chapter, not the old slot.
-        if (bookmark is KiteBookmark.Flow) navigationTarget = flowTarget(bookmark)
+        if (bookmark is KiteBookmark.Flow) {
+            navigationTarget = flowTarget(bookmark)
+            bookmark.fragment?.let { fragmentVisit = FragmentVisit(++fragmentVisits, bookmark.chapter, it) }
+        }
         try {
             val location = locateGuarded(bookmark) ?: return@onViewerThread
             publishChapter()

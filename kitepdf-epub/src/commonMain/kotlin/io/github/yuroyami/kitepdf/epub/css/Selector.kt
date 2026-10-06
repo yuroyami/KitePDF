@@ -45,7 +45,10 @@ internal interface SelectorTree {
     /** The value of the attribute of [el] named [name] in no namespace, or null. */
     fun attr(el: KiteXmlNode.Element, name: String): String?
 
-    /** The form control state [key] of [el] that a script set, or null while the control follows its attributes (#552). */
+    /**
+     * The state [key] of [el] that no attribute holds, or null: a form control's state that a script
+     * set (#552), and `target` on the element that the chapter's fragment indicates (#550).
+     */
     fun state(el: KiteXmlNode.Element, key: String): String? = el.attrs[FormStates.STATE + key]
 }
 
@@ -156,7 +159,7 @@ internal enum class PseudoKind {
     ROOT, SCOPE, EMPTY, FIRST_CHILD, LAST_CHILD, ONLY_CHILD, FIRST_OF_TYPE, LAST_OF_TYPE, ONLY_OF_TYPE,
     ANY_LINK, NEVER, DEFINED, OPEN,
     CHECKED, DEFAULT, INDETERMINATE, DISABLED, ENABLED, REQUIRED, OPTIONAL, READ_ONLY, READ_WRITE,
-    PLACEHOLDER_SHOWN, VALID, INVALID, IN_RANGE, OUT_OF_RANGE,
+    PLACEHOLDER_SHOWN, VALID, INVALID, IN_RANGE, OUT_OF_RANGE, TARGET,
 }
 
 internal class PseudoCondition(val kind: PseudoKind) : Condition() {
@@ -182,6 +185,8 @@ internal class PseudoCondition(val kind: PseudoKind) : Condition() {
             PseudoKind.NEVER -> false
             PseudoKind.DEFINED -> !(isCustomElementName(tree.localName(el)) && tree.namespace(el) == XHTML_NS)
             PseudoKind.OPEN -> html(el, tree).let { (it == "details" || it == "dialog") && tree.attr(el, "open") != null }
+            // The element that the fragment of the chapter's URL indicates (HTML, 7.4.6.4), which keeps the mark when a script detaches it, as in Blink.
+            PseudoKind.TARGET -> tree.state(el, "target") != null
             else -> FormStates.matches(kind, el, tree)
         }
     }
@@ -387,6 +392,8 @@ internal class Selector(
     val parts: List<SimpleSelector>,
     val combinators: List<Combinator>,
     val leading: Combinator? = null,
+    /** Whether it holds a `:target`, so the layout restyles its chapter when the target changes (#550). */
+    val usesTarget: Boolean = false,
 ) {
     /** `::before`/`::after` on the subject compound, or null for a normal selector. */
     val pseudoElement: PseudoSide? get() = parts.last().pseudoElement

@@ -290,6 +290,18 @@ a link to the chapter's `<title>` is of kind `OTHER`, with no text.
 link before the viewer scrolls, with `kind` set for a reference (see
 [Compose viewer](compose-viewer.md)).
 
+A book can style the element a link lands on with `:target`, as a footnote that
+lights up when the reader reaches it. `KiteDocView` tells the book each fragment
+the reader goes to, through a link, the table of contents or a bookmark. Another
+viewer does it with `setFragment`:
+
+```kotlin
+book.setFragment(chapter, "fn1")    // the element with id fn1 now matches :target
+book.fragmentOf(chapter)            // "fn1"
+```
+
+Only a chapter whose style sheets use `:target` is laid out again.
+
 ### Audio and video
 
 A `<video>` or an `<audio>` element with controls keeps a box of its own on
