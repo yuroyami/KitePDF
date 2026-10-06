@@ -1806,10 +1806,16 @@ function writeHtml(doc, html) {
   var body = bodyOf(idOf(doc));
   if (body !== null) check(K.insertHtml(body.__id, 'beforeend', html), 'write');
 }
-Document.prototype.write = function () { idOf(this); writeHtml(this, ArrayJoin(listMap(arguments, domString), '')); };
-Document.prototype.writeln = function () { idOf(this); writeHtml(this, ArrayJoin(listMap(arguments, domString), '') + '\n'); };
-Document.prototype.open = function () { idOf(this); return this; };
-Document.prototype.close = function () { idOf(this); };
+/* HTML, 8.4: an XML document, such as an XHTML chapter, refuses to be written, opened or closed (#603). */
+function htmlOnly(doc, method, what) {
+  if (!isHtmlDocument(idOf(doc))) {
+    throw new DOMException("Failed to execute '" + method + "' on 'Document': Only HTML documents support " + what + '().', 'InvalidStateError');
+  }
+}
+Document.prototype.write = function () { htmlOnly(this, 'write', 'write'); writeHtml(this, ArrayJoin(listMap(arguments, domString), '')); };
+Document.prototype.writeln = function () { htmlOnly(this, 'writeln', 'write'); writeHtml(this, ArrayJoin(listMap(arguments, domString), '') + '\n'); };
+Document.prototype.open = function () { htmlOnly(this, 'open', 'open'); return this; };
+Document.prototype.close = function () { htmlOnly(this, 'close', 'close'); };
 Document.prototype.elementFromPoint = function () { idOf(this); return null; };
 Document.prototype.elementsFromPoint = function () { idOf(this); return []; };
 Document.prototype.execCommand = function () { idOf(this); return false; };

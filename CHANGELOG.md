@@ -260,6 +260,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty element closes itself, and markup that is not well-formed throws a `SyntaxError`. An
   attribute value written as XML keeps its tabs and line breaks as character references, in
   `XMLSerializer` too (#548).
+- In an XHTML chapter, `document.write`, `writeln`, `open` and `close` throw an `InvalidStateError`,
+  as a browser's do in an XML document, where they wrote into the chapter. An HTML chapter is written
+  as before (#603).
 - A Type 1 font whose `/lenIV` is -1 runs its charstrings and subroutines as they are, as
   FreeType does, where every glyph threw while it was decrypted and drew nothing (#597).
 - An embedded Type 1 font decrypts each of its subroutines before a glyph calls it, as it already
