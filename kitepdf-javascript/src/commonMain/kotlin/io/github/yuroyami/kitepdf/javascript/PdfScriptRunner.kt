@@ -9,6 +9,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.withLock
 import io.github.yuroyami.kitepdf.core.script.KiteScriptEngine
 import io.github.yuroyami.kitepdf.core.script.KiteScriptException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Runs the JavaScript a PDF carries: its document scripts, the actions of its pages and buttons,
@@ -34,7 +36,8 @@ import io.github.yuroyami.kitepdf.core.script.KiteScriptException
  * the runner opens its engine on a thread of its own and runs every call there, one at a time and
  * in order. [close] stops that thread. The callbacks below run on it too. On JavaScript and
  * WebAssembly the engine loads before its first use: call [prepare] once and wait for it, as
- * `KiteDocView` does.
+ * `KiteDocView` does. There, a long script that a `suspend` event method runs pauses now and
+ * then so the page can draw, and the next call waits for it (#489).
  *
  * Scripts are untrusted input, so [policy] decides whether they run at all and how long they may
  * take, and anything that reaches outside the document arrives at [onRequest] for the host to
@@ -100,19 +103,52 @@ public class PdfScriptRunner(
         true
     }
 
-    /** Runs [block] on the thread the engine belongs to, and waits for it. */
-    private fun <T> onScriptThread(block: () -> T): T {
+    /** Runs [block] on the thread the engine belongs to, and waits for it. A script in it never pauses. */
+    private fun <T> onScriptThread(block: suspend () -> T): T {
         check(!closed) { "the script runner is closed" }
-        val counted = {
-            busy++
-            try {
-                block()
-            } finally {
-                busy--
-            }
-        }
+        val counted = { counted { withPausing(false) { runNow(block) } } }
         return if (engineSource != null) counted() else scriptThread.value.call(counted)
     }
+
+    /**
+     * Runs a viewer's call: as [onScriptThread] on a thread of its own, where no engine can pause.
+     * Where the work runs where it is called, as on the web, a long script pauses and lets the
+     * page draw, and the next call waits for it (#489).
+     */
+    private suspend fun <T> pausingCall(block: suspend () -> T): T {
+        check(!closed) { "the script runner is closed" }
+        if (engineSource == null && scriptThread.value.isOwnThread) return onScriptThread(block)
+        return turns.withLock { counted { withPausing(true) { block() } } }
+    }
+
+    private inline fun <T> counted(block: () -> T): T {
+        busy++
+        try {
+            return block()
+        } finally {
+            busy--
+            if (closeWaits && busy == 0) closeHere()
+        }
+    }
+
+    private inline fun <T> withPausing(on: Boolean, block: () -> T): T {
+        val was = pausing
+        pausing = on
+        try {
+            return block()
+        } finally {
+            pausing = was
+        }
+    }
+
+    /** Whether a script that runs now may pause: only in a viewer's call, and where the engine can. */
+    private var pausing = false
+
+    /** Takes turns where a script may pause, so that no call reaches the engine while its script waits. */
+    private val turns = Mutex()
+
+    /** Whether [close] came while a script was paused, and left the closing to the call that runs it. */
+    private var closeWaits = false
 
     private val host = PdfScriptHost(
         document,
@@ -210,43 +246,47 @@ public class PdfScriptRunner(
     /** Loads the engine, which on JavaScript and WebAssembly has to happen before the first script. */
     override suspend fun prepare(): Unit = KiteJsScriptEngine.load()
 
-    override fun documentOpened() {
-        val first = onScriptThread { !documentOpenRan.also { documentOpenRan = true } }
-        if (first) runDocumentOpen()
+    override suspend fun documentOpened() {
+        pausingCall {
+            if (!documentOpenRan) {
+                documentOpenRan = true
+                documentOpenHere()
+            }
+        }
     }
 
-    override fun pageOpened(pageIndex: Int) {
-        runPageOpen(pageIndex)
+    override suspend fun pageOpened(pageIndex: Int) {
+        pausingCall { pageOpenHere(pageIndex) }
     }
 
-    override fun pageClosed(pageIndex: Int) {
-        runPageClose(pageIndex)
+    override suspend fun pageClosed(pageIndex: Int) {
+        pausingCall { pageCloseHere(pageIndex) }
     }
 
-    override fun runAction(action: PdfAction.JavaScript) {
-        run(action)
+    override suspend fun runAction(action: PdfAction.JavaScript) {
+        pausingCall { runHere(action) }
     }
 
     /** The viewer's keystroke: the value the field should show, or null when a script refused it. */
-    override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
-        val result = keystroke(fieldName, change, selectionStart, selectionEnd, commit = false)
+    override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
+        val result = pausingCall { keystrokeHere(fieldName, change, selectionStart, selectionEnd) }
         return if (result.accepted) result.value else null
     }
 
-    override fun commit(fieldName: String, value: String): Boolean = setFieldValue(fieldName, value)
+    override suspend fun commit(fieldName: String, value: String): Boolean = pausingCall { commitOnThread(fieldName, value) }
 
     override val supportsMultipleChoices: Boolean get() = true
 
     /** Runs only the selection-change event; deferred selection remains outside the live state. */
-    override fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection? = onScriptThread {
+    override suspend fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection? = pausingCall {
         choiceKeystrokeOnThread(fieldName, selection, formState.choiceSelection(fieldName) ?: PdfChoiceSelection(emptyList()))
     }
 
-    override fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? = onScriptThread {
+    override suspend fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? = pausingCall {
         choiceKeystrokeOnThread(fieldName, selection, previous)
     }
 
-    private fun choiceKeystrokeOnThread(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? {
+    private suspend fun choiceKeystrokeOnThread(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? {
         val field = document.formField(fieldName) ?: return null
         var candidate = field.validateChoiceSelection(selection) ?: return null
         if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return null
@@ -273,50 +313,60 @@ public class PdfScriptRunner(
     }
 
     /** One choice change follows the Acrobat Field event sequence without flattening its values. */
-    override fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean = onScriptThread {
+    override suspend fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean = pausingCall {
         commitChoiceOnThread(fieldName, selection)
     }
 
-    public fun runDocumentOpen(): List<KiteScriptException> = onScriptThread {
+    public fun runDocumentOpen(): List<KiteScriptException> = onScriptThread { documentOpenHere() }
+
+    private suspend fun documentOpenHere(): List<KiteScriptException> {
         val before = failureList.size
-        runDocumentScripts()
+        documentScriptsHere()
         (document.openAction as? PdfAction.JavaScript)?.let { runAction(it, "openAction") }
-        failureList.drop(before)
+        return failureList.drop(before)
     }
 
     /**
      * Runs every document-level script in the order of their names (ISO 32000-1 §7.7.4). A script
      * that fails is recorded and the ones after it still run.
      */
-    public fun runDocumentScripts(): List<KiteScriptException> = onScriptThread {
+    public fun runDocumentScripts(): List<KiteScriptException> = onScriptThread { documentScriptsHere() }
+
+    private suspend fun documentScriptsHere(): List<KiteScriptException> {
         val before = failureList.size
         documentScriptsRan = true
         for ((name, source) in document.documentJavaScripts.entries.sortedBy { it.key }) {
             evaluate(source, name)
         }
-        failureList.drop(before)
+        return failureList.drop(before)
     }
 
     /** Runs the page's open script, its `/AA /O` entry (ISO 32000-1 §12.6.3, Table 195). */
-    public fun runPageOpen(pageIndex: Int): KiteScriptException? = onScriptThread {
+    public fun runPageOpen(pageIndex: Int): KiteScriptException? = onScriptThread { pageOpenHere(pageIndex) }
+
+    private suspend fun pageOpenHere(pageIndex: Int): KiteScriptException? {
         currentPage = pageIndex
         val action = document.pages.getOrNull(pageIndex)?.openAction as? PdfAction.JavaScript
-        action?.let { runAction(it, "page $pageIndex open") }
+        return action?.let { runAction(it, "page $pageIndex open") }
     }
 
     /** Runs the page's close script, its `/AA /C` entry. */
-    public fun runPageClose(pageIndex: Int): KiteScriptException? = onScriptThread {
+    public fun runPageClose(pageIndex: Int): KiteScriptException? = onScriptThread { pageCloseHere(pageIndex) }
+
+    private suspend fun pageCloseHere(pageIndex: Int): KiteScriptException? {
         val action = document.pages.getOrNull(pageIndex)?.closeAction as? PdfAction.JavaScript
-        action?.let { runAction(it, "page $pageIndex close") }
+        return action?.let { runAction(it, "page $pageIndex close") }
     }
 
     /** Runs one JavaScript action, such as a link's or a button's. */
-    public fun run(action: PdfAction.JavaScript): String? = onScriptThread {
+    public fun run(action: PdfAction.JavaScript): String? = onScriptThread { runHere(action) }
+
+    private suspend fun runHere(action: PdfAction.JavaScript): String? {
         ensureEngine()
-        if (!policy.enabled) null else evaluate(action.script, "action")
+        return if (!policy.enabled) null else evaluate(action.script, "action")
     }
 
-    private fun runAction(action: PdfAction.JavaScript, name: String): KiteScriptException? {
+    private suspend fun runAction(action: PdfAction.JavaScript, name: String): KiteScriptException? {
         ensureEngine()
         if (!policy.enabled) return null
         val before = failureList.size
@@ -350,10 +400,12 @@ public class PdfScriptRunner(
         selectionStart: Int = editingValue(fieldName).length,
         selectionEnd: Int = selectionStart,
         commit: Boolean = false,
-    ): KeystrokeResult = onScriptThread {
+    ): KeystrokeResult = onScriptThread { keystrokeHere(fieldName, change, selectionStart, selectionEnd) }
+
+    private suspend fun keystrokeHere(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): KeystrokeResult {
         ensureEngine()
         val script = keystrokeScript(fieldName)
-        if (script == null || !policy.enabled) {
+        return if (script == null || !policy.enabled) {
             KeystrokeResult(true, mergedValue(fieldName, change, selectionStart, selectionEnd))
         } else {
             val result = dispatch(
@@ -379,7 +431,7 @@ public class PdfScriptRunner(
      */
     public fun setFieldValue(fieldName: String, value: String): Boolean = onScriptThread { commitOnThread(fieldName, value) }
 
-    private fun commitOnThread(fieldName: String, value: String): Boolean {
+    private suspend fun commitOnThread(fieldName: String, value: String): Boolean {
         ensureEngine()
         val field = document.formField(fieldName) ?: return false
         if (field.type == PdfFormField.FieldType.Choice) {
@@ -413,7 +465,7 @@ public class PdfScriptRunner(
         return true
     }
 
-    private fun commitChoiceOnThread(fieldName: String, selection: PdfChoiceSelection): Boolean {
+    private suspend fun commitChoiceOnThread(fieldName: String, selection: PdfChoiceSelection): Boolean {
         val field = document.formField(fieldName) ?: return false
         var candidate = field.validateChoiceSelection(selection) ?: return false
         if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return false
@@ -484,7 +536,7 @@ public class PdfScriptRunner(
         if (policy.enabled) calculateAll()
     }
 
-    private fun calculateAll() {
+    private suspend fun calculateAll() {
         for (name in calculationOrder()) {
             val field = document.formField(name) ?: continue
             val action = field.additionalActions?.calculate as? PdfAction.JavaScript ?: continue
@@ -505,7 +557,7 @@ public class PdfScriptRunner(
      */
     public fun formattedValue(fieldName: String): String = onScriptThread { formatOnThread(fieldName) }
 
-    private fun formatOnThread(fieldName: String): String {
+    private suspend fun formatOnThread(fieldName: String): String {
         ensureEngine()
         val field = document.formField(fieldName)
         val stored = if (field != null) formState.choiceSelection(fieldName)?.let { choiceEventValue(field, it, face = field.isCombo) }
@@ -521,44 +573,44 @@ public class PdfScriptRunner(
     }
 
     /** Runs a widget's mouse down script, which is how an on-screen button reports a press. */
-    override fun mouseDown(fieldName: String): Unit = widgetEvent(fieldName, "MouseDown") { it.mouseDown }
+    override suspend fun mouseDown(fieldName: String): Unit = widgetEvent(fieldName, "MouseDown") { it.mouseDown }
 
     /** Runs a widget's mouse up script, which is how an on-screen button reports a release. */
-    override fun mouseUp(fieldName: String): Unit = widgetEvent(fieldName, "MouseUp") { it.mouseUp }
+    override suspend fun mouseUp(fieldName: String): Unit = widgetEvent(fieldName, "MouseUp") { it.mouseUp }
 
     /** Runs a widget's focus script. */
-    override fun focus(fieldName: String): Unit = widgetEvent(fieldName, "Focus") { it.focus }
+    override suspend fun focus(fieldName: String): Unit = widgetEvent(fieldName, "Focus") { it.focus }
 
     /** Runs a widget's blur script, which a viewer fires when the field loses the caret. */
-    override fun blur(fieldName: String): Unit = widgetEvent(fieldName, "Blur") { it.blur }
+    override suspend fun blur(fieldName: String): Unit = widgetEvent(fieldName, "Blur") { it.blur }
 
     /** Runs the mouse down script of one widget of the field, such as one button of a radio group. */
-    override fun mouseDown(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "MouseDown", widgetIndex) { it.mouseDown }
+    override suspend fun mouseDown(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "MouseDown", widgetIndex) { it.mouseDown }
 
     /** Runs the mouse up script of one widget of the field. */
-    override fun mouseUp(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "MouseUp", widgetIndex) { it.mouseUp }
+    override suspend fun mouseUp(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "MouseUp", widgetIndex) { it.mouseUp }
 
     /** Runs the focus script of one widget of the field. */
-    override fun focus(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "Focus", widgetIndex) { it.focus }
+    override suspend fun focus(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "Focus", widgetIndex) { it.focus }
 
     /** Runs the blur script of one widget of the field. */
-    override fun blur(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "Blur", widgetIndex) { it.blur }
+    override suspend fun blur(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "Blur", widgetIndex) { it.blur }
 
     /**
      * Performs one action of a widget's `/A` chain. A script runs as the field's mouse up event,
      * which is where Acrobat keeps a button's mouse up script, and a form reset is followed by a
      * calculation round, as MuPDF does after one.
      */
-    override fun runWidgetAction(fieldName: String, action: PdfAction): Boolean = when (action) {
+    override suspend fun runWidgetAction(fieldName: String, action: PdfAction): Boolean = when (action) {
         is PdfAction.JavaScript -> {
-            onScriptThread {
+            pausingCall {
                 ensureEngine()
                 if (policy.enabled) fieldEvent(fieldName, "MouseUp", action)
             }
             true
         }
         is PdfAction.ResetForm -> {
-            onScriptThread {
+            pausingCall {
                 formState.resetForm(action)
                 ensureEngine()
                 if (policy.enabled) calculateAll()
@@ -569,12 +621,12 @@ public class PdfScriptRunner(
     }
 
     /** Runs one trigger of a field: of widget [widgetIndex] when given, else of its first widget. */
-    private fun widgetEvent(
+    private suspend fun widgetEvent(
         fieldName: String,
         eventName: String,
         widgetIndex: Int? = null,
         select: (io.github.yuroyami.kitepdf.PdfWidgetActions) -> PdfAction?,
-    ): Unit = onScriptThread {
+    ): Unit = pausingCall {
         ensureEngine()
         val field = if (policy.enabled) document.formField(fieldName) else null
         val actions = if (widgetIndex == null) field?.additionalActions else field?.widgets?.getOrNull(widgetIndex)?.additionalActions
@@ -583,7 +635,7 @@ public class PdfScriptRunner(
     }
 
     /** Runs [action] as the [eventName] event of the field. Call it on the script thread. */
-    private fun fieldEvent(fieldName: String, eventName: String, action: PdfAction.JavaScript) {
+    private suspend fun fieldEvent(fieldName: String, eventName: String, action: PdfAction.JavaScript) {
         dispatch(
             action.script, eventName.lowercase(),
             mapOf(
@@ -604,8 +656,8 @@ public class PdfScriptRunner(
      * base the caller pumps with (#367). Nothing runs on its own: a document cannot take the
      * thread from the host.
      */
-    override fun pumpTimers(nowMillis: Long): Long? = onScriptThread {
-        if (!started || !policy.enabled) return@onScriptThread null
+    override suspend fun pumpTimers(nowMillis: Long): Long? = pausingCall {
+        if (!started || !policy.enabled) return@pausingCall null
         for (code in host.dueTimers(now())) {
             evaluate(code, "timer")
         }
@@ -623,7 +675,7 @@ public class PdfScriptRunner(
 
     /* ─── the engine ────────────────────────────────────────────────────── */
 
-    private fun dispatch(script: String, name: String, info: Map<String, Any?>): PdfScriptHost.EventResult {
+    private suspend fun dispatch(script: String, name: String, info: Map<String, Any?>): PdfScriptHost.EventResult {
         // An event that never reaches its script, as when the engine would not open, changes nothing.
         val unchanged = PdfScriptHost.EventResult(rc = true, value = info["value"] as? String ?: "", change = info["change"] as? String ?: "")
         val engine = openEngine ?: return unchanged
@@ -639,13 +691,13 @@ public class PdfScriptRunner(
         return host.lastEventResult
     }
 
-    private fun evaluate(source: String, name: String): String? {
+    private suspend fun evaluate(source: String, name: String): String? {
         if (!ensureEngine()) return null
         if (!policy.enabled) return null
         val engine = openEngine ?: return null
         eventStartedAt = now()
         return try {
-            engine.evaluate(source, name)
+            if (pausing) engine.evaluatePausing(source, name) else engine.evaluate(source, name)
         } catch (e: KiteScriptException) {
             recordFailure(e)
             null
@@ -699,7 +751,7 @@ public class PdfScriptRunner(
     }
 
     /** Puts every field's shown text through its format script, after a calculation round. */
-    private fun formatAll() {
+    private suspend fun formatAll() {
         for (field in document.formFields) {
             if (field.additionalActions?.format == null) continue
             formatOnThread(field.fullyQualifiedName)
@@ -727,6 +779,16 @@ public class PdfScriptRunner(
     override fun close() {
         if (closed) return
         closed = true
+        // A paused script cannot close; it stops at its next check of the deadline, and its call closes the runner.
+        if (busy > 0 && (engineSource != null || scriptThread.isInitialized() && !scriptThread.value.isOwnThread)) {
+            closeWaits = true
+            return
+        }
+        closeHere()
+    }
+
+    private fun closeHere() {
+        closeWaits = false
         // Nothing to close when no script ever ran, because no engine was ever opened.
         if (engineSource != null || !scriptThread.isInitialized()) {
             openEngine?.close()

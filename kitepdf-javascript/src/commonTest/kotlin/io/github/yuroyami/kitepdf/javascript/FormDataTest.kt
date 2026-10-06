@@ -149,7 +149,7 @@ class FormDataTest {
         """disabled true false""",
     )
 
-    private fun logged(html: Boolean): List<String> {
+    private suspend fun logged(html: Boolean): List<String> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(body, extraFiles = mapOf("a.js" to script), html = html)
         val runner = EpubScriptRunner(book, onConsole = { _, message -> console += message }).also { runners += it }

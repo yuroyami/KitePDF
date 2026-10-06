@@ -45,7 +45,7 @@ class ChoiceScriptTest {
 
     private fun PdfScriptRunner.runScript(source: String) = run(PdfAction.JavaScript(source, PdfDictionary(emptyMap())))
 
-    private fun PdfScriptRunner.choose(name: String, selection: PdfChoiceSelection): Boolean {
+    private suspend fun PdfScriptRunner.choose(name: String, selection: PdfChoiceSelection): Boolean {
         val accepted = choiceKeystroke(name, selection) ?: return false
         return commitChoice(name, accepted)
     }
@@ -279,11 +279,11 @@ class ChoiceScriptTest {
         val calls = ArrayList<String>()
         val handler = object : PdfScriptHandler {
             override val formState = PdfFormState(document)
-            override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+            override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
                 calls += "key:$change:$selectionStart:$selectionEnd"
                 return change
             }
-            override fun commit(fieldName: String, value: String): Boolean {
+            override suspend fun commit(fieldName: String, value: String): Boolean {
                 calls += "commit:$value"
                 formState.setValue(fieldName, value)
                 return true
@@ -295,12 +295,12 @@ class ChoiceScriptTest {
         assertEquals("M", handler.formState.value("choice"))
         val multiple = object : PdfScriptHandler {
             override val formState = PdfFormState(fixture(flags = 1 shl 21))
-            override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String = error("must refuse before callbacks")
+            override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String = error("must refuse before callbacks")
         }
         assertFalse(multiple.commitChoice("choice", PdfChoiceSelection(listOf(0, 1))))
         val duplicate = object : PdfScriptHandler {
             override val formState = PdfFormState(fixture(options = "[[(S) (Small)] [(S) (Duplicate)]]"))
-            override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String = change
+            override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String = change
         }
         assertFalse(duplicate.commitChoice("choice", PdfChoiceSelection(listOf(1))))
     }
@@ -310,7 +310,7 @@ class ChoiceScriptTest {
         val document = fixture(options = "[[(LONG-EXPORT) (A)] [(NEXT) (B)]]", value = "/V (LONG-EXPORT)")
         val handler = object : PdfScriptHandler {
             override val formState = PdfFormState(document)
-            override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+            override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
                 val current = formState.value(fieldName).orEmpty()
                 return current.substring(0, selectionStart) + change + current.substring(selectionEnd)
             }

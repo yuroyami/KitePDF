@@ -12,6 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * The scripted books of the public corpus, run as a reader runs them (#496).
@@ -56,18 +57,18 @@ class ScriptedBookGateTest {
             .also { runners += it }
 
         init {
-            for (chapter in book.scriptedChapters) scripts.chapterOpened(chapter)
+            for (chapter in book.scriptedChapters) runBlocking { scripts.chapterOpened(chapter) }
         }
 
         fun page(chapter: Int): EpubPage = book.page(KiteLocation(chapter, 0))
 
         fun tapAndWait(chapter: Int) {
             val page = page(chapter)
-            scripts.tap(page, page.width / 2, page.height / 2)
+            runBlocking { scripts.tap(page, page.width / 2, page.height / 2) }
             val until = now + millis
             while (scripts.hasTimers && now < until) {
                 now += 16
-                scripts.pumpTimers(now)
+                runBlocking { scripts.pumpTimers(now) }
             }
         }
 

@@ -23,7 +23,7 @@ class DomInterfaceTest {
     }
 
     /** The lines that [script] logs in a chapter whose body is [body], an XHTML chapter, or an HTML one for [html]. */
-    private fun logged(body: String, script: String, html: Boolean = false): List<String> {
+    private suspend fun logged(body: String, script: String, html: Boolean = false): List<String> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter("$body<script src=\"dom.js\"></script>", extraFiles = mapOf("dom.js" to script), html = html)
         val runner = EpubScriptRunner(book, onConsole = { level, message -> console += "$level: $message" }).also { runners += it }

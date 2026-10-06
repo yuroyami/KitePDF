@@ -53,11 +53,11 @@ class TimerPumpSceneTest {
         /** How many times a page's open script ran. */
         val opened = AtomicInteger()
 
-        override fun pageOpened(pageIndex: Int) {
+        override suspend fun pageOpened(pageIndex: Int) {
             opened.incrementAndGet()
         }
 
-        override fun pumpTimers(nowMillis: Long): Long? {
+        override suspend fun pumpTimers(nowMillis: Long): Long? {
             pumps.incrementAndGet()
             return if (active) next else null
         }

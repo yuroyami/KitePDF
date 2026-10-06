@@ -41,10 +41,10 @@ class WidgetTapSceneTest {
     private class Recorder(document: PdfDocument) : PdfScriptHandler {
         override val formState: PdfFormState = PdfFormState(document)
         val events: MutableList<String> = Collections.synchronizedList(ArrayList())
-        override fun mouseDown(fieldName: String, widgetIndex: Int) { events += "down $fieldName $widgetIndex" }
-        override fun mouseUp(fieldName: String, widgetIndex: Int) { events += "up $fieldName $widgetIndex" }
-        override fun focus(fieldName: String, widgetIndex: Int) { events += "focus $fieldName $widgetIndex" }
-        override fun runWidgetAction(fieldName: String, action: PdfAction): Boolean {
+        override suspend fun mouseDown(fieldName: String, widgetIndex: Int) { events += "down $fieldName $widgetIndex" }
+        override suspend fun mouseUp(fieldName: String, widgetIndex: Int) { events += "up $fieldName $widgetIndex" }
+        override suspend fun focus(fieldName: String, widgetIndex: Int) { events += "focus $fieldName $widgetIndex" }
+        override suspend fun runWidgetAction(fieldName: String, action: PdfAction): Boolean {
             events += "action $fieldName ${action::class.simpleName}"
             return super.runWidgetAction(fieldName, action)
         }

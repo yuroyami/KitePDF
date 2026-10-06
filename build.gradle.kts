@@ -30,6 +30,15 @@ allprojects {
     // would have no effect.
     version = providers.gradleProperty("version").get()
 
+    // The JavaScript and WebAssembly tests run on one Node, new enough for WebAssembly stack
+    // switching, so a script that pauses on the web is tested on both targets (#489).
+    plugins.withType<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsPlugin> {
+        the<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsEnvSpec>().version.set("26.10.0")
+    }
+    plugins.withType<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugin> {
+        the<org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec>().version.set("26.10.0")
+    }
+
     // The decompression-bomb tests intentionally inflate up to the 512 MiB
     // FilterChain cap; Gradle's default 512m test heap cannot hold that plus
     // the builder's grow-by-doubling copy.

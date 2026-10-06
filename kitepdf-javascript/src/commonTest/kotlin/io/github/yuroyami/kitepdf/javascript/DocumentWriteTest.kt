@@ -29,7 +29,7 @@ class DocumentWriteTest {
         console.log(out.join('\n'));
     """.trimIndent()
 
-    private fun logged(html: Boolean): List<String> {
+    private suspend fun logged(html: Boolean): List<String> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter("<p>x</p><script src=\"a.js\"></script>", extraFiles = mapOf("a.js" to script), html = html)
         val runner = EpubScriptRunner(book, onConsole = { _, message -> console += message }).also { runners += it }

@@ -45,9 +45,9 @@ class PageScriptsSceneTest {
     private class Recorder(document: PdfDocument) : PdfScriptHandler {
         override val formState: PdfFormState = PdfFormState(document)
         val events: MutableList<String> = Collections.synchronizedList(ArrayList())
-        override fun documentOpened() { events += "open" }
-        override fun pageOpened(pageIndex: Int) { events += "page $pageIndex" }
-        override fun pageClosed(pageIndex: Int) { events += "close $pageIndex" }
+        override suspend fun documentOpened() { events += "open" }
+        override suspend fun pageOpened(pageIndex: Int) { events += "page $pageIndex" }
+        override suspend fun pageClosed(pageIndex: Int) { events += "close $pageIndex" }
     }
 
     @Test

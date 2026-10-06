@@ -7,6 +7,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * Interfaces that a book's scripts see, against their JavaScript tests in web-platform-tests, run
@@ -203,9 +204,9 @@ class WebPlatformTest {
         var skipped = 0L
         val clock = { started.elapsedNow().inWholeMilliseconds + skipped }
         val runner = EpubScriptRunner(book, EpubScriptPolicy(budgetMillis = 60_000), onConsole = { level, message -> console += "$level: $message" }, clock = clock).also { runners += it }
-        runner.chapterOpened(0)
+        runBlocking { runner.chapterOpened(0) }
         while (runner.hasTimers && console.none { it.startsWith("log: DONE ") } && skipped < MAX_WAIT_MILLIS) {
-            skipped += runner.pumpTimers(clock()) ?: break
+            skipped += runBlocking { runner.pumpTimers(clock()) } ?: break
         }
         return console to runner.failures.map { it.message.orEmpty() }
     }

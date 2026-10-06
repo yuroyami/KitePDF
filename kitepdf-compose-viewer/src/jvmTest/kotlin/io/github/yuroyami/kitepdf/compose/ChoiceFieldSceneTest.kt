@@ -74,16 +74,16 @@ class ChoiceFieldSceneTest {
         var refuse = false
         var refuseProposal = false
         var onProposal: (() -> Unit)? = null
-        override fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection? {
+        override suspend fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection? {
             proposals += selection
             onProposal?.invoke()
             return selection.takeUnless { refuseProposal }
         }
-        override fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
+        override suspend fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
             commits += selection
             return !refuse && formState.setChoiceSelection(fieldName, selection)
         }
-        override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
             val current = formState.value(fieldName).orEmpty()
             val start = selectionStart.coerceIn(0, current.length)
             return current.take(start) + change + current.drop(selectionEnd.coerceIn(start, current.length))

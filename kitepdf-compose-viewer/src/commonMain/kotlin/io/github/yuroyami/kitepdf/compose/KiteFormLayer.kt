@@ -128,7 +128,7 @@ internal fun KiteEpubScriptTimers(state: KiteDocViewState, scripts: EpubScriptHa
 private suspend fun pumpScriptTimers(
     lane: CoroutineDispatcher,
     hasTimers: () -> Boolean,
-    pump: (Long) -> Long?,
+    pump: suspend (Long) -> Long?,
     onTimersChanged: (() -> Unit) -> () -> Unit,
     wakeAt: (SendChannel<Unit>?) -> Unit,
     wakesAt: (SendChannel<Unit>) -> Boolean,
@@ -334,7 +334,7 @@ internal suspend fun KiteDocViewState.turnPage(name: PdfAction.NamedActionType) 
  * is the on state of the widget under the finger, so each button of a group selects itself
  * (ISO 32000-1, 12.7.4.2.4, #359).
  */
-private fun toggleIfButton(scripts: PdfScriptHandler, field: PdfFormField, widget: PdfFormField.Widget) {
+private suspend fun toggleIfButton(scripts: PdfScriptHandler, field: PdfFormField, widget: PdfFormField.Widget) {
     if (field.type != PdfFormField.FieldType.Button) return
     if ((field.flags and PUSH_BUTTON) != 0) return
     val name = field.fullyQualifiedName

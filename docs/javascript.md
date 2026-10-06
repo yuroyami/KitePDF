@@ -136,6 +136,15 @@ Call `prepare()` on a runner once and wait for it before the first script, as th
 does. A script that runs before then fails with a message that says so. On the other targets
 `prepare()` returns at once.
 
+A browser page has one thread, so a long script would freeze the page while it runs. The event
+methods of a runner are `suspend` functions for this reason. On the web, a script that one of
+them runs pauses about every 16 ms and lets the page draw and run its timers. A call that comes
+while a script is paused waits for that script to end. The engine pauses only on a runtime
+with WebAssembly stack switching: Chrome 137 and newer, and Node 25 and newer. On any other
+runtime the script runs in one go. The synchronous helpers, such as `run` and `setFieldValue`,
+never pause. A script's time budget counts the pauses too, so it measures how long the reader
+waits.
+
 ## Other engines
 
 The runner talks to the `KiteScriptEngine` interface in `kitepdf-core`. `KiteJsScriptEngine` is the KiteJS implementation. Pass your own engine to `PdfScriptRunner` to use another one.
@@ -448,8 +457,10 @@ pumps timers and follows the scripts' changes itself; see
 The DOM the library sets up in a chapter's engine before the book's first script is not counted,
 as it takes a few hundred milliseconds and on a slow device seconds, so a tight budget stops the
 book's scripts and never the DOM they need ([#554](https://github.com/yuroyami/KitePDF/issues/554)).
-`EpubScriptPolicy.DENY` runs nothing. The runner runs its calls on a thread of its own, as
-`PdfScriptRunner` does, and opens each chapter's engine on a thread of its own too. Call
+`EpubScriptPolicy.DENY` runs nothing. On the JVM, Android and native targets, the runner runs
+its calls on a thread of its own, as `PdfScriptRunner` does, and opens each chapter's engine on a
+thread of its own too. On the web it runs them on the page's thread, and a long script pauses
+there as described in [Threads](#threads). Call
 `prepare()` once before the first chapter opens, as for a PDF. A listener of `onNavigate` or `onTimersChanged`
 runs on one of them while a script waits for it, so it hands its work on rather than calling the
 runner. `EpubScriptSession` in `kitepdf-epub` is the same thing over any `KiteScriptEngine`, on

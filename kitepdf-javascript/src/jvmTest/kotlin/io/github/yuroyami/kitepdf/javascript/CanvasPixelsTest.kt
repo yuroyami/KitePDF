@@ -12,6 +12,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestResult
 
 /**
@@ -42,7 +43,7 @@ class CanvasPixelsTest {
                 """<script>var c = document.getElementById('c'), x = c.getContext('2d');$script</script>""",
         )
         val scripts = EpubScriptRunner(book).also { runners += it }
-        scripts.chapterOpened(0)
+        runBlocking { scripts.chapterOpened(0) }
         assertEquals(emptyList(), scripts.failures.map { it.message })
         val page = book.page(KiteLocation(0, 0))
         // The green bar above the canvas gives where the canvas starts, in page points down from the top.

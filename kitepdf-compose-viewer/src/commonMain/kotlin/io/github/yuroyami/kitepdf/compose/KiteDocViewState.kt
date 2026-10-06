@@ -593,7 +593,7 @@ public class KiteDocViewState(
         private set
     internal var choiceRejected: Boolean by mutableStateOf(false)
         private set
-    internal var captureChoiceInput: ((ChoiceSession) -> (() -> Unit)?)? = null
+    internal var captureChoiceInput: ((ChoiceSession) -> (suspend () -> Unit)?)? = null
     internal var choiceKeyHandler: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)? = null
 
     internal fun choiceWidgetArea(): Rect? {
@@ -620,7 +620,7 @@ public class KiteDocViewState(
 
     /** Establishes the baseline after the previous widget's queued blur has finished. */
     private fun focusChoice(session: ChoiceSession) {
-        val work = {
+        val work: suspend () -> PdfChoiceSelection? = {
             scriptCall("focus", Unit) { session.handler.focus(session.name, session.widget) }
             session.expectedRevision = session.handler.formState.fieldRevision(session.name)
             session.acceptedSelection = session.handler.formState.choiceSelection(session.name)
@@ -639,7 +639,7 @@ public class KiteDocViewState(
         }
         val lane = scriptLane
         val scope = scriptScope
-        if (lane == null || scope == null) answer(work())
+        if (lane == null || scope == null) runInPlace { answer(work()) }
         else kotlinx.coroutines.CoroutineScope(lane).launch {
             val selection = work()
             scope.launch {
@@ -664,7 +664,7 @@ public class KiteDocViewState(
         choiceCommitPending = true
         val handler = session.handler
         val flushInput = captureChoiceInput?.invoke(session)
-        val work = {
+        val work: suspend () -> Pair<Boolean, PdfChoiceSelection?> = {
             flushInput?.invoke()
             val accepted = if (!choiceIsCurrent(session)) null else scriptCall("choice keystroke", null) {
                 handler.choiceKeystroke(session.name, valid, session.draft ?: PdfChoiceSelection(emptyList()))
@@ -692,7 +692,7 @@ public class KiteDocViewState(
         }
         val lane = scriptLane
         val scope = scriptScope
-        if (lane == null || scope == null) answer(work())
+        if (lane == null || scope == null) runInPlace { answer(work()) }
         else kotlinx.coroutines.CoroutineScope(lane).launch {
             val result = work()
             scope.launch {
@@ -707,7 +707,7 @@ public class KiteDocViewState(
         session.handler.formState.fieldRevision(session.name) == session.expectedRevision &&
         !session.handler.formState.isReadOnly(session.name) && !session.handler.formState.isHidden(session.name)
 
-    private fun commitChoice(session: ChoiceSession): Boolean {
+    private suspend fun commitChoice(session: ChoiceSession): Boolean {
         if (!choiceIsCurrent(session)) return false
         val selection = session.draft ?: return false
         val accepted = scriptCall("choice commit", false) { session.handler.commitChoice(session.name, selection) }
@@ -750,7 +750,7 @@ public class KiteDocViewState(
             focusedWidgetBox = null
             editingText = null
         }
-        val work = {
+        val work: suspend () -> Unit = {
             if (commit) {
                 flushInput?.invoke()
                 if (session.dirty) commitChoice(session)
@@ -759,7 +759,7 @@ public class KiteDocViewState(
             scriptsRan()
         }
         val lane = scriptLane
-        if (lane == null) work() else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
+        if (lane == null) runInPlace(work) else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
     }
 
     /** Moves keyboard focus among the visible editable text and choice widgets in annotation order. */
@@ -831,7 +831,7 @@ public class KiteDocViewState(
         editingText = null
         val widget = focusedWidget
         val handler = scripts ?: return
-        val work = {
+        val work: suspend () -> Unit = {
             if (commit) scriptCall("commit", false) {
                 if (typed != null && (document as? PdfDocument)?.formField(name)?.isEditableCombo == true) {
                     handler.commitChoice(name, PdfChoiceSelection(emptyList(), freeText = typed))
@@ -841,7 +841,7 @@ public class KiteDocViewState(
             scriptsRan()
         }
         val lane = scriptLane
-        if (lane == null) work() else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
+        if (lane == null) runInPlace(work) else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
     }
 
     /**
@@ -903,16 +903,18 @@ public class KiteDocViewState(
      * composition reads from the script thread (#364). A handler that fails is logged under
      * [what] (#365).
      */
-    internal fun post(what: String, work: () -> Unit) {
+    internal fun post(what: String, work: suspend () -> Unit) {
         val scope = scriptScope
         val lane = scriptLane
         if (scope == null || lane == null) {
-            scriptCall(what, Unit, work)
-            scriptsRan()
+            runInPlace {
+                scriptCall(what, Unit) { work() }
+                scriptsRan()
+            }
             return
         }
         scope.launch(lane) {
-            scriptCall(what, Unit, work)
+            scriptCall(what, Unit) { work() }
             scriptsRan()
         }
     }

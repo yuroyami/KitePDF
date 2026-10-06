@@ -14,6 +14,10 @@ package io.github.yuroyami.kitepdf
  * happen, but not always from the same thread. A handler whose engine belongs to one thread moves
  * each call there itself, as `PdfScriptRunner` does. [hasTimers] is the exception: a viewer reads
  * it on its drawing thread every frame, so it must answer at once.
+ *
+ * The calls that run scripts suspend. On the web a handler may pause a long script in them and
+ * let the page draw before it goes on (#489), so a viewer waits for each call before it makes
+ * the next. Everywhere else they run to the end before they return.
  */
 public interface PdfScriptHandler {
 
@@ -35,34 +39,34 @@ public interface PdfScriptHandler {
      * did not keep the state, so a handler that outlives its viewer runs the scripts on the first
      * call only, as `PdfScriptRunner` does.
      */
-    public fun documentOpened() {}
+    public suspend fun documentOpened() {}
 
     /**
      * The reader landed on this page: run its open script. A viewer calls this when a scroll or a
      * page turn settles on the page, with the page's index in the document.
      */
-    public fun pageOpened(pageIndex: Int) {}
+    public suspend fun pageOpened(pageIndex: Int) {}
 
     /**
      * The reader left this page, for another page or because the view closed: run its close
      * script. A viewer calls this before it opens the next page.
      */
-    public fun pageClosed(pageIndex: Int) {}
+    public suspend fun pageClosed(pageIndex: Int) {}
 
     /** The reader tapped something whose action is a script, such as a link. */
-    public fun runAction(action: PdfAction.JavaScript) {}
+    public suspend fun runAction(action: PdfAction.JavaScript) {}
 
     /** A pointer went down on a widget. */
-    public fun mouseDown(fieldName: String) {}
+    public suspend fun mouseDown(fieldName: String) {}
 
     /** A pointer came up on a widget. */
-    public fun mouseUp(fieldName: String) {}
+    public suspend fun mouseUp(fieldName: String) {}
 
     /** A field took the caret. */
-    public fun focus(fieldName: String) {}
+    public suspend fun focus(fieldName: String) {}
 
     /** A field lost the caret. */
-    public fun blur(fieldName: String) {}
+    public suspend fun blur(fieldName: String) {}
 
     /**
      * A pointer went down on one widget of a field: [widgetIndex] is its place in
@@ -70,22 +74,22 @@ public interface PdfScriptHandler {
      * page, has scripts of its own, so a handler that runs scripts runs that widget's (#359).
      * The default passes the call on without the widget.
      */
-    public fun mouseDown(fieldName: String, widgetIndex: Int) {
+    public suspend fun mouseDown(fieldName: String, widgetIndex: Int) {
         mouseDown(fieldName)
     }
 
     /** A pointer came up on one widget of a field. See the other [mouseDown]. */
-    public fun mouseUp(fieldName: String, widgetIndex: Int) {
+    public suspend fun mouseUp(fieldName: String, widgetIndex: Int) {
         mouseUp(fieldName)
     }
 
     /** One widget of a field took the caret. See [mouseDown] with a widget. */
-    public fun focus(fieldName: String, widgetIndex: Int) {
+    public suspend fun focus(fieldName: String, widgetIndex: Int) {
         focus(fieldName)
     }
 
     /** One widget of a field lost the caret. See [mouseDown] with a widget. */
-    public fun blur(fieldName: String, widgetIndex: Int) {
+    public suspend fun blur(fieldName: String, widgetIndex: Int) {
         blur(fieldName)
     }
 
@@ -98,7 +102,7 @@ public interface PdfScriptHandler {
      * which the viewer performs itself: a go-to or a page turn in the document, and a link, a
      * submit or a print through the host.
      */
-    public fun runWidgetAction(fieldName: String, action: PdfAction): Boolean = when (action) {
+    public suspend fun runWidgetAction(fieldName: String, action: PdfAction): Boolean = when (action) {
         is PdfAction.JavaScript -> {
             runAction(action)
             true
@@ -116,13 +120,13 @@ public interface PdfScriptHandler {
      *
      * Returns the value the field should show, or null when a script refused the change.
      */
-    public fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? = null
+    public suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? = null
 
     /**
      * The reader finished with a field, so its value is committed: validate, store, recalculate
      * and format. Returns false when a script refused the value.
      */
-    public fun commit(fieldName: String, value: String): Boolean {
+    public suspend fun commit(fieldName: String, value: String): Boolean {
         formState.choiceField(fieldName)?.let { field ->
             val selection = field.choiceSelectionForValue(value) ?: return false
             return formState.setChoiceSelection(fieldName, selection, formState.fieldRevision(fieldName))
@@ -147,7 +151,7 @@ public interface PdfScriptHandler {
      * The default adapts a single display label through [keystroke]. A multiple selection needs
      * [supportsMultipleChoices]; a capable typed handler can override this for its own scripts.
      */
-    public fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection? {
+    public suspend fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection): PdfChoiceSelection? {
         val field = formState.choiceField(fieldName) ?: return null
         var candidate = field.validateChoiceSelection(selection) ?: return null
         if (formState.isReadOnly(fieldName) || formState.isHidden(fieldName)) return null
@@ -175,7 +179,7 @@ public interface PdfScriptHandler {
      * selection has not reached [formState], so a viewer supplies it here for consecutive row
      * changes. The default retains the two-argument custom-handler compatibility path.
      */
-    public fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? =
+    public suspend fun choiceKeystroke(fieldName: String, selection: PdfChoiceSelection, previous: PdfChoiceSelection): PdfChoiceSelection? =
         choiceKeystroke(fieldName, selection)
 
     /**
@@ -189,7 +193,7 @@ public interface PdfScriptHandler {
      * A custom [commit] override remains responsible for checking changes to the field's flags
      * while its scripts run; this adapter cannot make an arbitrary override atomic.
      */
-    public fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
+    public suspend fun commitChoice(fieldName: String, selection: PdfChoiceSelection): Boolean {
         val field = formState.choiceField(fieldName) ?: return false
         val candidate = field.validateChoiceSelection(selection) ?: return false
         if (candidate.indices.size > 1) {
@@ -214,7 +218,7 @@ public interface PdfScriptHandler {
      * A viewer calls this on a frame while [hasTimers] is true, and waits for as long as the
      * answer says before it calls again.
      */
-    public fun pumpTimers(nowMillis: Long): Long? = null
+    public suspend fun pumpTimers(nowMillis: Long): Long? = null
 
     /** True when a script is waiting on a timer. */
     public val hasTimers: Boolean get() = false

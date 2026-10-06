@@ -75,7 +75,7 @@ class FormInputSceneTest {
     /** Keeps every key, as a field with no keystroke script does. */
     private class Scripts(document: PdfDocument) : PdfScriptHandler {
         override val formState: PdfFormState = PdfFormState(document)
-        override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
             val current = formState.value(fieldName) ?: ""
             val start = selectionStart.coerceIn(0, current.length)
             return current.substring(0, start) + change + current.substring(selectionEnd.coerceIn(start, current.length))

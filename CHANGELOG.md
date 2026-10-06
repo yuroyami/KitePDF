@@ -877,6 +877,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Breaking: every event method of `PdfScriptHandler` and `EpubScriptHandler` is a `suspend`
+  function, such as `runAction`, `commit`, `chapterOpened`, `tap` and `pumpTimers`. A handler
+  that overrides one adds `suspend`, and a caller outside a coroutine wraps the call in one.
+  The synchronous helpers of `PdfScriptRunner`, such as `run`, `setFieldValue` and
+  `formattedValue`, do not change (#489).
+
+- On JavaScript and Wasm, a long document script no longer freezes the page. The script pauses
+  about every 16 ms, so the page draws and runs its timers. A call that comes while a script is
+  paused waits for it. The engine pauses only on a runtime with WebAssembly stack switching
+  (Chrome 137 and newer, Node 25 and newer); on any other runtime the script runs in one go, as
+  before. `KiteScriptEngine` has a new `evaluatePausing` for this. The synchronous helpers never
+  pause. This needs `kitejs-api` and `kitejs-quickjs` 0.5.0 (#489).
+
 - A scripted chapter opens two to six times faster after the first one. Each engine loads the
   bytecode of a large script that another engine of the process compiled, so the DOM of a
   chapter is parsed once per process. A warm chapter set up in 25 to 28 ms on the JVM, 34 to 38

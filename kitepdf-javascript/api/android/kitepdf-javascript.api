@@ -17,7 +17,7 @@ public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner : io/g
 	public static final field LIVE_CHAPTERS I
 	public fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Ljava/lang/String;Lkotlin/jvm/functions/Function2;)V
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function0;Ljava/lang/String;Lkotlin/jvm/functions/Function2;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun chapterOpened (I)V
+	public fun chapterOpened (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun close ()V
 	public final fun getDocument ()Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun getFailures ()Ljava/util/List;
@@ -26,8 +26,8 @@ public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner : io/g
 	public fun onNavigate (Lkotlin/jvm/functions/Function1;)Lkotlin/jvm/functions/Function0;
 	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
 	public fun prepare (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun pumpTimers (J)Ljava/lang/Long;
-	public fun tap (Lio/github/yuroyami/kitepdf/epub/EpubPage;DD)Z
+	public fun pumpTimers (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun tap (Lio/github/yuroyami/kitepdf/epub/EpubPage;DDLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class io/github/yuroyami/kitepdf/javascript/EpubScriptRunner$Companion {
@@ -45,6 +45,7 @@ public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine : io
 	public fun defineFunction (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public fun defineValue (Ljava/lang/String;Ljava/lang/Object;)V
 	public fun evaluate (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public fun evaluatePausing (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun getInstructionBudget ()I
 }
 
@@ -179,16 +180,16 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRequest$Submit
 public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/github/yuroyami/kitepdf/PdfScriptHandler, java/lang/AutoCloseable {
 	public fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;)V
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lio/github/yuroyami/kitepdf/core/script/KiteScriptEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun blur (Ljava/lang/String;)V
-	public fun blur (Ljava/lang/String;I)V
-	public fun choiceKeystroke (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
-	public fun choiceKeystroke (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
+	public fun blur (Ljava/lang/String;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun blur (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun choiceKeystroke (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun choiceKeystroke (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun close ()V
-	public fun commit (Ljava/lang/String;Ljava/lang/String;)Z
-	public fun commitChoice (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Z
-	public fun documentOpened ()V
-	public fun focus (Ljava/lang/String;)V
-	public fun focus (Ljava/lang/String;I)V
+	public fun commit (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun commitChoice (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun documentOpened (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun focus (Ljava/lang/String;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun focus (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun formattedValue (Ljava/lang/String;)Ljava/lang/String;
 	public final fun getCurrentPage ()I
 	public final fun getFailures ()Ljava/util/List;
@@ -197,26 +198,26 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptRunner : io/gi
 	public fun getHasTimers ()Z
 	public final fun getPolicy ()Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy;
 	public fun getSupportsMultipleChoices ()Z
-	public fun keystroke (Ljava/lang/String;Ljava/lang/String;II)Ljava/lang/String;
+	public fun keystroke (Ljava/lang/String;Ljava/lang/String;IILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun keystroke (Ljava/lang/String;Ljava/lang/String;IIZ)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult;
 	public static synthetic fun keystroke$default (Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner;Ljava/lang/String;Ljava/lang/String;IIZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/javascript/PdfScriptRunner$KeystrokeResult;
-	public fun mouseDown (Ljava/lang/String;)V
-	public fun mouseDown (Ljava/lang/String;I)V
-	public fun mouseUp (Ljava/lang/String;)V
-	public fun mouseUp (Ljava/lang/String;I)V
+	public fun mouseDown (Ljava/lang/String;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun mouseDown (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun mouseUp (Ljava/lang/String;ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun mouseUp (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onTimersChanged (Lkotlin/jvm/functions/Function0;)Lkotlin/jvm/functions/Function0;
-	public fun pageClosed (I)V
-	public fun pageOpened (I)V
+	public fun pageClosed (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun pageOpened (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun prepare (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun pumpTimers (J)Ljava/lang/Long;
+	public fun pumpTimers (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun run (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)Ljava/lang/String;
-	public fun runAction (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;)V
+	public fun runAction (Lio/github/yuroyami/kitepdf/PdfAction$JavaScript;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun runCalculations ()V
 	public final fun runDocumentOpen ()Ljava/util/List;
 	public final fun runDocumentScripts ()Ljava/util/List;
 	public final fun runPageClose (I)Lio/github/yuroyami/kitepdf/core/script/KiteScriptException;
 	public final fun runPageOpen (I)Lio/github/yuroyami/kitepdf/core/script/KiteScriptException;
-	public fun runWidgetAction (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfAction;)Z
+	public fun runWidgetAction (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfAction;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun setCurrentPage (I)V
 	public final fun setFieldValue (Ljava/lang/String;Ljava/lang/String;)Z
 	public final fun setFileName (Ljava/lang/String;)V

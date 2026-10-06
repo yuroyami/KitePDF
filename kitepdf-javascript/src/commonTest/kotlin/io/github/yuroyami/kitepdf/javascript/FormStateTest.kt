@@ -54,7 +54,7 @@ class FormStateTest {
 
     private val body = "<form id=\"f\"><input type=\"checkbox\" id=\"c\"/><select id=\"s\"><option id=\"o1\">a</option><option id=\"o2\">b</option></select><input id=\"t\" required=\"required\" placeholder=\"p\"/><input type=\"radio\" name=\"g\" id=\"r1\"/><input type=\"radio\" name=\"g\" id=\"r2\"/><textarea id=\"ta\" placeholder=\"q\" required=\"required\"></textarea><input type=\"number\" id=\"n\" min=\"0\" max=\"10\" value=\"5\"/></form>" + "<script src=\"a.js\"></script>"
 
-    private fun logged(html: Boolean): List<String> {
+    private suspend fun logged(html: Boolean): List<String> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(body, extraFiles = mapOf("a.js" to script), html = html)
         val runner = EpubScriptRunner(book, onConsole = { _, message -> console += message }).also { runners += it }

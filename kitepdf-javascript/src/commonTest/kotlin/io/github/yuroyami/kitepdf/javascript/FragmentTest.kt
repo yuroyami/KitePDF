@@ -77,11 +77,11 @@ class FragmentTest {
         )
     }
 
-    private fun logged(html: Boolean): List<String> {
+    private suspend fun logged(html: Boolean): List<String> {
         val console = ArrayList<String>()
         val book = book(html)
         val runner = EpubScriptRunner(book, onConsole = { _, message -> console += message }).also { runners += it }
-        fun pump() {
+        suspend fun pump() {
             var rounds = 0
             while (runner.hasTimers && rounds++ < 20) runner.pumpTimers(0L)
         }

@@ -67,6 +67,12 @@ public class KiteJsScriptEngine(
         if (value.isNullish) null else value.asString()
     }
 
+    /** On the web, with WebAssembly stack switching, a long script pauses about once a frame (#489). */
+    override suspend fun evaluatePausing(source: String, name: String): String? = guarded(name) {
+        val value = if (source.length >= MIN_CACHED_SOURCE) script(source, name).runPausing() else js.evaluatePausing(source, name)
+        if (value.isNullish) null else value.asString()
+    }
+
     /**
      * [source] compiled, from the bytecode another engine of the process wrote for it when there
      * is one (#555). A large script, such as the DOM that each chapter's engine sets up first,

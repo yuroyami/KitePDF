@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 /**
  * A runner answers on any thread. A KiteJS engine refuses a call from a thread other than the one
@@ -55,9 +56,9 @@ class ScriptThreadTest {
     @Test
     fun calls_from_two_threads_reach_the_one_engine() {
         PdfScriptRunner(PdfDocument.open(buttonPdf())).use { runner ->
-            assertNull(onThread("A") { runner.mouseUp("b") })
-            assertNull(onThread("B") { runner.mouseUp("b") })
-            runner.mouseUp("b")
+            assertNull(onThread("A") { runBlocking { runner.mouseUp("b") } })
+            assertNull(onThread("B") { runBlocking { runner.mouseUp("b") } })
+            runBlocking { runner.mouseUp("b") }
             assertTrue(runner.failures.isEmpty(), "scripts failed: ${runner.failures.map { it.message }}")
             assertEquals("xxx", runner.formState.value("t"))
         }
@@ -69,9 +70,9 @@ class ScriptThreadTest {
         val two = PdfScriptRunner(PdfDocument.open(buttonPdf()))
         try {
             assertNull(onThread("C") {
-                one.mouseUp("b")
-                two.mouseUp("b")
-                two.mouseUp("b")
+                runBlocking { one.mouseUp("b") }
+                runBlocking { two.mouseUp("b") }
+                runBlocking { two.mouseUp("b") }
             })
             assertTrue(one.failures.isEmpty() && two.failures.isEmpty())
             assertEquals("x", one.formState.value("t"))
@@ -95,9 +96,9 @@ class ScriptThreadTest {
     @Test
     fun a_closed_runner_refuses_calls_instead_of_hanging() {
         val runner = PdfScriptRunner(PdfDocument.open(buttonPdf()))
-        runner.mouseUp("b")
+        runBlocking { runner.mouseUp("b") }
         runner.close()
-        val failure = runCatching { runner.mouseUp("b") }.exceptionOrNull()
+        val failure = runCatching { runBlocking { runner.mouseUp("b") } }.exceptionOrNull()
         assertTrue(failure is IllegalStateException, "got $failure")
     }
 

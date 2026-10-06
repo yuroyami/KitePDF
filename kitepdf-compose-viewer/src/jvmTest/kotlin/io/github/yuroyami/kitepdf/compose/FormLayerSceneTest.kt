@@ -64,10 +64,10 @@ class FormLayerSceneTest {
         var ticks = 0
         private var timerDue: Long? = null
 
-        override fun documentOpened() { events.add("open") }
-        override fun pageOpened(pageIndex: Int) { events.add("page $pageIndex") }
-        override fun mouseDown(fieldName: String) { events.add("down $fieldName") }
-        override fun mouseUp(fieldName: String) {
+        override suspend fun documentOpened() { events.add("open") }
+        override suspend fun pageOpened(pageIndex: Int) { events.add("page $pageIndex") }
+        override suspend fun mouseDown(fieldName: String) { events.add("down $fieldName") }
+        override suspend fun mouseUp(fieldName: String) {
             events.add("up $fieldName")
             // Only the button writes and starts the timer, as its own script would.
             if (fieldName == "press") {
@@ -77,7 +77,7 @@ class FormLayerSceneTest {
         }
 
         /** Stands in for a keystroke script that only takes digits. */
-        override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
             if (change.any { !it.isDigit() }) return null
             val current = formState.value(fieldName) ?: ""
             val start = selectionStart.coerceIn(0, current.length)
@@ -85,17 +85,17 @@ class FormLayerSceneTest {
             return current.substring(0, start) + change + current.substring(end)
         }
 
-        override fun commit(fieldName: String, value: String): Boolean {
+        override suspend fun commit(fieldName: String, value: String): Boolean {
             events.add("commit $fieldName=$value")
             formState.setValue(fieldName, value)
             return true
         }
 
-        override fun focus(fieldName: String) { events.add("focus $fieldName") }
-        override fun blur(fieldName: String) { events.add("blur $fieldName") }
+        override suspend fun focus(fieldName: String) { events.add("focus $fieldName") }
+        override suspend fun blur(fieldName: String) { events.add("blur $fieldName") }
 
         override val hasTimers: Boolean get() = timerDue != null
-        override fun pumpTimers(nowMillis: Long): Long? {
+        override suspend fun pumpTimers(nowMillis: Long): Long? {
             val due = timerDue ?: return null
             if (nowMillis < due) return due - nowMillis
             ticks++
@@ -219,7 +219,7 @@ class FormLayerSceneTest {
         val doc = PdfDocument.open(formPdf())
         val scripts = object : PdfScriptHandler {
             override val formState: PdfFormState = PdfFormState(doc)
-            override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
+            override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
                 Thread.sleep(80)
                 if (change.any { !it.isDigit() }) return null
                 val current = formState.value(fieldName) ?: ""
@@ -261,7 +261,7 @@ class FormLayerSceneTest {
         val doc = PdfDocument.open(formPdf())
         val scripts = object : PdfScriptHandler {
             override val formState: PdfFormState = PdfFormState(doc)
-            override fun mouseUp(fieldName: String) {
+            override suspend fun mouseUp(fieldName: String) {
                 if (fieldName == "press") formState.setValue("out", "88888888")
             }
         }
@@ -373,7 +373,7 @@ class FormLayerSceneTest {
 
             @Volatile var thread: String? = null
 
-            override fun documentOpened() {
+            override suspend fun documentOpened() {
                 thread = Thread.currentThread().name
                 started.countDown()
                 release.await()

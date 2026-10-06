@@ -19,7 +19,7 @@ class SelectorQueryTest {
         runners.forEach { it.close() }
     }
 
-    private fun logged(body: String, script: String, html: Boolean): List<String> {
+    private suspend fun logged(body: String, script: String, html: Boolean): List<String> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter("$body<script src=\"q.js\"></script>", extraFiles = mapOf("q.js" to script), html = html)
         val runner = EpubScriptRunner(book, onConsole = { level, message -> console += "$level: $message" }).also { runners += it }

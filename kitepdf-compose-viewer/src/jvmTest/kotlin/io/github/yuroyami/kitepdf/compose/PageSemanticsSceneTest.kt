@@ -57,7 +57,7 @@ class PageSemanticsSceneTest {
     /** Keeps every key, as a field with no keystroke script does. */
     private class Scripts(document: PdfDocument) : PdfScriptHandler {
         override val formState: PdfFormState = PdfFormState(document)
-        override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String = change
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String = change
     }
 
     private fun nodes(scene: ImageComposeScene): List<SemanticsNode> = onTestUiThread {

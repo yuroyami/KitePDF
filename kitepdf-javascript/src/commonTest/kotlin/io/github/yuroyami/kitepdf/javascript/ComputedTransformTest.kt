@@ -35,7 +35,7 @@ class ComputedTransformTest {
         """scale(0.0000012) => matrix(1.2e-06, 0, 0, 1.2e-06, 0, 0)""",
     )
 
-    private fun logged(html: Boolean): List<String> {
+    private suspend fun logged(html: Boolean): List<String> {
         val console = ArrayList<String>()
         var now = 0L
         val book = ScriptBooks.chapter("""<p id="p">x</p><script src="a.js"></script>""", extraFiles = mapOf("a.js" to script), html = html)

@@ -38,7 +38,7 @@ class FrameTest {
         settings = EpubSettings(pageWidth = 600.0, pageHeight = 800.0, margin = 20.0),
     )
 
-    private fun open(book: EpubDocument, console: MutableList<String> = ArrayList()): EpubScriptRunner {
+    private suspend fun open(book: EpubDocument, console: MutableList<String> = ArrayList()): EpubScriptRunner {
         val scripts = EpubScriptRunner(book, onConsole = { _, m -> console += m }).also { runners += it }
         scripts.chapterOpened(0)
         return scripts

@@ -52,16 +52,16 @@ class ScriptCallsSceneTest {
     private open class Recorder(document: PdfDocument) : PdfScriptHandler {
         override val formState: PdfFormState = PdfFormState(document)
         val events: MutableList<String> = Collections.synchronizedList(ArrayList())
-        override fun documentOpened() { events += "open" }
-        override fun pageOpened(pageIndex: Int) { events += "page $pageIndex" }
-        override fun focus(fieldName: String) { events += "focus $fieldName" }
-        override fun blur(fieldName: String) { events += "blur $fieldName" }
-        override fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
+        override suspend fun documentOpened() { events += "open" }
+        override suspend fun pageOpened(pageIndex: Int) { events += "page $pageIndex" }
+        override suspend fun focus(fieldName: String) { events += "focus $fieldName" }
+        override suspend fun blur(fieldName: String) { events += "blur $fieldName" }
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String? {
             val current = formState.value(fieldName) ?: ""
             val start = selectionStart.coerceIn(0, current.length)
             return current.substring(0, start) + change + current.substring(selectionEnd.coerceIn(start, current.length))
         }
-        override fun commit(fieldName: String, value: String): Boolean {
+        override suspend fun commit(fieldName: String, value: String): Boolean {
             events += "commit $fieldName=$value"
             formState.setValue(fieldName, value)
             return true
@@ -113,9 +113,9 @@ class ScriptCallsSceneTest {
             forBothEffectOrders { queued ->
                 val doc = PdfDocument.open(formPdf())
                 val scripts = object : Recorder(doc) {
-                    override fun documentOpened() = throw IllegalStateException("the open script failed")
-                    override fun pageOpened(pageIndex: Int) = throw IllegalStateException("the page script failed")
-                    override fun focus(fieldName: String) {
+                    override suspend fun documentOpened() = throw IllegalStateException("the open script failed")
+                    override suspend fun pageOpened(pageIndex: Int) = throw IllegalStateException("the page script failed")
+                    override suspend fun focus(fieldName: String) {
                         super.focus(fieldName)
                         throw IllegalStateException("the focus script failed")
                     }
@@ -152,7 +152,7 @@ class ScriptCallsSceneTest {
         try {
             val slowDoc = PdfDocument.open(formPdf())
             val slow = object : Recorder(slowDoc) {
-                override fun documentOpened() {
+                override suspend fun documentOpened() {
                     started.countDown()
                     release.await()
                 }
@@ -214,7 +214,7 @@ class ScriptCallsSceneTest {
             try {
                 val doc = PdfDocument.open(formPdf())
                 val scripts = object : Recorder(doc) {
-                    override fun focus(fieldName: String) {
+                    override suspend fun focus(fieldName: String) {
                         super.focus(fieldName)
                         focusing.countDown()
                         release.await()

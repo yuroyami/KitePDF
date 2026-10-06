@@ -467,7 +467,7 @@ class LinkTapSceneTest {
     private class ScriptRecorder(document: io.github.yuroyami.kitepdf.PdfDocument) : io.github.yuroyami.kitepdf.PdfScriptHandler {
         override val formState = io.github.yuroyami.kitepdf.PdfFormState(document)
         val ran: MutableList<String> = java.util.Collections.synchronizedList(ArrayList())
-        override fun runAction(action: PdfAction.JavaScript) { ran += action.script }
+        override suspend fun runAction(action: PdfAction.JavaScript) { ran += action.script }
     }
 
     /** Lays out [doc] in [layout] with [scripts], and runs [block] once page 0 has a place. */

@@ -10,6 +10,8 @@ import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kitepdf.epub.EpubScriptHandler
 import io.github.yuroyami.kitepdf.epub.EpubScriptSession
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * What a book's scripts are allowed to do, and for how long (#41).
@@ -48,9 +50,11 @@ public class EpubScriptPolicy(
  *
  * The scripts of each chapter run in a window of their own, over the library's own parse and
  * layout: [EpubScriptSession] says what they see. A runner can be called from any thread. It
- * runs every call on a thread of its own, one at a time and in order, as `PdfScriptRunner` does.
- * A KiteJS engine belongs to the thread that opened it, and each chapter's engine opens on a
- * thread of its own, so the call goes there while it runs that chapter's scripts (#498). [close] stops every one of them. A listener of [onNavigate] or
+ * runs every call one at a time and in order, as `PdfScriptRunner` does. Off the web, it runs
+ * them on a thread of its own. A KiteJS engine belongs to the thread that opened it, and each
+ * chapter's engine opens on a thread of its own, so the call goes there while it runs that
+ * chapter's scripts (#498). [close] stops every one of them. On the web, a long script pauses now
+ * and then so the page can draw, and the next call waits for it (#489). A listener of [onNavigate] or
  * [onTimersChanged] runs on one of them while a script waits for it, so it hands its work on, as
  * `KiteDocView` does, rather than calling the runner.
  *
@@ -121,17 +125,17 @@ public class EpubScriptRunner(
     /** Loads the engine, which on JavaScript and WebAssembly has to happen before the first script. */
     override suspend fun prepare(): Unit = KiteJsScriptEngine.load()
 
-    override fun chapterOpened(chapter: Int) {
+    override suspend fun chapterOpened(chapter: Int) {
         if (!policy.enabled) return
         call { it.chapterOpened(chapter) }
     }
 
-    override fun tap(page: EpubPage, x: Double, y: Double): Boolean {
+    override suspend fun tap(page: EpubPage, x: Double, y: Double): Boolean {
         if (!policy.enabled) return false
         return call { it.tap(page, x, y) } ?: false
     }
 
-    override fun pumpTimers(nowMillis: Long): Long? {
+    override suspend fun pumpTimers(nowMillis: Long): Long? {
         if (!policy.enabled) return null
         return call { it.pumpTimers(nowMillis) }
     }
@@ -146,20 +150,37 @@ public class EpubScriptRunner(
         return { lock.withLock { navigationListeners.remove(listener) } }
     }
 
-    /** Runs [block] with the session on the script thread, and waits for it; null once closed. */
-    private fun <T> call(block: (EpubScriptSession) -> T): T? {
+    /**
+     * Runs [block] with the session on the script thread, and waits for it; null once closed. On a
+     * thread of its own no engine can pause, so the call runs to its end there. Where the work runs
+     * where it is called, as on the web, a long script pauses and lets the page draw, and the next
+     * call waits for it (#489).
+     */
+    private suspend fun <T> call(block: suspend (EpubScriptSession) -> T): T? {
         if (closed) return null
-        return scriptThread.value.call {
-            if (closed) return@call null
-            callStartedAt = now()
-            busy++
-            try {
-                block(sessionHere())
-            } finally {
-                busy--
-            }
+        val thread = scriptThread.value
+        if (thread.isOwnThread) return thread.call { turn { session -> runNow { block(session) } } }
+        return turns.withLock { turn { session -> block(session) } }
+    }
+
+    /** One call of the runner, with the budget started; a [close] that came while it was paused ends it. */
+    private inline fun <T> turn(block: (EpubScriptSession) -> T): T? {
+        if (closed) return null
+        callStartedAt = now()
+        busy++
+        try {
+            return block(sessionHere())
+        } finally {
+            busy--
+            if (closed && busy == 0 && closeWaits) closeHere()
         }
     }
+
+    /** Takes turns where a script may pause, so that no call reaches an engine while its script waits. */
+    private val turns = Mutex()
+
+    /** Whether [close] came while a script was paused, and left the closing to the call that runs it. */
+    private var closeWaits = false
 
     /** The session, made on first use on the script thread. Each chapter's engine opens on a thread of its own. */
     private fun sessionHere(): EpubScriptSession = session ?: EpubScriptSession(
@@ -203,6 +224,16 @@ public class EpubScriptRunner(
         if (closed) return
         closed = true
         if (!scriptThread.isInitialized()) return
+        // A paused script cannot close; it stops at its next check of the deadline, and its call closes the runner.
+        if (busy > 0 && !scriptThread.value.isOwnThread) {
+            closeWaits = true
+            return
+        }
+        closeHere()
+    }
+
+    private fun closeHere() {
+        closeWaits = false
         val thread = scriptThread.value
         try {
             thread.call {
@@ -238,6 +269,12 @@ public class EpubScriptRunner(
             if (!first) return engine.evaluate(source, name)
             first = false
             return settingUp { engine.evaluate(source, name) }
+        }
+
+        override suspend fun evaluatePausing(source: String, name: String): String? {
+            if (!first) return engine.evaluatePausing(source, name)
+            first = false
+            return settingUp { engine.evaluatePausing(source, name) }
         }
 
         private inline fun <T> settingUp(block: () -> T): T {
