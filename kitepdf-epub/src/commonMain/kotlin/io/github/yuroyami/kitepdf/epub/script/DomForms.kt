@@ -233,7 +233,7 @@ function autocompleteMember(p) {
 /* The state of an input: its type, by the keywords of HTML, 4.10.5. */
 function inputType(el) { return enumState(ENUMS.inputtype, K.attr(el.__id, 'type')); }
 function buttonType(el) { return enumState(ENUMS.buttontype, K.attr(el.__id, 'type')); }
-function disabledOf(el) { return K.attr(el.__id, 'disabled') != null; }
+function disabledOf(el) { return controlDisabled(el.__id); }
 function checkedOf(el) { var c = flagState(el, 'checked'); return c !== undefined ? c : K.attr(el.__id, 'checked') != null; }
 /* Sets the checkedness of [el], which makes it dirty, so its checked attribute no longer sets it (HTML, 4.10.5). */
 function setChecked(el, v) {
@@ -285,16 +285,267 @@ function inputTypeChanged(input) {
   var v = dirtyValue(input), type = inputType(input);
   if (v !== undefined && valueMode(type) === 'value') K.setState(id, 'value', K.sanitize(id, type, v));
 }
+/* The value of an input, by its value mode (HTML, 4.10.5.4), and the API value of a textarea. */
+function inputValue(el) {
+  var type = inputType(el), mode = valueMode(type), v;
+  if (mode === 'filename') return '';
+  if (mode === 'value') v = dirtyValue(el);
+  if (v === undefined) v = K.attr(el.__id, 'value');
+  if (mode === 'value') return K.sanitize(el.__id, type, v == null ? '' : v);
+  return v != null ? v : mode === 'default/on' ? 'on' : '';
+}
+function textareaValue(el) { var v = dirtyValue(el); return K.sanitize(el.__id, 'textarea', v !== undefined ? v : textOf(el)); }
 /* The dirty value of a control, or undefined while it has none. */
 function dirtyValue(el) { var v = K.state(el.__id, 'value'); return v == null ? undefined : v; }
 function setDirtyValue(el, v) { K.setState(el.__id, 'value', v === null ? '' : domString(v)); }
+
+/* ---- FormData, of XMLHttpRequest, 4.3, over the entry list of a form, of HTML, 4.10.21.4 (#531) ---- */
+
+/* The entry list of a FormData lives in a weak map, as a holder whose list set() and delete()
+   replace, so an iterator reads the list live. */
+var formDatas = new WeakMap();
+function formDataOf(d) {
+  var h = WeakMapGet(formDatas, d);
+  if (h === undefined) throw new TypeError('Illegal invocation');
+  return h;
+}
+function newFormData(list) { var d = ObjectCreate(FormData.prototype); WeakMapSet(formDatas, d, { list: list }); return d; }
+/* An entry's value: a scalar value string, or a File. A Blob that is no File becomes one named
+   "blob", and a filename names a new File over the same bytes. */
+function entryValue(value, filename) {
+  var data = value !== null && typeof value === 'object' ? WeakMapGet(blobs, value) : undefined;
+  if (data === undefined) return usv(value);
+  var file = WeakMapGet(files, value);
+  if (file !== undefined && filename === undefined) return value;
+  var out = ObjectCreate(File.prototype);
+  WeakMapSet(blobs, out, data);
+  WeakMapSet(files, out, { name: filename !== undefined ? usv(filename) : file !== undefined ? file.name : 'blob', lastModified: file !== undefined ? file.lastModified : DateNow() });
+  return out;
+}
+/* The value and filename of append() and set(): a third argument needs a Blob. */
+function entryArgs(args, what) {
+  needArgs(args, 2, what);
+  var isBlob = args[1] !== null && typeof args[1] === 'object' && WeakMapHas(blobs, args[1]);
+  if (args.length > 2 && !isBlob) throw new TypeError(what + ": parameter 2 is not of type 'Blob'.");
+  return [usv(args[0]), entryValue(args[1], args.length > 2 && args[2] !== undefined ? args[2] : undefined)];
+}
+
+/* Whether the control [id] is disabled (HTML, 4.10.18.5): by its own attribute, or a disabled
+   fieldset around it, unless it sits in that fieldset's first legend. */
+function controlDisabled(id) {
+  if (K.attr(id, 'disabled') != null) return true;
+  for (var child = id, p = K.parent(id); p != null && K.kind(p) === 1; child = p, p = K.parent(p)) {
+    if (isHtml(p, 'fieldset') && K.attr(p, 'disabled') != null) {
+      var legend = childrenNamed(p, 'legend')[0];
+      if (legend === undefined || legend !== child) return true;
+    }
+  }
+  return false;
+}
+/* A submit button: a button of type submit, or an input of type submit or image. */
+function isSubmitButton(id) {
+  if (isHtml(id, 'button')) return buttonType(wrap(id)) === 'submit';
+  return isHtml(id, 'input') && (function (t) { return t === 'submit' || t === 'image'; })(inputType(wrap(id)));
+}
+/* The directionality of [id] (HTML, 3.2.6.4), for a control's dirname entry. A control whose
+   dir is auto takes the direction of the first strong character of its value. */
+function directionOf(id) {
+  for (var e = id; e != null && K.kind(e) === 1; e = K.parent(e)) {
+    var dir = K.attr(e, 'dir');
+    dir = dir == null ? '' : asciiLowerCase(dir);
+    if (dir === 'ltr' || dir === 'rtl') return dir;
+    if (dir === 'auto') return firstStrong(isHtml(e, 'input') || isHtml(e, 'textarea') ? (isHtml(e, 'input') ? inputValue(wrap(e)) : textareaValue(wrap(e))) : K.text(e));
+  }
+  return 'ltr';
+}
+function firstStrong(s) {
+  for (var i = 0; i < s.length; i++) {
+    var c = StringCharCodeAt(s, i);
+    if ((c >= 0x590 && c <= 0x8FF) || (c >= 0xFB1D && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF)) return 'rtl';
+    if ((c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || (c >= 0xC0 && c <= 0x24F && c !== 0xD7 && c !== 0xF7) || (c >= 0x370 && c <= 0x58F) || c >= 0x900) return 'ltr';
+  }
+  return 'ltr';
+}
+/* The types of input whose dirname attribute adds the direction to the entries. */
+var DIRNAME_TYPES = nameSet(['hidden', 'text', 'search', 'tel', 'url', 'email', 'password', 'submit', 'reset', 'button']);
+
+/* The forms that construct their entry list now, which a formdata listener cannot do again. */
+var constructing = new WeakMap();
+/* The entry list of [form] (HTML, 4.10.21.4) with [submitter], after the formdata event, or null
+   while the form constructs one already. Chromium keeps the controls in a datalist, as here. */
+function entryList(form, submitter) {
+  var formId = form.__id;
+  if (WeakMapHas(constructing, form)) return null;
+  WeakMapSet(constructing, form, true);
+  var list = [];
+  try {
+    var root = rootOf(formId), scope = queryFirst(root, '[form]') == null ? formId : root;
+    var ids = listFilter(queryAll(scope, '*'), function (e) {
+      var n = nameOf(e);
+      return n.ns === XHTML_NS && (n.local === 'button' || n.local === 'input' || n.local === 'select' || n.local === 'textarea') && formOwnerId(e) === formId;
+    });
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i], el = wrap(id), local = nameOf(id).local, type = local === 'input' ? inputType(el) : null;
+      if (controlDisabled(id)) continue;
+      var button = local === 'button' || type === 'submit' || type === 'image' || type === 'reset' || type === 'button';
+      if (button && el !== submitter) continue;
+      if ((type === 'checkbox' || type === 'radio') && !checkedOf(el)) continue;
+      var name = K.attr(id, 'name');
+      if (type === 'image') {
+        var prefix = name ? name + '.' : '';
+        ArrayPush(list, [usv(prefix + 'x'), '0'], [usv(prefix + 'y'), '0']);
+        continue;
+      }
+      if (!name) continue;
+      name = usv(name);
+      if (local === 'select') {
+        var options = optionIds(id), chosen;
+        if (K.attr(id, 'multiple') != null) chosen = listFilter(options, function (o) { return selectedOf(wrap(o)); });
+        else { var at = selectedIndexOf(el); chosen = at < 0 ? [] : [options[at]]; }
+        for (var j = 0; j < chosen.length; j++) {
+          var option = wrap(chosen[j]);
+          if (!controlDisabled(chosen[j]) && !optionGroupDisabled(chosen[j])) ArrayPush(list, [name, usv(optionValue(option))]);
+        }
+      } else if (type === 'checkbox' || type === 'radio') {
+        var v = K.attr(id, 'value');
+        ArrayPush(list, [name, usv(v == null ? 'on' : v)]);
+      } else if (type === 'file') {
+        ArrayPush(list, [name, new File([], '', { __proto__: null, type: 'application/octet-stream' })]);
+      } else if (type === 'hidden' && asciiLowerCase(name) === '_charset_') {
+        ArrayPush(list, [name, 'UTF-8']);
+      } else {
+        ArrayPush(list, [name, usv(local === 'textarea' ? textareaValue(el) : inputValue(el))]);
+      }
+      var dirname = K.attr(id, 'dirname');
+      if (dirname && (local === 'textarea' || DIRNAME_TYPES[type] === true)) ArrayPush(list, [usv(dirname), directionOf(id)]);
+    }
+    var data = newFormData(list);
+    var event = new FormDataEvent('formdata', { __proto__: null, bubbles: true, formData: data });
+    event.isTrusted = true;
+    fireEvent(form, event);
+    return listSlice(formDataOf(data).list);
+  } finally {
+    WeakMapDelete(constructing, form);
+  }
+}
+function optionGroupDisabled(id) { var p = K.parent(id); return p != null && isHtml(p, 'optgroup') && K.attr(p, 'disabled') != null; }
+
+function FormData(form, submitter) {
+  var what = "Failed to construct 'FormData'";
+  if (!isA(this, FormData) || WeakMapHas(formDatas, this)) {
+    throw new TypeError(what + ": Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+  }
+  var list = [];
+  if (form !== undefined) {
+    if (!isNode(form) || !isHtml(form.__id, 'form')) throw new TypeError(what + ": parameter 1 is not of type 'HTMLFormElement'.");
+    if (submitter != null) {
+      if (!isNode(submitter) || K.kind(submitter.__id) !== 1 || nameOf(submitter.__id).ns !== XHTML_NS) throw new TypeError(what + ": parameter 2 is not of type 'HTMLElement'.");
+      if (!isSubmitButton(submitter.__id)) throw new TypeError(what + ': The specified element is not a submit button.');
+      if (formOwnerId(submitter.__id) !== form.__id) throw new DOMException(what + ': The specified element is not owned by this form element.', 'NotFoundError');
+    }
+    list = entryList(form, submitter == null ? null : submitter);
+    if (list === null) throw new DOMException(what + ': The form is constructing entry list.', 'InvalidStateError');
+  }
+  WeakMapSet(formDatas, this, { list: list });
+}
+interfaceProto(FormData, {}, 'FormData');
+var FP = FormData.prototype;
+FP.append = function () {
+  var h = formDataOf(this), e = entryArgs(arguments, "Failed to execute 'append' on 'FormData'");
+  ArrayPush(h.list, e);
+};
+FP['delete'] = function (name) {
+  needArgs(arguments, 1, "Failed to execute 'delete' on 'FormData'");
+  var h = formDataOf(this), n = usv(name);
+  h.list = listFilter(h.list, function (e) { return e[0] !== n; });
+};
+FP.get = function (name) {
+  needArgs(arguments, 1, "Failed to execute 'get' on 'FormData'");
+  var list = formDataOf(this).list, n = usv(name);
+  for (var i = 0; i < list.length; i++) if (list[i][0] === n) return list[i][1];
+  return null;
+};
+FP.getAll = function (name) {
+  needArgs(arguments, 1, "Failed to execute 'getAll' on 'FormData'");
+  var list = formDataOf(this).list, n = usv(name), out = [];
+  for (var i = 0; i < list.length; i++) if (list[i][0] === n) ArrayPush(out, list[i][1]);
+  return out;
+};
+FP.has = function (name) {
+  needArgs(arguments, 1, "Failed to execute 'has' on 'FormData'");
+  var list = formDataOf(this).list, n = usv(name);
+  for (var i = 0; i < list.length; i++) if (list[i][0] === n) return true;
+  return false;
+};
+FP.set = function () {
+  var h = formDataOf(this), e = entryArgs(arguments, "Failed to execute 'set' on 'FormData'"), found = false;
+  h.list = listFilter(h.list, function (x) {
+    if (x[0] !== e[0]) return true;
+    if (found) return false;
+    found = true;
+    x[1] = e[1];
+    return true;
+  });
+  if (!found) ArrayPush(h.list, e);
+};
+FP.forEach = function (callback, thisArg) {
+  needArgs(arguments, 1, "Failed to execute 'forEach' on 'FormData'");
+  if (typeof callback !== 'function') throw new TypeError("Failed to execute 'forEach' on 'FormData': The callback provided as parameter 1 is not a function.");
+  var h = formDataOf(this);
+  for (var i = 0; i < h.list.length; i++) ReflectApply(callback, thisArg, [h.list[i][1], h.list[i][0], this]);
+};
+function FormDataIterator(h, kind) { hidden(this, '__p', h); hidden(this, '__kind', kind); hidden(this, '__at', 0); }
+FormDataIterator.prototype = ObjectCreate(IteratorPrototype);
+hidden(FormDataIterator.prototype, 'next', function () {
+  var list = this.__p.list;
+  if (this.__at >= list.length) return { value: undefined, done: true };
+  var e = list[this.__at++];
+  return { value: this.__kind === 'keys' ? e[0] : this.__kind === 'values' ? e[1] : [e[0], e[1]], done: false };
+});
+if (SymbolToStringTag) ObjectDefineProperty(FormDataIterator.prototype, SymbolToStringTag, { __proto__: null, value: 'FormData Iterator', configurable: true });
+FP.entries = function () { return new FormDataIterator(formDataOf(this), 'entries'); };
+FP.keys = function () { return new FormDataIterator(formDataOf(this), 'keys'); };
+FP.values = function () { return new FormDataIterator(formDataOf(this), 'values'); };
+hidden(FP, SymbolIterator, FP.entries);
+defineInterface(FormData, 'FormData', null, 0);
+
+/* FormDataEvent, whose formData a formdata listener adds entries to, and SubmitEvent, whose
+   submitter is the button that submits the form. */
+var FormDataEvent = subEvent(Event, 'FormDataEvent', function (init) {
+  var d = init.formData, what = "Failed to construct 'FormDataEvent': Failed to read the 'formData' property from 'FormDataEventInit': ";
+  if (d === undefined) throw new TypeError(what + 'Required member is undefined.');
+  if (d === null || typeof d !== 'object' || !WeakMapHas(formDatas, d)) throw new TypeError(what + "Failed to convert value to 'FormData'.");
+  this.formData = d;
+}, 2);
+var SubmitEvent = subEvent(Event, 'SubmitEvent', function (init) {
+  var s = init.submitter;
+  if (s != null && !(isNode(s) && K.kind(s.__id) === 1)) throw new TypeError("Failed to construct 'SubmitEvent': Failed to read the 'submitter' property from 'SubmitEventInit': Failed to convert value to 'HTMLElement'.");
+  this.submitter = s == null ? null : s;
+});
+/* The steps of submitting [form] from [submitter]: the submit event, then, unless a listener
+   cancelled it, the entry list with its formdata event. A book navigates nowhere after that. */
+function* submitSteps(form, submitter) {
+  if (WeakMapHas(constructing, form)) return;
+  var event = new SubmitEvent('submit', { __proto__: null, bubbles: true, cancelable: true, submitter: submitter }), r;
+  event.isTrusted = true;
+  var g = dispatchSteps(form, event);
+  while (!(r = GeneratorNext(g)).done) yield;
+  if (r.value) entryList(form, submitter);
+}
 
 var HTMLFormElement = elementInterface('HTMLFormElement', HTMLElement, 'acceptCharset=accept-charset action:a autocomplete:eautocomplete ' +
   'enctype:eenctype encoding=enctype:eenctype method:emethod name noValidate=novalidate:b target rel relList=rel:trel', function (p) {
   def(p, 'elements', function () { return formElementsOf(wrap(idOf(this))); });
   def(p, 'length', function () { return formElementIds(idOf(this)).length; });
-  p.submit = function () { idOf(this); };
-  p.requestSubmit = function () { var f = wrap(idOf(this)); fireEvent(f, new Event('submit', { __proto__: null, bubbles: true, cancelable: true })); };
+  p.submit = function () { entryList(wrap(idOf(this)), null); };
+  p.requestSubmit = function (submitter) {
+    var f = wrap(idOf(this)), what = "Failed to execute 'requestSubmit' on 'HTMLFormElement'";
+    if (submitter != null) {
+      if (!isNode(submitter) || !isSubmitButton(submitter.__id)) throw new TypeError(what + ': The specified element is not a submit button.');
+      if (formOwnerId(submitter.__id) !== f.__id) throw new DOMException(what + ': The specified element is not owned by this form element.', 'NotFoundError');
+    }
+    drain(submitSteps(f, submitter == null ? null : submitter));
+  };
   p.reset = function () { drain(resetSteps(wrap(idOf(this)))); };
   p.checkValidity = function () { idOf(this); return true; };
   p.reportValidity = function () { idOf(this); return true; };
@@ -310,14 +561,7 @@ var HTMLInputElement = elementInterface('HTMLInputElement', HTMLElement, 'accept
   formControl(p); labelable(p); validationMembers(p); selectionMembers(p); autocompleteMember(p);
   sizeAttribute(p, 'width', 2);
   sizeAttribute(p, 'height', 3);
-  def(p, 'value', function () {
-    var el = wrap(idOf(this)), type = inputType(el), mode = valueMode(type), v;
-    if (mode === 'filename') return '';
-    if (mode === 'value') v = dirtyValue(el);
-    if (v === undefined) v = K.attr(el.__id, 'value');
-    if (mode === 'value') return K.sanitize(el.__id, type, v == null ? '' : v);
-    return v != null ? v : mode === 'default/on' ? 'on' : '';
-  }, function (v) {
+  def(p, 'value', function () { return inputValue(wrap(idOf(this))); }, function (v) {
     var el = wrap(idOf(this)), type = inputType(el), mode = valueMode(type);
     if (mode === 'value') setDirtyValue(el, K.sanitize(el.__id, type, v === null ? '' : domString(v)));
     else if (mode === 'filename') {
@@ -491,7 +735,7 @@ var HTMLTextAreaElement = elementInterface('HTMLTextAreaElement', HTMLElement, '
   'minLength=minlength:L name placeholder readOnly=readonly:b required:b rows:F2 wrap', function (p) {
   formControl(p); labelable(p); validationMembers(p); selectionMembers(p); autocompleteMember(p);
   def(p, 'type', function () { idOf(this); return 'textarea'; });
-  def(p, 'value', function () { var el = wrap(idOf(this)), v = dirtyValue(el); return K.sanitize(el.__id, 'textarea', v !== undefined ? v : textOf(el)); },
+  def(p, 'value', function () { return textareaValue(wrap(idOf(this))); },
     function (v) { setDirtyValue(wrap(idOf(this)), v); });
   def(p, 'defaultValue', function () { return textOf(this); }, function (v) { setTextOf(this, v); });
   def(p, 'textLength', function () { return domString(this.value).length; });
