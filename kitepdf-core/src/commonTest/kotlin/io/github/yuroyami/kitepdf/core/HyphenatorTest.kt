@@ -34,6 +34,27 @@ class HyphenatorTest {
     }
 
     @Test
+    fun a_later_duplicate_pattern_wins() {
+        assertEquals(emptyList(), Hyphenator(listOf("a1b", "a2b"), minPrefix = 1, minSuffix = 1).hyphenate("cab"))
+        assertEquals(listOf(2), Hyphenator(listOf("a2b", "a1b"), minPrefix = 1, minSuffix = 1).hyphenate("cab"))
+    }
+
+    @Test
+    fun patterns_that_share_a_prefix_all_apply() {
+        // "b1c" and "bc3d" both start at b; the trie must reach both.
+        val h = Hyphenator(listOf("b1c", "bc3d", "1a"), minPrefix = 1, minSuffix = 1)
+        assertEquals(listOf(2, 3), h.hyphenate("abcde"))
+    }
+
+    /** A break before a combining mark would part an accent from its letter (#617). */
+    @Test
+    fun no_break_before_a_combining_mark() {
+        val h = Hyphenator(listOf("e1"), minPrefix = 1, minSuffix = 1)
+        assertEquals(listOf(3), h.hyphenate("abecd"))
+        assertEquals(emptyList(), h.hyphenate("abe\u0301cd"))
+    }
+
+    @Test
     fun short_word_has_no_breaks() {
         assertEquals(emptyList(), Hyphenator.enUs().hyphenate("cat"))
     }

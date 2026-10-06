@@ -56,16 +56,23 @@ carry in order to be correct, listed here with where that data comes from.
    call for: CSS 2.1, Appendix D and the HTML Standard's Rendering section.
 
 6. Hyphenation patterns from the hyph-utf8 project
-   Used in: kitepdf-core .../core/text/hyphen/ (one file per language)
-   Knuth-Liang hyphenation pattern data from
-   https://github.com/hyphenation/tex-hyphen. Each Kotlin file is a
-   mechanical re-wrapping of one upstream pattern file into string chunks;
-   the pattern data itself is carried unmodified, and each file's header
-   names its own authors, licence and upstream source. The complete
-   original files are available at the repository above. German, Spanish,
-   French, Italian and Dutch are MIT-licensed; Portuguese is
-   BSD-3-Clause; Russian is Copyright 1999-2003 Alexander I. Lebedev,
-   LPPL 1.2 or later (https://www.latex-project.org/lppl/lppl-1-2/).
+   Used in: kitepdf-core .../core/text/hyphen/ (one file per pattern set)
+   Knuth-Liang hyphenation patterns and exception lists from
+   https://github.com/hyphenation/tex-hyphen, written by
+   tools/generate_hyphenation.py. Each Kotlin file is a mechanical
+   re-wrapping of one upstream pattern file, and its exception file where
+   there is one, into string chunks; the data itself is carried unmodified,
+   and each file's header names its own authors, copyright, licence (with
+   the licence text where upstream gives one) and upstream commit. The
+   complete original files are available at the repository above.
+   The sets are under permissive licences (MIT, BSD-3-Clause, the
+   Unlicense, public domain, or a notice that allows copying), the LaTeX
+   Project Public License (https://www.latex-project.org/lppl/), or, for
+   Hungarian, a choice that includes the Mozilla Public License 1.1
+   (https://www.mozilla.org/en-US/MPL/1.1/). Where a set offers a choice,
+   KitePDF takes the permissive licence when there is one. The script
+   lists the sets it leaves out because they are under the GPL or the LGPL
+   only, or under no stated licence.
 
 7. URW base 35 fonts
    Used in: kitepdf-core .../core/font/Standard14FontData.kt

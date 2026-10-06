@@ -397,9 +397,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructor and `copy` take a fifth parameter with a default, so source compiles
   unchanged, while a binary built against 0.12.0 that constructs a `FontSpec` needs
   a rebuild (#472).
+- EPUB hyphenation covers more than 60 languages: every set of the hyph-utf8 project whose
+  licence an Apache-2.0 library can carry, 71 in all, with their exception lists. English uses
+  the full `hyph-en-us` set instead of a list of about sixty patterns, and `en-GB` and the other
+  British-spelling regions get `hyph-en-gb`. The rest of a language tag picks among a language's
+  sets, such as `de-1901`, `el-polyton` and `sr-Latn`, and Serbian with no script hyphenates both
+  alphabets. Only the sets a book asks for are read, into a trie of flat arrays.
+  `tools/generate_hyphenation.py` writes the sets from a hyph-utf8 checkout, each with its
+  copyright and licence in its header (#207).
 
 ### Fixed
 
+- A book in a language with no bundled hyphenation patterns, such as Czech, was hyphenated with
+  the English patterns, so its words broke where English ones would. It is now not hyphenated,
+  and soft hyphens still break (#615).
+- A word with an `İ` in it had every later hyphenation point one place to the right, because
+  lower-casing made that letter two characters (#616).
+- A word with a combining mark, such as a vowel sign of Devanagari or a decomposed accent, was
+  never hyphenated, and no break now goes before a mark (#617).
+- A word with punctuation next to it, such as a comma, a full stop or a quotation mark, was never
+  hyphenated, nor was a word with an apostrophe in it, such as `l’université` (#618).
 - A number inside right-to-left text draws as a paragraph of the text draws it. A canvas without
   a layout of its own forced the digits right to left with the letters, so the text engine
   shaped them with the letters, and on macOS they drew differently from a paragraph of the same

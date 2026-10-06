@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.core
 import io.github.yuroyami.kitepdf.core.text.Hyphenator
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -104,20 +105,38 @@ class MultilingualHyphenationTest {
         )
     }
 
-    /** The trie rewrite must not change en-US output (same patterns, same mins). */
-    @Test fun en_us_output_unchanged() = check(
+    /** The full `hyph-en-us` set, which replaced a list of about sixty patterns (#207). */
+    @Test fun en_us_full_set() = check(
         Hyphenator.enUs(),
         listOf(
-            "hyphenation" to listOf(2),
-            "computer" to listOf(3),
-            "derivative" to listOf(3, 4),
-            "information" to listOf(5),
+            "hyphenation" to listOf(2, 6),        // hy-phen-ation
+            "computer" to listOf(3),              // com-puter
+            "derivative" to listOf(2, 5, 6),      // de-riv-a-tive
+            "information" to listOf(2, 5, 7),     // in-for-ma-tion
+            "presentation" to listOf(3, 6, 8),    // pre-sen-ta-tion
         ),
     )
 
+    /** An exception word replaces what the patterns find in it (TeX's `\hyphenation`). */
+    @Test fun en_us_exceptions_win() = check(
+        Hyphenator.enUs(),
+        listOf(
+            "associate" to listOf(2, 4),          // as-so-ciate
+            "Associates" to listOf(2, 4),         // the lookup ignores case like the patterns
+        ),
+    )
+
+    @Test fun british_english_has_its_own_set() {
+        val gb = Hyphenator.forLanguage("en-GB")!!
+        assertNotSame(Hyphenator.enUs(), gb)
+        assertSame(gb, Hyphenator.forLanguage("en-AU"), "Australia spells the British way")
+        assertSame(Hyphenator.enUs(), Hyphenator.forLanguage("en-CA"))
+        check(gb, listOf("organisation" to listOf(2, 5, 8), "hyphenation" to listOf(2, 6, 7)))
+    }
+
     @Test fun language_mapping_and_caching() {
         assertSame(Hyphenator.forLanguage("de"), Hyphenator.forLanguage("de-AT"), "shared instance per language")
-        assertSame(Hyphenator.enUs(), Hyphenator.forLanguage("en-GB"))
+        assertSame(Hyphenator.enUs(), Hyphenator.forLanguage("en"))
         assertNull(Hyphenator.forLanguage("ja"), "no bundled set: caller decides the fallback")
         assertNull(Hyphenator.forLanguage(null))
         assertNull(Hyphenator.forLanguage("  "))
