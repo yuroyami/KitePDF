@@ -67,10 +67,13 @@ import io.github.yuroyami.kiteplayer.LoopMode
 import io.github.yuroyami.kiteplayer.PlaybackStatus
 import io.github.yuroyami.kiteplayer.SeekMode
 import io.github.yuroyami.kiteplayer.compose.KitePlayerVideo
+import io.github.yuroyami.kiteplayer.session.BackgroundPolicy
 import io.github.yuroyami.kiteplayer.compose.KiteRenderPath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.time.Duration
@@ -87,6 +90,8 @@ import kotlin.time.Duration.Companion.seconds
  * Each element gets an [EpubMediaPlayer] on its box, so it moves and scales with the page, and the
  * bar of a video can take it full screen. A page that is not an EPUB page, or has no media, draws
  * nothing. An element starts no player until it starts to play, so a page of posters costs nothing.
+ * The elements share [session]: an element whose page comes back shows the place where it
+ * stopped, paused, and one element plays at a time.
  *
  * @param allowRemote plays a source that the book names by an `https` URL. False by default,
  *   because such a source tells its server that the book was opened. A source of any other
@@ -95,17 +100,25 @@ import kotlin.time.Duration.Companion.seconds
  *   cannot play. The default player plays through FFmpeg and the platform's audio output; pass
  *   `{ KitePlayerPlatform.createOrNull(PlayerConfig(...)) }` for settings of your own.
  * @param labels the words of the controls, which a screen reader says. English by default.
+ * @param session what the elements share. See [KiteMediaSession].
  */
 @Composable
 public fun KitePageOverlayScope.KiteMediaOverlay(
     allowRemote: Boolean = false,
     newPlayer: () -> KitePlayer? = { KitePlayerPlatform.createOrNull() },
     labels: KiteMediaLabels = KiteMediaLabels(),
+    session: KiteMediaSession = KiteMediaSession.Default,
 ) {
     val epubPage = page as? EpubPage ?: return
     val media = remember(epubPage) { epubPage.media }
+    // One opened book: its metadata is one object for every document over the same parse, so a new
+    // font size keeps the places, and opening the book again starts with none.
+    val book = epubPage.document.epubMetadata.hashCode()
     media.forEachIndexed { index, element ->
         key(epubPage, index) {
+            // The chapter and the element name the place, not the page object, which a new layout replaces.
+            val name = element.id ?: element.sources.firstOrNull()?.href.orEmpty()
+            val twin = media.subList(0, index).count { (it.id ?: it.sources.firstOrNull()?.href.orEmpty()) == name }
             EpubMediaPlayer(
                 media = element,
                 document = epubPage.document,
@@ -113,6 +126,8 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
                 allowRemote = allowRemote,
                 newPlayer = newPlayer,
                 labels = labels,
+                session = session,
+                place = "$book|${epubPage.chapter}|$name|$twin",
             )
         }
     }
@@ -146,11 +161,17 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  * video asks the window scene for landscape. Both turn back to the orientation they found when
  * full screen ends.
  *
- * The player is closed when this leaves the composition, so a page that scrolls away stops.
+ * The player is closed when this leaves the composition, so a page that scrolls away stops. With
+ * a [place], [session] keeps where it stopped, and the element shows that place, paused, when it
+ * comes back. Starting it pauses any other element of [session] that plays. When the app leaves
+ * the screen, a video pauses and an audio element follows [KiteMediaSession.audioInBackground].
  *
  * @param allowRemote plays a source that the book names by an `https` URL. See [KiteMediaOverlay].
  * @param newPlayer makes the player when the element starts. See [KiteMediaOverlay].
  * @param labels the words of the controls. See [KiteMediaOverlay].
+ * @param session what the elements share. See [KiteMediaSession].
+ * @param place a name for the element that stays the same when its chapter is laid out again,
+ *   under which [session] keeps where it stopped. Null keeps no place.
  */
 @Composable
 public fun EpubMediaPlayer(
@@ -160,13 +181,16 @@ public fun EpubMediaPlayer(
     allowRemote: Boolean = false,
     newPlayer: () -> KitePlayer? = { KitePlayerPlatform.createOrNull() },
     labels: KiteMediaLabels = KiteMediaLabels(),
+    session: KiteMediaSession = KiteMediaSession.Default,
+    place: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     val currentNewPlayer by rememberUpdatedState(newPlayer)
     var player by remember(media) { mutableStateOf<KitePlayer?>(null) }
     var unplayable by remember(media) { mutableStateOf(false) }
 
-    fun start(byAutoplay: Boolean) {
+    /** Opens the element, at the place the session kept for it, and plays it unless [paused]. */
+    fun start(byAutoplay: Boolean, paused: Boolean = false) {
         if (player != null || unplayable) return
         // Null, or a failure, on a platform without a player stack, such as a desktop with no audio output.
         val created = try {
@@ -179,8 +203,10 @@ public fun EpubMediaPlayer(
             return
         }
         player = created
-        created.setMuted(media.muted || byAutoplay)
+        val kept = place?.let(session::placeOf)
+        created.setMuted(kept?.muted ?: (media.muted || byAutoplay))
         created.setLoop(if (media.loop) LoopMode.One else LoopMode.Off)
+        kept?.let { runCatching { created.setSpeed(it.speed) } }
         scope.launch {
             // A player that fails in a way of its own leaves the poster, never a crash of the app.
             val opened = try {
@@ -195,17 +221,35 @@ public fun EpubMediaPlayer(
                 // Dropping it closes it, through the effect below.
                 player = null
             } else {
-                created.play()
+                if (kept != null && kept.position > Duration.ZERO) runCatching { created.seek(kept.position) }
+                if (!paused) created.play()
             }
         }
     }
 
     LaunchedEffect(media) {
-        if (media.autoplay) start(byAutoplay = true)
+        when {
+            // An element the reader played shows where it stopped, paused, and autoplay does not start it again.
+            place != null && session.placeOf(place) != null -> start(byAutoplay = false, paused = true)
+            media.autoplay -> start(byAutoplay = true)
+        }
     }
     val open = player
     DisposableEffect(open) {
-        onDispose { open?.close() }
+        if (open != null) session.register(open)
+        onDispose {
+            if (open != null) {
+                session.unregister(open)
+                if (place != null) session.keep(place, placeToKeep(open))
+                open.close()
+            }
+        }
+    }
+    if (open != null) {
+        LaunchedEffect(open) {
+            open.state.map { it.status.isActive }.distinctUntilChanged().collect { active -> if (active) session.started(open) }
+        }
+        BackgroundHandling(open, if (media.kind == EpubMediaKind.VIDEO) BackgroundPolicy.PauseAll else session.audioInBackground)
     }
     var fullScreen by remember(open) { mutableStateOf(false) }
 
@@ -304,6 +348,13 @@ private fun Playing(
         FullScreenWindow(landscape = shape > 1f)
         Box(Modifier.fillMaxSize().background(Color.Black)) { video() }
     }
+}
+
+/** Where [player] stopped, to show again, or null for one that never opened or that played to its end. */
+private fun placeToKeep(player: KitePlayer): KiteMediaSession.Place? {
+    val snapshot = player.state.value
+    if (snapshot.status == PlaybackStatus.Idle || snapshot.status == PlaybackStatus.Failed || snapshot.status == PlaybackStatus.Ended) return null
+    return KiteMediaSession.Place(player.position(), snapshot.muted, snapshot.speed)
 }
 
 /** A round play button in the middle of the box, as a browser draws over a video that has not started. */

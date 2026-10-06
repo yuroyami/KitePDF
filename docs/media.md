@@ -49,6 +49,23 @@ Each media element of a page then gets a player on its box, so it moves and zoom
 
 An element makes no player until it starts, so a page of posters costs nothing, and the player closes when its page leaves the screen.
 
+### Elements share a session
+
+The elements share a `KiteMediaSession`:
+
+- An element keeps its place while the book is open. When its page comes back, the element shows where it stopped, paused, with the sound and the speed it had.
+- One element plays at a time. Starting one pauses any other that plays.
+- When the app leaves the screen on Android or iOS, a video pauses, and so does an audio element by default. It plays again when the app comes back.
+
+The overlay uses `KiteMediaSession.Default` unless you pass your own. To keep a book's narration playing in the background, make a session with `BackgroundPolicy.ContinueAudio`:
+
+```kotlin
+val media = remember { KiteMediaSession(audioInBackground = BackgroundPolicy.ContinueAudio) }
+KiteDocView(state, pageOverlay = { KiteMediaOverlay(session = media) })
+```
+
+On Android, sound in the background also needs a media notification that keeps the process alive. KitePlayer's `attachMediaNotification` makes one. A desktop window keeps playing when it is hidden, as desktop players do.
+
 On a phone, full screen does a little more:
 
 - On Android it hides the system bars, and a swipe from an edge shows them for a moment. A landscape video turns the screen to landscape, and back when full screen ends, but only in an activity that handles the turn itself. Declare `android:configChanges="orientation|screenSize"` on the activity for that: Android recreates any other activity when the screen turns, which would close the player.
