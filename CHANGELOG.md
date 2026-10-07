@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KiteDocLayout.Continuous` takes a `fit`. `KitePageFit.PAGE` shrinks each page of the strip
+  until the whole page shows, centred across the strip. `KitePageFit.WIDTH`, the default, keeps
+  the pages across the full width (#437).
+- A continuous strip draws the pages next to the pages on screen into the bitmap cache once it
+  rests, so a scroll to them shows their bitmap at once. `KiteDocLayout.Continuous.prefetchPages`
+  sets how many on each side, 1 by default. Compose draws ahead on Android only, so the strip now
+  does it on every platform. The slots of a strip share one rasterizer, so a slot also finds a
+  page that another slot drew before it left the screen. The constructor and `copy` of
+  `KiteDocLayout.Continuous` take `fit` and `prefetchPages` with defaults, so source compiles
+  unchanged, while a binary built against 0.12.0 that constructs or copies one needs a rebuild
+  (#437).
 - `ReaderTheme.withImages(ReaderImages.LineArt)` makes a reading theme recolour line art, as it
   does text: a grey symbol or equation drawn as an image, on white or on transparent paper. A
   black symbol on dark paper then keeps the contrast of black text. Photos and coloured artwork

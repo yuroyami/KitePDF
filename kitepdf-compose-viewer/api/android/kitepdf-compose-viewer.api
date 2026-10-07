@@ -74,15 +74,19 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocLayout$Companion {
 public final class io/github/yuroyami/kitepdf/compose/KiteDocLayout$Continuous : io/github/yuroyami/kitepdf/compose/KiteDocLayout {
 	public static final field $stable I
 	public fun <init> ()V
-	public fun <init> (Landroidx/compose/foundation/gestures/Orientation;Landroidx/compose/foundation/layout/PaddingValues;)V
-	public synthetic fun <init> (Landroidx/compose/foundation/gestures/Orientation;Landroidx/compose/foundation/layout/PaddingValues;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Landroidx/compose/foundation/gestures/Orientation;Landroidx/compose/foundation/layout/PaddingValues;Lio/github/yuroyami/kitepdf/compose/KitePageFit;I)V
+	public synthetic fun <init> (Landroidx/compose/foundation/gestures/Orientation;Landroidx/compose/foundation/layout/PaddingValues;Lio/github/yuroyami/kitepdf/compose/KitePageFit;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Landroidx/compose/foundation/gestures/Orientation;
 	public final fun component2 ()Landroidx/compose/foundation/layout/PaddingValues;
-	public final fun copy (Landroidx/compose/foundation/gestures/Orientation;Landroidx/compose/foundation/layout/PaddingValues;)Lio/github/yuroyami/kitepdf/compose/KiteDocLayout$Continuous;
-	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteDocLayout$Continuous;Landroidx/compose/foundation/gestures/Orientation;Landroidx/compose/foundation/layout/PaddingValues;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteDocLayout$Continuous;
+	public final fun component3 ()Lio/github/yuroyami/kitepdf/compose/KitePageFit;
+	public final fun component4 ()I
+	public final fun copy (Landroidx/compose/foundation/gestures/Orientation;Landroidx/compose/foundation/layout/PaddingValues;Lio/github/yuroyami/kitepdf/compose/KitePageFit;I)Lio/github/yuroyami/kitepdf/compose/KiteDocLayout$Continuous;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/compose/KiteDocLayout$Continuous;Landroidx/compose/foundation/gestures/Orientation;Landroidx/compose/foundation/layout/PaddingValues;Lio/github/yuroyami/kitepdf/compose/KitePageFit;IILjava/lang/Object;)Lio/github/yuroyami/kitepdf/compose/KiteDocLayout$Continuous;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getContentPadding ()Landroidx/compose/foundation/layout/PaddingValues;
+	public final fun getFit ()Lio/github/yuroyami/kitepdf/compose/KitePageFit;
 	public final fun getOrientation ()Landroidx/compose/foundation/gestures/Orientation;
+	public final fun getPrefetchPages ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

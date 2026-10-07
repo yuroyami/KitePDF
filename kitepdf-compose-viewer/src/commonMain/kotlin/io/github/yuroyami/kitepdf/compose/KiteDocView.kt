@@ -109,6 +109,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -768,18 +769,36 @@ private fun ContinuousLayout(
     val orientation = layout.orientation
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
+    // The strip's size less its padding, each side rounded as the list rounds it, so a page drawn
+    // ahead has the size its slot will have.
+    val padding = layout.contentPadding
+    val viewport = state.viewportSize
+    val acrossPx = with(density) { padding.calculateStartPadding(direction).roundToPx() + padding.calculateEndPadding(direction).roundToPx() }
+    val alongPx = with(density) { padding.calculateTopPadding().roundToPx() + padding.calculateBottomPadding().roundToPx() }
+    val vertical = orientation == Orientation.Vertical
+    val crossPx = if (vertical) viewport.width - acrossPx else viewport.height - alongPx
+    // With fit PAGE a slot is no longer than the viewport on the scroll axis (#437). Until the
+    // viewport has a size the strip waits a frame, so no page draws at a size it never keeps.
+    val lengthLimitPx = when {
+        layout.fit != KitePageFit.PAGE -> Int.MAX_VALUE
+        viewport == IntSize.Zero -> return
+        else -> (if (vertical) viewport.height - alongPx else viewport.width - acrossPx).coerceAtLeast(1)
+    }
+    SideEffect {
+        state.stripCrossPx = crossPx
+        state.stripLengthLimitPx = lengthLimitPx
+    }
     val listState = remember(orientation) {
-        val padding = layout.contentPadding
-        val crossPx = with(density) {
-            if (orientation == Orientation.Vertical) {
-                state.viewportSize.width - (padding.calculateStartPadding(direction) + padding.calculateEndPadding(direction)).roundToPx()
-            } else {
-                state.viewportSize.height - (padding.calculateTopPadding() + padding.calculateBottomPadding()).roundToPx()
-            }
-        }
-        val (index, offset) = state.stripSeed(orientation, crossPx)
+        val (index, offset) = state.stripSeed(orientation, crossPx, lengthLimitPx)
         LazyListState(index, offset)
     }
+    // One rasterizer for every slot of the strip and for the pages drawn ahead: the bitmap cache
+    // key holds the rasterizer's text measurer, so a slot finds what another slot or the strip
+    // drew, as the thumbnail strip does (#437, #391).
+    val rasterSpec = renderSpec as? KiteRenderSpec.Rasterized
+    val rasterizer = rasterSpec?.let {
+        rememberKitePageRasterizer(maxOf(KITE_DEFAULT_MAX_RASTER_PIXELS, it.maxBitmapLongSide.toLong() * it.maxBitmapLongSide))
+    }?.also { it.textOffMain = state.hostTextOffMain }
     DisposableEffect(state, listState) {
         // A strip on the other axis starts unpanned: the old pan lies on the axis this one scrolls.
         if (state.stripOrientation.let { it != null && it != orientation }) state.panOffset = Offset.Zero
@@ -789,10 +808,48 @@ private fun ContinuousLayout(
         onDispose {
             state.park(adapter.currentPage, adapter.leadingPage, adapter.scrollOffsetPx, adapter.leadingSlotLength ?: 0)
             if (state.adapter === adapter) state.adapter = null
+            state.stripCrossPx = 0
+            state.stripLengthLimitPx = Int.MAX_VALUE
         }
     }
     LaunchedEffect(state, listState) {
         listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) state.onUserDrag() }
+    }
+    // Pages drawn ahead. Compose's own prefetch runs on Android only, so once the strip rests it
+    // draws as many slots as prefetchPages past the last slot on screen, then as many before the
+    // first, into the bitmap cache with the key their slot asks for at zoom 1. A zoomed strip
+    // draws nothing ahead: its slots draw at the zoom. A slot that is composed draws itself (#437).
+    val cache = rasterSpec?.let { state.bitmapCacheFor(it.cacheBudgetBytes) }
+    if (rasterSpec != null && rasterizer != null && cache != null && layout.prefetchPages > 0 && crossPx > 0) {
+        LaunchedEffect(state, listState, layout, rasterSpec, colors, rasterizer, cache, crossPx, lengthLimitPx) {
+            snapshotFlow {
+                val visible = listState.layoutInfo.visibleItemsInfo
+                if (listState.isScrollInProgress || visible.isEmpty() || state.zoom != 1f) null
+                else visible.first().index to visible.last().index
+            }.distinctUntilChanged().collectLatest { window ->
+                val (first, last) = window ?: return@collectLatest
+                delay(PREFETCH_SETTLE_MS)
+                val ahead = (last + 1)..(last + layout.prefetchPages)
+                val behind = (first - 1) downTo (first - layout.prefetchPages)
+                for (index in ahead + behind) {
+                    val page = state.pageAt(index) ?: continue
+                    if (state.pageRenderState(index) != null) continue
+                    val aspect = kitePageAspect(page)
+                    val plan = rasterPlanFor(stripBaseSize(vertical, aspect, crossPx, lengthLimitPx), aspect, 1f, rasterSpec)
+                    if (plan.raster == IntSize.Zero) continue
+                    val drawn = rasterizer.rasterizeCachedOrNull(
+                        cache, page, plan.raster.width, plan.raster.height,
+                        colors.pageBackground, plan.hairline, colors.theme, index,
+                        skipWidgets = state.scripts != null && page is PdfPage,
+                        canvasDecorator = rasterSpec.canvasDecorator,
+                        priority = { RasterPriority.NEAR },
+                        contentVersion = state.contentVersionOf(page),
+                    )
+                    backOnComposeThread()
+                    if (drawn != null) state.prefetchedPages = state.prefetchedPages + index
+                }
+            }
+        }
     }
 
     val scope = rememberCoroutineScope()
@@ -818,18 +875,20 @@ private fun ContinuousLayout(
         val pageItem: @Composable androidx.compose.foundation.lazy.LazyItemScope.(Int) -> Unit = { index ->
             val page = state.pageAt(index)
             if (page == null) {
-                ChapterGapSlot(state, index, layout.orientation, colors, chapterPlaceholder, inStrip = true)
+                ChapterGapSlot(state, index, layout.orientation, colors, chapterPlaceholder, inStrip = true, lengthLimitPx = lengthLimitPx)
             } else {
                 ContinuousPageItem(
                     state = state,
                     page = page,
                     pageIndex = index,
                     orientation = layout.orientation,
+                    lengthLimitPx = lengthLimitPx,
                     settledZoom = settledZoom,
                     renderSpec = renderSpec,
                     colors = colors,
                     onPageRendered = onPageRendered,
                     pagePlaceholder = pagePlaceholder,
+                    rasterizer = rasterizer,
                 )
             }
         }
@@ -865,22 +924,25 @@ private fun ContinuousLayout(
     }
 }
 
-/** One page in the strip: fills the cross axis at its natural aspect ratio. */
+/** One page in the strip: fills the cross axis at its natural aspect ratio, no longer than [lengthLimitPx]. */
 @Composable
 private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
     state: KiteDocViewState,
     page: KitePage,
     pageIndex: Int,
     orientation: Orientation,
+    lengthLimitPx: Int,
     settledZoom: Float,
     renderSpec: KiteRenderSpec,
     colors: KiteDocViewColors,
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
+    /** The strip's rasterizer, which every slot shares, or null for a vector strip. */
+    rasterizer: KitePageRasterizer?,
 ) {
     val aspect = kitePageAspect(page)
     val slotDensity = LocalDensity.current
-    val sizing = Modifier.stripSlot(orientation, aspect) {
+    val sizing = Modifier.stripSlot(orientation, aspect, lengthLimitPx) {
         with(slotDensity) {
             (if (orientation == Orientation.Vertical) page.displayWidth else page.displayHeight).dp.roundToPx()
         }
@@ -913,7 +975,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.ContinuousPageItem(
         val inView by remember(state, pageIndex) { derivedStateOf { state.inZoomedView(pageIndex) } }
         PageSlotContent(
             state, page, pageIndex, baseSize, if (inView) settledZoom else 1f, renderSpec, colors,
-            onPageRendered, pagePlaceholder, Modifier.fillMaxSize(),
+            onPageRendered, pagePlaceholder, Modifier.fillMaxSize(), sharedRasterizer = rasterizer,
         )
     }
 }
@@ -936,6 +998,8 @@ private fun PageSlotContent(
     onPageRendered: ((Int, ImageBitmap) -> Unit)?,
     pagePlaceholder: (@Composable (Int) -> Unit)?,
     modifier: Modifier,
+    /** A rasterizer that the layout shares between its slots, or null for one of this slot's own. */
+    sharedRasterizer: KitePageRasterizer? = null,
 ) {
     val drawsForm = state.scripts != null && page is PdfPage
     // The page's text, built off the main thread once the reader rests on the page, so a long
@@ -976,6 +1040,7 @@ private fun PageSlotContent(
                 drawsFormLayer = drawsForm,
                 state = state,
                 contentVersion = contentVersion,
+                sharedRasterizer = sharedRasterizer,
             )
             is KiteRenderSpec.Vectorized -> KitePageVector(
                 page, renderSpec, colors, slot, skipWidgets = drawsForm, magnification = settledZoom,
@@ -1296,10 +1361,12 @@ private fun KitePageRaster(
     state: KiteDocViewState? = null,
     /** What the page paints besides the viewer's settings; a new value draws it again (#38). */
     contentVersion: Int = 0,
+    /** A rasterizer that the layout shares between its slots, or null for one of this slot's own (#437). */
+    sharedRasterizer: KitePageRasterizer? = null,
 ) {
     // The spec's long-side cap is the sizing authority in this path, so the
     // rasterizer's pixel ceiling must never undercut maxBitmapLongSide².
-    val rasterizer = rememberKitePageRasterizer(
+    val rasterizer = sharedRasterizer ?: rememberKitePageRasterizer(
         maxOf(
             KITE_DEFAULT_MAX_RASTER_PIXELS,
             spec.maxBitmapLongSide.toLong() * spec.maxBitmapLongSide,
@@ -1323,28 +1390,9 @@ private fun KitePageRaster(
         }
     }
 
-    // A zoom that is not finite never reaches here, but the raster size must not round NaN (#338).
-    val zoomScale = if (settledZoom.isFinite()) settledZoom.coerceAtLeast(0.01f) else 1f
-    // Pinches that settle near each other share one raster: the zoom rounds up to a bucket (#375).
-    val bucket = zoomBucket(zoomScale)
-    val scale = spec.quality * bucket
-    // A side that rounds below one pixel keeps one, so every accepted quality gives a page (#422).
-    val raster = fitWithin(
-        (settledBase.width * scale).roundToInt().coerceAtLeast(if (settledBase.width > 0) 1 else 0),
-        (settledBase.height * scale).roundToInt().coerceAtLeast(if (settledBase.height > 0) 1 else 0),
-        kitePageAspect(page),
-        spec.maxBitmapLongSide,
-    )
-    // Hairline compensation: the engine draws a zero-width stroke 1 *raster* px wide
-    // and floors other strokes at a fifth of that. When the raster is larger than its
-    // final on-screen size (supersampling), both must grow by the same ratio or
-    // sub-pixel strokes fade in the downscale. (Upscaling can only thicken them, so 1 is safe.)
-    // The bucket stands for the zoom here too, so the hairline, part of the raster key, is the same
-    // across the bucket. A hairline then shows at most a sixth thinner than one screen pixel.
-    val visualWidth = settledBase.width * bucket
-    val hairline = if (spec.preserveHairlines && visualWidth > 0f) {
-        max(1f, raster.width / visualWidth)
-    } else 1f
+    val plan = rasterPlanFor(settledBase, kitePageAspect(page), settledZoom, spec)
+    val raster = plan.raster
+    val hairline = plan.hairline
 
     // The page the shown bitmap belongs to, so a failed upgrade keeps it for that page only.
     val shownFor = remember { arrayOfNulls<KitePage>(1) }
@@ -1396,7 +1444,7 @@ private fun KitePageRaster(
     // The page at this zoom in full, which the long-side cap may have cut down. When it has, the
     // part on screen is drawn again at full resolution in tiles, so deep zoom and a tall page stay
     // sharp (#375).
-    val full = IntSize((settledBase.width * scale).roundToInt(), (settledBase.height * scale).roundToInt())
+    val full = IntSize((settledBase.width * plan.scale).roundToInt(), (settledBase.height * plan.scale).roundToInt())
     val tiled = state != null && bitmap != null && (full.width > raster.width + 1 || full.height > raster.height + 1)
 
     // Fade the bitmap in once it lands instead of popping (and keep the previous
@@ -1413,6 +1461,38 @@ private fun KitePageRaster(
             )
         }
     }
+}
+
+/** The raster a slot draws for a page: its size, the hairline width it draws with, and the scale from slot to raster. */
+internal class RasterPlan(val raster: IntSize, val hairline: Float, val scale: Float)
+
+/**
+ * The raster a slot of [base] px draws for a page of [aspect] at [zoom] under [spec]. The strip
+ * computes it from the viewport for a page it draws ahead, so that bitmap has the key its slot
+ * asks for (#437).
+ */
+internal fun rasterPlanFor(base: IntSize, aspect: Float, zoom: Float, spec: KiteRenderSpec.Rasterized): RasterPlan {
+    // A zoom that is not finite never reaches here, but the raster size must not round NaN (#338).
+    val zoomScale = if (zoom.isFinite()) zoom.coerceAtLeast(0.01f) else 1f
+    // Pinches that settle near each other share one raster: the zoom rounds up to a bucket (#375).
+    val bucket = zoomBucket(zoomScale)
+    val scale = spec.quality * bucket
+    // A side that rounds below one pixel keeps one, so every accepted quality gives a page (#422).
+    val raster = fitWithin(
+        (base.width * scale).roundToInt().coerceAtLeast(if (base.width > 0) 1 else 0),
+        (base.height * scale).roundToInt().coerceAtLeast(if (base.height > 0) 1 else 0),
+        aspect,
+        spec.maxBitmapLongSide,
+    )
+    // Hairline compensation: the engine draws a zero-width stroke 1 *raster* px wide
+    // and floors other strokes at a fifth of that. When the raster is larger than its
+    // final on-screen size (supersampling), both must grow by the same ratio or
+    // sub-pixel strokes fade in the downscale. (Upscaling can only thicken them, so 1 is safe.)
+    // The bucket stands for the zoom here too, so the hairline, part of the raster key, is the same
+    // across the bucket. A hairline then shows at most a sixth thinner than one screen pixel.
+    val visualWidth = base.width * bucket
+    val hairline = if (spec.preserveHairlines && visualWidth > 0f) max(1f, raster.width / visualWidth) else 1f
+    return RasterPlan(raster, hairline, scale)
 }
 
 /** The page's whole bitmap, faded in once it lands, or the placeholder until then. */
@@ -1850,6 +1930,9 @@ private const val ZOOM_SETTLE_DEBOUNCE_MS = 220L
 /** How long a page slot's size must hold before its raster follows it (#390). */
 private const val RESIZE_SETTLE_DEBOUNCE_MS = 220L
 
+/** How long a strip rests before it draws pages ahead, so a scroll that only pauses starts no raster (#437). */
+private const val PREFETCH_SETTLE_MS = 150L
+
 /** Fade-in duration for a freshly rasterized page bitmap. */
 private const val PAGE_FADE_MS = 160
 
@@ -1870,6 +1953,8 @@ private fun ChapterGapSlot(
     chapterPlaceholder: (@Composable (chapter: Int) -> Unit)?,
     /** True in the continuous strip, where the slot's length follows its shape and must stay representable. */
     inStrip: Boolean = false,
+    /** The longest the slot may be on the strip's scroll axis, when the strip fits whole pages (#437). */
+    lengthLimitPx: Int = Int.MAX_VALUE,
     /** True in a pager, where the slot fills the viewport and the placeholder is fitted inside it as a page is. */
     letterboxed: Boolean = false,
     /** A pager slot's taps and zoom gestures, and the zoom and pan it draws at, as a page's. */
@@ -1905,7 +1990,7 @@ private fun ChapterGapSlot(
         return
     }
     val sizing = if (inStrip) {
-        Modifier.stripSlot(orientation, aspect) { 1 }
+        Modifier.stripSlot(orientation, aspect, lengthLimitPx) { 1 }
     } else {
         Modifier
             .then(if (orientation == Orientation.Vertical) Modifier.fillMaxWidth() else Modifier.fillMaxHeight())
@@ -1923,22 +2008,23 @@ private fun ChapterGapSlot(
  * Sizes a slot of the continuous strip: the full cross axis, and the length that the page's
  * [aspect] gives. Compose packs constraints into one Long, so a slot far longer than wide
  * cannot be represented and threw in measure (#332). Such a page is capped at the longest
- * length Compose can hold, keeps its shape, and is centred on the cross axis. [naturalCrossPx]
- * sizes a strip whose cross axis is unbounded.
+ * length Compose can hold, keeps its shape, and is centred on the cross axis. A strip that fits
+ * whole pages caps the length at [lengthLimitPx] the same way (#437). [naturalCrossPx] sizes a
+ * strip whose cross axis is unbounded.
  */
-private fun Modifier.stripSlot(orientation: Orientation, aspect: Float, naturalCrossPx: () -> Int): Modifier =
+private fun Modifier.stripSlot(
+    orientation: Orientation,
+    aspect: Float,
+    lengthLimitPx: Int = Int.MAX_VALUE,
+    naturalCrossPx: () -> Int,
+): Modifier =
     layout { measurable, constraints ->
         val vertical = orientation == Orientation.Vertical
         val bounded = if (vertical) constraints.hasBoundedWidth else constraints.hasBoundedHeight
         val cross = (if (!bounded) naturalCrossPx() else if (vertical) constraints.maxWidth else constraints.maxHeight)
             .coerceAtLeast(1)
-        val wanted = wantedSlotLength(vertical, aspect, cross)
-        val length = stripSlotLength(vertical, aspect, cross)
-        val pageCross = if (length >= wanted) {
-            cross
-        } else {
-            (if (vertical) length * aspect else length / aspect).roundToInt().coerceIn(1, cross)
-        }
+        val length = stripSlotLength(vertical, aspect, cross, lengthLimitPx)
+        val pageCross = stripPageCross(vertical, aspect, cross, length)
         val placeable = measurable.measure(
             if (vertical) {
                 androidx.compose.ui.unit.Constraints.fixed(pageCross, length)
@@ -1960,15 +2046,31 @@ private fun wantedSlotLength(vertical: Boolean, aspect: Float, cross: Int): Int 
     // As a Float first: a very long page overflows an Int.
     (if (vertical) cross / aspect else cross * aspect).coerceIn(1f, MAX_SLOT_LENGTH).roundToInt()
 
-/** The length a strip slot gets on the scroll axis: [wantedSlotLength], capped to what Compose can hold. */
-internal fun stripSlotLength(vertical: Boolean, aspect: Float, cross: Int): Int {
+/**
+ * The length a strip slot gets on the scroll axis: [wantedSlotLength], capped to what Compose can
+ * hold and to [lengthLimitPx].
+ */
+internal fun stripSlotLength(vertical: Boolean, aspect: Float, cross: Int, lengthLimitPx: Int = Int.MAX_VALUE): Int {
     val wanted = wantedSlotLength(vertical, aspect, cross)
     val fitted = if (vertical) {
         androidx.compose.ui.unit.Constraints.fitPrioritizingWidth(cross, cross, wanted, wanted)
     } else {
         androidx.compose.ui.unit.Constraints.fitPrioritizingHeight(wanted, wanted, cross, cross)
     }
-    return if (vertical) fitted.maxHeight else fitted.maxWidth
+    return minOf(if (vertical) fitted.maxHeight else fitted.maxWidth, lengthLimitPx.coerceAtLeast(1))
+}
+
+/** How far across the strip a page reaches in a slot [length] long: the whole [cross], or less when the length was capped. */
+internal fun stripPageCross(vertical: Boolean, aspect: Float, cross: Int, length: Int): Int =
+    if (length >= wantedSlotLength(vertical, aspect, cross)) cross
+    else (if (vertical) length * aspect else length / aspect).roundToInt().coerceIn(1, cross)
+
+/** The size a strip gives a page of [aspect] when the strip is [cross] px across, as its slot's constraints fix it (#437). */
+internal fun stripBaseSize(vertical: Boolean, aspect: Float, cross: Int, lengthLimitPx: Int): IntSize {
+    val across = cross.coerceAtLeast(1)
+    val pageCross = stripPageCross(vertical, aspect, across, stripSlotLength(vertical, aspect, across, lengthLimitPx))
+    return if (vertical) IntSize(pageCross, (pageCross / aspect).roundToInt().coerceAtLeast(1))
+    else IntSize((pageCross * aspect).roundToInt().coerceAtLeast(1), pageCross)
 }
 
 /**

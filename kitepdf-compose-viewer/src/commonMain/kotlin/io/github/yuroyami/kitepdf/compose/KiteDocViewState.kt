@@ -1113,21 +1113,36 @@ public class KiteDocViewState(
      */
     internal var stripOrientation: androidx.compose.foundation.gestures.Orientation? = null
 
+    /** The continuous strip's cross axis in px less its padding, or 0 when no strip shows. */
+    internal var stripCrossPx: Int = 0
+
+    /** The longest a continuous slot may be on the scroll axis, when the strip fits whole pages (#437). */
+    internal var stripLengthLimitPx: Int = Int.MAX_VALUE
+
+    /** The slots whose bitmap a continuous strip drew ahead (#437). Tests read it. */
+    @kotlin.concurrent.Volatile
+    internal var prefetchedPages: Set<Int> = emptySet()
+
     /** The length of the leading slot on the scroll axis when a continuous strip parked. */
     private var parkedSlotLength: Int = 0
 
     /**
      * Where a new continuous list for this state starts: the leading slot, and the offset into it
-     * on [orientation]'s axis. A slot [crossPx] across is as long as the strip will lay it out.
+     * on [orientation]'s axis. A slot [crossPx] across, and no longer than [lengthLimitPx], is as
+     * long as the strip will lay it out.
      */
-    internal fun stripSeed(orientation: androidx.compose.foundation.gestures.Orientation, crossPx: Int): Pair<Int, Int> {
+    internal fun stripSeed(
+        orientation: androidx.compose.foundation.gestures.Orientation,
+        crossPx: Int,
+        lengthLimitPx: Int = Int.MAX_VALUE,
+    ): Pair<Int, Int> {
         val at = currentScrollPosition
         val index = inStrip(slotFor(at.location))
         val old = stripOrientation
         val oldLength = (adapter as? LazyListScrollAdapter)?.leadingSlotLength ?: parkedSlotLength
         val page = pageAt(index)
         if (old == null || old == orientation || oldLength <= 0 || crossPx <= 0 || page == null) return index to at.offsetPx
-        val newLength = stripSlotLength(orientation == androidx.compose.foundation.gestures.Orientation.Vertical, kitePageAspect(page), crossPx)
+        val newLength = stripSlotLength(orientation == androidx.compose.foundation.gestures.Orientation.Vertical, kitePageAspect(page), crossPx, lengthLimitPx)
         return index to (at.offsetPx.toLong() * newLength / oldLength).toInt().coerceIn(0, newLength)
     }
     internal var zoomRange: ClosedFloatingPointRange<Float> by mutableStateOf(1f..8f)
@@ -1881,7 +1896,13 @@ public class KiteDocViewState(
             panToShowAtTop(slot, y)?.let { panOffset = it }
             return@onViewerThread
         }
-        val length = continuous.verticalSlotLength(kitePageAspect(page)) { pageAt(it)?.let(::kitePageAspect) }
+        // With fit PAGE a slot can be shorter than its page across the strip gives, so its length
+        // comes from the strip's own cross axis (#437).
+        val length = if (stripLengthLimitPx < Int.MAX_VALUE && stripCrossPx > 0) {
+            stripSlotLength(vertical = true, aspect = kitePageAspect(page), cross = stripCrossPx, lengthLimitPx = stripLengthLimitPx)
+        } else {
+            continuous.verticalSlotLength(kitePageAspect(page)) { pageAt(it)?.let(::kitePageAspect) }
+        }
         if (length == null) {
             toPage()
             return@onViewerThread

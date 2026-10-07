@@ -277,6 +277,16 @@ KiteDocView(
 )
 ```
 
+- **`fit`**: `KitePageFit.WIDTH` (default) fills the width of a vertical strip, so a tall page scrolls through the viewport. `KitePageFit.PAGE` shrinks each page until the whole page shows, centred across the strip.
+- **`prefetchPages`**: once the strip rests, it draws this many pages on each side of the pages on screen into the bitmap cache, so a scroll to them shows their bitmap at once. The default is 1. Use 0 to draw nothing ahead.
+
+```kotlin
+KiteDocView(
+    state,
+    layout = KiteDocLayout.Continuous(fit = KitePageFit.PAGE, prefetchPages = 2),
+)
+```
+
 **Best for:** reading documents end-to-end (papers, reports), where the page count matters less than the scroll position.
 
 ### `KiteDocLayout.Paged` (snap paging)
@@ -1146,7 +1156,7 @@ Freshly rasterized pages fade in smoothly rather than popping (160 ms by default
 
 ## Performance notes
 
-- **Lazy composition**: Continuous mode composes only visible pages and their immediate offscreen neighbours (paged mode pre-renders `offscreenPages` on each side). Millions of pages are supported; only visible ones cost anything.
+- **Lazy composition**: Continuous mode composes only the visible pages. Once the strip rests, it draws `prefetchPages` pages on each side into the bitmap cache (paged mode pre-renders `offscreenPages` on each side). Millions of pages are supported; only visible ones cost anything.
 - **Rasterization is off the main thread**: `KiteDocView` renders page bitmaps through `KitePageRasterizer.rasterizeOffMain()` on a background pool after composition settles, so scrolling and input stay responsive; results land through a page-bitmap LRU cache. The jitter on a page turn is avoided by pre-fetching neighbours while idle.
 - **Two pages render at once, the visible one first**: every viewer and thumbnail strip in the process shares two render slots. A page on screen gets the next free slot before a page drawn ahead, and both come before a thumbnail. A page that scrolls into view while it waits moves ahead. A cache hit needs no slot.
 - **System-font text renders off Main**: a page whose text has no font outlines of its own, such as the text of a book without embedded fonts, renders on the raster pool in one pass. Compose's text stack is not safe to use from two threads, so that text draws through the platform's own engine with what Compose's text would give it, in the same pixels: Skia's paragraph engine on the desktop JVM, iOS and macOS (#131), and Android's text stack on Android (#487).

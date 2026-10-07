@@ -17,8 +17,10 @@ public sealed interface KiteDocLayout {
 
     /**
      * All pages in one continuous scrollable strip (lazy: offscreen pages are
-     * neither composed nor rasterized). Pages fill the cross axis at their
-     * natural aspect ratio.
+     * not composed). Pages fill the cross axis at their natural aspect ratio,
+     * or, with [fit] [KitePageFit.PAGE], shrink until the whole page shows.
+     * Once the strip rests, [prefetchPages] pages on each side of the pages on
+     * screen draw into the bitmap cache.
      *
      * Zoom in this mode is magnifier-style: the strip is scaled around the
      * viewport centre, pan across the strip is a clamped transform, and the
@@ -31,7 +33,23 @@ public sealed interface KiteDocLayout {
         val orientation: Orientation = Orientation.Vertical,
         /** Scrollable edge clearance for host controls; pages still pass underneath them. */
         val contentPadding: PaddingValues = PaddingValues(0.dp),
-    ) : KiteDocLayout
+        /**
+         * How each page fits the viewport. [KitePageFit.WIDTH] fills the cross axis, so a page
+         * longer than the viewport scrolls through it. [KitePageFit.PAGE] shrinks a page until
+         * the whole of it shows at once, centred across the strip (#437).
+         */
+        val fit: KitePageFit = KitePageFit.WIDTH,
+        /**
+         * Pages drawn ahead on each side of the pages on screen once the strip rests, into the
+         * bitmap cache, so a scroll to them finds their bitmap ready. 0 draws nothing ahead. The
+         * strip draws them itself, because Compose's own prefetch runs on Android only (#437).
+         */
+        val prefetchPages: Int = 1,
+    ) : KiteDocLayout {
+        init {
+            require(prefetchPages >= 0) { "prefetchPages must be >= 0 (was $prefetchPages)" }
+        }
+    }
 
     /**
      * One page at a time with snap paging (swipe, or drive programmatically
@@ -140,15 +158,21 @@ public sealed interface KiteDocLayout {
     }
 }
 
-/** How a [KiteDocLayout.Paged] pager fits each page into the viewport. */
+/** How a [KiteDocLayout.Paged] pager or a [KiteDocLayout.Continuous] strip fits each page into the viewport. */
 public enum class KitePageFit {
-    /** The whole page shows, centred, with bands on the sides it does not fill. */
+    /**
+     * The whole page shows. In a pager it is centred, with bands on the sides it does not fill.
+     * In a strip each page shrinks until it fits the scroll axis too, centred across the strip,
+     * so the reader sees one whole page at a time (#437).
+     */
     PAGE,
 
     /**
-     * The page fills the width. A page taller than the viewport starts at its top, and the
-     * reader drags or turns the wheel down through it; a drag sideways past its edge turns it.
-     * A shorter page shows centred. This is how a scrolled EPUB chapter reads (#505).
+     * The page fills the width. In a pager, a page taller than the viewport starts at its top,
+     * and the reader drags or turns the wheel down through it; a drag sideways past its edge
+     * turns it. A shorter page shows centred. This is how a scrolled EPUB chapter reads (#505).
+     * In a strip, the pages fill the cross axis at their own aspect ratio, and the strip scrolls
+     * through them.
      */
     WIDTH,
 }
