@@ -2615,9 +2615,14 @@ internal class BoxLayout(
      * A ligature's marks all attach to its LAST component. The ligature matcher
      * needs its components adjacent, so any mark it kept was written after the
      * whole ligature, and that is where a reader expects it.
+     *
+     * A right-to-left line draws its cells in reverse, so a mark comes before its
+     * base and the pen there has not passed the base. Its offset then counts back
+     * from the base origin over the marks between them, not over the base (#622).
      */
     private fun positionMarks(cells: List<Cell>) {
         var base: Cell? = null
+        var baseAdvance = 0.0 // font units of the base's own advance
         var advSinceBase = 0.0 // font units from the base origin to the current pen
         // The last attached mark, and its drawn origin relative to the base.
         var stacked: Cell? = null
@@ -2633,9 +2638,11 @@ internal class BoxLayout(
                     ?: (if (b.ligComponents > 1) face.markLigatureOffset(b.gid, c.gid, b.ligComponents - 1) else null)
                     ?: face.markOffset(b.gid, c.gid)
                 if (off != null) {
-                    c.glyphXOffset = off.first - advSinceBase
+                    val advance = face.advanceRaw(c.gid) // usually 0 for a mark
+                    // Right to left, the marks from the base up to this one lie between it and the base.
+                    c.glyphXOffset = if (c.level % 2 == 1) off.first + (advSinceBase - baseAdvance + advance) else off.first - advSinceBase
                     c.glyphYOffset = off.second
-                    advSinceBase += face.advanceRaw(c.gid) // usually 0 for a mark
+                    advSinceBase += advance
                     stacked = c; stackedX = off.first; stackedY = off.second
                     continue // still attached to the same base
                 }
@@ -2643,6 +2650,7 @@ internal class BoxLayout(
             base = c
             stacked = null
             advSinceBase = if (face != null && c.gid >= 0) face.advanceRaw(c.gid).toDouble() else 0.0
+            baseAdvance = advSinceBase
         }
     }
 

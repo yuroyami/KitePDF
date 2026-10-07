@@ -419,6 +419,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- In right-to-left text, a mark such as an Arabic vowel sign was drawn left of its base by the
+  width of that base, so it sat over the next letter. Each mark now sits where HarfBuzz puts it
+  (#622).
 - A book in a language with no bundled hyphenation patterns, such as Czech, was hyphenated with
   the English patterns, so its words broke where English ones would. It is now not hyphenated,
   and soft hyphens still break (#615).

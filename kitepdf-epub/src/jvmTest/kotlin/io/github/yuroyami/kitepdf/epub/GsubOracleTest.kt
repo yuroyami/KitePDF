@@ -1,8 +1,10 @@
 package io.github.yuroyami.kitepdf.epub
 
-import io.github.yuroyami.kitepdf.core.font.OpenTypeGsub
+import io.github.yuroyami.kitepdf.epub.HarfBuzzOracle.fontsDir
+import io.github.yuroyami.kitepdf.epub.HarfBuzzOracle.harfbuzz
+import io.github.yuroyami.kitepdf.epub.HarfBuzzOracle.hbShape
+import io.github.yuroyami.kitepdf.epub.HarfBuzzOracle.loadFace
 import java.io.File
-import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -16,67 +18,12 @@ import kotlin.test.assertTrue
  */
 class GsubOracleTest {
 
-    private fun fontsDir(): File? {
-        var d: File? = File(System.getProperty("user.dir")).absoluteFile
-        while (d != null && !File(d, "mupdf-master/resources/fonts/noto").exists()) d = d.parentFile
-        return d?.let { File(it, "mupdf-master/resources/fonts/noto") }
-    }
-
-    private fun hbShape(): String? =
-        listOf("/opt/homebrew/bin/hb-shape", "/usr/local/bin/hb-shape", "/usr/bin/hb-shape").firstOrNull { File(it).canExecute() }
-
-    /** The glyph ids HarfBuzz gives each of [words] in [font], in logical order, from one run of `hb-shape`. */
-    private fun harfbuzz(tool: String, font: File, words: List<String>): List<List<Int>> {
-        val text = File.createTempFile("gsub-oracle", ".txt").apply { deleteOnExit(); writeText(words.joinToString("\n", postfix = "\n")) }
-        val p = ProcessBuilder(tool, "--no-positions", "--no-glyph-names", "--no-clusters", "--text-file=${text.path}", font.path)
-            .redirectErrorStream(true).start()
-        val lines = p.inputStream.bufferedReader().readLines()
-        p.waitFor(60, TimeUnit.SECONDS)
-        return words.mapIndexed { i, word ->
-            val gids = lines[i].trim().removePrefix("[").removeSuffix("]").split('|').filter { it.isNotBlank() }.map { it.trim().toInt() }
-            // HarfBuzz lists the glyphs of a right-to-left word from its end.
-            if (isRightToLeft(word)) gids.reversed() else gids
-        }
-    }
-
-    /**
-     * True when HarfBuzz shapes [word] right to left: the first character of a script, by the
-     * JDK's own Unicode data, is of a script that HarfBuzz's hb_script_get_horizontal_direction
-     * lists as right to left.
-     */
-    private fun isRightToLeft(word: String): Boolean {
-        for (cp in word.codePoints().toArray()) {
-            val script = Character.UnicodeScript.of(cp)
-            if (script == Character.UnicodeScript.COMMON || script == Character.UnicodeScript.INHERITED ||
-                script == Character.UnicodeScript.UNKNOWN
-            ) continue
-            return script.name in RTL_SCRIPTS
-        }
-        return false
-    }
-
-    private val RTL_SCRIPTS = setOf(
-        "ARABIC", "HEBREW", "SYRIAC", "THAANA", "CYPRIOT", "KHAROSHTHI", "PHOENICIAN", "NKO", "LYDIAN", "AVESTAN",
-        "IMPERIAL_ARAMAIC", "INSCRIPTIONAL_PAHLAVI", "INSCRIPTIONAL_PARTHIAN", "OLD_SOUTH_ARABIAN", "OLD_TURKIC",
-        "SAMARITAN", "MANDAIC", "MEROITIC_CURSIVE", "MEROITIC_HIEROGLYPHS", "MANICHAEAN", "MENDE_KIKAKUI", "NABATAEAN",
-        "OLD_NORTH_ARABIAN", "PALMYRENE", "PSALTER_PAHLAVI", "HATRAN", "ADLAM", "HANIFI_ROHINGYA", "OLD_SOGDIAN",
-        "SOGDIAN", "ELYMAIC", "CHORASMIAN", "YEZIDI", "OLD_UYGHUR", "GARAY", "SIDETIC",
-    )
-
     private val faces = HashMap<File, EmbeddedFace>()
 
-    private fun face(font: File): EmbeddedFace =
-        faces.getOrPut(font) { FontRegistry.face("t", bold = false, italic = false, font.readBytes()) ?: error("${font.name} does not parse") }
+    private fun face(font: File): EmbeddedFace = faces.getOrPut(font) { loadFace(font) }
 
     /** The glyph ids KitePDF gives [word] in [font], through the same steps as [BoxLayout]. */
-    private fun kitepdf(font: File, word: String): List<Int> {
-        val face = face(font)
-        val gsub = face.gsub ?: OpenTypeGsub.EMPTY
-        val cps = word.codePoints().toArray()
-        val script = TextShaper.script(cps, gsub)
-        val forms = if (ArabicJoining.hasArabic(cps)) ArabicJoining.forms(cps) else null
-        return TextShaper.shape(face, gsub, script, cps, IntArray(cps.size) { face.gidFor(cps[it]) }, forms, optionalLigatures = true).map { it.gid }
-    }
+    private fun kitepdf(font: File, word: String): List<Int> = HarfBuzzOracle.kitepdf(face(font), word)
 
     private val cases = mapOf(
         "NotoSerif-Regular.otf" to listOf(
