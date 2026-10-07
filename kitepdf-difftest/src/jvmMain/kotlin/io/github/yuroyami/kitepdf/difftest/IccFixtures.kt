@@ -11,7 +11,9 @@ import kotlin.math.roundToInt
  * - a version 2 CMYK printer profile: `lut16Type` tables to and from Lab, which uses the
  *   legacy 16-bit encoding, so black point compensation maps Lab black through them;
  * - a version 4 RGB display profile: a `lutAtoBType` table with parametric A curves, a
- *   grid, M curves and a matrix.
+ *   grid, M curves and a matrix;
+ * - a version 2 RGB display profile: a matrix and one gamma 1.8 curve for the three
+ *   channels, with primaries much wider than sRGB, so the conversion clips (#623).
  *
  * Each profile paints a row of swatches and an 8-bit image. mutool converts them through
  * Little CMS with the relative colorimetric intent and black point compensation.
@@ -23,6 +25,8 @@ object IccFixtures {
         image("icc-cmyk-lut16-image", cmykProfile, 4),
         swatches("icc-rgb-lutab-swatches", rgbProfile, 3, RGB_SWATCHES),
         image("icc-rgb-lutab-image", rgbProfile, 3),
+        swatches("icc-rgb-matrix-wide-swatches", wideMatrixProfile, 3, RGB_SWATCHES),
+        image("icc-rgb-matrix-wide-image", wideMatrixProfile, 3),
     )
 
     private val CMYK_SWATCHES = listOf(
@@ -324,6 +328,24 @@ object IccFixtures {
         val y = 0.2412 * r + 0.6922 * g + 0.0666 * b
         val z = -0.0011 * r + 0.0419 * g + 0.7841 * b
         return xyzToLab(x, y, z)
+    }
+
+    /**
+     * A version 2 RGB display profile with a matrix and tone curves: the D50-adapted ProPhoto
+     * primaries, and one gamma 1.8 curve that the three channels share (#623). Its green and blue
+     * lie far outside sRGB, so the swatches test the clipping of a matrix profile.
+     */
+    private val wideMatrixProfile: ByteArray by lazy {
+        fun xyz(x: Double, y: Double, z: Double) = Writer().apply { sig("XYZ "); u32(0); s15f16(x); s15f16(y); s15f16(z) }.bytes()
+        val trc = Writer().apply { sig("curv"); u32(0); u32(1); u16((1.8 * 256).roundToInt()); u16(0) }.bytes()
+        profile(
+            0x02100000, "mntr", "RGB ",
+            listOf(
+                "rXYZ" to xyz(0.7977, 0.2880, 0.0), "gXYZ" to xyz(0.1352, 0.7119, 0.0), "bXYZ" to xyz(0.0313, 0.0001, 0.8249),
+                "rTRC" to trc, "gTRC" to trc, "bTRC" to trc,
+            ),
+            pcs = "XYZ ",
+        )
     }
 
     /* ─── Colour helpers ───────────────────────────────────────────────────── */
