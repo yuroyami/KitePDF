@@ -3,14 +3,14 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.ui.graphics.ImageBitmap
 
 /**
- * Platform-supplied image decoder. KitePDF's core decodes images with
- * KiteImageCodec; an encoded image that the core cannot decode comes here, to
- * the decoder the host platform already provides: Skia on the JVM, iOS, macOS
- * and the web, and BitmapFactory on Android.
+ * Bitmaps for the Compose canvas. [decodeRaw] wraps pixels that KitePDF's core decoded with
+ * KiteImageCodec. [decode] reads an encoded file with the decoder the host platform provides:
+ * Skia on the JVM, iOS, macOS and the web, and BitmapFactory on Android. KitePDF does not call
+ * [decode] for page images: an image that the shared decoders refuse draws as a placeholder on
+ * every canvas (#184).
  *
  * The actual implementations live in :kitepdf-compose-viewer's platform source sets.
- * If a platform can't decode the bytes (corrupt JPEG, unsupported format),
- * the actual returns null and the renderer paints a placeholder rectangle.
+ * If a platform can't decode the bytes (corrupt file, unsupported format), [decode] returns null.
  */
 public expect object ImageDecoder {
     public fun decode(bytes: ByteArray): ImageBitmap?
@@ -24,10 +24,3 @@ public expect object ImageDecoder {
     public fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap?
 }
 
-/**
- * [bytes] decoded with each side divided by [sample], rounded up, when the platform decoder can
- * shrink while it decodes, and at full size when it cannot. [sample] is 1, 2, 4 or 8. Returns the
- * bitmap and the division that the decoder applied, [sample] or 1, or null when the bytes do not
- * decode. Android and Skia shrink a JPEG inside the decoder (#381).
- */
-internal expect fun decodeSampled(bytes: ByteArray, sample: Int): Pair<ImageBitmap, Int>?

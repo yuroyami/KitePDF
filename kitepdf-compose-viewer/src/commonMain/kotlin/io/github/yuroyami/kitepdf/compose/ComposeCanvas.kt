@@ -56,7 +56,6 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
-import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.drawOrderParts
@@ -613,36 +612,12 @@ public class ComposeCanvas internal constructor(
     /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out. */
     private fun bitmapFor(image: KiteImageData, sampling: KiteImageSampling): ImageBitmap? {
         convertedImages++
-        val bytes = when (image.kind) {
-            // RAW (FlateDecode etc.): samples are already inflated. Assemble RGBA
-            // and build a bitmap directly. Covers the common embedded-PNG case.
-            // An image drawn smaller converts and shrinks a band of rows at a time (#381).
-            KiteImageData.Kind.RAW -> {
-                val rgba = image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)
-                if (rgba != null) {
-                    return ImageDecoder.decodeRaw(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
-                }
-                // A JPEG whose data KiteImageCodec could not decode goes to the platform decoder below (#475).
-                image.encodedBytes.takeIf { it.isNotEmpty() } ?: return null
-            }
-            // An encoded image that the core could not decode goes to the platform decoder. Skia and
-            // Android read JPEG and shrink it inside the decoder by up to 8 (#381). They have no JPEG
-            // 2000 or JBIG2 codec, so those return null and draw as a placeholder.
-            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 -> image.encodedBytes
-            else -> return null
-        }
-        val (decoded, done) = decodeSampled(bytes, minOf(sampling.shrinkX, sampling.shrinkY, 8)) ?: return null
-        // The decoder divided each side by done, and both factors are powers of two: average the rest.
-        val fx = sampling.shrinkX / done
-        val fy = sampling.shrinkY / done
-        if (fx == 1 && fy == 1) return decoded
-        // readPixels gives straight ARGB on every platform.
-        val w = decoded.width
-        val h = decoded.height
-        val small = shrinkArgb(w, h, fx, fy) { pixels, y, rows ->
-            decoded.readPixels(pixels, startX = 0, startY = y, width = w, height = rows)
-        }
-        return ImageDecoder.decodeRaw(small, (w + fx - 1) / fx, (h + fy - 1) / fy) ?: decoded
+        // Only a RAW image draws. Every other kind is data the shared decoders refused, a decoder
+        // gap of KitePDF itself, and it draws as a placeholder on every canvas (#184).
+        if (image.kind != KiteImageData.Kind.RAW) return null
+        // An image drawn smaller converts and shrinks a band of rows at a time (#381).
+        val rgba = image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY) ?: return null
+        return ImageDecoder.decodeRaw(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
     }
 
     override fun fillShading(

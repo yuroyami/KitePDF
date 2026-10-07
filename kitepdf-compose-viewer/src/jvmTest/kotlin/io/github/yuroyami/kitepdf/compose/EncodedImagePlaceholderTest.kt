@@ -3,7 +3,6 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
@@ -12,17 +11,15 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
-import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
- * An encoded image that the core cannot decode goes to the platform decoder, which shrinks a
- * JPEG inside the decoder when the image draws small, and the canvas averages only the rest
- * (#381). KiteImage refuses arithmetic coding, so this JPEG takes that path.
+ * An image that the shared decoders refuse draws as the placeholder, on this canvas as on every
+ * other, so a placeholder marks a decoder gap of KitePDF itself (#184). KiteImage refuses
+ * arithmetic coding, so this JPEG is such an image.
  */
-class EncodedImageSamplingTest {
+class EncodedImagePlaceholderTest {
 
     /** 64 by 48, arithmetic coded by `cjpeg -arithmetic -quality 90`: red grows to the right, green downwards, blue 128. */
     private val arithmeticJpeg = (
@@ -36,47 +33,20 @@ class EncodedImageSamplingTest {
         "a1467ced33367649d96b2360855dcb892bb5582065cc408090f6d69f7ba35ce54ae61a14de428d4bed34ffd9"
     ).chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
-    private fun render(w: Int, h: Int): PixelMap {
+    @Test
+    fun a_jpeg_the_shared_decoder_refuses_draws_as_the_placeholder() {
         val image = KiteImageData.fromEncodedImage(arithmeticJpeg) ?: error("no image")
         assertEquals(KiteImageData.Kind.JPEG, image.kind, "KiteImage must refuse arithmetic coding for this test to mean anything")
-        val bitmap = ImageBitmap(w, h)
-        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
+        val bitmap = ImageBitmap(64, 48)
+        CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(64f, 48f)) {
             ComposeCanvas(this, TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr))
-                .drawImage(image, KiteMatrix(w.toDouble(), 0.0, 0.0, -h.toDouble(), 0.0, h.toDouble()), 1.0)
+                .drawImage(image, KiteMatrix(64.0, 0.0, 0.0, -48.0, 0.0, 48.0), 1.0)
         }
-        return bitmap.toPixelMap()
-    }
-
-    @Test
-    fun a_jpeg_drawn_at_a_quarter_or_an_eighth_keeps_its_gradient() {
-        for (f in listOf(4, 8)) {
-            val w = 64 / f
-            val h = 48 / f
-            val map = render(w, h)
-            var worst = 0f
-            for (y in 0 until h) for (x in 0 until w) {
-                // The mean of the block that the pixel covers.
-                val red = (f * x + (f - 1) / 2f) / 64f
-                val green = (f * y + (f - 1) / 2f) / 48f
-                worst = maxOf(worst, abs(map[x, y].red - red), abs(map[x, y].green - green), abs(map[x, y].blue - 128 / 255f))
-            }
-            assertTrue(worst < 0.04f, "drawn at 1/$f: worst difference $worst")
-        }
-    }
-
-    @Test
-    fun the_canvas_draws_the_platform_decoders_own_reduced_pixels() {
-        // Drawn at a quarter, the bitmap is the decoder's 1/4 decode, pixel for pixel. A full decode
-        // averaged down by the canvas differs from it, because a reduced IDCT is not a box filter.
-        val map = render(16, 12)
-        val (reduced, done) = decodeSampled(arithmeticJpeg, 4) ?: error("decodeSampled returned null")
-        assertEquals(4, done)
-        val expected = reduced.toPixelMap()
-        for (y in 0 until 12) for (x in 0 until 16) {
-            val a = map[x, y]
-            val b = expected[x, y]
-            val d = maxOf(abs(a.red - b.red), abs(a.green - b.green), abs(a.blue - b.blue))
-            assertTrue(d <= 1.5f / 255, "pixel ($x, $y): drawn $a, decoded $b")
-        }
+        // A pixel inside the placeholder's grey fill, off its border and off both diagonals. The
+        // JPEG's gradient has red near 0.1 and green near 0.5 there, so a decode would show.
+        val inside = bitmap.toPixelMap()[6, 24]
+        assertEquals(0xE0 / 255f, inside.red, 0.01f)
+        assertEquals(0xE0 / 255f, inside.green, 0.01f)
+        assertEquals(0xE0 / 255f, inside.blue, 0.01f)
     }
 }

@@ -281,12 +281,12 @@ page.renderTo(pdfCanvas, deviceCtm)
 // To save as PNG: use the browser's canvas.toBlob() or toDataURL()
 ```
 
-!!! warning "Embedded images arrive one frame late"
-    The browser decodes JPEG and JP2 asynchronously, so the first pass over such an image paints a placeholder and the image appears on the next render. Raw-sample images draw immediately. Use Skia on JS when the very first paint must be complete.
+!!! note "Images"
+    Canvas2D draws every image that the shared decoders read in the same pass as the rest of the page. An image they refuse, such as an arithmetic-coded JPEG, draws as a grey placeholder, as it does on every canvas.
 
 ## Web: Skia over WASM (kitepdf-skia-renderer, JS/wasmJs)
 
-For better image fidelity on the web (including embedded image XObjects), use Skia compiled to WASM.
+Skia compiled to WASM draws the web page with the same engine as the Skia renderer on the JVM. Use it when the output must match that renderer pixel for pixel; Canvas2D gives a smaller bundle.
 
 **Install:**
 

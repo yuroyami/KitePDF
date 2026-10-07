@@ -359,10 +359,10 @@ with the reason behind each gap.
 | Redaction | A few things survive, such as a large background fill and a clipping path's outline. The [editing guide](https://yuroyami.github.io/KitePDF/editing/#redaction-limitations) lists them all. |
 | Encryption | Files encrypted with RC4 open, but only AES files can be edited. New files use AES-256. |
 | Colour | ICC profiles and rendering intents apply. Overprint is not simulated. |
+| Images | An image that the shared decoders refuse, such as an arithmetic-coded or 12-bit JPEG, a JPEG whose data is damaged, a JPEG 2000 stream the decoder does not read, or a JBIG2 stream in MMR, Huffman or halftone form, draws as a grey placeholder on every platform. |
 | Text | Text comes as blocks, lines and spans, with no word splitting and no tag tree. |
 | Shaping | Hangul jamo are not composed into syllables. A font without its own shaping tables gets no Arabic or Thai fallback forms. |
 | EPUB | Czech, Macedonian, Indonesian, Armenian, Latvian and Romanian are not hyphenated: their hyph-utf8 patterns come under the GPL, the LGPL or no licence, which an Apache-2.0 library cannot carry. Thai is not hyphenated either. |
-| Browser | With Canvas2D, an image appears one frame late, because the browser decodes it in the background. |
 | Rendering | AWT on the JVM and Skia are the two complete renderers. |
 | CI | CI runs the tests on the JVM, the Android host, the iOS simulator, macOS, Node and a headless browser. Android devices, Wasm, and native Linux and Windows are not tested there. |
 

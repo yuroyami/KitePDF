@@ -32,12 +32,10 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *
  *   - `DCTDecode` → decoded by KiteImageCodec into a [Kind.RAW] image. An image
  *     without a mask keeps only its encoded data and decodes at the size it draws
- *     ([toShrunkRgbaBytes]), with the file in [encodedBytes] for the host
- *     platform's image loader if that decode fails. A four-component JPEG gives
- *     CMYK samples, which the image's own colour space converts. A JPEG whose
- *     headers name a coding KiteImageCodec does not decode, such as an
- *     arithmetic-coded one, falls back to [Kind.JPEG] with the file in
- *     [encodedBytes], for the host platform's image loader.
+ *     ([toShrunkRgbaBytes]). A four-component JPEG gives CMYK samples, which the
+ *     image's own colour space converts. A JPEG whose headers name a coding
+ *     KiteImageCodec does not decode, such as an arithmetic-coded one, falls back
+ *     to [Kind.JPEG] with the file in [encodedBytes].
  *   - `FlateDecode` / `LZWDecode` / `CCITTFaxDecode` / ASCII / RunLength → pixel
  *     samples already decoded into [pixelBytes]; [toRgbaBytes] assembles RGBA
  *     using [resolvedColorSpace], [bitsPerComponent], and [decode].
@@ -49,7 +47,9 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *     JPEG is; unsupported flavours fall back to [Kind.JPEG2000] with the
  *     payload in [encodedBytes].
  *
- * Callers should switch on [kind] to pick the right rendering path. Stencil masks
+ * A canvas paints the pixels of a [Kind.RAW] image and draws a placeholder for every
+ * other kind, the same on every platform, so a placeholder marks a decoder gap of
+ * KitePDF itself and never a difference between hosts (#184). Stencil masks
  * (`/ImageMask true`) carry [isImageMask] and are tinted by [maskFill].
  *
  * Transparency reaches the raster path in three forms: `/SMask` and a stencil
@@ -63,11 +63,10 @@ public class KiteImageData internal constructor(
     public val colorSpace: String,
     public val kind: Kind,
     /**
-     * Encoded bytes, for kinds that defer decoding to a platform image loader. A PDF's JPEG
-     * that is a [Kind.RAW] image decoding at the size it draws keeps its file here too. Its
-     * headers were read when it loaded, not its data, so its first decode can still fail; a
-     * canvas then hands these bytes to the platform loader, as for a [Kind.JPEG] image (#475).
-     * Every other [Kind.RAW] image leaves this empty.
+     * Encoded bytes, for the kinds that the shared decoders refused. A PDF's JPEG that is a
+     * [Kind.RAW] image decoding at the size it draws keeps its file here too. Its headers were
+     * read when it loaded, not its data, so its first decode can still fail; the image then
+     * draws as a placeholder (#475, #184). Every other [Kind.RAW] image leaves this empty.
      */
     public val encodedBytes: ByteArray,
     pixelBytes: ByteArray? = null,
@@ -239,17 +238,17 @@ public class KiteImageData internal constructor(
     ).also { it.bitmapIdentity = identity }
 
     public enum class Kind {
-        /** Pixel data already flat in [pixelBytes] (Flate/LZW/CCITT/ASCII/RLE). */
+        /** Pixel data already flat in [pixelBytes] (Flate/LZW/CCITT/ASCII/RLE), or decoding at the size it draws. The one kind a canvas paints. */
         RAW,
-        /** JPEG-encoded; [encodedBytes] is a complete JFIF/EXIF file. */
+        /** A JPEG the shared decoder refused; [encodedBytes] is the complete file. Draws as a placeholder. */
         JPEG,
         /** Unused: CCITT decodes through the filter chain into [RAW]. Kept for API stability. */
         CCITT,
-        /** JBIG2-encoded payload the pure-Kotlin decoder could not handle (MMR/Huffman/halftone). */
+        /** A JBIG2 payload the pure-Kotlin decoder could not handle (MMR/Huffman/halftone). Draws as a placeholder. */
         JBIG2,
-        /** JPEG 2000-encoded; not decoded yet. */
+        /** A JPEG 2000 stream the pure-Kotlin decoder refused. Draws as a placeholder. */
         JPEG2000,
-        /** Filter chain not recognised; backends should render a placeholder. */
+        /** Filter chain not recognised. Draws as a placeholder. */
         UNKNOWN,
     }
 
@@ -358,8 +357,8 @@ public class KiteImageData internal constructor(
                     val bm = if (lazy != null || inked != null) null else runCatching { KiteImageCodec.decode(terminal.bytes) }.getOrNull()
                     // The RGB of a four-component JPEG is converted already, so it stays device RGB.
                     val keep = keepsSpace && (lazy != null || inked != null || (bm != null && ink == null))
-                    // The file stays in encodedBytes as well, the same array, for a canvas to hand to the
-                    // platform decoder if the first draw finds data that KiteImageCodec cannot decode (#475).
+                    // The file stays in encodedBytes as well, the same array. If the first draw finds data
+                    // that KiteImageCodec cannot decode, the image draws as a placeholder (#475, #184).
                     if (lazy != null) KiteImageData(
                         lazy.width, lazy.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW, encodedBytes = terminal.bytes,
                         resolvedColorSpace = if (keep) declared else KiteColorSpace.DeviceRGB, decode = if (keep) decodeArr else null,
@@ -466,10 +465,10 @@ public class KiteImageData internal constructor(
          *
          * PNG, GIF, BMP, JPEG, JPEG 2000, TIFF and lossless WebP are decoded in
          * pure Kotlin by the shared KiteImageCodec engine into a [Kind.RAW] image that
-         * renders on every backend. Lossy WebP has no decoder yet and returns null. A JPEG the native decoder can't handle (arithmetic coding,
-         * 12-bit) falls back to the host platform's loader ([Kind.JPEG] with the
-         * file in [encodedBytes]). Unrecognised formats return null, so callers
-         * degrade gracefully by skipping the image.
+         * renders on every backend. Lossy WebP has no decoder yet and returns null. A JPEG
+         * the codec refuses (arithmetic coding, 12-bit) becomes a [Kind.JPEG] image with the
+         * file in [encodedBytes], which draws as a placeholder (#184). Unrecognised formats
+         * return null, so callers degrade gracefully by skipping the image.
          */
         public fun fromEncodedImage(bytes: ByteArray): KiteImageData? {
             return when (ImageFormat.sniff(bytes)) {
@@ -478,8 +477,8 @@ public class KiteImageData internal constructor(
                     runCatching { KiteImageCodec.decode(bytes) }.getOrNull()?.toKiteImageData()
                 ImageFormat.JPEG -> {
                     runCatching { KiteImageCodec.decode(bytes) }.getOrNull()?.let { return it.toKiteImageData() }
-                    // Streams KiteImageCodec can't handle (arithmetic coding, 12-bit)
-                    // defer to the host platform's loader.
+                    // A stream KiteImageCodec cannot handle (arithmetic coding, 12-bit) keeps
+                    // its file and draws as a placeholder (#184).
                     val (w, h) = jpegFrame(bytes) ?: return null
                     if (w <= 0 || h <= 0) return null
                     KiteImageData(

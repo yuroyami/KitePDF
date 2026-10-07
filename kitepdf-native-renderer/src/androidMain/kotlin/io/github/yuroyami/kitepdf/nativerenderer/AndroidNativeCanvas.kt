@@ -1,6 +1,5 @@
 package io.github.yuroyami.kitepdf.nativerenderer
 
-import android.graphics.BitmapFactory
 import android.graphics.BlendMode as AndroidBlendMode
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color
@@ -26,7 +25,6 @@ import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
 import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
-import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
@@ -529,36 +527,18 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
 
     /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out (#122). */
     private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): android.graphics.Bitmap? = try {
-        when (image.kind) {
-            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 -> decodeEncoded(image.encodedBytes, sampling)
-            // Decoded samples: what every successful JPEG / JPX / JBIG2 decode
-            // produces, plus plain Flate images. Straight-alpha RGBA from core.
-            // An image drawn smaller converts and shrinks a band of rows at a time (#381).
-            // A JPEG whose data KiteImageCodec could not decode goes to BitmapFactory, as above (#475).
-            KiteImageData.Kind.RAW -> image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
+        // Only a RAW image draws; every other kind is a placeholder on every canvas (#184). Its
+        // samples come from core as straight-alpha RGBA, a band of rows at a time when the image
+        // draws smaller (#381).
+        if (image.kind != KiteImageData.Kind.RAW) {
+            null
+        } else {
+            image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
                 rgbaBitmap(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
-            } ?: image.encodedBytes.takeIf { it.isNotEmpty() }?.let { decodeEncoded(it, sampling) }
-            else -> null
+            }
         }
     } catch (t: Throwable) {
         null
-    }
-
-    /** An encoded image through BitmapFactory, averaged down as [sampling] asks. */
-    private fun decodeEncoded(bytes: ByteArray, sampling: KiteImageSampling): android.graphics.Bitmap? {
-        // The decoder averages a JPEG down while it decodes, by one power of two for both directions.
-        val sample = minOf(sampling.shrinkX, sampling.shrinkY)
-        val options = BitmapFactory.Options().apply { inSampleSize = sample }
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.let { bm ->
-            val fx = sampling.shrinkX / sample
-            val fy = sampling.shrinkY / sample
-            if (fx == 1 && fy == 1) return@let bm
-            // getPixels gives straight ARGB.
-            val small = shrinkArgb(bm.width, bm.height, fx, fy) { pixels, y, rows ->
-                bm.getPixels(pixels, 0, bm.width, 0, y, bm.width, rows)
-            }
-            rgbaBitmap(small, (bm.width + fx - 1) / fx, (bm.height + fy - 1) / fy).also { bm.recycle() }
-        }
     }
 
     /** Straight RGBA as a bitmap. createBitmap premultiplies on the way in, which is what Canvas wants. */

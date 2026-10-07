@@ -8,50 +8,6 @@ import kotlin.test.assertTrue
 
 class ImageDecoderTest {
 
-    /** A smooth [w] by [h] picture encoded by ImageIO as [format]. */
-    private fun encoded(w: Int, h: Int, format: String): ByteArray {
-        val image = java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB)
-        for (y in 0 until h) for (x in 0 until w) image.setRGB(x, y, ((x * 255 / w) shl 16) or ((y * 255 / h) shl 8) or 128)
-        return java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(image, format, it) }.toByteArray()
-    }
-
-    @Test
-    fun decodeSampled_shrinks_a_jpeg_inside_the_decoder() {
-        // Skia's JPEG codec decodes straight to 1/2, 1/4 or 1/8 of the size (#381).
-        val bytes = encoded(203, 157, "jpg")
-        val full = ImageDecoder.decode(bytes)?.toPixelMap() ?: error("decode returned null")
-        for (sample in listOf(2, 4, 8)) {
-            val (bitmap, done) = decodeSampled(bytes, sample) ?: error("decodeSampled returned null")
-            assertEquals(sample, done)
-            assertEquals((203 + sample - 1) / sample, bitmap.width)
-            assertEquals((157 + sample - 1) / sample, bitmap.height)
-            // Each pixel stands for a block of the full decode: compare it with that block's mean.
-            val small = bitmap.toPixelMap()
-            var worst = 0f
-            for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
-                var red = 0f
-                var n = 0
-                for (fy in y * sample until minOf((y + 1) * sample, 157)) for (fx in x * sample until minOf((x + 1) * sample, 203)) {
-                    red += full[fx, fy].red
-                    n++
-                }
-                worst = maxOf(worst, kotlin.math.abs(small[x, y].red - red / n))
-            }
-            assertTrue(worst < 0.05f, "1/$sample: worst red difference $worst")
-        }
-    }
-
-    @Test
-    fun decodeSampled_decodes_what_it_cannot_shrink_at_full_size() {
-        // Skia's PNG codec decodes only at its own size, so the canvas shrinks the whole image.
-        val png = encoded(203, 157, "png")
-        val (bitmap, done) = decodeSampled(png, 4) ?: error("decodeSampled returned null")
-        assertEquals(1, done)
-        assertEquals(203, bitmap.width)
-        val (jpeg, one) = decodeSampled(encoded(203, 157, "jpg"), 1) ?: error("decodeSampled returned null")
-        assertEquals(1, one)
-        assertEquals(203, jpeg.width)
-    }
     @Test
     fun decodeRaw_preserves_straight_alpha() {
         // 1×2 RGBA: pixel0 opaque red, pixel1 fully transparent. The decoder must keep the

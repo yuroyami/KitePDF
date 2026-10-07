@@ -44,18 +44,6 @@ public actual object ImageDecoder {
 /** Pixels that [ImageDecoder.decodeRaw] converts at a time: a 256 KB band. */
 private const val BAND_PIXELS = 1 shl 16
 
-internal actual fun decodeSampled(bytes: ByteArray, sample: Int): Pair<ImageBitmap, Int>? = try {
-    // BitmapFactory shrinks a JPEG inside libjpeg-turbo by inSampleSize. The bounds say whether it did.
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    if (sample > 1) BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-    val options = BitmapFactory.Options().apply { inSampleSize = sample }
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.let { bitmap ->
-        bitmap.asImageBitmap() to if (sample > 1 && bitmap.width < bounds.outWidth) sample else 1
-    }
-} catch (t: Throwable) {
-    null
-}
-
 public actual fun ImageBitmap.encodeToPng(): ByteArray? = try {
     val out = ByteArrayOutputStream()
     if (asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, out)) out.toByteArray() else null

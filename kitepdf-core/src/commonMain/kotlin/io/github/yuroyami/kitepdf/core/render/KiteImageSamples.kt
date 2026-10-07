@@ -63,11 +63,11 @@ internal class KiteImageSamples private constructor(
     companion object {
         /**
          * [bytes], a JPEG, as samples that decode on demand, or null when its headers name a
-         * coding KiteImageCodec does not decode, such as arithmetic coding, which the caller then
-         * hands to the platform decoder. Nothing decodes here: a check at an eighth read every
-         * entropy-coded byte, about a third of the page's render time, and the draw read them
-         * again (#475). A file whose data then fails to decode fails at its first draw, where a
-         * canvas hands it to the platform decoder instead. With [ink], the samples are CMYK.
+         * coding KiteImageCodec does not decode, such as arithmetic coding. Nothing decodes here:
+         * a check at an eighth read every entropy-coded byte, about a third of the page's render
+         * time, and the draw read them again (#475). A file whose data then fails to decode fails
+         * at its first draw, and the image draws as a placeholder (#184). With [ink], the samples
+         * are CMYK.
          */
         fun jpeg(bytes: ByteArray, gray: Boolean, ink: JpegInk.Layout? = null): KiteImageSamples? {
             val info = runCatching { KiteImageCodec.probe(bytes) }.getOrNull() ?: return null

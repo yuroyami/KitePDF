@@ -957,6 +957,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- An image that the shared decoders refuse draws as a placeholder on every canvas. This includes a
+  JPEG whose data is damaged. Before, Skia, Android, Java's ImageIO, Apple's Image I/O and the
+  browser each decoded what they could, so an arithmetic-coded JPEG showed on one platform and not
+  on another. A placeholder now marks a decoder gap of KitePDF itself. `ImageDecoder.decode` stays
+  for apps, but KitePDF no longer calls it. On AWT, the placeholder was a solid mid-grey box one
+  image height too low. It is now the light grey box with a thin outline that the other canvases
+  draw (#184).
 - `KiteReadAloud` now gives the element it reads the book's own active classes, so the text being
   read shows the style the book chose, and the rest of the chapter the style it sets while
   playing. Its own highlight now marks the text only where the book's rules do not style the

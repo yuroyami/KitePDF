@@ -9,21 +9,19 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import java.awt.Color
 import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
-import kotlin.math.abs
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 /**
- * A PDF's JPEG whose headers KiteImageCodec reads and whose data it cannot decode draws through
- * ImageIO, as an encoded JPEG does. The file is no longer decoded when it loads, so the damage
- * shows at the first draw, and the canvas falls back there (#475).
+ * A PDF's JPEG whose headers KiteImageCodec reads and whose data it cannot decode draws as the
+ * placeholder, as every image that the shared decoders refuse does (#184). The file is not
+ * decoded when it loads, so the damage shows at the first draw (#475).
  */
-class DamagedJpegFallbackTest {
+class DamagedJpegPlaceholderTest {
 
     private val w = 96
     private val h = 64
@@ -46,8 +44,7 @@ class DamagedJpegFallbackTest {
     }
 
     @Test
-    fun a_jpeg_whose_data_does_not_decode_draws_through_imageio() {
-        val reference = assertNotNull(ImageIO.read(ByteArrayInputStream(damaged)), "ImageIO reads the damaged file")
+    fun a_jpeg_whose_data_does_not_decode_draws_the_placeholder() {
         val image = assertNotNull(
             KiteImageData.from(
                 PdfStream(
@@ -73,12 +70,8 @@ class DamagedJpegFallbackTest {
         AwtCanvas(g).drawImage(image, KiteMatrix(w.toDouble(), 0.0, 0.0, -h.toDouble(), 0.0, h.toDouble()))
         g.dispose()
 
-        var worst = 0
-        for (y in 0 until h) for (x in 0 until w) {
-            val e = reference.getRGB(x, y)
-            val a = page.getRGB(x, y)
-            for (shift in intArrayOf(16, 8, 0)) worst = maxOf(worst, abs(((e ushr shift) and 0xFF) - ((a ushr shift) and 0xFF)))
-        }
-        assertTrue(worst <= 2, "the page differs from ImageIO's decode by $worst levels")
+        // The placeholder is a light grey box; the picture would vary across the page.
+        val centre = page.getRGB(w / 2, h / 2) and 0xFFFFFF
+        assertEquals(0xE0E0E0, centre, "the centre is #${centre.toString(16)}, not the placeholder grey")
     }
 }

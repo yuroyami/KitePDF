@@ -91,7 +91,6 @@ import platform.CoreGraphics.CGContextEndTransparencyLayer
 import platform.CoreGraphics.CGContextFillPath
 import platform.CoreGraphics.CGContextGetUserSpaceToDeviceSpaceTransform
 import platform.CoreGraphics.CGContextSetInterpolationQuality
-import platform.CoreGraphics.kCGInterpolationHigh
 import platform.CoreGraphics.kCGInterpolationLow
 import platform.CoreGraphics.kCGInterpolationNone
 import platform.CoreGraphics.CGContextMoveToPoint
@@ -142,8 +141,6 @@ import platform.CoreText.kCTFontAttributeName
 import platform.CoreText.kCTLanguageAttributeName
 import platform.CoreText.CTFontCreateWithName
 import platform.CoreText.CTFontGetGlyphsForCharacters
-import platform.ImageIO.CGImageSourceCreateImageAtIndex
-import platform.ImageIO.CGImageSourceCreateWithData
 
 /**
  * [KiteCanvas] backed by an iOS / macOS [CGContextRef]. Pure CoreGraphics:
@@ -623,12 +620,8 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
                 // the first row at the top of its rectangle, so no flip is needed (#289).
                 CGContextSetBlendMode(ctx, paintBlend(blendMode))
                 CGContextConcatCTM(ctx, local.toCGAffine())
-                val quality = when {
-                    // A RAW image is averaged down in decodeImage. CoreGraphics averages an encoded one itself.
-                    sampling.shrinks && image.kind != KiteImageData.Kind.RAW -> kCGInterpolationHigh
-                    sampling.smooth -> kCGInterpolationLow
-                    else -> kCGInterpolationNone
-                }
+                // The image was averaged down in decodeImage when it draws smaller.
+                val quality = if (sampling.smooth) kCGInterpolationLow else kCGInterpolationNone
                 CGContextSetInterpolationQuality(ctx, quality)
                 if (a < 1.0) platform.CoreGraphics.CGContextSetAlpha(ctx, a)
                 CGContextDrawImage(ctx, CGRectMake(0.0, 0.0, 1.0, 1.0), cgImage)
@@ -641,26 +634,9 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
     }
 
     private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): platform.CoreGraphics.CGImageRef? {
-        // A JPEG whose data KiteImageCodec could not decode goes to Image I/O, as an encoded one does (#475).
-        if (image.kind == KiteImageData.Kind.RAW) return rawCgImage(image, sampling) ?: encodedCgImage(image.encodedBytes)
-        if (image.kind !in IMAGE_KINDS_DECODABLE_BY_CG) return null
-        return encodedCgImage(image.encodedBytes)
-    }
-
-    /** An encoded JPEG or JPEG 2000 file through Image I/O, or null for no bytes or a file it cannot read. */
-    private fun encodedCgImage(bytes: ByteArray): platform.CoreGraphics.CGImageRef? {
-        if (bytes.isEmpty()) return null
-        val cfData = bytes.toCFData() ?: return null
-        try {
-            val source = CGImageSourceCreateWithData(cfData, null) ?: return null
-            try {
-                return CGImageSourceCreateImageAtIndex(source, 0.toULong(), null)
-            } finally {
-                CFRelease(source)
-            }
-        } finally {
-            CFRelease(cfData)
-        }
+        // Only a RAW image draws; every other kind is a placeholder on every canvas (#184).
+        if (image.kind != KiteImageData.Kind.RAW) return null
+        return rawCgImage(image, sampling)
     }
 
     /**
@@ -1178,11 +1154,6 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
 
         /** A mask area this many budgets wide cannot be a page render; it keeps the paint unmasked. */
         const val UNBOUNDED_MASK_FACTOR = 16L
-
-        val IMAGE_KINDS_DECODABLE_BY_CG = setOf(
-            KiteImageData.Kind.JPEG,
-            KiteImageData.Kind.JPEG2000,
-        )
     }
 }
 

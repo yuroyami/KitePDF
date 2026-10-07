@@ -29,7 +29,7 @@ class KiteImageDataEncodedTest {
         assertEquals(48, img!!.width)
         assertEquals(32, img.height)
         assertEquals(KiteImageData.Kind.JPEG, img.kind)
-        assertSame(jpeg48x32, img.encodedBytes, "encoded file handed to the platform decoder verbatim")
+        assertSame(jpeg48x32, img.encodedBytes, "the file is kept")
     }
 
     @Test

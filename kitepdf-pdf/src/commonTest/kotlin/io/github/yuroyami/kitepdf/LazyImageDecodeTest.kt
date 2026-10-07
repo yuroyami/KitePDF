@@ -161,17 +161,17 @@ class LazyImageDecodeTest {
         assertTrue(KiteImageCodec.probe(damaged).isDecodable, "the headers of the damaged file read")
         assertTrue(runCatching { KiteImageCodec.decode(damaged) }.isFailure, "the data of the damaged file decodes")
         val image = image(damaged)
-        // A decode when the file loaded would have found the damage and made it the platform's JPEG (#475).
+        // A decode when the file loaded would have found the damage and made it a Kind.JPEG image (#475).
         assertEquals(KiteImageData.Kind.RAW, image.kind)
         assertContentEquals(damaged, image.encodedBytes)
         assertEquals(damaged.size.toLong(), image.retainedBytes(), "the file counts once")
-        // The first draw finds the damage, and a canvas hands encodedBytes to the platform decoder.
+        // The first draw finds the damage, and the image draws as a placeholder (#184).
         assertNull(image.toShrunkRgbaBytes(4, 4))
         assertNull(image.toRgbaBytes())
     }
 
     @Test
-    fun a_jpeg_that_the_codec_refuses_still_goes_to_the_platform_decoder() {
+    fun a_jpeg_that_the_codec_refuses_keeps_its_file_as_a_jpeg_kind() {
         val image = image(arithmetic, 64, 48)
         assertEquals(KiteImageData.Kind.JPEG, image.kind)
         assertContentEquals(arithmetic, image.encodedBytes)

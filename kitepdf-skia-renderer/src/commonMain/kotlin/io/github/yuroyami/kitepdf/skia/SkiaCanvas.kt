@@ -61,9 +61,6 @@ import org.jetbrains.skia.shaper.TrivialLanguageRunIterator
 import org.jetbrains.skia.Gradient
 import org.jetbrains.skia.Color4f
 import org.jetbrains.skia.FilterTileMode
-import org.jetbrains.skia.FilterMipmap
-import org.jetbrains.skia.FilterMode
-import org.jetbrains.skia.MipmapMode
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.SamplingMode
 
@@ -670,8 +667,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
             KiteMatrix(m[0].toDouble(), m[3].toDouble(), m[1].toDouble(), m[4].toDouble(), m[2].toDouble(), m[5].toDouble()),
         )
         val sampling = imageSampling(image.width, image.height, device, image.interpolate)
-        // Skia decodes JPEG natively + JP2/JPEG-2000 where the platform shim
-        // supports it. Other kinds fall back to a placeholder rectangle.
+        // Only a RAW image draws; every other kind is a placeholder on every canvas (#184).
         val sk = images.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { imageFor(image, sampling) }
         if (sk == null) {
             drawPlaceholder(ctm)
@@ -692,12 +688,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
             this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() }
             this.blendMode = paintBlend(blendMode)
         }
-        val mode = when {
-            // An encoded image is not averaged above, so Skia's mipmaps average it.
-            sampling.shrinks && image.kind != KiteImageData.Kind.RAW -> FilterMipmap(FilterMode.LINEAR, MipmapMode.LINEAR)
-            sampling.smooth -> SamplingMode.LINEAR
-            else -> SamplingMode.DEFAULT
-        }
+        val mode = if (sampling.smooth) SamplingMode.LINEAR else SamplingMode.DEFAULT
         canvas.save()
         canvas.translate(0f, 1f)
         canvas.scale(1f / sk.width, -1f / sk.height)
@@ -711,14 +702,11 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     /** Bitmaps built from images, so that an image drawn many times converts once (#117). */
     private val images = KiteBitmapCache<Image>()
 
-    /** The image as a Skia image, averaged down when [sampling] shrinks a RAW image. */
-    private fun imageFor(image: KiteImageData, sampling: KiteImageSampling): Image? = when (image.kind) {
-        KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000, KiteImageData.Kind.JBIG2 -> try {
-            Image.makeFromEncoded(image.encodedBytes)
-        } catch (t: Throwable) {
+    /** The image as a Skia image, averaged down when [sampling] shrinks it. Only a RAW image draws (#184). */
+    private fun imageFor(image: KiteImageData, sampling: KiteImageSampling): Image? = try {
+        if (image.kind != KiteImageData.Kind.RAW) {
             null
-        }
-        KiteImageData.Kind.RAW -> try {
+        } else {
             // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead
             // of dropping out, and it converts and shrinks a band of rows at a time (#381).
             image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { pixels ->
@@ -730,12 +718,9 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                 // OPAQUE would discard it, rendering masks as solid black.
                 Image.makeRaster(ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.UNPREMUL), pixels, w * 4)
             }
-                // A JPEG whose data KiteImageCodec could not decode goes to Skia's decoder, as above (#475).
-                ?: image.encodedBytes.takeIf { it.isNotEmpty() }?.let { Image.makeFromEncoded(it) }
-        } catch (t: Throwable) {
-            null
         }
-        else -> null
+    } catch (t: Throwable) {
+        null
     }
 
     private fun drawPlaceholder(ctm: KiteMatrix) {

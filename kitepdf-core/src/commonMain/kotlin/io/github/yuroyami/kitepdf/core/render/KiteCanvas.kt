@@ -147,8 +147,8 @@ public interface KiteCanvas {
     /**
      * Paint an XObject Image under [ctm]. PDF defines the image's bounds as
      * the unit square (0..1, 0..1); the CTM already encodes the scale +
-     * position. Backends that can decode [image] paint the pixels; others
-     * draw a placeholder rather than throw.
+     * position. A canvas paints the pixels of a [KiteImageData.Kind.RAW] image
+     * and draws a placeholder for every other kind. It never throws (#184).
      */
     public fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double = 1.0) { /* opt-in default */ }
 

@@ -33,7 +33,6 @@ import org.khronos.webgl.Uint8Array
 import org.khronos.webgl.Uint8ClampedArray
 import org.w3c.dom.CanvasRenderingContext2D
 import org.w3c.dom.HTMLCanvasElement
-import org.w3c.dom.HTMLImageElement
 import org.w3c.dom.ImageData
 import org.w3c.dom.Path2D
 import org.w3c.dom.url.URL
@@ -54,10 +53,9 @@ import org.w3c.files.BlobPropertyBag
  *    the standard Canvas2D API. A transparency group with an alpha or a
  *    blend mode, and a soft mask, paint into an offscreen canvas that
  *    composites onto the page once.
- *  - Embedded image XObjects: ⚠️ JPEG / JP2 are decoded asynchronously by
- *    the browser (`HTMLImageElement.src = …`), which doesn't fit the
- *    renderer's synchronous draw pass. v1 paints placeholders for image
- *    XObjects; an async render path is roadmapped.
+ *  - Embedded image XObjects: a RAW image, which is what the shared decoders
+ *    produce, paints synchronously. Every other kind paints a placeholder, as
+ *    on every canvas (#184).
  */
 public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
 
@@ -348,10 +346,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
-        // Decoded samples paint synchronously; that is what every successful
-        // JPEG / JPX / JBIG2 decode produces. Encoded kinds core could not
-        // decode keep the placeholder: browser decoding is async, and a
-        // preload API is still to come.
+        // Only a RAW image draws; every other kind is a placeholder on every canvas (#184).
         // One sampling policy on every canvas (#122, #123). setTransform below makes the ctm the device
         // transform, and the edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
         val device = gridFitImage(ctm)

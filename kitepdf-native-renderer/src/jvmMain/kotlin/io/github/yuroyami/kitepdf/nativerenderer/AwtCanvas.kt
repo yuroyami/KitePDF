@@ -25,7 +25,6 @@ import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
-import io.github.yuroyami.kitepdf.core.render.shrinkArgb
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
@@ -49,7 +48,6 @@ import java.awt.image.ColorModel
 import java.awt.image.Raster
 import java.awt.image.WritableRaster
 import java.awt.image.DataBufferInt
-import javax.imageio.ImageIO
 import kotlin.math.abs
 import kotlin.math.floor
 
@@ -584,35 +582,19 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
     /** The image as a bitmap, averaged down when [sampling] shrinks it, so fine detail fades instead of dropping out (#122). */
     private fun decodeImage(image: KiteImageData, sampling: KiteImageSampling): BufferedImage? = try {
-        when (image.kind) {
-            KiteImageData.Kind.JPEG, KiteImageData.Kind.JPEG2000 -> decodeEncoded(image.encodedBytes, sampling)
-            // Every other kind, RAW (Flate/LZW/CCITT/PNG-predictor decoded) and
-            // ImageMask stencils, is assembled into a flat RGBA8888 buffer by the
-            // shared rasterizer (the same path the Compose/Skia backends use). Wrap
-            // it in an ARGB BufferedImage so ImageMask + SMask alpha survive.
-            // An image drawn smaller converts and shrinks a band of rows at a time (#381).
-            else -> image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
+        // Only a RAW image draws; every other kind is a placeholder on every canvas (#184). The
+        // shared rasterizer assembles RAW samples (Flate/LZW/CCITT/PNG-predictor decoded, and
+        // ImageMask stencils) into a flat RGBA8888 buffer, a band of rows at a time when the
+        // image draws smaller (#381). An ARGB BufferedImage keeps the ImageMask and SMask alpha.
+        if (image.kind != KiteImageData.Kind.RAW) {
+            null
+        } else {
+            image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
                 rgbaToBufferedImage(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
             }
-                // A JPEG whose data KiteImageCodec could not decode goes to ImageIO, as above (#475).
-                ?: image.encodedBytes.takeIf { image.kind == KiteImageData.Kind.RAW && it.isNotEmpty() }
-                    ?.let { decodeEncoded(it, sampling) }
         }
     } catch (t: Throwable) {
         null
-    }
-
-    /** An encoded JPEG through ImageIO, averaged down as [sampling] asks. */
-    private fun decodeEncoded(bytes: ByteArray, sampling: KiteImageSampling): BufferedImage? =
-        decodeJpeg(bytes)?.let { if (sampling.shrinks) shrink(it, sampling) else it }
-
-    /** [image] averaged down as [sampling] asks. getRGB gives straight ARGB whatever the image type. */
-    private fun shrink(image: BufferedImage, sampling: KiteImageSampling): BufferedImage {
-        val w = image.width
-        val small = shrinkArgb(w, image.height, sampling.shrinkX, sampling.shrinkY) { pixels, y, rows ->
-            image.getRGB(0, y, w, rows, pixels, 0, w)
-        }
-        return rgbaToBufferedImage(small, sampling.shrunkWidth(w), sampling.shrunkHeight(image.height)) ?: image
     }
 
     /**
@@ -641,96 +623,21 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         return img
     }
 
-    /**
-     * Decode a JPEG. ImageIO handles 3-channel (YCbCr) JPEGs correctly, but
-     * 4-channel CMYK / YCCK JPEGs (Adobe, APP14 marker) come back inverted or
-     * rejected, so for those we read the raw raster and convert ourselves.
-     */
-    private fun decodeJpeg(bytes: ByteArray): BufferedImage? {
-        val iis = ImageIO.createImageInputStream(java.io.ByteArrayInputStream(bytes))
-            ?: return ImageIO.read(java.io.ByteArrayInputStream(bytes))
-        val readers = ImageIO.getImageReaders(iis)
-        if (!readers.hasNext()) { iis.close(); return ImageIO.read(java.io.ByteArrayInputStream(bytes)) }
-        val reader = readers.next()
-        try {
-            reader.setInput(iis)
-            val raster = reader.readRaster(0, null)
-            if (raster.numBands < 4) return ImageIO.read(java.io.ByteArrayInputStream(bytes))
-
-            // 4-channel CMYK / YCCK. Adobe stores the channels inverted, so the
-            // raster already holds (255-C, 255-M, 255-Y, 255-K) → RGB = inv*invK/255.
-            val transform = adobeTransform(bytes) // 2 = YCCK (bands 0-2 are YCbCr)
-            val w = raster.width
-            val h = raster.height
-            val out = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
-            val p = IntArray(4)
-            for (y in 0 until h) {
-                for (x in 0 until w) {
-                    raster.getPixel(x, y, p)
-                    val invC: Int
-                    val invM: Int
-                    val invY: Int
-                    val kMul: Int // black multiplier: 255 = no black ink, 0 = full black
-                    if (transform == 2) {
-                        // YCCK: bands 0-2 are YCbCr of the (inverted) CMY → RGB;
-                        // band 3 is K stored DIRECTLY, so the multiplier is 255-K.
-                        val yy = p[0].toDouble(); val cb = p[1] - 128.0; val cr = p[2] - 128.0
-                        invC = (yy + 1.402 * cr).toInt().coerceIn(0, 255)
-                        invM = (yy - 0.344136 * cb - 0.714136 * cr).toInt().coerceIn(0, 255)
-                        invY = (yy + 1.772 * cb).toInt().coerceIn(0, 255)
-                        kMul = 255 - p[3]
-                    } else {
-                        // Adobe CMYK stored inverted: raster = (255-C,255-M,255-Y,255-K).
-                        invC = p[0]; invM = p[1]; invY = p[2]; kMul = p[3]
-                    }
-                    val r = invC * kMul / 255
-                    val g2 = invM * kMul / 255
-                    val b = invY * kMul / 255
-                    out.setRGB(x, y, (r shl 16) or (g2 shl 8) or b)
-                }
-            }
-            return out
-        } catch (t: Throwable) {
-            return try { ImageIO.read(java.io.ByteArrayInputStream(bytes)) } catch (e: Throwable) { null }
-        } finally {
-            reader.dispose()
-            try { iis.close() } catch (_: Throwable) {}
-        }
-    }
-
-    /** APP14 Adobe `transform` byte: -1 none, 0 CMYK, 1 YCbCr, 2 YCCK. */
-    private fun adobeTransform(bytes: ByteArray): Int {
-        var i = 2
-        while (i + 4 < bytes.size) {
-            if (bytes[i].toInt() and 0xFF != 0xFF) { i++; continue }
-            when (val marker = bytes[i + 1].toInt() and 0xFF) {
-                0xEE -> {
-                    val len = ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF)
-                    return if (len >= 14 && i + 2 + len <= bytes.size) bytes[i + 2 + len - 1].toInt() and 0xFF else -1
-                }
-                0xDA, 0xD9 -> return -1
-                in 0xD0..0xD8 -> i += 2
-                else -> {
-                    val len = ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF)
-                    i += 2 + len
-                }
-            }
-        }
-        return -1
-    }
-
+    /** A light grey box with a thin outline, as the other canvases draw an image they cannot decode (#184). */
     private fun drawPlaceholder(ctm: KiteMatrix) {
-        val saved = g.transform
+        // The box is the image's unit square. It goes through the image's matrix first, so the
+        // outline is one unit of the graphics wide, not one unit of the image.
+        val box = AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f)
+            .createTransformedShape(Rectangle2D.Double(0.0, 0.0, 1.0, 1.0))
+        val savedStroke = g.stroke
         try {
-            g.transform = AffineTransform(g.transform).apply {
-                concatenate(AffineTransform(ctm.a, ctm.b, ctm.c, ctm.d, ctm.e, ctm.f))
-            }
             g.color = Color(0xE0, 0xE0, 0xE0)
-            g.fillRect(0, -1, 1, 1)
+            g.fill(box)
             g.color = Color(0x88, 0x88, 0x88)
-            g.drawRect(0, -1, 1, 1)
+            g.stroke = BasicStroke(1f)
+            g.draw(box)
         } finally {
-            g.transform = saved
+            g.stroke = savedStroke
         }
     }
 
