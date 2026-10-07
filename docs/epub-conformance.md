@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 132 | 4 | 4 |
+| must | 140 | 133 | 3 | 4 |
 | should | 38 | 37 | 0 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 194 | 6 | 6 |
+| all | 206 | 195 | 5 | 6 |
 
 ## How the results are known
 
@@ -184,7 +184,7 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 |---|---|---|---|
 | [`scr-not-support_ccscript-modify-host`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-not-support_ccscript-modify-host) | must | Passes | Checked: The iframe's box draws its document, whose script ran, and the chapter's text stays: the frame's `parent` is its own window. |
 | [`scr-not-support_ccscript-modify-size`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-not-support_ccscript-modify-size) | must | Passes | Checked: The iframe's box draws its document, whose script ran, and the box keeps its shape of 500 by 70 pixels. |
-| [`scr-readingsystem-features`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-features) | must | Fails ([KiteJS#11](https://github.com/yuroyami/KiteJS/issues/11)) | Checked: After the scripts run, the page lists each feature `hasFeature` answers; today the script does not parse, for `const` in a `for` head. |
+| [`scr-readingsystem-features`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-features) | must | Passes | Checked: After the scripts run, the page lists each of the six features that `hasFeature` answers as true or false, and none as unimplemented. |
 | [`scr-readingsystem-support`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support) | must | Passes | Checked: After the scripts run, the page says the reading system implements `epubReadingSystem`. |
 | [`scr-readingsystem-support_iframe`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support_iframe) | must | Passes | Checked: The iframe's box draws its document, whose script finds `epubReadingSystem`. |
 | [`scr-readingsystem-support_iframe_svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/scr-readingsystem-support_iframe_svg) | must | Passes | Checked: The iframe's box draws its SVG document, whose script finds `epubReadingSystem`. |

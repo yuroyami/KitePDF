@@ -194,7 +194,7 @@
     "pub-xml-non-validating_unclosed": true,
     "scr-not-support_ccscript-modify-host": true,
     "scr-not-support_ccscript-modify-size": true,
-    "scr-readingsystem-features": false,
+    "scr-readingsystem-features": true,
     "scr-readingsystem-support": true,
     "scr-readingsystem-support_iframe": true,
     "scr-readingsystem-support_iframe_svg": true,

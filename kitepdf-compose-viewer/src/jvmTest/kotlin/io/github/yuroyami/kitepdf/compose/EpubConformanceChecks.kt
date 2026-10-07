@@ -656,7 +656,13 @@ internal object EpubConformanceChecks {
         check("scr-readingsystem-features") {
             runScripts()
             val text = text(0)
-            listOf("dom-manipulation: true", "layout-changes: true", "spine-scripting: true").all { it in text } && "unimplemented" !in text
+            // The script writes each feature as true or false, or as unimplemented when hasFeature
+            // gives no answer. The page's own instructions name unimplemented as the failing value,
+            // so the word alone proves nothing: the check reads the six entries.
+            val features = listOf("dom-manipulation", "layout-changes", "touch-events", "mouse-events", "keyboard-events", "spine-scripting")
+            "implements the epubReadingSystem object with the following features" in text &&
+                "does not implement" !in text &&
+                features.all { Regex("$it: (true|false)\\b").containsMatchIn(text) }
         }
         check("scr-support_origin") {
             runScripts()
