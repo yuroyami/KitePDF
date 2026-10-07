@@ -2,11 +2,11 @@
 # Book hash (SHA-1 prefix), page count, book name. Rewrite with -Dkitepdf.epub.updatePages=true.
 d9d53e38746d 826 1
 76134f0f2d2a 111 10
-a501964728ba 585 11
+a501964728ba 582 11
 eec7c04e3d65 11 12
-7a64e6ca9f9e 373 13
+7a64e6ca9f9e 371 13
 25870ca18d0b 182 15
-145f60726c63 204 16
+145f60726c63 202 16
 524d7bb4a86f 3 17
 87fa6da33535 515 18
 63c16aceff72 1242 19
@@ -24,14 +24,14 @@ acb1d027bdcf 7 idpf-cole-voyage-of-life-tol
 02c07befa1d4 10 idpf-page-blanche
 996fcfad8eb8 25 idpf-regime-anticancer-arabic
 0e11af53e99c 6 idpf-svg-in-spine
-b90f2bb6bbde 1 image
+d70f642af773 1 image
 b4341fe88482 1 inline-background
 72631037ff41 1 inline-decoration
 27a932a2af5c 2 novel
 8f509a530f2c 1 styled
 d3e1064f6cad 1 table
-4bf0c8a4b3b1 1 vertical-cover
-31ef6f274d5f 1 vertical-images
+be1e9371af5c 1 vertical-cover
+a0cbcf44cd2c 1 vertical-images
 78bd34694d9b 1 w3c-cnt-mathml-support
 d6cee2fbe45c 3 w3c-css-epub-writing-mode
 2dca2c3e7ff7 2 w3c-nav-non-text_img
