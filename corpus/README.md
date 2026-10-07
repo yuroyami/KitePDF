@@ -61,4 +61,8 @@ Keep the credits and the license notices when you share a file. Follow the share
 
 Never add a private or user-supplied file to the manifest.
 
-What the corpus still lacks, such as a real vertical Japanese book or an arithmetic-coded JBIG2 halftone file, is tracked in [#215](https://github.com/yuroyami/KitePDF/issues/215).
+What the corpus still lacks is tracked in three issues:
+
+- a vertical Japanese document with embedded fonts: [#620](https://github.com/yuroyami/KitePDF/issues/620)
+- a JBIG2 file with an arithmetic-coded halftone region: [#621](https://github.com/yuroyami/KitePDF/issues/621)
+- 150 scored PDF pages and 30 real books: [#624](https://github.com/yuroyami/KitePDF/issues/624)
