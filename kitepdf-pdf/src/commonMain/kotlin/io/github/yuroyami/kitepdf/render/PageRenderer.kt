@@ -1700,10 +1700,10 @@ public class PageRenderer(
                     // Unsupported pattern. Skip rather than paint the default
                     // colour, which would flood e.g. a full-page background black.
                 }
-                else -> canvas.fillPath(
-                    built, s.ctm, s.fillColor, evenOdd,
-                    alpha = s.fillAlpha, blendMode = s.blendMode,
-                )
+                else -> {
+                    val paint = { canvas.fillPath(built, s.ctm, s.fillColor, evenOdd, alpha = s.fillAlpha, blendMode = s.blendMode) }
+                    if (!overprinted(built, s, fill = true, paint)) paint()
+                }
             }
         }
     }
@@ -1720,14 +1720,46 @@ public class PageRenderer(
                 pat != null -> {
                     // Unsupported pattern. Skip rather than paint a stale colour.
                 }
-                else -> canvas.strokePath(
-                    built, s.ctm, s.strokeColor, s.lineWidth,
-                    alpha = s.strokeAlpha, blendMode = s.blendMode,
-                    dashArray = s.dashArray, dashPhase = s.dashPhase,
-                    lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
-                )
+                else -> {
+                    val paint = {
+                        canvas.strokePath(
+                            built, s.ctm, s.strokeColor, s.lineWidth,
+                            alpha = s.strokeAlpha, blendMode = s.blendMode,
+                            dashArray = s.dashArray, dashPhase = s.dashPhase,
+                            lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
+                        )
+                    }
+                    if (!overprinted(built, s, fill = false, paint)) paint()
+                }
             }
         }
+    }
+
+    /**
+     * Paints [paint], the fill or the stroke of [path] in [s], under overprint mode 1 when [s]
+     * asks for it (ISO 32000-1, 8.6.7, #201). Returns false, having drawn nothing, when the paint
+     * does not overprint, or overprints as a plain paint would, or the canvas cannot read its
+     * backdrop. The caller then paints as usual.
+     */
+    private fun overprinted(path: KitePath, s: GraphicsState, fill: Boolean, paint: () -> Unit): Boolean {
+        val inks = Overprint.inks(s, fill, outputIntent?.space) ?: return false
+        // A paint that sets no ink leaves every ink of the backdrop, so it changes nothing.
+        if (inks.all { it == 0.0 }) return true
+        // A paint that sets every ink replaces the backdrop, as a plain paint does.
+        if (inks.none { it == 0.0 }) return false
+        // A knockout group paints each object over its own backdrop already (#308).
+        if (canvas is KnockoutCanvas) return false
+        val box = path.bounds() ?: return false
+        val det = kotlin.math.abs(s.ctm.a * s.ctm.d - s.ctm.b * s.ctm.c)
+        if (!(det > 0.0) || !det.isFinite()) return false
+        // The stroke reaches past the path by half its width, more at a miter join or a square cap,
+        // and antialiasing by a pixel more.
+        val pixel = 1.0 / kotlin.math.sqrt(det)
+        val reach = if (fill) 0.0 else maxOf(s.lineWidth, pixel) / 2 * maxOf(if (s.lineJoin == 0) s.miterLimit else 1.0, 1.5)
+        val grow = reach + 2 * pixel
+        val region = io.github.yuroyami.kitepdf.core.KiteRectangle(box.left - grow, box.bottom - grow, box.right + grow, box.top + grow)
+        val space = if (fill) s.fillColorSpace else s.strokeColorSpace
+        return Overprint.paint(canvas, region, s.ctm, space, inks, s.blendMode, paint)
     }
 
     /**
@@ -2742,7 +2774,8 @@ public class PageRenderer(
      * converts again. A device space converts alike for every intent, so it keeps none.
      */
     private fun components(space: KiteColorSpace, a: List<PdfObject>): DoubleArray? = when (space) {
-        KiteColorSpace.DeviceGray, KiteColorSpace.DeviceRGB, KiteColorSpace.DeviceCMYK -> null
+        // DeviceCMYK keeps its inks, which overprint reads (#201).
+        KiteColorSpace.DeviceGray, KiteColorSpace.DeviceRGB -> null
         else -> DoubleArray(a.size) { num(a, it) }
     }
 

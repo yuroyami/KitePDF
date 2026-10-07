@@ -358,7 +358,7 @@ with the reason behind each gap.
 | Signing | `PdfSigner` prepares the signature field and its byte range, and your app supplies the signature itself. `PdfSignature.validate` checks a signature and the revocation data that it gets, but fetches nothing and does not check the dates of the certificates. |
 | Redaction | A few things survive, such as a large background fill and a clipping path's outline. The [editing guide](https://yuroyami.github.io/KitePDF/editing/#redaction-limitations) lists them all. |
 | Encryption | Files encrypted with RC4 open, but only AES files can be edited. New files use AES-256. |
-| Colour | ICC profiles and rendering intents apply. Overprint is not simulated. |
+| Colour | ICC profiles and rendering intents apply. Overprint applies to path fills and strokes in DeviceCMYK. Text and spot colours ignore it (#625). |
 | Images | An image that the shared decoders refuse, such as an arithmetic-coded or 12-bit JPEG, a JPEG whose data is damaged, a JPEG 2000 stream the decoder does not read, or a JBIG2 stream in MMR, Huffman or halftone form, draws as a grey placeholder on every platform. |
 | Text | Text comes as blocks, lines and spans, with no word splitting and no tag tree. |
 | Shaping | Hangul jamo are not composed into syllables. A font without its own shaping tables gets no Arabic or Thai fallback forms. |

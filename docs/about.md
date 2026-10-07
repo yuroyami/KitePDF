@@ -32,7 +32,7 @@ KitePDF is **pre-1.0**. These features work today:
 
 Planned:
 
-- Overprint simulation, and proofing RGB content through a CMYK output intent
+- Overprint for text and spot colours, and proofing RGB content through a CMYK output intent
 - Less common form widgets (media players)
 
 Known limits are listed in the [README](https://github.com/yuroyami/KitePDF#limits).

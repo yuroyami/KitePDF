@@ -193,7 +193,7 @@ object ParityHarness {
 
     /** The drop-in and synthetic corpus, the parity fixtures, and every shared oracle fixture. */
     fun documents(outDir: File): List<Document> {
-        val icc = IccFixtures.all() + (IccFixtures.intents() + IccFixtures.outputIntent()).map { it.fixture }
+        val icc = IccFixtures.all() + (IccFixtures.intents() + IccFixtures.outputIntent() + IccFixtures.outputIntentOverprint()).map { it.fixture }
         val shared = ColorFixtures.all() + GradientFixtures.all() + GroupFixtures.all() + ImageFixtures.all() + icc
         val reserved = ParityFixtures.all().map { it.name } + shared.map { "fixture-${it.name}" }
         val docs = Corpus.assemble(outDir, reserved.toSet()).map { Document(it.name, it.pdf) }.toMutableList()

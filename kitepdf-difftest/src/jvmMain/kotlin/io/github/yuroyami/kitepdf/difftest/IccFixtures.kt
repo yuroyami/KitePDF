@@ -213,6 +213,28 @@ object IccFixtures {
         )
     }
 
+    /**
+     * A page whose catalog names the press profile as its output intent, with overprint (#201):
+     * a yellow band, then cyan and half cyan under overprint mode 1, which keep the yellow ink,
+     * and cyan under mode 0, which replaces it. DeviceCMYK converts through the output intent,
+     * and mutool overprints in that space too.
+     */
+    fun outputIntentOverprint(): SwatchPage {
+        val content = StringBuilder("0 0 1 0 k 5 105 190 90 re f\n")
+        content.append("/GS1 gs 1 0 0 0 k ").append(cell(0, 0))
+        content.append("0.5 0 0 0 k ").append(cell(0, 1))
+        content.append("/GS2 gs 1 0 0 0 k ").append(cell(0, 2))
+        return SwatchPage(
+            oracleFixture(
+                "icc-output-intent-overprint", content.toString(),
+                "/ExtGState << /GS1 << /OP true /op true /OPM 1 >> /GS2 << /OP true /op true /OPM 0 >> >>",
+                listOf(pdfStream(pressProfile, "/N 4")), budget = 0.01,
+                catalog = "/OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (Press) /DestOutputProfile 5 0 R >>] ",
+            ),
+            (0 until 4).map { centre(0, it) },
+        )
+    }
+
     /** Twelve swatches of 40 points in a space of [n] components, on a 190-point page. */
     private fun swatches(name: String, profile: ByteArray, n: Int, colours: List<String>): OracleFixture {
         val content = StringBuilder("/CS0 cs\n")

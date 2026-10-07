@@ -61,6 +61,12 @@ public data class GraphicsState(
     val fillComponents: DoubleArray? = null,
     /** The components [strokeColor] came from in [strokeColorSpace], or null for the initial colour of the space. */
     val strokeComponents: DoubleArray? = null,
+    /** Overprint for strokes (ExtGState `/OP`). */
+    val overprintStroke: Boolean = false,
+    /** Overprint for fills and other paints (ExtGState `/op`). */
+    val overprintFill: Boolean = false,
+    /** The overprint mode (ExtGState `/OPM`): 1 leaves the backdrop's ink wherever a DeviceCMYK paint sets 0. */
+    val overprintMode: Int = 0,
 )
 
 /** Per-`BT/ET` block text state, reset at BT and mutated by text operators. */
@@ -120,6 +126,9 @@ public fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
     // /D replaces the dash; an empty or all-zero array means solid, as for d (#107).
     dashArray = if (ext.dashArray == null) dashArray else ext.dashArray.takeIf { ds -> ds.isNotEmpty() && ds.any { it > 0.0 } },
     dashPhase = if (ext.dashArray == null) dashPhase else ext.dashPhase,
+    overprintStroke = ext.overprintStroke ?: overprintStroke,
+    overprintFill = ext.overprintFill ?: overprintFill,
+    overprintMode = ext.overprintMode ?: overprintMode,
 ).withColorRendering(ext.renderingIntent ?: renderingIntent, ext.blackPointCompensation ?: blackPointCompensation)
 
 /**

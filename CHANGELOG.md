@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KiteDocLayout.Continuous` take `fit` and `prefetchPages` with defaults, so source compiles
   unchanged, while a binary built against 0.12.0 that constructs or copies one needs a rebuild
   (#437).
+- Overprint mode 1 applies to a path fill or stroke in DeviceCMYK, or in the CMYK space of the
+  output intent. An ink that the paint sets to zero keeps the ink under it, so cyan over yellow
+  prints green, as mutool and a press print it. `ExtGState` and `GraphicsState` carry
+  `overprintStroke`, `overprintFill` and `overprintMode`. Their constructors and `copy` take the
+  three with defaults, so source compiles unchanged, while a binary built against 0.12.0 that
+  constructs or copies one needs a rebuild. Text and spot colours do not overprint yet (#625,
+  #201).
 - `ReaderTheme.withImages(ReaderImages.LineArt)` makes a reading theme recolour line art, as it
   does text: a grey symbol or equation drawn as an image, on white or on transparent paper. A
   black symbol on dark paper then keeps the contrast of black text. Photos and coloured artwork

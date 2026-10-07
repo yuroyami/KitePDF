@@ -27,5 +27,17 @@ object ColorFixtures {
             ),
             budget = 0.005,
         ),
+        // ISO 32000-1, 8.6.7: under overprint mode 1, an ink that a DeviceCMYK paint sets to 0
+        // keeps the backdrop's ink (#201). Cyan over yellow is green, for a fill and a stroke; a
+        // magenta fill with /OPM 0 replaces the yellow under it.
+        oracleFixture(
+            "overprint-cmyk-mode-1",
+            "0 0 1 0 k 10 10 180 180 re f " +
+                "/GS1 gs 1 0 0 0 k 30 110 60 60 re f 1 0 0 0 K 12 w 140 100 m 140 190 l S " +
+                "/GS2 gs 0 1 0 0 k 30 30 60 60 re f",
+            "/ExtGState << /GS1 << /OP true /op true /OPM 1 >> /GS2 << /OP true /op true /OPM 0 >> >>",
+            emptyList(),
+            budget = 0.005,
+        ),
     )
 }

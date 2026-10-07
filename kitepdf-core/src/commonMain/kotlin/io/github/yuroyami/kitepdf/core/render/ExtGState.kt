@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.core.render
 
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
@@ -23,7 +24,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *   - `/SMask`: soft-mask dict ("None" / Mask dict)
  *   - `/LW` `/LC` `/LJ` `/ML` `/D`: line width, cap, join, miter limit and dash
  *   - `/RI` `/UseBlackPtComp`: rendering intent and black point compensation
- *   - `/AIS`, `/SA`, `/OP`, `/op`, `/OPM`, `/Font`: accepted but ignored (rare)
+ *   - `/OP` `/op` `/OPM`: overprint for strokes and fills, and the overprint mode
+ *   - `/AIS`, `/SA`, `/Font`: accepted but ignored (rare)
  *
  * Missing fields stay at their previous values; that's the spec's
  * "ExtGState modifies the current state" rule.
@@ -48,6 +50,12 @@ public data class ExtGState(
      * as MuPDF reads it, or null when the dictionary does not set it.
      */
     val blackPointCompensation: Boolean? = null,
+    /** `/OP`: overprint for strokes, or null when the dictionary does not set it. */
+    val overprintStroke: Boolean? = null,
+    /** `/op`: overprint for fills and other paints. When it is absent, `/OP` sets it too (ISO 32000-1, Table 58). */
+    val overprintFill: Boolean? = null,
+    /** `/OPM`: the overprint mode, 0 or 1, or null when the dictionary does not set it. */
+    val overprintMode: Int? = null,
 ) {
 
     public companion object {
@@ -70,6 +78,7 @@ public data class ExtGState(
                 else -> 0.0
             }
             val dashArray = (dash?.getOrNull(0)?.resolve(refs) as? PdfArray)?.map { number(it) }
+            val overprint = (deref(dict["OP"], refs) as? PdfBoolean)?.value
             return ExtGState(
                 fillAlpha = fillAlpha?.coerceIn(0.0, 1.0),
                 strokeAlpha = strokeAlpha?.coerceIn(0.0, 1.0),
@@ -83,6 +92,10 @@ public data class ExtGState(
                 dashPhase = number(dash?.getOrNull(1)),
                 renderingIntent = (deref(dict["RI"], refs) as? PdfName)?.let { KiteRenderingIntent.fromPdfName(it.value) },
                 blackPointCompensation = (deref(dict["UseBlackPtComp"], refs) as? PdfName)?.let { it.value == "ON" },
+                overprintStroke = overprint,
+                overprintFill = (deref(dict["op"], refs) as? PdfBoolean)?.value ?: overprint,
+                // MuPDF reads any mode other than 0 as mode 1.
+                overprintMode = (deref(dict["OPM"], refs) as? PdfInt)?.let { if (it.value == 0L) 0 else 1 },
             )
         }
 

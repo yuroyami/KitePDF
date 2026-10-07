@@ -15,7 +15,8 @@ import kotlin.test.assertTrue
  * Compares each swatch of the [IccFixtures.intents] pages with mutool, which converts
  * through Little CMS with the rendering intent of the paint (#201), and of the
  * [IccFixtures.outputIntent] page, whose DeviceCMYK converts through the output intent
- * (#312). Skips without mutool.
+ * (#312), and of the [IccFixtures.outputIntentOverprint] page, which overprints in that space
+ * (#201). Skips without mutool.
  */
 class IccIntentOracleTest {
 
@@ -30,7 +31,7 @@ class IccIntentOracleTest {
     fun every_swatch_converts_as_mutool_converts_it() {
         assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
         val failures = ArrayList<String>()
-        for (page in IccFixtures.intents() + IccFixtures.outputIntent()) {
+        for (page in IccFixtures.intents() + IccFixtures.outputIntent() + IccFixtures.outputIntentOverprint()) {
             val f = page.fixture
             val kite = AwtPdfRasterizer.renderToImage(PdfDocument.open(f.bytes).pages[0])
             val pdf = File.createTempFile("kite-${f.name}", ".pdf").apply { deleteOnExit(); writeBytes(f.bytes) }
