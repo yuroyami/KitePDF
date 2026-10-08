@@ -9,7 +9,7 @@ plugins {
 
 /*
  * :kitepdf-pdf is the PDF handler. Its only runtime dependencies are
- * kotlin-stdlib and :kitepdf-core (which in turn brings in KiteImageCodec for the
+ * kotlin-stdlib and :kitepdf-core (which in turn brings in ImageKodec for the
  * image codecs). No UI framework: Compose Multiplatform lives in :sample and
  * in the renderer modules, not here.
  *
@@ -127,7 +127,7 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             // The image tests compare with the engine's own decode, which kitepdf-core keeps to itself.
-            implementation(libs.kiteimagecodec)
+            implementation(libs.imagekodec)
         }
 
         // Test-only: the shared mutool acceptance check. The module is internal and never published.

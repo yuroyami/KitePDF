@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kiteimagecodec.KiteBitmap
-import io.github.yuroyami.kiteimagecodec.KiteImageCodec
+import io.github.yuroyami.imagekodec.KiteBitmap
+import io.github.yuroyami.imagekodec.ImageKodec
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
@@ -29,7 +29,7 @@ class LazyImageDecodeTest {
     private val h = 157
 
     /** A smooth picture with a soft band across it, as a photo or a scan is. */
-    private val bytes = KiteImageCodec.encodeJpeg(
+    private val bytes = ImageKodec.encodeJpeg(
         KiteBitmap(w, h, IntArray(w * h) { i ->
             val x = i % w
             val y = i / w
@@ -39,7 +39,7 @@ class LazyImageDecodeTest {
         quality = 90,
     )
 
-    /** 64 by 48, arithmetic coded by `cjpeg -arithmetic`, which KiteImageCodec does not decode. */
+    /** 64 by 48, arithmetic coded by `cjpeg -arithmetic`. */
     private val arithmetic = (
             "ffd8ffe000104a46494600010100000100010000ffdb0043000302020302020303030304030304050805050404050a070706080c0a0c0c0b0a0b0b0d" +
             "0e12100d0e110e0b0b1016101113141515150c0f171816141812141514ffdb00430103040405040509050509140d0b0d141414141414141414141414" +
@@ -67,9 +67,9 @@ class LazyImageDecodeTest {
             refs = { null },
         )
 
-    /** The RGBA of KiteImageCodec's own decode with each side divided by [r]. */
+    /** The RGBA of ImageKodec's own decode with each side divided by [r]. */
     private fun reducedRgba(r: Int): ByteArray {
-        val bitmap = KiteImageCodec.decodeReduced(bytes, r)
+        val bitmap = ImageKodec.decodeReduced(bytes, r)
         return ByteArray(bitmap.argb.size * 4) { i ->
             val p = bitmap.argb[i / 4]
             when (i % 4) {
@@ -158,8 +158,8 @@ class LazyImageDecodeTest {
 
     @Test
     fun a_jpeg_whose_data_does_not_decode_loads_without_a_decode_and_keeps_its_file() {
-        assertTrue(KiteImageCodec.probe(damaged).isDecodable, "the headers of the damaged file read")
-        assertTrue(runCatching { KiteImageCodec.decode(damaged) }.isFailure, "the data of the damaged file decodes")
+        assertTrue(ImageKodec.probe(damaged).isDecodable, "the headers of the damaged file read")
+        assertTrue(runCatching { ImageKodec.decode(damaged) }.isFailure, "the data of the damaged file decodes")
         val image = image(damaged)
         // A decode when the file loaded would have found the damage and made it a Kind.JPEG image (#475).
         assertEquals(KiteImageData.Kind.RAW, image.kind)
@@ -171,9 +171,15 @@ class LazyImageDecodeTest {
     }
 
     @Test
-    fun a_jpeg_that_the_codec_refuses_keeps_its_file_as_a_jpeg_kind() {
+    fun an_arithmetic_jpeg_decodes_lazily_at_every_reduction() {
         val image = image(arithmetic, 64, 48)
-        assertEquals(KiteImageData.Kind.JPEG, image.kind)
+        assertEquals(KiteImageData.Kind.RAW, image.kind)
         assertContentEquals(arithmetic, image.encodedBytes)
+        assertEquals(arithmetic.size.toLong(), image.retainedBytes())
+        for (r in listOf(1, 2, 4, 8)) {
+            val rgba = image.toShrunkRgbaBytes(r, r)
+            assertEquals(64 / r * (48 / r) * 4, rgba?.size, "reduction $r")
+            assertTrue(rgba!!.filterIndexed { i, _ -> i % 4 != 3 }.toSet().size > 32, "the picture draws at reduction $r")
+        }
     }
 }

@@ -1,12 +1,12 @@
 package io.github.yuroyami.kitepdf.core.render
 
-import io.github.yuroyami.kiteimagecodec.KiteBitmap
+import io.github.yuroyami.imagekodec.KiteBitmap
 
 /**
- * Bridge from KiteImageCodec's ARGB [KiteBitmap] to KitePDF's [KiteImageData] RAW
+ * Bridge from ImageKodec's ARGB [KiteBitmap] to KitePDF's [KiteImageData] RAW
  * shape (interleaved DeviceRGB samples + an optional soft-mask alpha plane).
  * Since the codec consolidation, KitePDF decodes PNG/GIF/JPEG/JP2 through
- * KiteImageCodec and only keeps the PDF-semantics layer (color spaces, /Decode,
+ * ImageKodec and only keeps the PDF-semantics layer (color spaces, /Decode,
  * SMask compositing) on its own side.
  */
 

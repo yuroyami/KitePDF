@@ -11,6 +11,11 @@ The public corpus documents are tracked, and the test task checks them with
 `python3 tools/corpus.py verify` before it runs. The [corpus guide](../corpus/README.md)
 covers attribution, local drop-ins and how to add a public document.
 
+On Linux, install `fonts-noto-cjk` before running the JVM rendering tests, as CI
+does. The vertical Japanese text document has no embedded font and needs a
+host fallback. A runner without one draws missing-glyph boxes instead of text
+and fails the page baseline (#627).
+
 ```bash
 ./gradlew :kitepdf-native-renderer:jvmTest \
   --tests "io.github.yuroyami.kitepdf.nativerenderer.difftest.DifferentialTest"

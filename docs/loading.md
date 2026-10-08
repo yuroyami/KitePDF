@@ -103,11 +103,11 @@ It reads the whole document into memory, so keep it off the main thread for anyt
 
 ### Remote URL
 
-Networking lives in a separate artifact. The engine depends on `kotlin-stdlib`, KiteImageCodec and `kotlinx-coroutines-core` only, and `kitepdf-net` is the one place Ktor enters the build, so you pay for it only if you use it.
+Networking lives in a separate artifact. The engine depends on `kotlin-stdlib`, ImageKodec and `kotlinx-coroutines-core` only, and `kitepdf-net` is the one place Ktor enters the build, so you pay for it only if you use it.
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-net:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-net:0.13.0")
     implementation("io.ktor:ktor-client-cio:3.6.0")   // or OkHttp, Darwin, Js
 }
 ```

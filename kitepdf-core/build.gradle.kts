@@ -12,7 +12,7 @@ plugins {
  * the font engine, compression, hyphenation data, and the shared value model.
  * Every document handler (:kitepdf-pdf, :kitepdf-epub, ...) and every render
  * backend depends on it. Its one runtime dependency beyond kotlin-stdlib is
- * KiteImageCodec, declared with `implementation` below, which supplies the image codecs.
+ * ImageKodec, declared with `implementation` below, which supplies the image codecs.
  */
 kotlin {
     explicitApi()
@@ -89,7 +89,7 @@ kotlin {
             // The one runtime dependency: the Kite lineage's shared image engine.
             // Image codecs (JPEG incl. progressive, PNG, GIF, JPX, JBIG2, CCITT)
             // live there now; everything else here stays kotlin-stdlib-only.
-            implementation(libs.kiteimagecodec)
+            implementation(libs.imagekodec)
         }
 
         commonTest.dependencies {

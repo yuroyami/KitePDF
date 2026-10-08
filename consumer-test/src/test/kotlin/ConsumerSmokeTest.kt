@@ -1,4 +1,5 @@
 import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.document.KiteDoc
 import io.github.yuroyami.kitepdf.nativerenderer.AwtCanvas
@@ -10,6 +11,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -100,5 +102,23 @@ class ConsumerSmokeTest {
         val svg = """<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><a href="https://example.com"><rect width="50" height="50"/></a></svg>"""
         val page = KiteDoc.open(svg.encodeToByteArray()).pages.single()
         assertEquals(listOf("https://example.com"), page.hyperlinks.map { it.uri })
+    }
+
+    @Test
+    fun a_lossy_webp_resolves_the_published_image_decoder() {
+        // A generated 16x16 card from ImageKodec's Apache-2.0 WebpDecoderTest at f25823b74d76.
+        // The ARGB checksum comes from dwebp. This must work with only KitePDF coordinates (#513).
+        val hex = "524946468200000057454250565038580a000000100000000f00000f0000414c504815000000010ff094ff888820102066ccd873ed20a2ff1530" +
+            "5e005650382046000000d001009d012a1000100001402625b00274010eb589a80000fefe92532bfabaf61b2bfe6d7311f2d9de894ae0d53cb87e" +
+            "d1c9dd7fbe5d7ffe5e99eabfffeb4fcf4b6fef830000"
+        val bytes = ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+        val image = assertNotNull(KiteImageData.fromEncodedImage(bytes))
+        assertEquals(16 to 16, image.width to image.height)
+        val rgb = assertNotNull(image.pixelBytes)
+        val alpha = assertNotNull(image.softMaskAlpha)
+        val argb = ByteArray(16 * 16 * 4) { i ->
+            if (i % 4 == 0) alpha[i / 4] else rgb[i / 4 * 3 + i % 4 - 1]
+        }
+        assertEquals(0xE33C325CL, CRC32().also { it.update(argb) }.value)
     }
 }

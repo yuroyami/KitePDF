@@ -11,7 +11,7 @@ KitePDF is published to Maven Central as thirteen artifacts: the `kitepdf` umbre
     ```gradle
     dependencies {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.12.0")
+            implementation("io.github.yuroyami:kitepdf:0.13.0")
         }
     }
     ```
@@ -20,11 +20,11 @@ KitePDF is published to Maven Central as thirteen artifacts: the `kitepdf` umbre
 
     ```gradle
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.12.0")
+        implementation("io.github.yuroyami:kitepdf:0.13.0")
     }
     ```
 
-The core `kitepdf` artifact depends on `kotlin-stdlib`, the pure-Kotlin KiteImageCodec engine, and `kotlinx-coroutines-core`, which fetches the resources an EPUB names by URL. It works on every Kotlin target (JVM, Android, Native, JS, wasmJs).
+The core `kitepdf` artifact depends on `kotlin-stdlib`, the pure-Kotlin ImageKodec engine, and `kotlinx-coroutines-core`, which fetches the resources an EPUB names by URL. It works on every Kotlin target (JVM, Android, Native, JS, wasmJs).
 
 ## Step 2: Open your first PDF
 
@@ -64,7 +64,7 @@ val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
 ```
 
 !!! tip "EPUB books"
-    The same dependency graph reads EPUBs: add `io.github.yuroyami:kitepdf-epub:0.12.0` and call `EpubDocument.open(bytes)`. See the [EPUB guide](epub.md).
+    The same dependency graph reads EPUBs: add `io.github.yuroyami:kitepdf-epub:0.13.0` and call `EpubDocument.open(bytes)`. See the [EPUB guide](epub.md).
 
 ## Step 3: Show it on screen in Compose
 
@@ -75,7 +75,7 @@ Add the dependency:
 ```gradle
 dependencies {
     commonMain.dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
     }
 }
 ```
@@ -179,7 +179,7 @@ Add the dependency:
 
 ```gradle
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
 }
 ```
 

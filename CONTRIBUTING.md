@@ -8,7 +8,7 @@ Breaking any of these fails the change, however good the code is.
 
 - **Work on `main`.** Do not create branches. Do not add AI attribution to commits, tags, pull requests or files.
 - **No em dashes** in any file, comment, commit message or document. Use commas, colons or brackets.
-- **Zero new dependencies in `:kitepdf-core`, `:kitepdf-pdf` and `:kitepdf-epub`.** Besides the Kotlin standard library and other KitePDF modules, these three depend on one library: KiteImageCodec, the image engine of `:kitepdf-core`. `:kitepdf-epub` also depends on kotlinx.coroutines, which fetches the resources a book names by URL in the background (#38). Do not add another. If a change seems to need a library, it needs `expect`/`actual` platform code instead: the JVM may use the JDK, Apple targets may use platform frameworks, JavaScript may use browser APIs, and common code stays pure Kotlin.
+- **Zero new dependencies in `:kitepdf-core`, `:kitepdf-pdf` and `:kitepdf-epub`.** Besides the Kotlin standard library and other KitePDF modules, these three depend on one library: ImageKodec, the image engine of `:kitepdf-core`. `:kitepdf-epub` also depends on kotlinx.coroutines, which fetches the resources a book names by URL in the background (#38). Do not add another. If a change seems to need a library, it needs `expect`/`actual` platform code instead: the JVM may use the JDK, Apple targets may use platform frameworks, JavaScript may use browser APIs, and common code stays pure Kotlin.
 - **Never break lenient salvage.** A single corrupt object, image, font or annotation degrades to a skip or a placeholder. It never aborts the page or the document. Every parser you touch keeps this property.
 - **Public API changes need documentation** in the house style: explain why, and cite the spec section. `PdfDocument.kt` is the voice reference.
 - **Match the surrounding code.** No wildcard imports, the same comment density as the file you are in, spec section citations, and `internal` for cross-file helpers that are not public API.
@@ -32,6 +32,41 @@ Breaking any of these fails the change, however good the code is.
 - **The conformance files of Unicode are the bidi oracle.** `BidiConformanceTest` runs a committed sample of `BidiCharacterTest.txt` and `BidiTest.txt` of Unicode 17 in every build. It runs the full files when they are in `~/.cache/kitepdf/ucd-17`, and its KDoc gives the commands that download them.
 
 ## The gate
+
+### Testing an unpublished ImageKodec
+
+The codec integration for #473, #474 and #513 uses ImageKodec 0.3.0, with the
+artifact `io.github.yuroyami:imagekodec` and package `io.github.yuroyami.imagekodec`.
+To test an unpublished revision, build it locally. The commands below use the
+revision that validated this integration. Use a separate Maven directory and a
+revision-specific version so a development build cannot replace a released artifact:
+
+```bash
+git clone https://github.com/yuroyami/ImageKodec.git ../ImageKodec
+git -C ../ImageKodec checkout f25823b74d76b6708faaaced3daf7cb5c42eec1d
+../ImageKodec/gradlew -p ../ImageKodec \
+  :imagekodec:publishKotlinMultiplatformPublicationToMavenLocal \
+  :imagekodec:publishJvmPublicationToMavenLocal \
+  -Pversion=0.2.0-dev.f25823b74d76 -PRELEASE_SIGNING_ENABLED=false \
+  -Dmaven.repo.local="$PWD/../imagekodec-maven" \
+  -x :imagekodec:dokkaGeneratePublicationHtml --max-workers=2 --no-parallel
+./gradlew :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest \
+  -PimageKodecRepository="$PWD/../imagekodec-maven" \
+  -PimageKodecVersion=0.2.0-dev.f25823b74d76 --max-workers=2 --no-parallel
+```
+
+The documentation task is excluded only for this local build because it needs
+the Android SDK. Pass the same two `imageKodec` properties to the gate commands
+below. To test another target, publish its artifact too, for example
+`:imagekodec:publishJsPublicationToMavenLocal` or
+`:imagekodec:publishLinuxX64PublicationToMavenLocal`. Publishing KitePDF for the
+consumer check also resolves metadata for every native target, including Apple
+targets on Linux, so it needs the complete ImageKodec publication. A local source
+checkout can be selected with `-PimageKodecPath=../ImageKodec`; composite metadata
+builds may also need the two Kotlin plugins to agree. Do not release KitePDF with
+a local development dependency; switch to the published ImageKodec version first.
+
+### Required checks
 
 Run this before every commit.
 

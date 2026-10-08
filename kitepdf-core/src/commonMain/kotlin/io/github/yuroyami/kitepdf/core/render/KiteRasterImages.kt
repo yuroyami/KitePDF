@@ -1,13 +1,13 @@
 package io.github.yuroyami.kitepdf.core.render
 
-import io.github.yuroyami.kiteimagecodec.KiteBitmap
-import io.github.yuroyami.kiteimagecodec.KiteImageCodec
+import io.github.yuroyami.imagekodec.KiteBitmap
+import io.github.yuroyami.imagekodec.ImageKodec
 
 /** These pixels as an image that a canvas draws, smoothed when it is scaled. */
 public fun KiteRaster.toImageData(): KiteImageData = KiteBitmap(width, height, pixels.copyOf()).toKiteImageData()
 
 /** These pixels as a PNG file, with their alpha. */
-public fun KiteRaster.encodePng(): ByteArray = KiteImageCodec.encodePng(KiteBitmap(width, height, pixels))
+public fun KiteRaster.encodePng(): ByteArray = ImageKodec.encodePng(KiteBitmap(width, height, pixels))
 
 /**
  * These pixels as a JPEG file of [quality] from 1 to 100. JPEG has no alpha, so each pixel is
@@ -24,5 +24,5 @@ public fun KiteRaster.encodeJpeg(quality: Int): ByteArray {
             (0xFF shl 24) or (r shl 16) or (g shl 8) or b
         }
     }
-    return KiteImageCodec.encodeJpeg(KiteBitmap(width, height, opaque), quality.coerceIn(1, 100))
+    return ImageKodec.encodeJpeg(KiteBitmap(width, height, opaque), quality.coerceIn(1, 100))
 }

@@ -25,7 +25,7 @@ KitePDF is **pre-1.0**. These features work today:
 | Encryption | Open, authenticate, edit and create password-protected PDFs (AES-256/R6 on write) |
 | Editing and saving | Fill forms, stamp watermarks, redact (the content is removed, not covered), incremental save or full rebuild |
 | Building | Text with standard or custom embedded fonts, including subsetting, plus shapes, images and colors |
-| Image codecs | Supplied by KiteImageCodec, the shared pure-Kotlin codec engine: PNG, JPEG (baseline and progressive), GIF, BMP, JPEG 2000, JBIG2 and CCITT |
+| Image codecs | Supplied by ImageKodec, the shared pure-Kotlin codec engine: PNG, JPEG (baseline and progressive), GIF, BMP, JPEG 2000, JBIG2 and CCITT |
 | Colour | Device spaces, CalGray/CalRGB, Lab, Indexed, Separation/DeviceN, and grey, RGB and CMYK ICC profiles, matrix/TRC and lookup-table alike, through the rendering intent the document names. A CMYK output intent converts DeviceCMYK |
 | Signing scaffold | `/ByteRange` preparation and CMS embedding. The signing key and its cryptography stay in your application. |
 | Signature validation | CMS, CAdES and PKCS #1 signatures and document timestamps, with RSA and ECDSA. Reports the signer, the certificate chain, trust in your anchors, and changes made after signing. |

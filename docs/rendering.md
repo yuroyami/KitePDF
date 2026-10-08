@@ -31,7 +31,7 @@ The AWT rasterizer is zero-dependency; it ships with the JDK and needs no native
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
 }
 ```
 
@@ -80,7 +80,7 @@ On iOS, macOS, and tvOS, use `ApplePdfRasterizer` to render via native CoreGraph
 ```kotlin
 // In your ios/macOS sourceSet
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
 }
 ```
 
@@ -131,7 +131,7 @@ On Android, `AndroidPdfBitmapRenderer` returns an ARGB_8888 `Bitmap` for use wit
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
 }
 ```
 
@@ -186,7 +186,7 @@ For a single API across JVM, Android, Apple, and Linux, use `PdfPageRasterizer` 
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")
 }
 ```
 
@@ -257,7 +257,7 @@ For minimal bundle size on the web, use Canvas2D rendering via `Canvas2dCanvas`.
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
 }
 ```
 
@@ -282,7 +282,7 @@ page.renderTo(pdfCanvas, deviceCtm)
 ```
 
 !!! note "Images"
-    Canvas2D draws every image that the shared decoders read in the same pass as the rest of the page. An image they refuse, such as an arithmetic-coded JPEG, draws as a grey placeholder, as it does on every canvas.
+    Canvas2D draws every image that the shared decoders read in the same pass as the rest of the page. An image they refuse, such as a JPEG with damaged image data, draws as a grey placeholder, as it does on every canvas.
 
 ## Web: Skia over WASM (kitepdf-skia-renderer, JS/wasmJs)
 
@@ -292,7 +292,7 @@ Skia compiled to WASM draws the web page with the same engine as the Skia render
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")
 }
 ```
 
@@ -321,7 +321,7 @@ If you're using the Compose viewer (`kitepdf-compose-viewer`), export the curren
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
 }
 ```
 

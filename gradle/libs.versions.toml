@@ -17,10 +17,10 @@ activityCompose = "1.14.0-alpha03"
 # renderer Compose uses, without the Compose runtime sitting on top.
 skiko = "0.150.1"
 
-# KiteImageCodec. The Kite lineage's shared image engine, and :kitepdf-core's one
-# runtime dependency beyond kotlin-stdlib. Up to 0.1.0 it was published as
-# `kiteimage`, with the package io.github.yuroyami.kiteimage.
-kiteimagecodec = "0.2.0"
+# ImageKodec. The Kite lineage's shared image engine, and :kitepdf-core's one
+# runtime dependency beyond kotlin-stdlib. CONTRIBUTING.md describes how to test
+# an unpublished revision in an isolated local Maven repository.
+imagekodec = "0.3.0"
 
 # KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
 # so no other module carries a script engine. Its code sees only kitejs-api; QuickJS runs underneath.
@@ -34,7 +34,7 @@ kiteplayer = "0.2.0"
 robolectric = "4.17"
 
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
-# No other module may depend on it: the engine stays kotlin-stdlib + KiteImageCodec.
+# No other module may depend on it: the engine stays kotlin-stdlib + ImageKodec.
 ktor = "3.6.0"
 
 # kotlinx.coroutines. :kitepdf-epub fetches a book's remote resources with it (#38), and Compose and
@@ -42,9 +42,9 @@ ktor = "3.6.0"
 kotlinxCoroutines = "1.11.0"
 
 [libraries] ######################################################################################
-# KiteImageCodec supplies every image codec :kitepdf-core decodes through: JPEG
-# (baseline and progressive), PNG, GIF, BMP, JPEG 2000, JBIG2 and CCITT.
-kiteimagecodec = { module = "io.github.yuroyami:kiteimagecodec", version.ref = "kiteimagecodec" }
+# ImageKodec supplies every image codec :kitepdf-core decodes through: JPEG
+# PNG, GIF, BMP, WebP, TIFF, JPEG 2000, AVIF, JPEG XL, JBIG2 and CCITT.
+imagekodec = { module = "io.github.yuroyami:imagekodec", version.ref = "imagekodec" }
 
 # KiteJS runs document JavaScript, :kitepdf-javascript only.
 kitejs-api = { module = "io.github.yuroyami:kitejs-api", version.ref = "kitejs" }

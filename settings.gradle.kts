@@ -10,21 +10,31 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
+    providers.gradleProperty("imageKodecVersion").orNull?.let { localVersion ->
+        versionCatalogs { create("libs") { version("imagekodec", localVersion) } }
+    }
     repositories {
+        // Only ImageKodec may resolve from an unpublished local build.
+        providers.gradleProperty("imageKodecRepository").orNull?.let { path ->
+            exclusiveContent {
+                forRepository { maven { url = uri(path) } }
+                filter { includeModuleByRegex("io\\.github\\.yuroyami", "imagekodec(-.*)?") }
+            }
+        }
         google()
         mavenCentral()
         maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
     }
 }
 
-// Point at a local KiteImageCodec checkout to develop the two repositories together:
-// ./gradlew build -PkiteImageCodecPath=../KiteImageCodec. Without it, KiteImageCodec
+// Point at a local ImageKodec checkout to develop the two repositories together:
+// ./gradlew build -PimageKodecPath=../ImageKodec. Without it, ImageKodec
 // resolves from Maven Central like any other dependency.
-providers.gradleProperty("kiteImageCodecPath").orNull?.let { path ->
+providers.gradleProperty("imageKodecPath").orNull?.let { path ->
     includeBuild(path) {
         dependencySubstitution {
-            substitute(module("io.github.yuroyami:kiteimagecodec"))
-                .using(project(":kiteimagecodec"))
+            substitute(module("io.github.yuroyami:imagekodec"))
+                .using(project(":imagekodec"))
         }
     }
 }

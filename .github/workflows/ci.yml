@@ -51,6 +51,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # The vertical-text corpus PDF names a Japanese font without embedding it.
+      # Without a CJK fallback, AWT draws boxes and fails the page baseline (#627).
+      - name: Install CJK fallback fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+
       - name: Test the public-corpus tool
         run: python3 -m unittest discover -s tools -p test_corpus.py -v
 

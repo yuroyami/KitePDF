@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 
 /**
  * Bitmaps for the Compose canvas. [decodeRaw] wraps pixels that KitePDF's core decoded with
- * KiteImageCodec. [decode] reads an encoded file with the decoder the host platform provides:
+ * ImageKodec. [decode] reads an encoded file with the decoder the host platform provides:
  * Skia on the JVM, iOS, macOS and the web, and BitmapFactory on Android. KitePDF does not call
  * [decode] for page images: an image that the shared decoders refuse draws as a placeholder on
  * every canvas (#184).

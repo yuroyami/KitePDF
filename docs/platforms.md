@@ -72,7 +72,7 @@ but it is not a substitute for compiling and running those target variants.
 
 ### `kitepdf`: the core engine
 
-No platform or native dependencies: only `kotlin-stdlib`, the pure-Kotlin KiteImageCodec module, and `kotlinx-coroutines-core` for the EPUB reader. Parse, decrypt, extract text, edit, redact, fill forms, and build PDFs from scratch. No UI or platform binding; just the PDF spec in pure Kotlin. Use this when you need:
+No platform or native dependencies: only `kotlin-stdlib`, the pure-Kotlin ImageKodec module, and `kotlinx-coroutines-core` for the EPUB reader. Parse, decrypt, extract text, edit, redact, fill forms, and build PDFs from scratch. No UI or platform binding; just the PDF spec in pure Kotlin. Use this when you need:
 
 - Server-side PDF processing (CLI tools, batch jobs, REST APIs)
 - Text extraction and metadata reading
@@ -235,16 +235,16 @@ Two renderer gaps come from KitePDF, not from the toolkit underneath:
 
     ```kotlin
     // The core engine (always add this)
-    implementation("io.github.yuroyami:kitepdf:0.12.0")
+    implementation("io.github.yuroyami:kitepdf:0.13.0")
 
     // Optional: Compose viewer
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
 
     // Optional: platform-native rasterizer (no Compose)
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
 
     // Optional: Skia rasterizer (headless, one common API)
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")
     ```
 
 === "Android / JVM only"
@@ -252,10 +252,10 @@ Two renderer gaps come from KitePDF, not from the toolkit underneath:
     Add to your regular `dependencies { }` block:
 
     ```kotlin
-    implementation("io.github.yuroyami:kitepdf:0.12.0")
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
     // or
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")
     ```
 
 ## Related

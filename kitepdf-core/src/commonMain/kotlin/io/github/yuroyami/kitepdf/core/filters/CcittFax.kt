@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf.core.filters
 
-import io.github.yuroyami.kiteimagecodec.codec.CcittFax
-import io.github.yuroyami.kiteimagecodec.codec.CcittOptions
+import io.github.yuroyami.imagekodec.codec.CcittFax
+import io.github.yuroyami.imagekodec.codec.CcittOptions
 import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 
@@ -13,7 +13,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
  * Mode is selected by `/K` in DecodeParms:
  *   - `K < 0`  → Pure 2D ("Group 4", T.6): the modern default
  *   - `K = 0`  → Pure 1D ("Group 3 1D", T.4): common in older scans
- *   - `K > 0`  → Mixed 1D/2D: not implemented, so it falls back to 1D
+ *   - `K > 0`  → Mixed 1D/2D (Group 3, T.4)
  *
  * Output is 1 bit per pixel, packed MSB-first, padded to a byte boundary
  * per row. The bit polarity matches the spec default: 0 = black/foreground,
@@ -33,7 +33,7 @@ public object CcittFaxFilter : PdfFilter {
 
         val opts = CcittOptions(columns, rows, endOfBlock, blackIs1, encodedByteAlign, endOfLine)
         // The algorithm (T.4/T.6 + the shared G4 core JBIG2's MMR regions use)
-        // lives in KiteImageCodec since the codec consolidation.
+        // lives in ImageKodec since the codec consolidation.
         return CcittFax.decode(input, k, opts)
     }
 }

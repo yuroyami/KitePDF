@@ -9,7 +9,7 @@ below; those of an EPUB are in [Scripts in an EPUB](#scripts-in-an-epub).
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf-javascript:0.12.0")
+    implementation("io.github.yuroyami:kitepdf-javascript:0.13.0")
 }
 ```
 

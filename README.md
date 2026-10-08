@@ -98,13 +98,14 @@ doc.pages[0].extractText()   // "Hello from PdfBuilder"
 
 ## Install
 
-Every artifact is on Maven Central at `0.12.0`. Most apps need just two lines: one to
+The examples use version `0.13.0`; artifacts are published to Maven Central.
+Most apps need just two lines: one to
 open documents, and one to show them.
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf:0.12.0")                  // opens every format
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")   // shows them with KiteDocView
+    implementation("io.github.yuroyami:kitepdf:0.13.0")                  // opens every format
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")   // shows them with KiteDocView
 }
 ```
 
@@ -115,22 +116,22 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // Every format: PDF, EPUB, CBZ, SVG, XPS and OpenXPS
-            implementation("io.github.yuroyami:kitepdf:0.12.0")
+            implementation("io.github.yuroyami:kitepdf:0.13.0")
 
             // Or one format only
-            implementation("io.github.yuroyami:kitepdf-pdf:0.12.0")
-            implementation("io.github.yuroyami:kitepdf-epub:0.12.0")
-            implementation("io.github.yuroyami:kitepdf-cbz:0.12.0")
-            implementation("io.github.yuroyami:kitepdf-svg:0.12.0")
-            implementation("io.github.yuroyami:kitepdf-xps:0.12.0")
+            implementation("io.github.yuroyami:kitepdf-pdf:0.13.0")
+            implementation("io.github.yuroyami:kitepdf-epub:0.13.0")
+            implementation("io.github.yuroyami:kitepdf-cbz:0.13.0")
+            implementation("io.github.yuroyami:kitepdf-svg:0.13.0")
+            implementation("io.github.yuroyami:kitepdf-xps:0.13.0")
 
             // Optional, depending on what you build
-            implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")   // KiteDocView for Compose Multiplatform
-            implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")  // page-to-image on the platform canvas
-            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.12.0")    // page-to-image on Skia (on Android, add one repository)
-            implementation("io.github.yuroyami:kitepdf-javascript:0.12.0")       // runs the JavaScript inside PDFs and EPUBs (pulls in KiteJS)
-            implementation("io.github.yuroyami:kitepdf-net:0.12.0")              // loads documents from a URL (add a Ktor engine too)
-            implementation("io.github.yuroyami:kitepdf-media:0.12.0")            // plays EPUB audio and video in KiteDocView (pulls in KitePlayer)
+            implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")   // KiteDocView for Compose Multiplatform
+            implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")  // page-to-image on the platform canvas
+            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")    // page-to-image on Skia (on Android, add one repository)
+            implementation("io.github.yuroyami:kitepdf-javascript:0.13.0")       // runs the JavaScript inside PDFs and EPUBs (pulls in KiteJS)
+            implementation("io.github.yuroyami:kitepdf-net:0.13.0")              // loads documents from a URL (add a Ktor engine too)
+            implementation("io.github.yuroyami:kitepdf-media:0.13.0")            // plays EPUB audio and video in KiteDocView (pulls in KitePlayer)
         }
     }
 }
@@ -150,7 +151,7 @@ kotlin {
 Good to know:
 
 - `kitepdf-core` comes with every document artifact, so you never add it yourself.
-- The document artifacts depend only on `kotlin-stdlib` and KiteImageCodec, which decodes the images. `kitepdf-epub` adds `kotlinx-coroutines-core`, which fetches the resources a book names by URL.
+- The document artifacts depend only on `kotlin-stdlib` and ImageKodec, which decodes the images. `kitepdf-epub` adds `kotlinx-coroutines-core`, which fetches the resources a book names by URL.
 - In a plain Android or JVM project, put the same lines in your usual `dependencies { }` block.
 
 ## A quick tour
@@ -359,7 +360,7 @@ with the reason behind each gap.
 | Redaction | A few things survive, such as a large background fill and a clipping path's outline. The [editing guide](https://yuroyami.github.io/KitePDF/editing/#redaction-limitations) lists them all. |
 | Encryption | Files encrypted with RC4 open, but only AES files can be edited. New files use AES-256. |
 | Colour | ICC profiles and rendering intents apply. Overprint is simulated for DeviceCMYK paths and text, and Separation/DeviceN paths, text and images. RGB backdrops make ink reconstruction approximate. |
-| Images | An image that the shared decoders refuse, such as an arithmetic-coded or 12-bit JPEG, a JPEG whose data is damaged, a JPEG 2000 stream the decoder does not read, or a JBIG2 stream in MMR, Huffman or halftone form, draws as a grey placeholder on every platform. |
+| Images | Damaged or unsupported image data draws as a grey placeholder on every platform. ImageKodec supplies the shared decoders. |
 | Text | Text comes as blocks, lines and spans, with no word splitting and no tag tree. |
 | Shaping | Hangul jamo are not composed into syllables. A font without its own shaping tables gets no Arabic or Thai fallback forms. |
 | EPUB | Czech, Macedonian, Indonesian, Armenian, Latvian and Romanian are not hyphenated: their hyph-utf8 patterns come under the GPL, the LGPL or no licence, which an Apache-2.0 library cannot carry. Thai is not hyphenated either. |
@@ -398,5 +399,5 @@ comes from:
 - the hyphenation patterns of the hyph-utf8 project, each under the license in its file header
 
 Part of the Kite family: [KiteCore](https://github.com/yuroyami/KiteCore),
-[KiteImageCodec](https://github.com/yuroyami/KiteImageCodec),
+[ImageKodec](https://github.com/yuroyami/ImageKodec),
 [KiteQR](https://github.com/yuroyami/KiteQR).

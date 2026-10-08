@@ -86,4 +86,4 @@ c++ -std=c++17 -O2 -I/path/to/jbig2enc/src tools/make_halftone_corpus.cpp \
 /tmp/make-halftone corpus/pdf/kitepdf-jbig2-arithmetic-halftone.pdf
 ```
 
-This original eight-tone chart contains an arithmetic pattern dictionary and an immediate arithmetic halftone region, with no externally sourced image. MuPDF and PDFium reproduce all 19,200 chart pixels. Contrary to the older description in #621, the current KiteImageCodec 0.2.0 already renders this arithmetic template-0 case: the initial AWT score against MuPDF is 0.0010 MAE at 96 dpi. The baseline records the actual chart, without a decoder change or a dependency upgrade.
+This original eight-tone chart contains an arithmetic pattern dictionary and an immediate arithmetic halftone region, with no externally sourced image. MuPDF and PDFium reproduce all 19,200 chart pixels. Contrary to the older description in #621, the current ImageKodec 0.2.0 already renders this arithmetic template-0 case: the initial AWT score against MuPDF is 0.0010 MAE at 96 dpi. The baseline records the actual chart, without a decoder change or a dependency upgrade.

@@ -101,7 +101,7 @@ class CbzDocumentTest {
     }
 
     @Test
-    fun webp_pages_take_their_size_from_the_header_and_lossless_ones_draw() {
+    fun webp_pages_take_their_size_from_the_header_and_draw() {
         val doc = CbzDocument.open(
             CbzFixtures.comic("p1.webp" to CbzFixtures.webpLossless6x4(), "p2.webp" to CbzFixtures.webpLossy6x4())
         )
@@ -111,10 +111,7 @@ class CbzDocumentTest {
         }
         val lossless = RecordingCanvas().also { doc.pages[0].renderTo(it) }
         assertEquals(1, images(lossless).size, "a lossless WebP page decodes and draws")
-        val lossy = RecordingCanvas().also { doc.pages[1].renderTo(it) }.calls
-        assertEquals(
-            1, lossy.count { it is RecordingCanvas.Call.Image || it is RecordingCanvas.Call.Fill },
-            "the page draws its image or a placeholder, never nothing",
-        )
+        val lossy = RecordingCanvas().also { doc.pages[1].renderTo(it) }
+        assertEquals(1, images(lossy).size, "a lossy WebP page decodes and draws")
     }
 }

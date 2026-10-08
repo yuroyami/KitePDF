@@ -40,29 +40,29 @@ The engine is a single dependency. Add it to `commonMain` and you have everythin
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.12.0")
+            implementation("io.github.yuroyami:kitepdf:0.13.0")
         }
     }
 }
 ```
 
-Its runtime dependencies are `kotlin-stdlib`, the pure-Kotlin KiteImageCodec engine, and `kotlinx-coroutines-core`, which fetches the resources an EPUB names by URL. It runs on every target listed under [Platform support](platforms.md).
+Its runtime dependencies are `kotlin-stdlib`, the pure-Kotlin ImageKodec engine, and `kotlinx-coroutines-core`, which fetches the resources an EPUB names by URL. It runs on every target listed under [Platform support](platforms.md).
 
 Drawing a page to the screen is the one job that needs a platform, so the rendering bindings are separate, opt-in artifacts. Add the one that matches how you draw:
 
 | Artifact | Add it when you want |
 |---|---|
-| `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib, KiteImageCodec and kotlinx.coroutines). |
+| `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib, ImageKodec and kotlinx.coroutines). |
 | `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `KiteDocView` for PDF and EPUB, drawn straight into a `DrawScope`. |
 | `io.github.yuroyami:kitepdf-net` | Optional. Opens a document straight from a URL; the only artifact that pulls in Ktor. |
 | `io.github.yuroyami:kitepdf-media` | Optional. Plays the audio and video of an EPUB in `KiteDocView`; the only artifact that pulls in a player and FFmpeg. |
 | `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
 | `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
 
-Every artifact is at `0.12.0`. For a single format, add `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` on its own. The `kitepdf` umbrella contains all five. See [Show it on screen](#show-it-on-screen) for each binding in use.
+The examples use `0.13.0` for every artifact. For a single format, add `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` on its own. The `kitepdf` umbrella contains all five. See [Show it on screen](#show-it-on-screen) for each binding in use.
 
 !!! note "Not using Kotlin Multiplatform?"
-    The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.12.0` to your normal `dependencies { }` block.
+    The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.13.0` to your normal `dependencies { }` block.
 
 ## What you can do
 
@@ -116,7 +116,7 @@ The engine is headless. Rendering is the one job that needs a platform, so it li
 A PDF page is just another composable, drawn straight into a Compose `DrawScope`.
 
 ```kotlin
-implementation("io.github.yuroyami:kitepdf-compose-viewer:0.12.0")
+implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
 ```
 
 ```kotlin
@@ -140,7 +140,7 @@ See **[the Compose viewer guide](compose-viewer.md)**.
 For servers, CI and thumbnails, render a page straight to image bytes with no UI:
 
 ```kotlin
-implementation("io.github.yuroyami:kitepdf-native-renderer:0.12.0")  // or kitepdf-skia-renderer
+implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")  // or kitepdf-skia-renderer
 ```
 
 ```kotlin

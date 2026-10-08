@@ -8,11 +8,11 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 | Level | Tests | Passes | Fails | Not applicable |
 |---|---|---|---|---|
-| must | 140 | 133 | 3 | 4 |
+| must | 140 | 136 | 0 | 4 |
 | should | 38 | 37 | 0 | 1 |
 | may | 1 | 0 | 1 | 0 |
 | deprecated | 27 | 25 | 1 | 1 |
-| all | 206 | 195 | 5 | 6 |
+| all | 206 | 198 | 2 | 6 |
 
 ## How the results are known
 
@@ -92,16 +92,16 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 
 | Test | Level | Result | How it is known |
 |---|---|---|---|
-| [`pub-cmt-avif`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-avif) | must | Fails ([#513](https://github.com/yuroyami/KitePDF/issues/513)) | Checked: The AVIF draws; today it does not decode. |
+| [`pub-cmt-avif`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-avif) | must | Passes | Checked: The AVIF draws. |
 | [`pub-cmt-gif`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-gif) | must | Passes | Checked: The GIF draws. |
 | [`pub-cmt-jpeg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-jpeg) | must | Passes | Checked: The JPEG draws. |
-| [`pub-cmt-jxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-jxl) | must | Fails ([#513](https://github.com/yuroyami/KitePDF/issues/513)) | Checked: The JPEG XL draws; today it does not decode. |
+| [`pub-cmt-jxl`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-jxl) | must | Passes | Checked: The JPEG XL draws. |
 | [`pub-cmt-mp3`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-mp3) | must | Passes | Checked: The page offers the MP3 as audio with controls, which `kitepdf-media` plays on Android, iOS and the desktop JVM. |
 | [`pub-cmt-mp4`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-mp4) | must | Passes | Checked: The page offers the M4A as audio with controls, which `kitepdf-media` plays on Android, iOS and the desktop JVM. |
 | [`pub-cmt-opus`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-opus) | must | Passes | Checked: The page offers the Opus file as audio with controls, which `kitepdf-media` plays on Android, iOS and the desktop JVM. |
 | [`pub-cmt-png`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-png) | must | Passes | Checked: The PNG draws. |
 | [`pub-cmt-svg`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-svg) | must | Passes | Checked: The SVG image draws its red heart. |
-| [`pub-cmt-webp`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-webp) | must | Fails ([#513](https://github.com/yuroyami/KitePDF/issues/513)) | Checked: The WebP draws; today a lossy WebP does not decode. |
+| [`pub-cmt-webp`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-cmt-webp) | must | Passes | Checked: The WebP draws. |
 
 ## Manifest Fallbacks
 

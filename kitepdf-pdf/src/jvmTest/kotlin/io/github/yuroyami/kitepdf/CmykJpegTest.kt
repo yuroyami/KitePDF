@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kiteimagecodec.KiteImageCodec
+import io.github.yuroyami.imagekodec.ImageKodec
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
@@ -185,6 +185,26 @@ class CmykJpegTest {
     }
 
     @Test
+    fun the_adobe_transform_overrides_the_pdf_at_every_reduction() {
+        for ((adobe, transform) in listOf(0 to 1, 2 to 0)) {
+            val data = jpeg(65, 49, adobe, progressive = true, subsampled = true) { _, _ ->
+                if (adobe == 0) intArrayOf(200, 50, 0, 31) else ycck(200, 50, 0, 31)
+            }
+            val decoded = image(data, 65, 49, extra = mapOf(
+                "DecodeParms" to PdfDictionary(linkedMapOf("ColorTransform" to PdfInt(transform.toLong()))),
+            ))
+            for (r in listOf(1, 2, 4, 8)) {
+                val rgba = assertNotNull(decoded.toShrunkRgbaBytes(r, r))
+                val width = (65 + r - 1) / r
+                val height = (49 + r - 1) / r
+                assertEquals(width * height * 4, rgba.size)
+                assertNear(cmyk(200, 50, 0, 31), pixel(rgba, width, width / 2, height / 2), 4,
+                    "Adobe $adobe overrides /ColorTransform $transform at reduction $r")
+            }
+        }
+    }
+
+    @Test
     fun an_inverting_decode_array_inverts_the_ink() {
         val data = jpeg(16, 16, adobe = 0) { _, _ -> intArrayOf(0, 0, 0, 0) }
         val plain = pixel(image(data, 16, 16).toRgbaBytes()!!, 16, 8, 8)
@@ -195,7 +215,7 @@ class CmykJpegTest {
 
     @Test
     fun each_sample_is_the_component_the_codec_decodes() {
-        // KiteImageCodec multiplies C, M and Y by K over 255, so with K at 255 its RGB is the
+        // ImageKodec multiplies C, M and Y by K over 255, so with K at 255 its RGB is the
         // first three components, and with C at 255 its red is the fourth.
         val w = 40
         val h = 24
@@ -203,8 +223,8 @@ class CmykJpegTest {
             val what = "progressive $progressive, subsampled $subsampled"
             val cmy = jpeg(w, h, adobe = 0, progressive, subsampled) { x, y -> intArrayOf(x * 6, y * 10, (x + y) * 4, 255) }
             val k = jpeg(w, h, adobe = 0, progressive, subsampled) { x, y -> intArrayOf(255, 255, 255, x * 5 + y * 2) }
-            val cmyCodec = KiteImageCodec.decode(cmy).argb
-            val kCodec = KiteImageCodec.decode(k).argb
+            val cmyCodec = ImageKodec.decode(cmy).argb
+            val kCodec = ImageKodec.decode(k).argb
             val cmySamples = assertNotNull(image(cmy, w, h).pixelBytes)
             val kSamples = assertNotNull(image(k, w, h).pixelBytes)
             assertEquals(w * h * 4, cmySamples.size, what)

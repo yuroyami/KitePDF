@@ -1,8 +1,8 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kiteimagecodec.KiteBitmap
-import io.github.yuroyami.kiteimagecodec.KiteImageCodec
-import io.github.yuroyami.kiteimagecodec.codec.JpxDecoder
+import io.github.yuroyami.imagekodec.KiteBitmap
+import io.github.yuroyami.imagekodec.ImageKodec
+import io.github.yuroyami.imagekodec.codec.JpxDecoder
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfName
@@ -56,7 +56,7 @@ class LazyImageMemoryTest {
         // 3,000 by 2,000: 18 MB of RGB samples and 24 MB of RGBA at full size.
         val w = 3000
         val h = 2000
-        val jpeg = KiteImageCodec.encodeJpeg(KiteBitmap(w, h, IntArray(w * h) { i ->
+        val jpeg = ImageKodec.encodeJpeg(KiteBitmap(w, h, IntArray(w * h) { i ->
             val x = i % w
             val y = i / w
             (0xFF shl 24) or (((x * 7 + y) and 0xFF) shl 16) or (((y * 3) and 0xFF) shl 8) or (((x xor y) * 5) and 0xFF)

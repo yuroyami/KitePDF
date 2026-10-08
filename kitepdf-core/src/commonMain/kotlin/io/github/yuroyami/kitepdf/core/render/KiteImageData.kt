@@ -1,9 +1,9 @@
 package io.github.yuroyami.kitepdf.core.render
 
-import io.github.yuroyami.kiteimagecodec.ImageFormat
-import io.github.yuroyami.kiteimagecodec.KiteImageCodec
-import io.github.yuroyami.kiteimagecodec.codec.Jbig2Decoder
-import io.github.yuroyami.kiteimagecodec.codec.JpxDecoder
+import io.github.yuroyami.imagekodec.ImageFormat
+import io.github.yuroyami.imagekodec.ImageKodec
+import io.github.yuroyami.imagekodec.codec.Jbig2Decoder
+import io.github.yuroyami.imagekodec.codec.JpxDecoder
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.filters.TerminalDecodeResult
@@ -30,12 +30,11 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *
  * The decoded byte buffer's interpretation depends on the filter chain:
  *
- *   - `DCTDecode` → decoded by KiteImageCodec into a [Kind.RAW] image. An image
+ *   - `DCTDecode` → decoded by ImageKodec into a [Kind.RAW] image. An image
  *     without a mask keeps only its encoded data and decodes at the size it draws
  *     ([toShrunkRgbaBytes]). A four-component JPEG gives CMYK samples, which the
  *     image's own colour space converts. A JPEG whose headers name a coding
- *     KiteImageCodec does not decode, such as an arithmetic-coded one, falls back
- *     to [Kind.JPEG] with the file in [encodedBytes].
+ *     ImageKodec does not decode falls back to [Kind.JPEG] with the file in [encodedBytes].
  *   - `FlateDecode` / `LZWDecode` / `CCITTFaxDecode` / ASCII / RunLength → pixel
  *     samples already decoded into [pixelBytes]; [toRgbaBytes] assembles RGBA
  *     using [resolvedColorSpace], [bitsPerComponent], and [decode].
@@ -331,7 +330,7 @@ public class KiteImageData internal constructor(
                 // RAW image so it renders on every backend AND picks up the
                 // `/SMask` alpha via [toRgbaBytes] (the old platform path ignored
                 // it). Falls back to the encoded [Kind.JPEG] path when the native
-                // decoder can't handle the stream (arithmetic / 12-bit / etc.).
+                // decoder cannot read damaged or unsupported image data.
                 Kind.JPEG -> {
                     // Prefix filters, e.g. /Filter [/ASCII85Decode /DCTDecode], must
                     // be undone before the bytes are a JFIF file at all (D-5).
@@ -343,7 +342,7 @@ public class KiteImageData internal constructor(
                     val declaredComps = if (declared is KiteColorSpace.Indexed) 1 else declared?.componentCount ?: 0
                     val frameComps = jpegFrame(terminal.bytes)?.get(2)
                     // 7.4.8, Table 13: a four-component JPEG decodes to CMYK samples, normal ink as
-                    // stored, which KiteImageCodec's RGB has lost. JpegInk reads them, and they keep
+                    // stored, which ImageKodec's RGB has lost. JpegInk reads them, and they keep
                     // the declared space too (#470).
                     val ink = if (declaredComps == 4 && frameComps == 4) {
                         runCatching { JpegInk.layout(terminal.bytes, terminal.terminalParams?.getInt("ColorTransform")?.toInt()) }.getOrNull()
@@ -361,11 +360,11 @@ public class KiteImageData internal constructor(
                         null
                     }
                     val inked = if (lazy == null && ink != null) JpegInk.decode(terminal.bytes, ink, 1) else null
-                    val bm = if (lazy != null || inked != null) null else runCatching { KiteImageCodec.decode(terminal.bytes) }.getOrNull()
+                    val bm = if (lazy != null || inked != null) null else runCatching { ImageKodec.decode(terminal.bytes) }.getOrNull()
                     // The RGB of a four-component JPEG is converted already, so it stays device RGB.
                     val keep = keepsSpace && (lazy != null || inked != null || (bm != null && ink == null))
                     // The file stays in encodedBytes as well, the same array. If the first draw finds data
-                    // that KiteImageCodec cannot decode, the image draws as a placeholder (#475, #184).
+                    // that ImageKodec cannot decode, the image draws as a placeholder (#475, #184).
                     if (lazy != null) KiteImageData(
                         lazy.width, lazy.height, 8, if (keep) cs else "DeviceRGB", Kind.RAW, encodedBytes = terminal.bytes,
                         resolvedColorSpace = if (keep) declared else KiteColorSpace.DeviceRGB, decode = if (keep) decodeArr else null,
@@ -472,21 +471,21 @@ public class KiteImageData internal constructor(
          * CBZ / SVG `<image>` (rather than pulled from a PDF `/XObject` stream).
          * The format and pixel dimensions are sniffed from the bytes.
          *
-         * PNG, GIF, BMP, JPEG, JPEG 2000, TIFF and lossless WebP are decoded in
-         * pure Kotlin by the shared KiteImageCodec engine into a [Kind.RAW] image that
-         * renders on every backend. Lossy WebP has no decoder yet and returns null. A JPEG
-         * the codec refuses (arithmetic coding, 12-bit) becomes a [Kind.JPEG] image with the
+         * PNG, GIF, BMP, JPEG, JPEG 2000, TIFF, WebP, AVIF and JPEG XL are decoded in
+         * pure Kotlin by the shared ImageKodec engine into a [Kind.RAW] image that
+         * renders on every backend. A JPEG
+         * the codec refuses becomes a [Kind.JPEG] image with the
          * file in [encodedBytes], which draws as a placeholder (#184). Unrecognised formats
          * return null, so callers degrade gracefully by skipping the image.
          */
         public fun fromEncodedImage(bytes: ByteArray): KiteImageData? {
             return when (ImageFormat.sniff(bytes)) {
                 ImageFormat.PNG, ImageFormat.GIF, ImageFormat.BMP, ImageFormat.JP2,
-                ImageFormat.WEBP, ImageFormat.TIFF ->
-                    runCatching { KiteImageCodec.decode(bytes) }.getOrNull()?.toKiteImageData()
+                ImageFormat.WEBP, ImageFormat.TIFF, ImageFormat.AVIF, ImageFormat.JXL ->
+                    runCatching { ImageKodec.decode(bytes) }.getOrNull()?.toKiteImageData()
                 ImageFormat.JPEG -> {
-                    runCatching { KiteImageCodec.decode(bytes) }.getOrNull()?.let { return it.toKiteImageData() }
-                    // A stream KiteImageCodec cannot handle (arithmetic coding, 12-bit) keeps
+                    runCatching { ImageKodec.decode(bytes) }.getOrNull()?.let { return it.toKiteImageData() }
+                    // A damaged or unsupported JPEG stream keeps
                     // its file and draws as a placeholder (#184).
                     val (w, h) = jpegFrame(bytes) ?: return null
                     if (w <= 0 || h <= 0) return null
@@ -600,7 +599,7 @@ public class KiteImageData internal constructor(
                     val bpc = (mdict.getInt("BitsPerComponent") ?: 8L).toInt()
                     bytes?.let { grayPlane(it, bpc, mw, mh) }?.let { Triple(it, mw, mh) }
                 }
-                Kind.JPEG -> runCatching { KiteImageCodec.decode(terminalBytesOf(mask).bytes) }.getOrNull()
+                Kind.JPEG -> runCatching { ImageKodec.decode(terminalBytesOf(mask).bytes) }.getOrNull()
                     ?.takeIf { it.width.toLong() * it.height <= MAX_MASK_SAMPLES }
                     ?.let { bm ->
                         val rgb = bm.toRgbBytes()

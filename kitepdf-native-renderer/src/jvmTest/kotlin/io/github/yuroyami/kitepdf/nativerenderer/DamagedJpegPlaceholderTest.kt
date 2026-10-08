@@ -17,7 +17,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
- * A PDF's JPEG whose headers KiteImageCodec reads and whose data it cannot decode draws as the
+ * A PDF's JPEG whose headers ImageKodec reads and whose data it cannot decode draws as the
  * placeholder, as every image that the shared decoders refuse does (#184). The file is not
  * decoded when it loads, so the damage shows at the first draw (#475).
  */
@@ -60,7 +60,7 @@ class DamagedJpegPlaceholderTest {
                 ),
             ),
         )
-        assertNull(image.toRgbaBytes(), "KiteImageCodec decodes the damaged file")
+        assertNull(image.toRgbaBytes(), "ImageKodec decodes the damaged file")
 
         // One pixel of the page for each pixel of the image, row 0 at the top.
         val page = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)

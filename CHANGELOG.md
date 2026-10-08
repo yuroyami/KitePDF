@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-08
+
 ### Added
+
+- AVIF, JPEG XL and lossy WebP images decode through ImageKodec 0.3.0 on every
+  platform. EPUB pages draw these images with their alpha, and CBZ pages also
+  draw lossy WebP. The last three required W3C EPUB image tests pass (#513).
 
 - `KiteDocLayout.Continuous` takes a `fit`. `KitePageFit.PAGE` shrinks each page of the strip
   until the whole page shows, centred across the strip. `KitePageFit.WIDTH`, the default, keeps
@@ -988,9 +994,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The image engine is now `io.github.yuroyami:imagekodec:0.3.0`. A CMYK or YCCK
+  JPEG decodes its four components once, including reduced and progressive
+  images, while PDF colour transforms and `/Decode` still apply (#473).
+  Group 4 fax decoding is faster: a controlled JVM comparison on three 600 dpi
+  pages measured 3.33 times the previous decoder's speed with identical output
+  (#474). Arithmetic-coded JPEGs now decode through the shared engine too.
 - An image that the shared decoders refuse draws as a placeholder on every canvas. This includes a
   JPEG whose data is damaged. Before, Skia, Android, Java's ImageIO, Apple's Image I/O and the
-  browser each decoded what they could, so an arithmetic-coded JPEG showed on one platform and not
+  browser each decoded what they could, so the same image could show on one platform and fail
   on another. A placeholder now marks a decoder gap of KitePDF itself. `ImageDecoder.decode` stays
   for apps, but KitePDF no longer calls it. On AWT, the placeholder was a solid mid-grey box one
   image height too low. It is now the light grey box with a thin outline that the other canvases
@@ -3283,6 +3295,8 @@ Other breaking changes:
   editor, encryption, and font handling, callable from `commonMain` and running
   unchanged across Android, iOS, JVM, JS, Wasm, and Kotlin/Native.
 
+[Unreleased]: https://github.com/yuroyami/KitePDF/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/yuroyami/KitePDF/compare/v0.12.0...v0.13.0
 [0.3.1]: https://github.com/yuroyami/KitePDF/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yuroyami/KitePDF/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/yuroyami/KitePDF/compare/v0.1.0...v0.2.0
