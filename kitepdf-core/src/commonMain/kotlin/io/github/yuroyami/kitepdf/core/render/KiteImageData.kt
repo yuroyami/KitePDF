@@ -133,6 +133,10 @@ public class KiteImageData internal constructor(
 
     private val storedPixels: ByteArray? = pixelBytes
 
+    /** A PDF /SMask is a separate image, unlike opacity embedded in PNG or JPX samples (#626). */
+    internal var independentSoftMask: Boolean = false
+        private set
+
     /**
      * A shallow view carrying [identity] for a platform bitmap cache. Reconstructed images
      * of one immutable resource can share a bitmap without the cache retaining their source
@@ -235,7 +239,10 @@ public class KiteImageData internal constructor(
         softMaskAlpha = softMaskAlpha, softMaskWidth = softMaskWidth, softMaskHeight = softMaskHeight,
         resolvedColorSpace = resolvedColorSpace, decode = decode, isImageMask = isImageMask, maskFill = maskFill,
         colorKeyMask = colorKeyMask, softMaskMatte = softMaskMatte, interpolate = interpolate, samples = samples, ink = ink,
-    ).also { it.bitmapIdentity = identity }
+    ).also {
+        it.bitmapIdentity = identity
+        it.independentSoftMask = independentSoftMask
+    }
 
     public enum class Kind {
         /** Pixel data already flat in [pixelBytes] (Flate/LZW/CCITT/ASCII/RLE), or decoding at the size it draws. The one kind a canvas paints. */
@@ -455,7 +462,9 @@ public class KiteImageData internal constructor(
             // A mask, stencil or soft, is usually finer than the layer it masks, so
             // the composite is built on the mask's grid (#75).
             val interpolate = ((dict["Interpolate"] ?: dict["I"]) as? PdfBoolean)?.value == true
-            return image.alignedToMaskGrid().withInterpolate(interpolate)
+            return image.alignedToMaskGrid().withInterpolate(interpolate).also {
+                it.independentSoftMask = hasSMask && alpha != null && image.softMaskAlpha === alpha && matte == null
+            }
         }
 
         /**

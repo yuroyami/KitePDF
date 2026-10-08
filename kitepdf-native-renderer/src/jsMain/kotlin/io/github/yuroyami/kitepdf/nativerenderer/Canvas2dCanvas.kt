@@ -24,7 +24,7 @@ import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.strokePen
-import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toSampledRgbaBytes
 import kotlinx.browser.document
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -382,9 +382,9 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     private fun offscreenFor(image: KiteImageData, sampling: KiteImageSampling): HTMLCanvasElement? {
         if (image.kind != KiteImageData.Kind.RAW) return null
         // An image drawn smaller converts and shrinks a band of rows at a time (#381).
-        val rgba = image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY) ?: return null
-        val width = sampling.shrunkWidth(image.width)
-        val height = sampling.shrunkHeight(image.height)
+        val rgba = image.toSampledRgbaBytes(sampling) ?: return null
+        val width = sampling.rasterWidth(image.width)
+        val height = sampling.rasterHeight(image.height)
         val off = document.createElement("canvas") as HTMLCanvasElement
         off.width = width
         off.height = height

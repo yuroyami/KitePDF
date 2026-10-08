@@ -7,7 +7,7 @@ The corpus holds the real documents that the differential harnesses render. It h
 
 The EPUBs include 31 complete Standard Ebooks publications, a complete Japanese novel with an embedded vertical font, and the original fourteen publications and conformance samples. Six carry scripts, which the scripted-book gate runs (#496). The PDF additions include 32 scientific articles, a seven-page Japanese chapter and an original JBIG2 chart. The articles alone supply 175 selected pages across 32 documents (#624).
 
-The expanded 96 dpi sweep scores 240 pages including generated harness fixtures, with mean MAE 0.0015 against colour-managed MuPDF 1.27.2. The original 58 selected pages retain their 0.0005 mean; the movement comes from the added documents. Two raster diagrams expose sampling differences against both MuPDF and PDFium, tracked in [#626](https://github.com/yuroyami/KitePDF/issues/626), and remain in the corpus with per-page scores. The EPUB sweep renders 6,178 pages including harness fixtures; the only two blank pages are the existing Page Blanche sample pages.
+The 96 dpi sweep scores 240 pages including generated harness fixtures, with mean MAE 0.0012 against colour-managed MuPDF 1.27.2, down from 0.0015 after the image-sampling fix in [#626](https://github.com/yuroyami/KitePDF/issues/626). The two JOSS raster diagrams that exposed it remain in the corpus with improved per-page scores and no tiles where KitePDF alone differs from both references. Four generated image fixtures cover fractional reductions with and without a soft mask. The EPUB sweep renders 6,178 pages including harness fixtures; the only two blank pages are the existing Page Blanche sample pages.
 
 ## Verify the public documents
 

@@ -109,13 +109,13 @@ public fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int): ByteArra
     toShrunkRgbaBytes(shrinkX, shrinkY, BAND_RGBA_BYTES)
 
 /** [toShrunkRgbaBytes] with bands of about [bandBytes] of RGBA. A test makes them small. */
-internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandBytes: Long): ByteArray? {
+internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandBytes: Long, alphaWeighted: Boolean = true): ByteArray? {
     val fx = shrinkX.coerceAtLeast(1)
     val fy = shrinkY.coerceAtLeast(1)
     if (fx == 1 && fy == 1) return toRgbaBytes()
     ink?.let { return shrinkInk(it, fx, fy) }
     // A JPEG or JPEG 2000 image decodes at a reduced size first, and the bands average the rest (#381).
-    reducedFor(fx, fy)?.let { (reduced, r) -> return reduced.toShrunkRgbaBytes(fx / r, fy / r, bandBytes) }
+    reducedFor(fx, fy)?.let { (reduced, r) -> return reduced.toShrunkRgbaBytes(fx / r, fy / r, bandBytes, alphaWeighted) }
     val w = width
     val h = height
     if (w <= 0 || h <= 0 || w.toLong() * h > Int.MAX_VALUE) return null
@@ -139,10 +139,31 @@ internal fun KiteImageData.toShrunkRgbaBytes(shrinkX: Int, shrinkY: Int, bandByt
     while (y < h) {
         val rows = minOf(bandRows, h - y)
         val band = rowBand(y, rows, src, rowBytes, space).toRgbaBytes() ?: return null
-        shrinkRgba(band, w, rows, fx, fy).copyInto(out, (y / fy) * outWidth * 4)
+        shrinkRgba(band, w, rows, fx, fy, alphaWeighted).copyInto(out, (y / fy) * outWidth * 4)
         y += rows
     }
     return out
+}
+
+/**
+ * The straight RGBA bitmap a canvas draws with [sampling], of
+ * [KiteImageSampling.rasterWidth] by [KiteImageSampling.rasterHeight] pixels.
+ * Power-of-two averaging keeps decoding and colour conversion bounded; a filter
+ * widened to cover each destination pixel handles the remaining reduction (#626).
+ * ISO 32000-1, 8.9.5.3 leaves the interpolation filter to the reader.
+ *
+ * A same-resolution PDF /SMask without /Matte filters independently of its colour
+ * image (11.6.5.3). Embedded opacity, colour keys and matte-corrected colours retain
+ * alpha-weighted filtering. Invalid or unsupported samples return null as in [toRgbaBytes].
+ */
+public fun KiteImageData.toSampledRgbaBytes(sampling: KiteImageSampling): ByteArray? {
+    val separate = sampling.targetWidth > 0 && independentSoftMask && ink == null &&
+        softMaskWidth == width && softMaskHeight == height
+    val rgba = toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY, BAND_RGBA_BYTES, alphaWeighted = !separate) ?: return null
+    return resampleRgba(
+        rgba, sampling.shrunkWidth(width), sampling.shrunkHeight(height),
+        sampling.rasterWidth(width), sampling.rasterHeight(height), alphaWeighted = !separate,
+    )
 }
 
 /**

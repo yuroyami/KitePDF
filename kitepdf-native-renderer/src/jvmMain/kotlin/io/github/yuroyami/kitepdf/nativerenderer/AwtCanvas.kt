@@ -27,7 +27,7 @@ import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
-import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toSampledRgbaBytes
 import java.awt.AlphaComposite
 import java.awt.BasicStroke
 import java.awt.Color
@@ -589,8 +589,8 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         if (image.kind != KiteImageData.Kind.RAW) {
             null
         } else {
-            image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
-                rgbaToBufferedImage(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
+            image.toSampledRgbaBytes(sampling)?.let { rgba ->
+                rgbaToBufferedImage(rgba, sampling.rasterWidth(image.width), sampling.rasterHeight(image.height))
             }
         }
     } catch (t: Throwable) {

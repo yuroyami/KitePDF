@@ -26,7 +26,7 @@ import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.strokePen
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
-import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toSampledRgbaBytes
 import io.github.yuroyami.kitepdf.core.text.Bidi
 import org.jetbrains.skia.BlendMode as SkiaBlendMode
 import org.jetbrains.skia.Canvas as SkCanvas
@@ -709,9 +709,9 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         } else {
             // An image drawn smaller than its pixels is averaged down first, so fine detail fades instead
             // of dropping out, and it converts and shrinks a band of rows at a time (#381).
-            image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { pixels ->
-                val w = sampling.shrunkWidth(image.width)
-                val h = sampling.shrunkHeight(image.height)
+            image.toSampledRgbaBytes(sampling)?.let { pixels ->
+                val w = sampling.rasterWidth(image.width)
+                val h = sampling.rasterHeight(image.height)
                 // toRgbaBytes() emits straight (non-premultiplied) R,G,B,A
                 // per pixel, matching RGBA_8888. UNPREMUL honours the alpha
                 // channel (SMask alpha, ImageMask stencil transparency);

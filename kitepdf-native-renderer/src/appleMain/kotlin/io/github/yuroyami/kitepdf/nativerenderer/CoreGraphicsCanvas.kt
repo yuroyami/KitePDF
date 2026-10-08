@@ -25,7 +25,7 @@ import io.github.yuroyami.kitepdf.core.render.hostTextParts
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.strokePen
-import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toSampledRgbaBytes
 import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
@@ -648,8 +648,8 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
     private fun rawCgImage(image: KiteImageData, sampling: KiteImageSampling): platform.CoreGraphics.CGImageRef? {
         val pixels = rgbaImages.getOrPut(image, sampling, { it.rgba.size.toLong() }) {
             // An image drawn smaller converts and shrinks a band of rows at a time (#381).
-            val rgba = image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY) ?: return@getOrPut null
-            RgbaImage(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
+            val rgba = image.toSampledRgbaBytes(sampling) ?: return@getOrPut null
+            RgbaImage(rgba, sampling.rasterWidth(image.width), sampling.rasterHeight(image.height))
         } ?: return null
         val width = pixels.width
         val height = pixels.height

@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.core.render
 
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.hypot
 
 /**
@@ -15,6 +16,8 @@ public class KiteImageSampling internal constructor(
     public val shrinkY: Int,
     /** Blend neighbouring pixels. Otherwise take the nearest pixel, so enlarged pixels keep hard edges. */
     public val smooth: Boolean,
+    internal val targetWidth: Int = 0,
+    internal val targetHeight: Int = 0,
 ) {
     /** True when the canvas must average the image down with [shrinkRgba] or [shrinkArgb] before drawing it. */
     public val shrinks: Boolean get() = shrinkX > 1 || shrinkY > 1
@@ -24,6 +27,12 @@ public class KiteImageSampling internal constructor(
 
     /** The height of an image [height] pixels high after it is averaged down. */
     public fun shrunkHeight(height: Int): Int = (height + shrinkY - 1) / shrinkY
+
+    /** The bitmap width after [toSampledRgbaBytes] also filters the remaining reduction. */
+    public fun rasterWidth(width: Int): Int = if (targetWidth > 0) minOf(targetWidth, shrunkWidth(width)) else shrunkWidth(width)
+
+    /** The bitmap height after [toSampledRgbaBytes] also filters the remaining reduction. */
+    public fun rasterHeight(height: Int): Int = if (targetHeight > 0) minOf(targetHeight, shrunkHeight(height)) else shrunkHeight(height)
 }
 
 /**
@@ -34,7 +43,9 @@ public class KiteImageSampling internal constructor(
  *   averaged down by a power of two, to no fewer pixels than it covers. Thin strokes
  *   in a scanned page then fade instead of dropping out. MuPDF averages both
  *   directions by one factor. Here each direction has its own factor.
- * - An image drawn smaller than its pixels in both directions is smoothed.
+ * - An image drawn smaller than its pixels in both directions is filtered to its
+ *   device size by [toSampledRgbaBytes]. Bilinear interpolation alone does not
+ *   cover enough source pixels between the power-of-two reductions (#626).
  * - Otherwise, an image enlarged more than twice in either direction keeps hard pixel
  *   edges, unless [interpolate] is true: the /Interpolate entry of ISO 32000-1, Table 89.
  * - Otherwise, an image that is rotated, skewed or enlarged is smoothed, and an image
@@ -53,7 +64,12 @@ public fun imageSampling(width: Int, height: Int, ctm: KiteMatrix, interpolate: 
         !interpolate && (sx > 2.0 || sy > 2.0) -> false
         else -> !rectilinear || sx > 1.0 || sy > 1.0
     }
-    return KiteImageSampling(shrinkFactor(sx, width), shrinkFactor(sy, height), smooth)
+    val reduces = sx < 1.0 && sy < 1.0
+    return KiteImageSampling(
+        shrinkFactor(sx, width), shrinkFactor(sy, height), smooth,
+        if (reduces) ceil(hypot(ctm.a, ctm.b)).toInt().coerceAtLeast(1) else 0,
+        if (reduces) ceil(hypot(ctm.c, ctm.d)).toInt().coerceAtLeast(1) else 0,
+    )
 }
 
 /** The largest power of two that keeps [pixels] at least as many as [scale] times [pixels] device pixels. */
@@ -70,7 +86,11 @@ private fun shrinkFactor(scale: Double, pixels: Int): Int {
  * transparent pixel does not darken its neighbours. The result is
  * `ceil(width / shrinkX)` by `ceil(height / shrinkY)` pixels.
  */
-public fun shrinkRgba(rgba: ByteArray, width: Int, height: Int, shrinkX: Int, shrinkY: Int): ByteArray {
+public fun shrinkRgba(rgba: ByteArray, width: Int, height: Int, shrinkX: Int, shrinkY: Int): ByteArray =
+    shrinkRgba(rgba, width, height, shrinkX, shrinkY, alphaWeighted = true)
+
+/** Independent PDF soft masks filter colour and alpha separately (ISO 32000-1, 11.6.5.3). */
+internal fun shrinkRgba(rgba: ByteArray, width: Int, height: Int, shrinkX: Int, shrinkY: Int, alphaWeighted: Boolean): ByteArray {
     val fx = shrinkX.coerceAtLeast(1)
     val fy = shrinkY.coerceAtLeast(1)
     val w = (width + fx - 1) / fx
@@ -90,19 +110,21 @@ public fun shrinkRgba(rgba: ByteArray, width: Int, height: Int, shrinkX: Int, sh
                 var p = (y * width + x0) * 4
                 for (x in x0 until x1) {
                     val alpha = rgba[p + 3].toInt() and 0xFF
-                    r += (rgba[p].toInt() and 0xFF) * alpha
-                    g += (rgba[p + 1].toInt() and 0xFF) * alpha
-                    b += (rgba[p + 2].toInt() and 0xFF) * alpha
+                    val weight = if (alphaWeighted) alpha else 255
+                    r += (rgba[p].toInt() and 0xFF) * weight
+                    g += (rgba[p + 1].toInt() and 0xFF) * weight
+                    b += (rgba[p + 2].toInt() and 0xFF) * weight
                     a += alpha
                     p += 4
                 }
             }
             val count = (y1 - y0) * (x1 - x0)
             val o = (oy * w + ox) * 4
-            if (a > 0) {
-                out[o] = ((r + a / 2) / a).toInt().toByte()
-                out[o + 1] = ((g + a / 2) / a).toInt().toByte()
-                out[o + 2] = ((b + a / 2) / a).toInt().toByte()
+            val weight = if (alphaWeighted) a else count.toLong() * 255
+            if (weight > 0) {
+                out[o] = ((r + weight / 2) / weight).toInt().toByte()
+                out[o + 1] = ((g + weight / 2) / weight).toInt().toByte()
+                out[o + 2] = ((b + weight / 2) / weight).toInt().toByte()
             }
             out[o + 3] = ((a + count / 2) / count).toInt().toByte()
         }

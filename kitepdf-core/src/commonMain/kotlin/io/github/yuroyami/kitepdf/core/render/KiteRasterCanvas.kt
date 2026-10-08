@@ -47,7 +47,7 @@ public class KiteRasterCanvas(
     private val layers = ArrayList<Layer>().apply { add(Layer(IntArray(width * height), 0)) }
     private val clips = ArrayList<Clip?>()
     private val scan = RasterScan(width, height)
-    private val images = HashMap<KiteImageData, Pair<KiteImageSampling, IntArray?>>()
+    private val images = KiteBitmapCache<IntArray>()
 
     private val target: Layer get() = layers.last()
 
@@ -167,10 +167,9 @@ public class KiteRasterCanvas(
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         val inverse = ctm.invert() ?: return
-        val (sampling, pixels) = images.getOrPut(image) {
-            val s = imageSampling(image.width, image.height, ctm, image.interpolate)
-            val rgba = if (s.shrinkX > 1 || s.shrinkY > 1) image.toShrunkRgbaBytes(s.shrinkX, s.shrinkY) else image.toRgbaBytes()
-            s to rgba?.let { bytes ->
+        val sampling = imageSampling(image.width, image.height, ctm, image.interpolate)
+        val pixels = images.getOrPut(image, sampling, { it.size.toLong() * 4 }) {
+            image.toSampledRgbaBytes(sampling)?.let { bytes ->
                 IntArray(bytes.size / 4) { i ->
                     RasterBlend.premultiply(
                         (bytes[i * 4 + 3].toInt() and 255 shl 24) or (bytes[i * 4].toInt() and 255 shl 16) or
@@ -180,8 +179,8 @@ public class KiteRasterCanvas(
             }
         }
         pixels ?: return
-        val w = sampling.shrunkWidth(image.width)
-        val h = sampling.shrunkHeight(image.height)
+        val w = sampling.rasterWidth(image.width)
+        val h = sampling.rasterHeight(image.height)
         scan.add(KitePath.Builder().apply { rectangle(0.0, 0.0, 1.0, 1.0) }.build(), ctm)
         paint(false, ImageSource(pixels, w, h, inverse, sampling.smooth, alpha.toFloat()), blendMode)
     }

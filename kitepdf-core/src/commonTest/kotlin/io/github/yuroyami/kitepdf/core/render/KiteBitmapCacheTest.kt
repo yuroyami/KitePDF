@@ -44,6 +44,20 @@ class KiteBitmapCacheTest {
     }
 
     @Test
+    fun fractional_reductions_with_the_same_shrink_factor_keep_separate_bitmaps() {
+        val cache = KiteBitmapCache<Bitmap>()
+        val image = image()
+        var builds = 0
+        fun at(width: Double) = cache.getOrPut(
+            image, imageSampling(64, 64, KiteMatrix(width, 0.0, 0.0, 40.0, 0.0, 0.0), false), { it.bytes },
+        ) { builds++; Bitmap(100) }
+        val first = at(40.0)
+        assertNotEquals(first, at(41.0))
+        assertSame(first, at(40.0))
+        assertEquals(2, builds)
+    }
+
+    @Test
     fun the_bitmap_used_least_recently_leaves_first() {
         val cache = KiteBitmapCache<Bitmap>(budgetBytes = 250)
         val sampling = imageSampling(64, 64, atItsSize, false)

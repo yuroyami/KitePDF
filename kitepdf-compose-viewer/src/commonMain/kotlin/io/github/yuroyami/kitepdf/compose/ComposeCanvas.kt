@@ -57,7 +57,7 @@ import io.github.yuroyami.kitepdf.core.render.gridFitImage
 import io.github.yuroyami.kitepdf.core.render.imageSampling
 import io.github.yuroyami.kitepdf.core.render.sampleStops
 import io.github.yuroyami.kitepdf.core.render.strokePen
-import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toSampledRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.drawOrderParts
 import io.github.yuroyami.kitepdf.core.render.spacedPieces
 import kotlin.math.abs
@@ -616,8 +616,8 @@ public class ComposeCanvas internal constructor(
         // gap of KitePDF itself, and it draws as a placeholder on every canvas (#184).
         if (image.kind != KiteImageData.Kind.RAW) return null
         // An image drawn smaller converts and shrinks a band of rows at a time (#381).
-        val rgba = image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY) ?: return null
-        return ImageDecoder.decodeRaw(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
+        val rgba = image.toSampledRgbaBytes(sampling) ?: return null
+        return ImageDecoder.decodeRaw(rgba, sampling.rasterWidth(image.width), sampling.rasterHeight(image.height))
     }
 
     override fun fillShading(

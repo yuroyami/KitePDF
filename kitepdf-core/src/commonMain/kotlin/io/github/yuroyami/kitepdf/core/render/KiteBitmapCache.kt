@@ -18,7 +18,7 @@ import io.github.yuroyami.kitepdf.core.withLock
 public class KiteBitmapCache<T : Any>(
     private val budgetBytes: Long = DEFAULT_BUDGET_BYTES,
 ) {
-    private data class Key(val identity: KiteImageIdentity, val shrinkX: Int, val shrinkY: Int)
+    private data class Key(val identity: KiteImageIdentity, val shrinkX: Int, val shrinkY: Int, val width: Int, val height: Int)
 
     private class Entry<T>(val bitmap: T, val bytes: Long)
 
@@ -51,7 +51,7 @@ public class KiteBitmapCache<T : Any>(
      * wins and both callers receive it. No callback runs while the cache lock is held.
      */
     public fun getOrPut(image: KiteImageData, sampling: KiteImageSampling, sizeOf: (T) -> Long, build: () -> T?): T? {
-        val key = Key(image.bitmapIdentity, sampling.shrinkX, sampling.shrinkY)
+        val key = Key(image.bitmapIdentity, sampling.shrinkX, sampling.shrinkY, sampling.rasterWidth(image.width), sampling.rasterHeight(image.height))
         val started = lock.withLock {
             entries.remove(key)?.let { entry ->
                 // Put it back at the end, as the bitmap used most recently.

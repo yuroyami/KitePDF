@@ -51,11 +51,7 @@ class PdfiumParityTest {
          * Pages where PDFium does better today, each with the open issue that records it.
          * The goal is an empty map. Drop-in corpus pages run only where the corpus exists.
          */
-        val KNOWN_GAPS: Map<String, Int> = mapOf(
-            // Raster diagrams added by #624 expose downsampling differences at thin edges.
-            "public-joss-10203 p1" to 626,
-            "public-joss-10314 p2" to 626,
-        )
+        val KNOWN_GAPS: Map<String, Int> = emptyMap()
 
         /**
          * Pages where KitePDF alone differs and is still right, each with the reason from the

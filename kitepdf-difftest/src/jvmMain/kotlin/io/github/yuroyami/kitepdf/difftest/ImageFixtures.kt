@@ -18,6 +18,18 @@ object ImageFixtures {
         image("image-checkerboard-shrunk", "64 0 0 64 68 68 cm", gray(256) { x, y -> if ((x + y) % 2 == 0) 0 else 255 }, budget = 0.005),
         // A one-pixel line every eight rows, drawn at a quarter: each line fades to grey instead of dropping out.
         image("image-thin-lines-shrunk", "64 0 0 64 68 68 cm", gray(256) { _, y -> if (y % 8 == 0) 0 else 255 }, budget = 0.006),
+        // A fractional reduction needs a wider filter than bilinear, before and after halving (#626).
+        image("image-thin-lines-fractional", "150 0 0 150 25 25 cm", DIAGRAM, budget = 0.002),
+        image("image-thin-lines-fractional-halved", "90 0 0 90 55 55 cm", DIAGRAM, budget = 0.002),
+        // The colour image and its independent soft mask both carry the diagram's edges (#626).
+        image(
+            "image-soft-mask-fractional", "150 0 0 150 25 25 cm", DIAGRAM, budget = 0.002,
+            mask = gray(256) { x, y -> 255 - diagramLevel(x, y) }, softMask = true,
+        ),
+        image(
+            "image-soft-mask-fractional-halved", "90 0 0 90 55 55 cm", DIAGRAM, budget = 0.002,
+            mask = gray(256) { x, y -> 255 - diagramLevel(x, y) }, softMask = true,
+        ),
         // Four pixels enlarged eighty times keep hard edges.
         image("image-enlarged-hard-edges", "160 0 0 160 20 20 cm", FOUR_COLOURS, budget = 0.005),
         // A stencil mask of single-pixel squares enlarged twenty times keeps hard edges too.
@@ -47,6 +59,15 @@ object ImageFixtures {
     /** A stencil mask of eight by eight single-pixel squares. */
     private val STENCIL = Samples(8, 8, null, ByteArray(8) { y -> if (y % 2 == 0) 0xAA.toByte() else 0x55 })
 
+    /** Thin intersecting strokes and their partly covered edge pixels. */
+    private fun diagramLevel(x: Int, y: Int): Int = when {
+        x % 13 == 0 || y % 11 == 0 -> 0
+        x % 13 == 1 || y % 11 == 1 -> 160
+        else -> 255
+    }
+
+    private val DIAGRAM = gray(256, ::diagramLevel)
+
     /** A square DeviceGray image [side] pixels wide whose grey level at (x, y) is [level]. */
     private fun gray(side: Int, level: (x: Int, y: Int) -> Int): Samples =
         Samples(side, side, "/DeviceGray", ByteArray(side * side) { i -> level(i % side, i / side).toByte() })
@@ -63,8 +84,9 @@ object ImageFixtures {
     }
 
     /** A page that draws [samples] under [cm], in blue when they are a stencil mask, with [mask] as its `/Mask` when given. */
-    private fun image(name: String, cm: String, samples: Samples, budget: Double, mask: Samples? = null): OracleFixture {
-        val objects = listOf(imageStream(samples, if (mask != null) " /Mask 6 0 R" else "")) + listOfNotNull(mask?.let { imageStream(it, "") })
+    private fun image(name: String, cm: String, samples: Samples, budget: Double, mask: Samples? = null, softMask: Boolean = false): OracleFixture {
+        val key = if (softMask) "SMask" else "Mask"
+        val objects = listOf(imageStream(samples, if (mask != null) " /$key 6 0 R" else "")) + listOfNotNull(mask?.let { imageStream(it, "") })
         return oracleFixture(name, "q 0 0 1 rg $cm /Im1 Do Q", "/XObject << /Im1 5 0 R >>", objects, budget)
     }
 

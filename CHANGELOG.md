@@ -432,6 +432,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Raster diagrams reduced between power-of-two sizes use a filter that covers the source
+  pixels contributing to each output pixel. PDF soft masks at the image's resolution filter
+  separately from its colours when no matte is present. Thin lines and lettering in the two
+  JOSS corpus diagrams now agree with MuPDF and PDFium (#626).
 - In right-to-left text, a mark such as an Arabic vowel sign was drawn left of its base by the
   width of that base, so it sat over the next letter. Each mark now sits where HarfBuzz puts it
   (#622).

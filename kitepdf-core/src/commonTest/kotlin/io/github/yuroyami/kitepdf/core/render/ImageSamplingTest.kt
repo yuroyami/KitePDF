@@ -32,6 +32,20 @@ class ImageSamplingTest {
     }
 
     @Test
+    fun the_final_bitmap_covers_the_device_extent_after_integer_averaging() {
+        val sampling = imageSampling(256, 256, drawn(90.2, 100.0), false)
+        assertEquals(128, sampling.shrunkWidth(256))
+        assertEquals(91, sampling.rasterWidth(256))
+        assertEquals(100, sampling.rasterHeight(256))
+        val turned = imageSampling(256, 256, KiteMatrix(0.0, 90.2, -100.0, 0.0, 0.0, 0.0), false)
+        assertEquals(91, turned.rasterWidth(256))
+        assertEquals(100, turned.rasterHeight(256))
+        val enlarged = imageSampling(2, 2, drawn(160.0, 160.0), false)
+        assertEquals(2, enlarged.rasterWidth(2))
+        assertEquals(2, enlarged.rasterHeight(2))
+    }
+
+    @Test
     fun each_direction_is_averaged_on_its_own() {
         val s = imageSampling(1000, 10, drawn(100.0, 40.0), false)
         assertEquals(8, s.shrinkX)

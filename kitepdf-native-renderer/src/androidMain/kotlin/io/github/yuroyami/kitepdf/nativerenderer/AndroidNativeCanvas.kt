@@ -37,7 +37,7 @@ import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
 import io.github.yuroyami.kitepdf.core.render.paintComplexShading
 import io.github.yuroyami.kitepdf.core.render.sampleStops
-import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
+import io.github.yuroyami.kitepdf.core.render.toSampledRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.twoCircleParameter
 
 /**
@@ -533,8 +533,8 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         if (image.kind != KiteImageData.Kind.RAW) {
             null
         } else {
-            image.toShrunkRgbaBytes(sampling.shrinkX, sampling.shrinkY)?.let { rgba ->
-                rgbaBitmap(rgba, sampling.shrunkWidth(image.width), sampling.shrunkHeight(image.height))
+            image.toSampledRgbaBytes(sampling)?.let { rgba ->
+                rgbaBitmap(rgba, sampling.rasterWidth(image.width), sampling.rasterHeight(image.height))
             }
         }
     } catch (t: Throwable) {
