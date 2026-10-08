@@ -1744,9 +1744,9 @@ public class PageRenderer(
     private fun overprinted(path: KitePath, s: GraphicsState, fill: Boolean, paint: () -> Unit): Boolean {
         val inks = Overprint.inks(s, fill, outputIntent?.space) ?: return false
         // A paint that sets no ink leaves every ink of the backdrop, so it changes nothing.
-        if (inks.all { it == 0.0 }) return true
+        if (inks.paintsNothing) return true
         // A paint that sets every ink replaces the backdrop, as a plain paint does.
-        if (inks.none { it == 0.0 }) return false
+        if (inks.replacesAll) return false
         // A knockout group paints each object over its own backdrop already (#308).
         if (canvas is KnockoutCanvas) return false
         val box = path.bounds() ?: return false
@@ -1758,8 +1758,7 @@ public class PageRenderer(
         val reach = if (fill) 0.0 else maxOf(s.lineWidth, pixel) / 2 * maxOf(if (s.lineJoin == 0) s.miterLimit else 1.0, 1.5)
         val grow = reach + 2 * pixel
         val region = io.github.yuroyami.kitepdf.core.KiteRectangle(box.left - grow, box.bottom - grow, box.right + grow, box.top + grow)
-        val space = if (fill) s.fillColorSpace else s.strokeColorSpace
-        return Overprint.paint(canvas, region, s.ctm, space, inks, s.blendMode, paint)
+        return Overprint.paint(canvas, region, s.ctm, inks, s.blendMode, paint)
     }
 
     /**
@@ -2072,11 +2071,15 @@ public class PageRenderer(
      * delegates with `by` sends the other overload past itself (#290).
      */
     private fun paintImage(image: KiteImageData, s: GraphicsState) {
-        if (s.blendMode == KiteBlendMode.Normal) {
-            canvas.drawImage(image, s.ctm, s.fillAlpha)
-        } else {
-            canvas.drawImage(image, s.ctm, s.fillAlpha, s.blendMode)
+        val paint = {
+            if (s.blendMode == KiteBlendMode.Normal) {
+                canvas.drawImage(image, s.ctm, s.fillAlpha)
+            } else {
+                canvas.drawImage(image, s.ctm, s.fillAlpha, s.blendMode)
+            }
         }
+        if (canvas !is KnockoutCanvas && Overprint.image(canvas, image, s, outputIntent?.space, paint)) return
+        paint()
     }
 
     /** The page crop box in the space [maskCtm] maps to the device, for a mask box that cannot be read. */
@@ -2295,7 +2298,9 @@ public class PageRenderer(
                 (fillPattern is KitePattern.Shading || fillPattern is KitePattern.Tiling)
             // A font without a program strokes, clips and fills with a pattern through the
             // outlines of the host face that stands in for it (ISO 32000-1, 9.3.6 and 9.6.2.2, #85).
-            val hostShapes = if ((doStroke || doClip || patternFill) && !font.hasOutlines) hostOutlined(painted, font) else null
+            val overprintFill = doFill && canvas.resolvesGlyphOutlines &&
+                Overprint.inks(state.current, fill = true, outputIntent?.space) != null
+            val hostShapes = if ((doStroke || doClip || patternFill || overprintFill) && !font.hasOutlines) hostOutlined(painted, font) else null
             val shapes = hostShapes ?: glyphs
             val shapeUnits = if (hostShapes != null) HOST_UNITS_PER_EM else font.unitsPerEm ?: 1000
             val placements = vertical?.placements
@@ -2307,7 +2312,9 @@ public class PageRenderer(
                     paintFill(shapePath, state, evenOdd = false)
                 } else {
                     withSoftMask(state.current) {
-                        drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasOutlines)
+                        val paint = { drawRun(state.current.fillColor, state.current.fillAlpha, font.unitsPerEm ?: 1000, font.hasOutlines) }
+                        val bounds = if (overprintFill) glyphShapes(shapes, t, textToUser, shapeUnits, placements)?.build() else null
+                        if (bounds == null || !overprinted(bounds, state.current, fill = true, paint)) paint()
                     }
                 }
             } else if (!canvas.resolvesGlyphOutlines) {
@@ -2451,12 +2458,15 @@ public class PageRenderer(
                 else glyphToUser(textToUser, penX, glyph, unitScale)
                 val userPath = transformPath(outline, toUser)
                 withSoftMask(s) {
-                    canvas.strokePath(
-                        userPath, s.ctm, s.strokeColor, s.lineWidth,
-                        alpha = s.strokeAlpha, blendMode = s.blendMode,
-                        dashArray = s.dashArray, dashPhase = s.dashPhase,
-                        lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
-                    )
+                    val paint = {
+                        canvas.strokePath(
+                            userPath, s.ctm, s.strokeColor, s.lineWidth,
+                            alpha = s.strokeAlpha, blendMode = s.blendMode,
+                            dashArray = s.dashArray, dashPhase = s.dashPhase,
+                            lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
+                        )
+                    }
+                    if (!overprinted(userPath, s, fill = false, paint)) paint()
                 }
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust

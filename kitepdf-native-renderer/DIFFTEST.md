@@ -92,7 +92,7 @@ Example: tighten the gate and crank density once correctness improves:
   fills/strokes/curves, transparency, multi-page. Deterministic, no external
   files, and both engines render the same bytes, so any divergence is a real
   KitePDF gap.
-- **Public and local PDFs**: the pinned manifest supplies 15 public PDFs. Put
+- **Public and local PDFs**: the pinned manifest supplies 49 public PDFs. Put
   additional local `.pdf` files in the repo-root `corpus/pdf/`, or point
   `-Dkitepdf.corpus` elsewhere. Discovery is recursive and ordered by relative
   path; duplicate file stems receive distinct report names. Files outside the
@@ -101,13 +101,14 @@ Example: tighten the gate and crank density once correctness improves:
   including the first and last pages. A limit of one selects page 0. Set
   `-Dkitepdf.diff.allpages=true` to select every page. The report records the
   selected page indices and available page counts, separate from successful
-  oracle scores. The default run selects 25 of the 47 public PDF pages.
+  oracle scores. The default run selects 207 of the 249 public PDF pages.
 
 The EPUB sweep (`--tests '*EpubDifferentialTest*'`) renders every page produced
 by KitePDF and checks recorded per-book page counts. Its optional MuPDF
 comparison covers page 0 only and is informational because reflow can differ.
-What the corpus still lacks is tracked in
-[#215](https://github.com/yuroyami/KitePDF/issues/215).
+The 46 public EPUBs include 31 complete Standard Ebooks publications and an
+embedded-font Japanese novel. The [corpus guide](../corpus/README.md) records
+the rights, coverage and regeneration recipes (#620, #621, #624).
 
 ## The oracle (`mutool`)
 

@@ -186,7 +186,7 @@ object GradientFixtures {
     )
 
     /** A TrueType font of 1000 units per em whose `A` (glyph 1) is a 500-unit square. */
-    private fun squareFont(): ByteArray {
+    internal fun squareFont(): ByteArray {
         fun u16(v: Int) = byteArrayOf((v shr 8).toByte(), v.toByte())
         fun u32(v: Int) = byteArrayOf((v shr 24).toByte(), (v shr 16).toByte(), (v shr 8).toByte(), v.toByte())
         // cmap format 4 with two segments: A to glyph 1, and the closing 0xFFFF segment.

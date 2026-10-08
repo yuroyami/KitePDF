@@ -56,7 +56,13 @@ fun scoreAgainstMutool(backend: String, fixtures: List<OracleFixture>, render: (
         val reference = MuPdfOracle.render(pdf, page = 1, dpi = 72) ?: error("mutool did not render ${f.name}")
         val mae = ImageDiff.compare(kite, reference).meanAbsError
         println("$backend ${f.name}: MAE=${"%.5f".format(mae)} (budget ${f.budget})")
-        if (mae > f.budget) failures += "${f.name}: $mae > ${f.budget}"
+        if (mae > f.budget) {
+            val diagnostics = File("build/oracle-diagnostics").apply { mkdirs() }
+            File(diagnostics, "${f.name}.pdf").writeBytes(f.bytes)
+            javax.imageio.ImageIO.write(kite, "png", File(diagnostics, "${f.name}-kite.png"))
+            javax.imageio.ImageIO.write(reference, "png", File(diagnostics, "${f.name}-mutool.png"))
+            failures += "${f.name}: $mae > ${f.budget} (images in ${diagnostics.absolutePath})"
+        }
     }
     return failures
 }

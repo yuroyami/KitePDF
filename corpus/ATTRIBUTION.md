@@ -479,3 +479,480 @@ Editing Arabic Wikipedia, Part I: Principles and Visual Editor. Abbad Diraneyya;
 - SHA-256: `c26d3759dee81c0a67fa3e97f802a91dc73dfa7f92ae601fab5ba8e19d953d25`.
 - Size: 2,028,315 bytes.
 - License evidence: Commons file-specific description records an own-work CC BY-SA 4.0 grant by the copyright holder. The PDF itself additionally states CC BY 4.0 on page 2. This entry conservatively records the file-page share-alike grant and preserves all internal notices. No altered or extracted pages. [Upstream notice](https://creativecommons.org/licenses/by-sa/4.0/).
+
+## Real publications added for #624
+
+The EPUBs retain their embedded colophons, artwork credits and public-domain notices. Standard Ebooks dedicates its editorial contributions under CC0; that dedication does not replace the original works' territorial copyright notices. The JOSS articles retain their individual CC BY 4.0 notices.
+
+### The Hound of the Baskervilles
+
+- File: `corpus/epub/se-arthur-conan-doyle-the-hound-of-the-baskervilles.epub`
+- The Hound of the Baskervilles. Arthur Conan Doyle. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/arthur-conan-doyle_the-hound-of-the-baskervilles/tree/4f080d1fa42a98a70c29bff9088678472e503295
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### A Christmas Carol
+
+- File: `corpus/epub/se-charles-dickens-a-christmas-carol.epub`
+- A Christmas Carol. Charles Dickens. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/charles-dickens_a-christmas-carol/tree/d5a9e582af4372567bfe03a4136f0c9a0f64f22d
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Ethan Frome
+
+- File: `corpus/epub/se-edith-wharton-ethan-frome.epub`
+- Ethan Frome. Edith Wharton. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/edith-wharton_ethan-frome/tree/536001fbec47c8301fa78e6ac809b31eed9f9726
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Summer
+
+- File: `corpus/epub/se-edith-wharton-summer.epub`
+- Summer. Edith Wharton. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/edith-wharton_summer/tree/433da4eb18c95f63f1803d7e9796fe955f11de2e
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Great Gatsby
+
+- File: `corpus/epub/se-f-scott-fitzgerald-the-great-gatsby.epub`
+- The Great Gatsby. F. Scott Fitzgerald. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/f-scott-fitzgerald_the-great-gatsby/tree/fe47c8c04f5175d45f9410f4e3ca64c257ae0acc
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Narrative of the Life of Frederick Douglass
+
+- File: `corpus/epub/se-frederick-douglass-narrative-of-the-life-of-frederick-douglass.epub`
+- Narrative of the Life of Frederick Douglass. Frederick Douglass. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/frederick-douglass_narrative-of-the-life-of-frederick-douglass/tree/e293ab41c0087d11610d91fc96ed83c428a05cb7
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Man Who Was Thursday
+
+- File: `corpus/epub/se-g-k-chesterton-the-man-who-was-thursday.epub`
+- The Man Who Was Thursday. G. K. Chesterton. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/g-k-chesterton_the-man-who-was-thursday/tree/085b5f0cc25d9c6eb98b0cbf0cd9a3386bfa0a7d
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The First Men in the Moon
+
+- File: `corpus/epub/se-h-g-wells-the-first-men-in-the-moon.epub`
+- The First Men in the Moon. H. G. Wells. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/h-g-wells_the-first-men-in-the-moon/tree/c8e000f4f0e0cf58b9eb91f506c16cf02cd69bbd
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Invisible Man
+
+- File: `corpus/epub/se-h-g-wells-the-invisible-man.epub`
+- The Invisible Man. H. G. Wells. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/h-g-wells_the-invisible-man/tree/989518e85490067bfc21596f8e7c0b4859bbee0b
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Island of Doctor Moreau
+
+- File: `corpus/epub/se-h-g-wells-the-island-of-doctor-moreau.epub`
+- The Island of Doctor Moreau. H. G. Wells. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/h-g-wells_the-island-of-doctor-moreau/tree/2584b62d0892c7bcbd9741d129a352bb7806118b
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Time Machine
+
+- File: `corpus/epub/se-h-g-wells-the-time-machine.epub`
+- The Time Machine. H. G. Wells. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/h-g-wells_the-time-machine/tree/9fd22d612e6ed35cd07a8ed5e3ccdc4856c05088
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The War of the Worlds
+
+- File: `corpus/epub/se-h-g-wells-the-war-of-the-worlds.epub`
+- The War of the Worlds. H. G. Wells. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/h-g-wells_the-war-of-the-worlds/tree/a90e71734bb2d3e920eed853c901d2f191bd1aae
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Turn of the Screw
+
+- File: `corpus/epub/se-henry-james-the-turn-of-the-screw.epub`
+- The Turn of the Screw. Henry James. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/henry-james_the-turn-of-the-screw/tree/047e8e9d63e6bdec2315c4a763975b3514580735
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Peter and Wendy
+
+- File: `corpus/epub/se-j-m-barrie-peter-and-wendy.epub`
+- Peter and Wendy. J. M. Barrie. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/j-m-barrie_peter-and-wendy/tree/827086e1a4bd1afd7da399f99c48472b1518ef93
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Call of the Wild
+
+- File: `corpus/epub/se-jack-london-the-call-of-the-wild.epub`
+- The Call of the Wild. Jack London. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/jack-london_the-call-of-the-wild/tree/692c1cdc40399405e16c58efb7ec9ff2e08f9d30
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Dubliners
+
+- File: `corpus/epub/se-james-joyce-dubliners.epub`
+- Dubliners. James Joyce. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/james-joyce_dubliners/tree/c54fa2759376b23bc4db8994112036eec86eb0bc
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Northanger Abbey
+
+- File: `corpus/epub/se-jane-austen-northanger-abbey.epub`
+- Northanger Abbey. Jane Austen. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/jane-austen_northanger-abbey/tree/728163bd7dd7b79844ebfb8de7ae819b3c4aa360
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Persuasion
+
+- File: `corpus/epub/se-jane-austen-persuasion.epub`
+- Persuasion. Jane Austen. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/jane-austen_persuasion/tree/f458531fe2df6dd79f860b6d007d928e37b96e28
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Pride and Prejudice
+
+- File: `corpus/epub/se-jane-austen-pride-and-prejudice.epub`
+- Pride and Prejudice. Jane Austen. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/jane-austen_pride-and-prejudice/tree/ed94a32be3e875c0814568050c7544e03aad3ef5
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Thirty-Nine Steps
+
+- File: `corpus/epub/se-john-buchan-the-thirty-nine-steps.epub`
+- The Thirty-Nine Steps. John Buchan. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/john-buchan_the-thirty-nine-steps/tree/e9c1a6c474cd933b340bc47842ad2a7db19b0b23
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Heart of Darkness
+
+- File: `corpus/epub/se-joseph-conrad-heart-of-darkness.epub`
+- Heart of Darkness. Joseph Conrad. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/joseph-conrad_heart-of-darkness/tree/656af069edec0bed70c264b2444dc55dfd6e2ac4
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Wind in the Willows
+
+- File: `corpus/epub/se-kenneth-grahame-the-wind-in-the-willows.epub`
+- The Wind in the Willows. Kenneth Grahame. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/kenneth-grahame_the-wind-in-the-willows/tree/0c69015afb96e60538e1ab7ebe2fc1696937ddd3
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Alice’s Adventures in Wonderland
+
+- File: `corpus/epub/se-lewis-carroll-alices-adventures-in-wonderland.epub`
+- Alice’s Adventures in Wonderland. Lewis Carroll. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/lewis-carroll_alices-adventures-in-wonderland_john-tenniel/tree/9ecdf2ffa23098e7cb3c72157d7c3031b6f59903
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Through the Looking-Glass
+
+- File: `corpus/epub/se-lewis-carroll-through-the-looking-glass.epub`
+- Through the Looking-Glass. Lewis Carroll. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/lewis-carroll_through-the-looking-glass_john-tenniel/tree/56b8c2b2163e7eba0bed778b9c73aa8afbe572b1
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Adventures of Tom Sawyer
+
+- File: `corpus/epub/se-mark-twain-the-adventures-of-tom-sawyer.epub`
+- The Adventures of Tom Sawyer. Mark Twain. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/mark-twain_the-adventures-of-tom-sawyer/tree/d51493e2ec4894468e8cd3b38f848d4fae4e78b9
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Prince and the Pauper
+
+- File: `corpus/epub/se-mark-twain-the-prince-and-the-pauper.epub`
+- The Prince and the Pauper. Mark Twain. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/mark-twain_the-prince-and-the-pauper/tree/61e6cc16feb7bf3065e7ebc30dd40b0ec279ad83
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Frankenstein
+
+- File: `corpus/epub/se-mary-shelley-frankenstein.epub`
+- Frankenstein. Mary Shelley. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/mary-shelley_frankenstein/tree/3909a2b9d956377e797e235562cd237d3667fa9b
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Importance of Being Earnest
+
+- File: `corpus/epub/se-oscar-wilde-the-importance-of-being-earnest.epub`
+- The Importance of Being Earnest. Oscar Wilde. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/oscar-wilde_the-importance-of-being-earnest/tree/b269fda6d832c8a1e98b432f5abf570558d84133
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Strange Case of Dr. Jekyll and Mr. Hyde
+
+- File: `corpus/epub/se-robert-louis-stevenson-the-strange-case-of-dr-jekyll-and-mr-hyde.epub`
+- The Strange Case of Dr. Jekyll and Mr. Hyde. Robert Louis Stevenson. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/robert-louis-stevenson_the-strange-case-of-dr-jekyll-and-mr-hyde/tree/c155a0344f75c0d2163c3adcb5749c2b2799a758
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### Treasure Island
+
+- File: `corpus/epub/se-robert-louis-stevenson-treasure-island.epub`
+- Treasure Island. Robert Louis Stevenson. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/robert-louis-stevenson_treasure-island/tree/c7fd6b42e8e856a49781be45d71a9aa18819f3b8
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### The Souls of Black Folk
+
+- File: `corpus/epub/se-w-e-b-du-bois-the-souls-of-black-folk.epub`
+- The Souls of Black Folk. W. E. B. Du Bois. Standard Ebooks edition, downloaded unchanged. Retain the embedded colophon, image credits and uncopyright notice. The source text and artwork in this ebook are believed to be in the United States public domain; that is, they are believed to be free of copyright restrictions in the United States. They may still be copyrighted in other countries, so users located outside of the United States must check their local laws before using this ebook. The creators of, and contributors to, this ebook dedicate their contributions to the worldwide public domain via the terms in the [CC0 1.0 Universal Public Domain Dedication](https://creativecommons.org/publicdomain/zero/1.0/).
+- Source: https://github.com/standardebooks/w-e-b-du-bois_the-souls-of-black-folk/tree/2989d4ae84018744aec2fab05a1c93b7c8a537bc
+- Licence evidence: https://creativecommons.org/publicdomain/zero/1.0/
+
+### FastTanhSinhQuadrature.jl: High-performance Tanh-Sinh numerical integration in Julia
+
+- File: `corpus/pdf/public-joss-10076.pdf`
+- FastTanhSinhQuadrature.jl: High-performance Tanh-Sinh numerical integration in Julia. Stamatis Vretinaris. Journal of Open Source Software, DOI 10.21105/joss.10076. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10076
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10076/10.21105.joss.10076.crossref.xml
+
+### qdiv: A Python package for microbial ecology analysis using the Hill number framework
+
+- File: `corpus/pdf/public-joss-10089.pdf`
+- qdiv: A Python package for microbial ecology analysis using the Hill number framework. Oskar Modin. Journal of Open Source Software, DOI 10.21105/joss.10089. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10089
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10089/10.21105.joss.10089.crossref.xml
+
+### Kigali Sim: Open source simulation toolkit for modeling substances and policies related to the Montreal Protocol
+
+- File: `corpus/pdf/public-joss-10104.pdf`
+- Kigali Sim: Open source simulation toolkit for modeling substances and policies related to the Montreal Protocol. A Samuel Pottinger; Balaji Natarajan; Magali de Bruyn; Ciera C. Martinez. Journal of Open Source Software, DOI 10.21105/joss.10104. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10104
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10104/10.21105.joss.10104.crossref.xml
+
+### dySEM: An R Package for Dyadic Structural Equation Modeling with Latent Variables
+
+- File: `corpus/pdf/public-joss-10115.pdf`
+- dySEM: An R Package for Dyadic Structural Equation Modeling with Latent Variables. John Kitchener Sakaluk; Omar J. Camanto. Journal of Open Source Software, DOI 10.21105/joss.10115. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10115
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10115/10.21105.joss.10115.crossref.xml
+
+### multimodars: A Rust-powered toolkit for multi-modality cardiac image fusion and registration
+
+- File: `corpus/pdf/public-joss-10131.pdf`
+- multimodars: A Rust-powered toolkit for multi-modality cardiac image fusion and registration. Anselm W. Stark; Marc Ilic; Ali Mokhtari; Pooya Mohammadi Kazaj; Christoph Gräni; Isaac Shiri. Journal of Open Source Software, DOI 10.21105/joss.10131. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10131
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10131/10.21105.joss.10131.crossref.xml
+
+### GCAMUSAJobs: An R package for employment projections based on GCAM-USA power sector outcomes
+
+- File: `corpus/pdf/public-joss-10142.pdf`
+- GCAMUSAJobs: An R package for employment projections based on GCAM-USA power sector outcomes. Di Sheng; Brian O’Neill; Stephanie Morris; Matthew Binsted; Ying Zhang. Journal of Open Source Software, DOI 10.21105/joss.10142. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10142
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10142/10.21105.joss.10142.crossref.xml
+
+### estim8 - An FMI-compliant Python toolbox for bioprocess modeling and parameter estimation
+
+- File: `corpus/pdf/public-joss-10147.pdf`
+- estim8 - An FMI-compliant Python toolbox for bioprocess modeling and parameter estimation. Tobias Latour; Daniel Strohmeier; Michael Osthege; Wolfgang Wiechert; Stephan Noack. Journal of Open Source Software, DOI 10.21105/joss.10147. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10147
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10147/10.21105.joss.10147.crossref.xml
+
+### Macapype: An open multi-software framework for non-human primate brain anatomical MRI processing
+
+- File: `corpus/pdf/public-joss-10203.pdf`
+- Macapype: An open multi-software framework for non-human primate brain anatomical MRI processing. David Meunier; Kep Kee Loh; Bastien Cagna; Regis Trapeau; Julien Sein; Olivier Coulon. Journal of Open Source Software, DOI 10.21105/joss.10203. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10203
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10203/10.21105.joss.10203.crossref.xml
+
+### ROMS-Tools: Reproducible Preprocessing and Analysis for Regional Ocean Modeling with ROMS
+
+- File: `corpus/pdf/public-joss-10234.pdf`
+- ROMS-Tools: Reproducible Preprocessing and Analysis for Regional Ocean Modeling with ROMS. Nora Loose; Tom Nicholas; Sam Maticka; Scott Eilerman; Christopher McBride; Dafydd Stephenson; Ulla Heede; Benjamin Saenz; Kristen M. Thyng; Scott Bachman; Pierre Damien; Alicia Karspeck; Matthew C. Long; M. Jeroen Molemaker; Abigale Wyatt. Journal of Open Source Software, DOI 10.21105/joss.10234. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10234
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10234/10.21105.joss.10234.crossref.xml
+
+### The Pulmonary Agent-based Infection simulator (PAI): A Multi-Scale Agent-Based Model of Pulmonary Host-Pathogen Interactions
+
+- File: `corpus/pdf/public-joss-10245.pdf`
+- The Pulmonary Agent-based Infection simulator (PAI): A Multi-Scale Agent-Based Model of Pulmonary Host-Pathogen Interactions. Henrique AL Ribeiro; Sandra A Tsiorintsoa; Reinhard Laubenbacher. Journal of Open Source Software, DOI 10.21105/joss.10245. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10245
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10245/10.21105.joss.10245.crossref.xml
+
+### Inference Perf: A Benchmarking Tool for GenAI Inference
+
+- File: `corpus/pdf/public-joss-10314.pdf`
+- Inference Perf: A Benchmarking Tool for GenAI Inference. Ashok Chandrasekar; Sachin Varghese; Jason Kramberger; Brendan Slabe; Chen Wang; Yuan Tang. Journal of Open Source Software, DOI 10.21105/joss.10314. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10314
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10314/10.21105.joss.10314.crossref.xml
+
+### IAMAP: Unlocking Deep Learning in QGIS for non-coders and limited computing resources
+
+- File: `corpus/pdf/public-joss-10329.pdf`
+- IAMAP: Unlocking Deep Learning in QGIS for non-coders and limited computing resources. Paul Tresson; Pierre Le Coz; Hadrien Tulet; Anthony Malkassian; Maxime Réjou-Méchain. Journal of Open Source Software, DOI 10.21105/joss.10329. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10329
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10329/10.21105.joss.10329.crossref.xml
+
+### sklearn-migrator: Cross-version migration of scikit-learn models for reproducible MLOps
+
+- File: `corpus/pdf/public-joss-10374.pdf`
+- sklearn-migrator: Cross-version migration of scikit-learn models for reproducible MLOps. Alberto Andres Valdes Gonzalez. Journal of Open Source Software, DOI 10.21105/joss.10374. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10374
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10374/10.21105.joss.10374.crossref.xml
+
+### JupyterGIS: A Collaborative GIS Environment for JupyterLab
+
+- File: `corpus/pdf/public-joss-10383.pdf`
+- JupyterGIS: A Collaborative GIS Environment for JupyterLab. Martin Renou; Arjun Verma; Matt Fisher; Gregory Mooney; Matthias Meschede; Nicolas Brichet; David Brochart; Nakul Verma; Anne Fouilloux; Sylvain Corlay; Fernando Pérez. Journal of Open Source Software, DOI 10.21105/joss.10383. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10383
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10383/10.21105.joss.10383.crossref.xml
+
+### MooBench: A micro-benchmark for performance overhead measurement of observability tools
+
+- File: `corpus/pdf/public-joss-10400.pdf`
+- MooBench: A micro-benchmark for performance overhead measurement of observability tools. David Georg Reichelt; Shinhyung Yang; Marcel Hansson; Wilhelm Hasselbring. Journal of Open Source Software, DOI 10.21105/joss.10400. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10400
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10400/10.21105.joss.10400.crossref.xml
+
+### dynLattice: A finite element environment for dynamic simulation of beam networks and lattice metamaterials
+
+- File: `corpus/pdf/public-joss-10410.pdf`
+- dynLattice: A finite element environment for dynamic simulation of beam networks and lattice metamaterials. Til Gärtner; Frans P. van der Meer. Journal of Open Source Software, DOI 10.21105/joss.10410. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10410
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10410/10.21105.joss.10410.crossref.xml
+
+### Liblsl.dart: A Dart native API for Lab Streaming Layer (LSL)
+
+- File: `corpus/pdf/public-joss-10425.pdf`
+- Liblsl.dart: A Dart native API for Lab Streaming Layer (LSL). Luke Daniel Ring; Anna Zamm; Chris Mathys; Simon Lind Kappel. Journal of Open Source Software, DOI 10.21105/joss.10425. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10425
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10425/10.21105.joss.10425.crossref.xml
+
+### InfDB: An Open Source Energy and Infrastructure Data Ecosystem for Modeling and Planning
+
+- File: `corpus/pdf/public-joss-10458.pdf`
+- InfDB: An Open Source Energy and Infrastructure Data Ecosystem for Modeling and Planning. Patrick Buchenberg; Markus Döpfert; Beneharo Reveron Baecker; Hussein Mohamed Ali Genena; Martin Stengel; Marvin Wen Huang; Kadir Kalkan; Laura Kuper; Carolin Ayasse; Haniyeh Ebrahimi Salari. Journal of Open Source Software, DOI 10.21105/joss.10458. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10458
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10458/10.21105.joss.10458.crossref.xml
+
+### OpenTURNS: A Python package for uncertainty quantification
+
+- File: `corpus/pdf/public-joss-10484.pdf`
+- OpenTURNS: A Python package for uncertainty quantification. Michaël Baudin; Anne Dutfoy; Régis Lebrun; Julien Schueller; Sofiane Haddad; Loïc Brevault; Mathieu Balesdent; Julien Pelamatti; Joseph Muré. Journal of Open Source Software, DOI 10.21105/joss.10484. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10484
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10484/10.21105.joss.10484.crossref.xml
+
+### SARXarray: Xarray extension for Synthetic Aperture Radar data
+
+- File: `corpus/pdf/public-joss-10492.pdf`
+- SARXarray: Xarray extension for Synthetic Aperture Radar data. Ou Ku; Fakhereh (Sarah) Alidoost; Simon van Diepen; Freek van Leijen. Journal of Open Source Software, DOI 10.21105/joss.10492. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10492
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10492/10.21105.joss.10492.crossref.xml
+
+### Numerics: A .NET Library for Numerical Computing, Statistical Analysis, and Risk Assessment
+
+- File: `corpus/pdf/public-joss-10540.pdf`
+- Numerics: A .NET Library for Numerical Computing, Statistical Analysis, and Risk Assessment. C. Haden Smith; Woodrow L. Fields; Julian Gonzalez; Sadie Niblett; Brennan Beam; Brian Skahill. Journal of Open Source Software, DOI 10.21105/joss.10540. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10540
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10540/10.21105.joss.10540.crossref.xml
+
+### pharmsol: A high-performance Rust library for pharmacokinetic and pharmacodynamic modeling and simulation
+
+- File: `corpus/pdf/public-joss-10580.pdf`
+- pharmsol: A high-performance Rust library for pharmacokinetic and pharmacodynamic modeling and simulation. Julián D. Otálvaro; Markus Hovd; Walter M. Yamada; Michael Neely. Journal of Open Source Software, DOI 10.21105/joss.10580. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10580
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10580/10.21105.joss.10580.crossref.xml
+
+### StatsPAI: A Unified, Agent-Native Python Toolkit for Causal Inference and Applied Econometrics
+
+- File: `corpus/pdf/public-joss-10604.pdf`
+- StatsPAI: A Unified, Agent-Native Python Toolkit for Causal Inference and Applied Econometrics. Biaoyue Wang; Scott Rozelle. Journal of Open Source Software, DOI 10.21105/joss.10604. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10604
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10604/10.21105.joss.10604.crossref.xml
+
+### ESMBenchmarkViz: A Python Toolkit for Interactive Visualization of Earth System Model Evaluation and Benchmarking
+
+- File: `corpus/pdf/public-joss-10644.pdf`
+- ESMBenchmarkViz: A Python Toolkit for Interactive Visualization of Earth System Model Evaluation and Benchmarking. Jiwoo Lee; Kristin Y. Chang; Peter Gleckler; Paul Ullrich. Journal of Open Source Software, DOI 10.21105/joss.10644. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10644
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10644/10.21105.joss.10644.crossref.xml
+
+### Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine
+
+- File: `corpus/pdf/public-joss-10654.pdf`
+- Ndvi2Gif: A Python Package for Multi-Seasonal Remote Sensing Analysis with Google Earth Engine. Diego García Díaz. Journal of Open Source Software, DOI 10.21105/joss.10654. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10654
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10654/10.21105.joss.10654.crossref.xml
+
+### Links and Nodes: Middleware for distributed real-time robotic systems
+
+- File: `corpus/pdf/public-joss-10777.pdf`
+- Links and Nodes: Middleware for distributed real-time robotic systems. Florian Schmidt; Johannes Nix; Maximilian Mühlbauer; Jan Cremer; Maxime Chalon; Timo Bachmann; Antonin Raffin. Journal of Open Source Software, DOI 10.21105/joss.10777. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10777
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10777/10.21105.joss.10777.crossref.xml
+
+### GeoWombat: Scalable geospatial and remote sensing analysis in Python
+
+- File: `corpus/pdf/public-joss-10812.pdf`
+- GeoWombat: Scalable geospatial and remote sensing analysis in Python. Jordan Graesser; Michael L. Mann; Leonardo Hardtke; Robert Denham; Sharon Xu. Journal of Open Source Software, DOI 10.21105/joss.10812. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10812
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10812/10.21105.joss.10812.crossref.xml
+
+### AlgebraOfGraphics.jl: A Makie-powered algebraic grammar of graphics for Julia
+
+- File: `corpus/pdf/public-joss-10894.pdf`
+- AlgebraOfGraphics.jl: A Makie-powered algebraic grammar of graphics for Julia. Julius Krumbiegel; Pietro Vertechi. Journal of Open Source Software, DOI 10.21105/joss.10894. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10894
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10894/10.21105.joss.10894.crossref.xml
+
+### b3gbi: Standardized Biodiversity Indicators from Spatiotemporal Occurrence Cubes
+
+- File: `corpus/pdf/public-joss-10963.pdf`
+- b3gbi: Standardized Biodiversity Indicators from Spatiotemporal Occurrence Cubes. Shawn Dove. Journal of Open Source Software, DOI 10.21105/joss.10963. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.10963
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.10963/10.21105.joss.10963.crossref.xml
+
+### ESPResSo++: A Fast and Extensible Molecular Simulation Package for Coarse-Grained Models
+
+- File: `corpus/pdf/public-joss-11072.pdf`
+- ESPResSo++: A Fast and Extensible Molecular Simulation Package for Coarse-Grained Models. Zhen-Hao Xu; James Vance; Nikita Tretyakov; Sebastian Eibl; Pavel Kus; Jakub Krajniak; Tristan Bereau; Horacio V. Guzman; Bin Song; Markus Rampp; Torsten Stuehn; Christoph Junghans. Journal of Open Source Software, DOI 10.21105/joss.11072. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.11072
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.11072/10.21105.joss.11072.crossref.xml
+
+### Edge Addition Planarity Suite and Generalized Graph Library
+
+- File: `corpus/pdf/public-joss-11163.pdf`
+- Edge Addition Planarity Suite and Generalized Graph Library. John M. Boyer; Wanda B. K. Boyer. Journal of Open Source Software, DOI 10.21105/joss.11163. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.11163
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.11163/10.21105.joss.11163.crossref.xml
+
+### Boost.Int128: A C++14 Library for Portable and Performant 128-Bit Integer Arithmetic
+
+- File: `corpus/pdf/public-joss-11293.pdf`
+- Boost.Int128: A C++14 Library for Portable and Performant 128-Bit Integer Arithmetic. Matt Borland. Journal of Open Source Software, DOI 10.21105/joss.11293. CC BY 4.0. Downloaded unchanged; retain the article copyright and licence notice.
+- Source: https://joss.theoj.org/papers/10.21105/joss.11293
+- Licence evidence: https://raw.githubusercontent.com/openjournals/joss-papers/5af614174907c1f079ea0c0c461285cfee9a6aca/joss.11293/10.21105.joss.11293.crossref.xml
+
+## Vertical Japanese and arithmetic halftone coverage (#620, #621)
+
+### Kusamakura (草枕), embedded-font vertical edition
+
+`corpus/epub/kusamakura-embedded-vertical.epub`
+
+Kusamakura by Natsume Soseki. Text and chapter markup from IDPF EPUB 3 Samples, release 20230704, CC0. All thirteen chapters, retaining ruby. The recordings, cover, old styles and placeholder font are omitted. Embedded static Noto Sans JP subset is SIL OFL 1.1; retain corpus/licenses/OFL-1.1.txt (also inside the EPUB). Vertical edition generated for KitePDF issue 620.
+
+Source: https://github.com/IDPF/epub3-samples/tree/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/kusamakura-japanese-vertical-writing
+
+IDPF package metadata dedicates the text and markup to CC0 and separately licenses two audio recordings under CC BY-NC-SA 3.0. No recordings or other assets are copied. Noto Sans JP comes with the SIL Open Font License 1.1, with no Reserved Font Name; its notice and embedded font name records are retained.
+
+### Kusamakura (草枕), embedded-font vertical edition, chapter one
+
+`corpus/pdf/kusamakura-embedded-vertical.pdf`
+
+Kusamakura by Natsume Soseki. Text and chapter markup from IDPF EPUB 3 Samples, release 20230704, CC0. The complete first chapter, typeset in vertical columns; ruby readings omitted. The recordings, cover, old styles and placeholder font are omitted. Embedded static Noto Sans JP subset is SIL OFL 1.1; retain corpus/licenses/OFL-1.1.txt (also inside the EPUB). Vertical edition generated for KitePDF issue 620.
+
+Source: https://github.com/IDPF/epub3-samples/tree/46d7e07e1b39b2d0a0245ececaf896edcd9de4b2/30/kusamakura-japanese-vertical-writing
+
+IDPF package metadata dedicates the text and markup to CC0 and separately licenses two audio recordings under CC BY-NC-SA 3.0. No recordings or other assets are copied. Noto Sans JP comes with the SIL Open Font License 1.1, with no Reserved Font Name; its notice and embedded font name records are retained.
+
+### JBIG2 arithmetic halftone chart
+
+`corpus/pdf/kitepdf-jbig2-arithmetic-halftone.pdf`
+
+Original eight-tone ordered-dither chart and PDF wrapper by KitePDF contributors, Apache License 2.0. Encoded with the Apache-2.0 jbig2enc arithmetic encoder at d0dfca46216c98f11312a9c9f15615ed490cd7b3. No external document or test-suite image is copied.
+
+Source: https://github.com/yuroyami/KitePDF/blob/main/tools/make_halftone_corpus.cpp
+
+Original chart pixels and PDF generation source are contributed under the repository Apache License 2.0. The external arithmetic encoder is Apache-2.0; source is used only to regenerate the fixture, not linked into KitePDF.

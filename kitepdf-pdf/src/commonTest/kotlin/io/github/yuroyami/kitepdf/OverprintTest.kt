@@ -107,6 +107,57 @@ class OverprintTest {
     }
 
     @Test
+    fun a_spot_keeps_process_inks_in_both_modes_and_zero_tint_paints_nothing() {
+        for (mode in 0..1) for (tint in listOf(0, 1)) {
+            val pdf = onePagePdf(
+                "/ColorSpace << /Spot [/Separation /SpotYellow /DeviceCMYK " +
+                    "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 1 0] /N 1 >>] >> " +
+                    "/ExtGState << /GS1 << /op true /OPM $mode >> >>",
+                "1 0 0 0 k 10 10 80 80 re f /GS1 gs /Spot cs $tint scn 30 30 40 40 re f",
+            )
+            val overlap = render(pdf).rgb(50, 50)
+            assertTrue(if (tint == 0) isCyan(overlap) else isGreen(overlap), "mode $mode, tint $tint: $overlap")
+        }
+    }
+
+    @Test
+    fun a_named_process_ink_replaces_its_plate_even_at_zero_tint() {
+        for (mode in 0..1) {
+            val pdf = onePagePdf(
+                "/ColorSpace << /Ink [/DeviceN [/Yellow] /DeviceCMYK " +
+                    "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 1 0] /N 1 >>] >> " +
+                    "/ExtGState << /GS1 << /op true /OPM $mode >> >>",
+                "1 0 1 0 k 10 10 80 80 re f /GS1 gs /Ink cs 0 scn 30 30 40 40 re f",
+            )
+            val overlap = render(pdf).rgb(50, 50)
+            assertTrue(isCyan(overlap), "a named zero yellow left yellow on the plate, mode $mode: $overlap")
+        }
+    }
+
+    @Test
+    fun filled_and_stroked_embedded_text_overprint_without_changing_extraction() {
+        val font = TestFonts.squareAndSpaceTtf()
+        val extra = listOf(
+            ("<< /Type /Font /Subtype /TrueType /BaseFont /Square /FirstChar 65 /LastChar 65 /Widths [600] " +
+                "/FontDescriptor 6 0 R /Encoding /WinAnsiEncoding >>").encodeToByteArray(),
+            ("<< /Type /FontDescriptor /FontName /Square /Flags 32 /FontBBox [0 0 500 500] /ItalicAngle 0 " +
+                "/Ascent 500 /Descent 0 /CapHeight 500 /StemV 80 /FontFile2 7 0 R >>").encodeToByteArray(),
+            "<< /Length ${font.size} >>\nstream\n".encodeToByteArray() + font + "\nendstream".encodeToByteArray(),
+        )
+        for (mode in 0..2) {
+            val pdf = onePagePdf(
+                "/Font << /F1 5 0 R >> /ExtGState << /GS1 << /OP true /op true /OPM 1 >> >>",
+                "0 0 1 0 k 10 10 80 80 re f /GS1 gs 1 0 0 0 k 1 0 0 0 K 8 w " +
+                    "BT /F1 80 Tf $mode Tr 30 30 Td (A) Tj ET", extra,
+            )
+            val raster = render(pdf)
+            val overlap = raster.rgb(if (mode == 1) 30 else 50, 50)
+            assertTrue(isGreen(overlap), "text mode $mode did not keep the yellow: $overlap")
+            assertEquals("A", PdfDocument.open(pdf).pages[0].extractText().trim())
+        }
+    }
+
+    @Test
     fun extgstate_reads_the_overprint_entries() {
         val both = ExtGState.parse(PdfDictionary(linkedMapOf("OP" to PdfBoolean(true), "OPM" to PdfInt(1L))), noRefs)
         assertEquals(true, both.overprintStroke)
@@ -122,7 +173,7 @@ class OverprintTest {
     }
 
     /** A one-page 100 by 100 PDF with [resources] and [content]. */
-    private fun onePagePdf(resources: String, content: String): ByteArray {
+    private fun onePagePdf(resources: String, content: String, extra: List<ByteArray> = emptyList()): ByteArray {
         val buf = ByteArrayBuilder()
         val offsets = mutableListOf<Int>()
         fun w(s: String) = buf.append(s.encodeToByteArray())
@@ -138,10 +189,17 @@ class OverprintTest {
         w("4 0 obj\n<< /Length ${payload.size} >>\nstream\n")
         buf.append(payload)
         w("\nendstream\nendobj\n")
+        for ((i, body) in extra.withIndex()) {
+            offsets.add(buf.size())
+            w("${i + 5} 0 obj\n")
+            buf.append(body)
+            w("\nendobj\n")
+        }
+        val count = offsets.size + 1
         val xref = buf.size()
-        w("xref\n0 5\n0000000000 65535 f \n")
+        w("xref\n0 $count\n0000000000 65535 f \n")
         for (o in offsets) w("${o.toString().padStart(10, '0')} 00000 n \n")
-        w("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        w("trailer\n<< /Size $count /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
         return buf.toByteArray()
     }
 }

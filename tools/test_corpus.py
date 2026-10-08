@@ -134,5 +134,18 @@ class CorpusToolTest(unittest.TestCase):
         self.assertEqual(self.entry["sha256"], receipt["verified"][0]["sha256"])
 
 
+class PublicInventoryTest(unittest.TestCase):
+    def test_publication_coverage_does_not_shrink_below_issue_624(self):
+        entries = corpus.load_manifest(corpus.ROOT / "corpus/manifest.json", corpus.ROOT)
+        # Only independently published works count here; feature samples and generated
+        # fixtures cannot meet the real-publication target by multiplying tiny files.
+        publications = [e for e in entries if e.get("publication_kind") == "third-party-publication"]
+        pdfs = [e for e in publications if e["path"].endswith(".pdf")]
+        books = [e for e in publications if e["path"].endswith(".epub")]
+        self.assertGreaterEqual(len(pdfs), 25)
+        self.assertGreaterEqual(sum(min(e.get("pages", 0), 6) for e in pdfs), 150)
+        self.assertGreaterEqual(len(books), 30)
+
+
 if __name__ == "__main__":
     unittest.main()

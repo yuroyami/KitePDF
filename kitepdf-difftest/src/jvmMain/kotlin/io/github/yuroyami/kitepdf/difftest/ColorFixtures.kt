@@ -39,5 +39,68 @@ object ColorFixtures {
             emptyList(),
             budget = 0.005,
         ),
-    )
+        oracleFixture(
+            "overprint-cmyk-host-text",
+            "0 0 1 0 k 10 10 180 180 re f /GS1 gs 1 0 0 0 k BT /F1 40 Tf 30 70 Td (Ink) Tj ET",
+            "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> " +
+                "/ExtGState << /GS1 << /op true /OPM 1 >> >>", emptyList(), 0.005,
+        ),
+    ) + overprintText() + listOf(0, 1).flatMap { mode ->
+        listOf(
+            oracleFixture(
+                "overprint-spot-fill-mode-$mode",
+                "1 0 0 0 k 10 10 180 180 re f /GS1 gs /Spot cs 1 scn 30 110 60 60 re f " +
+                    "0.5 scn 110 110 60 60 re f 0 scn 30 30 60 60 re f",
+                "$SPOT /ExtGState << /GS1 << /OP true /op true /OPM $mode >> >>", emptyList(), 0.005,
+            ),
+            oracleFixture(
+                "overprint-devicen-stroke-mode-$mode",
+                "1 0 0 0 k 10 10 180 180 re f /GS1 gs /Spot CS 1 SCN 20 w 50 30 m 50 170 l S " +
+                    "0.5 SCN 140 30 m 140 170 l S",
+                SPOT.replace("/Separation /Orange", "/DeviceN [/Orange]") +
+                    " /ExtGState << /GS1 << /OP true /op false /OPM $mode >> >>", emptyList(), 0.005,
+            ),
+            oracleFixture(
+                "overprint-spot-image-mode-$mode",
+                "1 0 0 0 k 10 10 180 180 re f /GS1 gs q 160 0 0 160 20 20 cm /Im1 Do Q",
+                "$SPOT /XObject << /Im1 5 0 R >> /ExtGState << /GS1 << /op true /OPM $mode >> >>",
+                listOf(pdfStream(byteArrayOf(0, 85, 170.toByte(), 255.toByte()),
+                    "/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace $SPOT_SPACE /BitsPerComponent 8 /Decode [1 0]")), 0.005,
+            ),
+            oracleFixture(
+                "overprint-devicen-image-mode-$mode",
+                "0 1 0 0 k 10 10 180 180 re f /GS1 gs q 160 0 0 160 20 20 cm /Im1 Do Q",
+                "/XObject << /Im1 5 0 R >> /ExtGState << /GS1 << /op true /OPM $mode >> >>",
+                listOf(
+                    pdfStream(byteArrayOf(255.toByte(), 255.toByte(), 0, 85, 128.toByte(), 170.toByte(), 255.toByte(), 0),
+                        "/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace [/DeviceN [/Cyan /Orange] /DeviceCMYK 6 0 R] /BitsPerComponent 8"),
+                    pdfStream("{ dup 0.5 mul exch 0 }".toByteArray(),
+                        "/FunctionType 4 /Domain [0 1 0 1] /Range [0 1 0 1 0 1 0 1]"),
+                ), 0.005,
+            ),
+        )
+    }
+
+    private const val SPOT_SPACE = "[/Separation /Orange /DeviceCMYK " +
+        "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0.5 1 0] /N 1 >>]"
+    private const val SPOT = "/ColorSpace << /Spot $SPOT_SPACE >>"
+
+    /** An embedded square glyph separates ink errors from differences between host fonts. */
+    private fun overprintText(): List<OracleFixture> = listOf(
+        Triple("overprint-cmyk-text-fill", "0 0 1 0 k", "1 0 0 0 k 0 Tr"),
+        Triple("overprint-cmyk-text-stroke", "0 0 1 0 k", "1 0 0 0 K 6 w 1 Tr"),
+        Triple("overprint-spot-text", "1 0 0 0 k", "/Spot cs 1 scn 0 Tr"),
+    ).map { (name, background, ink) ->
+        oracleFixture(
+            name, "$background 10 10 180 180 re f /GS1 gs $ink BT /F1 100 Tf 30 60 Td (AA) Tj ET",
+            "$SPOT /Font << /F1 5 0 R >> /ExtGState << /GS1 << /OP true /op true /OPM 1 >> >>",
+            listOf(
+                ("<< /Type /Font /Subtype /TrueType /BaseFont /Square /FirstChar 65 /LastChar 65 /Widths [600] " +
+                    "/FontDescriptor 6 0 R /Encoding /WinAnsiEncoding >>").toByteArray(),
+                ("<< /Type /FontDescriptor /FontName /Square /Flags 32 /FontBBox [0 0 500 500] /ItalicAngle 0 " +
+                    "/Ascent 500 /Descent 0 /CapHeight 500 /StemV 80 /FontFile2 7 0 R >>").toByteArray(),
+                pdfStream(GradientFixtures.squareFont()),
+            ), 0.005,
+        )
+    }
 }

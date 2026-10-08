@@ -22,7 +22,7 @@ MAX_TOTAL_BYTES = 256 * 1024 * 1024
 ALLOWED_LICENSES = {
     "CC0-1.0", "CC-BY-3.0", "CC-BY-4.0", "CC-BY-SA-2.5", "CC-BY-SA-3.0",
     "CC-BY-SA-4.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "W3C-20150513",
-    "W3C-20230101", "LicenseRef-W3C-Software-and-Document",
+    "W3C-20230101", "LicenseRef-W3C-Software-and-Document", "Apache-2.0", "OFL-1.1",
 }
 
 

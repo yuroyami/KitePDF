@@ -224,14 +224,22 @@ object IccFixtures {
         content.append("/GS1 gs 1 0 0 0 k ").append(cell(0, 0))
         content.append("0.5 0 0 0 k ").append(cell(0, 1))
         content.append("/GS2 gs 1 0 0 0 k ").append(cell(0, 2))
+        content.append("0 0 1 0 k 5 5 190 90 re f /GS1 gs 1 0 0 0 k BT /F1 80 Tf 10 10 Td (A) Tj ET")
         return SwatchPage(
             oracleFixture(
                 "icc-output-intent-overprint", content.toString(),
-                "/ExtGState << /GS1 << /OP true /op true /OPM 1 >> /GS2 << /OP true /op true /OPM 0 >> >>",
-                listOf(pdfStream(pressProfile, "/N 4")), budget = 0.01,
+                "/Font << /F1 6 0 R >> /ExtGState << /GS1 << /OP true /op true /OPM 1 >> /GS2 << /OP true /op true /OPM 0 >> >>",
+                listOf(
+                    pdfStream(pressProfile, "/N 4"),
+                    ("<< /Type /Font /Subtype /TrueType /BaseFont /Square /FirstChar 65 /LastChar 65 /Widths [600] " +
+                        "/FontDescriptor 7 0 R /Encoding /WinAnsiEncoding >>").toByteArray(),
+                    ("<< /Type /FontDescriptor /FontName /Square /Flags 32 /FontBBox [0 0 500 500] /ItalicAngle 0 " +
+                        "/Ascent 500 /Descent 0 /CapHeight 500 /StemV 80 /FontFile2 8 0 R >>").toByteArray(),
+                    pdfStream(GradientFixtures.squareFont()),
+                ), budget = 0.01,
                 catalog = "/OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (Press) /DestOutputProfile 5 0 R >>] ",
             ),
-            (0 until 4).map { centre(0, it) },
+            (0 until 4).map { centre(0, it) } + centre(1, 0),
         )
     }
 

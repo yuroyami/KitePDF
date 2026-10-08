@@ -1,7 +1,7 @@
 # Corpus license notices
 
 These are complete, unmodified upstream license documents obtained for the
-public corpus intake on 2026-10-01. HTML files retain the official page content;
+public corpus intakes beginning on 2026-10-01. HTML files retain the official page content;
 the Creative Commons 4.0 files use the official plain-text legal code.
 The recorded SHA-256 values identify these exact notice snapshots.
 
@@ -22,8 +22,14 @@ CC BY-SA 3.0.
 | [CC-BY-SA-4.0](CC-BY-SA-4.0.txt) | [Official license](https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt) | `28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5` |
 | [W3C-20150513](W3C-20150513.html) | [Official license](https://www.w3.org/Consortium/Legal/2015/copyright-software-and-document) | `6ab846deec0c5554a4885b57737bf0455b189ae518f6786adb53d1983c14a400` |
 | [MIT](MIT.txt) | [jQuery 1.7.1 license](https://github.com/jquery/jquery/blob/1.7.1/MIT-LICENSE.txt) | `0ade425df7c0386e04fbaa6b49e97a71ec504e53a4c01137c4bfb425a9a92344` |
+| [CC0-1.0](CC0-1.0.txt) | [Official dedication](https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt) | `a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499` |
+| [OFL-1.1](OFL-1.1.txt) | [Noto Sans JP notice](https://github.com/google/fonts/blob/295d98a7a0c17c68f1341eaeea354e7960ea70d3/ofl/notosansjp/OFL.txt) | `1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9` |
+| [Apache-2.0](Apache-2.0.txt) | [KitePDF project license](../../LICENSE) | `4cb4a0ad2d8f8b06ae451eabb3255878db929859de44f777fac3e9a03ea56c31` |
 
 CC BY-SA files retain their share-alike license. Derivatives must follow the
-applicable adaptation conditions and record their changes. The current public
-corpus stores unchanged upstream documents. These notices do not relicense the
-KitePDF library or any private files added locally.
+applicable adaptation conditions and record their changes. Third-party downloads
+remain unchanged. The Japanese editions adapt CC0 chapter markup and embed a
+subset of the OFL font, with its notice retained. The JBIG2 chart is original
+Apache-2.0 material. Standard Ebooks' CC0 applies to its editorial contributions;
+retain each book's territorial notices for the underlying public-domain works.
+These notices do not relicense the KitePDF library or any private files added locally.

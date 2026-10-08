@@ -25,8 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prints green, as mutool and a press print it. `ExtGState` and `GraphicsState` carry
   `overprintStroke`, `overprintFill` and `overprintMode`. Their constructors and `copy` take the
   three with defaults, so source compiles unchanged, while a binary built against 0.12.0 that
-  constructs or copies one needs a rebuild. Text and spot colours do not overprint yet (#625,
-  #201).
+  constructs or copies one needs a rebuild (#201).
+- Overprint also applies to filled and stroked text in DeviceCMYK or the CMYK output intent.
+  Separation and DeviceN fills, strokes, text and images preserve the process inks they do not
+  name in either overprint mode. Ink reconstruction on an RGB canvas remains approximate (#625).
+- The public corpus adds 32 scientific PDFs and 31 complete EPUB publications, with licence
+  evidence and checksums (#624). A Japanese novel embeds vertical font substitutions in EPUB
+  and a seven-page PDF chapter (#620). An original arithmetic-coded JBIG2 halftone chart records
+  the current rendering baseline and has a reproducible encoder recipe (#621).
 - `ReaderTheme.withImages(ReaderImages.LineArt)` makes a reading theme recolour line art, as it
   does text: a grey symbol or equation drawn as an image, on white or on transparent paper. A
   black symbol on dark paper then keeps the contrast of black text. Photos and coloured artwork
