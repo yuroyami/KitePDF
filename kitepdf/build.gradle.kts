@@ -19,7 +19,7 @@ kotlin {
 
     android {
         namespace = "io.github.yuroyami.kitepdf.bundle"
-        compileSdk = 37
+        compileSdk { version = release(37) { minorApiLevel = 2 } }
         minSdk = 21
         withHostTest {}
     }

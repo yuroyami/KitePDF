@@ -1,7 +1,6 @@
 package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -44,7 +43,7 @@ class RasterCancellationTest {
     @Test
     fun a_cancelled_page_stops_and_returns_no_bitmap() = runBlocking {
         val density = Density(1f)
-        val rasterizer = KitePageRasterizer(density, LayoutDirection.Ltr, TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr))
+        val rasterizer = KitePageRasterizer(density, LayoutDirection.Ltr, TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr))
         val page = manyFills(20_000).pages[0]
         val fills = AtomicInteger()
         val render = async(Dispatchers.Default) {

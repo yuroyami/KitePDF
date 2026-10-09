@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.font.FontSpec
@@ -42,7 +41,7 @@ class BundledFaceTextTest {
     private fun draw(glyphs: List<TextGlyph>, spec: FontSpec, hasOutlines: Boolean): PixelMap {
         val bitmap = ImageBitmap(320, 120)
         val density = Density(1f)
-        val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        val measurer = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
         CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(320f, 120f)) {
             drawRect(Color.White)
             val canvas = ComposeCanvas(this, measurer, 1f, false, 1f, hostFace = { false })

@@ -62,7 +62,6 @@ import io.github.yuroyami.kitepdf.epub.EpubMedia
 import io.github.yuroyami.kitepdf.epub.EpubMediaKind
 import io.github.yuroyami.kitepdf.epub.EpubPage
 import io.github.yuroyami.kiteplayer.KitePlayer
-import io.github.yuroyami.kiteplayer.KitePlayerPlatform
 import io.github.yuroyami.kiteplayer.LoopMode
 import io.github.yuroyami.kiteplayer.PlaybackStatus
 import io.github.yuroyami.kiteplayer.SeekMode
@@ -72,6 +71,7 @@ import io.github.yuroyami.kiteplayer.Tracks
 import io.github.yuroyami.kiteplayer.compose.KitePlayerVideo
 import io.github.yuroyami.kiteplayer.session.BackgroundPolicy
 import io.github.yuroyami.kiteplayer.compose.KiteRenderPath
+import io.github.yuroyami.kiteplayer.isAvailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -101,14 +101,14 @@ import kotlin.time.Duration.Companion.seconds
  *   scheme never plays, `http` and `file` included (EPUB Reading Systems 3.3, 3.3 and 3.5).
  * @param newPlayer makes the player of an element when it starts, or returns null where the platform
  *   cannot play. The default player plays through FFmpeg and the platform's audio output; pass
- *   `{ KitePlayerPlatform.createOrNull(PlayerConfig(...)) }` for settings of your own.
+ *   `{ if (KitePlayer.isAvailable) KitePlayer(PlayerConfig(...)) else null }` for settings of your own.
  * @param labels the words of the controls, which a screen reader says. English by default.
  * @param session what the elements share. See [KiteMediaSession].
  */
 @Composable
 public fun KitePageOverlayScope.KiteMediaOverlay(
     allowRemote: Boolean = false,
-    newPlayer: () -> KitePlayer? = { KitePlayerPlatform.createOrNull() },
+    newPlayer: () -> KitePlayer? = { if (KitePlayer.isAvailable) KitePlayer() else null },
     labels: KiteMediaLabels = KiteMediaLabels(),
     session: KiteMediaSession = KiteMediaSession.Default,
 ) {
@@ -185,7 +185,7 @@ public fun EpubMediaPlayer(
     document: EpubDocument,
     modifier: Modifier = Modifier,
     allowRemote: Boolean = false,
-    newPlayer: () -> KitePlayer? = { KitePlayerPlatform.createOrNull() },
+    newPlayer: () -> KitePlayer? = { if (KitePlayer.isAvailable) KitePlayer() else null },
     labels: KiteMediaLabels = KiteMediaLabels(),
     session: KiteMediaSession = KiteMediaSession.Default,
     place: String? = null,
@@ -415,7 +415,7 @@ private fun TransportBar(
                     if (final) {
                         scope.launch { runCatching { player.seek(to, SeekMode.Precise) } }
                     } else {
-                        runCatching { player.seekLater(to, SeekMode.KeyframeThenRefine) }
+                        runCatching { player.requestSeek(to, SeekMode.KeyframeThenRefine) }
                     }
                 },
                 modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = 8.dp),

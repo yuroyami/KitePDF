@@ -127,6 +127,11 @@ public class KiteDocViewState(
     public val document: KiteDocument,
     initialPage: Int = 0,
 ) {
+    init {
+        // First, before a property below reads Compose's text.
+        ensureComposeBackend()
+    }
+
     /** Opens at a saved reading position instead of a page number. */
     public constructor(document: KiteDocument, bookmark: KiteBookmark) : this(document, 0) {
         openAt = bookmark

@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
@@ -29,7 +28,7 @@ class ComposeClipStackTest {
     private fun paint(body: ComposeCanvas.() -> Unit): ImageBitmap {
         val bitmap = ImageBitmap(100, 100)
         val density = Density(1f)
-        val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        val measurer = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
         CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(100f, 100f)) {
             drawRect(Color.White, size = size)
             val canvas = ComposeCanvas(this, measurer)

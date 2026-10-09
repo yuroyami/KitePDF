@@ -57,7 +57,7 @@ kotlin {
 
     android {
         namespace = "io.github.yuroyami.kitepdf.compose"
-        compileSdk = 37
+        compileSdk { version = release(37) { minorApiLevel = 2 } }
         minSdk = 24
         withHostTest { isIncludeAndroidResources = true }
     }

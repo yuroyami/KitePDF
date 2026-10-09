@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.KitePDF
@@ -43,7 +42,7 @@ class RenderGoldenTest {
         val bmp = ImageBitmap(w, h)
         val density = Density(1f)
         val ld = LayoutDirection.Ltr
-        val tm = TextMeasurer(createFontFamilyResolver(), density, ld)
+        val tm = TextMeasurer(testFontFamilyResolver(), density, ld)
         CanvasDrawScope().drawOnTestUiThread(density, ld, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
             drawRect(Color.White, size = size)
             page.renderTo(ComposeCanvas(this, tm), KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, h.toDouble()))
@@ -85,7 +84,7 @@ class RenderGoldenTest {
             val w = (pageW * scale).toInt(); val h = (pageH * scale).toInt()
             val bmp = ImageBitmap(w, h)
             val d = Density(density)
-            val tm = TextMeasurer(createFontFamilyResolver(), d, LayoutDirection.Ltr)
+            val tm = TextMeasurer(testFontFamilyResolver(), d, LayoutDirection.Ltr)
             CanvasDrawScope().drawOnTestUiThread(d, LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
                 drawRect(Color.White, size = size)
                 page.renderTo(ComposeCanvas(this, tm), KiteMatrix(scale, 0.0, 0.0, -scale, 0.0, h.toDouble()))

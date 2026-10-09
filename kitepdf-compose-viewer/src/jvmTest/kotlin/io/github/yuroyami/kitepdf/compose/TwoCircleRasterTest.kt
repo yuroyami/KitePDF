@@ -102,7 +102,7 @@ class TwoCircleRasterTest {
     private fun render(page: io.github.yuroyami.kitepdf.PdfPage, withoutPlatformGradient: Boolean): PixelMap {
         val bitmap = ImageBitmap(200, 200)
         val density = Density(1f)
-        val measurer = androidx.compose.ui.text.TextMeasurer(androidx.compose.ui.text.font.createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        val measurer = androidx.compose.ui.text.TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
         CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 200f)) {
             drawRect(Color.White)
             val canvas = if (withoutPlatformGradient) {
@@ -134,7 +134,7 @@ class TwoCircleRasterTest {
         }.build()
         val bitmap = ImageBitmap(200, 200)
         val density = Density(1f)
-        val measurer = androidx.compose.ui.text.TextMeasurer(androidx.compose.ui.text.font.createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        val measurer = androidx.compose.ui.text.TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
         CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(200f, 200f)) {
             drawRect(Color.White)
             val canvas = if (withoutPlatformGradient) {

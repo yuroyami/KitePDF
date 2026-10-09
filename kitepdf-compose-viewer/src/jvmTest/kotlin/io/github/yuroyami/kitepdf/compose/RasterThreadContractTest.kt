@@ -5,7 +5,6 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfChoiceSelection
@@ -354,7 +353,7 @@ class RasterThreadContractTest {
     ) = KitePageRasterizer(density, LayoutDirection.Ltr, measurer(resolutions)).apply { textOffMain = !throughCompose }
 
     private fun measurer(resolutions: MutableList<Boolean>): TextMeasurer = onTestUiThread {
-        val resolver = createFontFamilyResolver()
+        val resolver = testFontFamilyResolver()
         // Compose requires its final resolver implementation in ParagraphBuilder. Observe its existing
         // argument interceptor instead: every real resolve, including cache hits, goes through it before Skia.
         // This fixture depends on pinned Compose internals and must be updated if their layout changes.

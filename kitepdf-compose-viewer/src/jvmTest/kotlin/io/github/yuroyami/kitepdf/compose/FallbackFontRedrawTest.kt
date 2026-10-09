@@ -6,7 +6,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -82,7 +81,7 @@ class FallbackFontRedrawTest {
 
     @Test
     fun a_cached_page_draws_again_once_a_font_for_its_text_lands() = runBlocking {
-        val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        val measurer = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
         // Host text through Compose's text, as a browser draws it.
         val renderer = KitePageRasterizer(density, LayoutDirection.Ltr, measurer).apply { textOffMain = false }
         val cache = PageBitmapCache(10_000_000)
@@ -182,7 +181,7 @@ class FallbackFontRedrawTest {
         val scripts = object : PdfScriptHandler {
             override val formState: PdfFormState = PdfFormState(doc)
         }
-        val measurer = onTestUiThread { TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr) }
+        val measurer = onTestUiThread { TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr) }
         // The theme sees each colour the layer paints, so it counts the layer's draws.
         val paints = AtomicInteger()
         val theme = ReaderTheme(RgbColor.WHITE) { paints.incrementAndGet(); it }
@@ -216,7 +215,9 @@ internal fun landFallbackFont(measurer: TextMeasurer): Int {
     var reached = 0
     for (result in kept) {
         val intrinsics = result.multiParagraph.intrinsics
-        for (info in intrinsics.javaClass.getMethod("getInfoList\$ui_text").invoke(intrinsics) as List<*>) {
+        // The internal getter's suffix is the module name, which Compose 1.13 changed.
+        val infoList = intrinsics.javaClass.methods.single { it.name.startsWith("getInfoList\$") }
+        for (info in infoList.invoke(intrinsics) as List<*>) {
             val paragraph = info!!.javaClass.getMethod("getIntrinsics").invoke(info)
             val layouter = paragraph.javaClass.getMethod("layouter").invoke(paragraph)
             listener.getMethod("onNewFontInstalled").invoke(field(layouter, "unresolvedSymbolsRegistryListener"))

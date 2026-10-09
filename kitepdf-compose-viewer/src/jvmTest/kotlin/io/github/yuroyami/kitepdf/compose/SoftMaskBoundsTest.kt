@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -70,7 +69,7 @@ class SoftMaskBoundsTest {
         val bitmap = ImageBitmap(200, 200)
         val recorder = LayerRecorder(Canvas(bitmap))
         val density = Density(1f)
-        val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        val measurer = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
         CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, recorder, Size(200f, 200f)) {
             drawRect(Color.White)
             doc.pages[0].renderTo(ComposeCanvas(this, measurer), KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, 200.0))

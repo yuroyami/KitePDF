@@ -222,7 +222,9 @@ class SelectionSceneTest {
                 driver.pumpFrames(2)
                 val panned = state.panOffset
                 scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 90f), type = PointerType.Touch)
-                driver.pumpFrames(2)
+                // The release flings the page (#410). Let the fling end, or it moves the next drag's reading.
+                var last = Offset.Unspecified
+                driver.pumpUntilState { (state.panOffset == last).also { last = state.panOffset } }
                 return panned
             }
 

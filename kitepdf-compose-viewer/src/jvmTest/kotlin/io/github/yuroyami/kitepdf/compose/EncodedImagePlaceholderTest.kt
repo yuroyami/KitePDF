@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
@@ -31,7 +30,7 @@ class EncodedImagePlaceholderTest {
         assertEquals(KiteImageData.Kind.JPEG, image.kind, "the damaged image must take the placeholder path")
         val bitmap = ImageBitmap(64, 48)
         CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(64f, 48f)) {
-            ComposeCanvas(this, TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr))
+            ComposeCanvas(this, TextMeasurer(testFontFamilyResolver(), Density(1f), LayoutDirection.Ltr))
                 .drawImage(image, KiteMatrix(64.0, 0.0, 0.0, -48.0, 0.0, 48.0), 1.0)
         }
         // A pixel inside the placeholder's grey fill, off its border and off both diagonals.

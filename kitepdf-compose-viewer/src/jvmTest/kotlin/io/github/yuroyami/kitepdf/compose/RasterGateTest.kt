@@ -2,7 +2,6 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.KitePage
@@ -122,7 +121,7 @@ class RasterGateTest {
     @Test
     fun a_page_on_screen_renders_before_the_pages_drawn_ahead_of_it() = runBlocking<Unit> {
         val density = Density(1f)
-        val rasterizer = KitePageRasterizer(density, LayoutDirection.Ltr, TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr))
+        val rasterizer = KitePageRasterizer(density, LayoutDirection.Ltr, TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr))
         val started = Collections.synchronizedList(ArrayList<String>())
         val latches = HashMap<String, CountDownLatch>()
         fun page(name: String, slow: Boolean) = object : KitePage {

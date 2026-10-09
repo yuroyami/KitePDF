@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.KiteRectangle
@@ -41,7 +40,7 @@ class ComposeRasterStepTest {
     private fun paint(size: Int = 20, knowsTarget: Boolean = true, body: (ComposeCanvas) -> Unit): ImageBitmap {
         val bitmap = ImageBitmap(size, size)
         val density = Density(1f)
-        val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        val measurer = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
         CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(size.toFloat(), size.toFloat())) {
             drawRect(Color.White, size = this.size)
             val canvas = ComposeCanvas(this, measurer, 1f, false, magnification = 1f, target = if (knowsTarget) bitmap else null)

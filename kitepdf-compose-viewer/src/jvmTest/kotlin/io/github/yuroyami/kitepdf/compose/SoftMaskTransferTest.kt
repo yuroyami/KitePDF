@@ -3,7 +3,6 @@ package io.github.yuroyami.kitepdf.compose
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -60,7 +59,7 @@ class SoftMaskTransferTest {
 
     private fun rasterizer(): KitePageRasterizer {
         val density = Density(1f)
-        return KitePageRasterizer(density, LayoutDirection.Ltr, TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr))
+        return KitePageRasterizer(density, LayoutDirection.Ltr, TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr))
     }
 
     @Test
@@ -83,7 +82,7 @@ class SoftMaskTransferTest {
             val page = maskedPdf(kind, group).pages[0]
             val bitmap = androidx.compose.ui.graphics.ImageBitmap(100, 100)
             val density = Density(1f)
-            val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+            val measurer = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
             androidx.compose.ui.graphics.drawscope.CanvasDrawScope().drawOnTestUiThread(
                 density, LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(bitmap), androidx.compose.ui.geometry.Size(100f, 100f),
             ) {
@@ -104,7 +103,7 @@ class SoftMaskTransferTest {
         val page = maskedPdf("Luminosity", "q 100 0 0 100 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 ID xxxx EI Q").pages[0]
         val bitmaps = KiteBitmapCache<ImageBitmap>()
         val density = Density(1f)
-        val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+        val measurer = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().drawOnTestUiThread(
             density, LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(ImageBitmap(100, 100)), androidx.compose.ui.geometry.Size(100f, 100f),
         ) {

@@ -1097,6 +1097,8 @@ fun MyCustomPdfViewer(document: PdfDocument, onBitmap: (ImageBitmap) -> Unit) {
 
 `rememberKitePageRasterizer()` wires the rasterizer to the composition's density, layout direction, and text measurement engine. For off-composition rasterization (e.g. a background job), construct `KitePageRasterizer` directly if you already have a `TextMeasurer`.
 
+Since Compose 1.13, the desktop JVM, Apple and web targets set up Compose's text engine when the first window or `ImageComposeScene` opens. Before that, `createFontFamilyResolver()` throws "No Compose UI text implementation is registered". Create the `TextMeasurer` after a window or a scene exists. `KiteDocViewState` and `KitePageRasterizer` need no window themselves.
+
 Every synchronous `rasterize` overload requires the platform UI thread: Android's main
 Looper, Apple's main thread, the browser thread, or the AWT event dispatch thread on
 desktop JVM. Calls on other threads throw `IllegalStateException` before allocating or

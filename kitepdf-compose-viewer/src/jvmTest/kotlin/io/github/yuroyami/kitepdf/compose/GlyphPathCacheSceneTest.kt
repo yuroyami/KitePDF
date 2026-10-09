@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.font.FontSpec
@@ -27,7 +26,7 @@ import kotlin.test.assertTrue
  */
 class GlyphPathCacheSceneTest {
 
-    private val measurer = TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr)
+    private val measurer = TextMeasurer(testFontFamilyResolver(), Density(1f), LayoutDirection.Ltr)
 
     /** A glyph that is a 600 by 700 box, 100 units from its origin, in a 1000-unit em. */
     private val box = KitePath.Builder().apply { rectangle(100.0, 0.0, 600.0, 700.0) }.build()

@@ -76,8 +76,8 @@ public class KiteMediaSession(
 }
 
 /**
- * Applies [policy] to [player] while it is in the composition: pauses it when the app leaves the
- * screen, or keeps its sound, as KitePlayer's background handling does on the platform.
+ * Gives [player] a media session while it is in the composition. The session applies [policy] when
+ * the app leaves the screen, and pauses for a call or when the headphones come out.
  */
 @Composable
 internal expect fun BackgroundHandling(player: KitePlayer, policy: BackgroundPolicy)

@@ -11,7 +11,7 @@
   <a href="https://central.sonatype.com/artifact/io.github.yuroyami/kitepdf"><img src="https://img.shields.io/maven-central/v/io.github.yuroyami/kitepdf?label=Maven%20Central" alt="Maven Central"></a>
   <a href="https://github.com/yuroyami/KitePDF/actions/workflows/ci.yml"><img src="https://github.com/yuroyami/KitePDF/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://yuroyami.github.io/KitePDF/"><img src="https://img.shields.io/badge/docs-yuroyami.github.io-1f6feb" alt="Docs"></a>
-  <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 2.4.20"></a>
+  <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 2.4.21"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
 </p>
 
@@ -145,7 +145,7 @@ kotlin {
 | If you add | You also need |
 | --- | --- |
 | `kitepdf-net` | **A Ktor client engine** such as `io.ktor:ktor-client-cio:3.6.0`, or the OkHttp, Darwin or JS engine. KitePDF downloads through the engine you pick. |
-| `kitepdf-media` | **Android `minSdk` 26**, and on iOS the **linker flags and privacy manifest entries** that [KitePlayer's install guide](https://github.com/yuroyami/KitePlayer#install) lists. It publishes Android, iOS and the desktop JVM only. |
+| `kitepdf-media` | **Android `minSdk` 26 and `compileSdk` 37.2**, and on iOS the **linker flags and privacy manifest entries** that [KitePlayer's install guide](https://github.com/yuroyami/KitePlayer#install) lists. It publishes Android, iOS and the desktop JVM only. |
 | `kitepdf-skia-renderer` on Android | **One more repository**: `maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`. Skia's Android build lives there, not on Maven Central. |
 
 Good to know:

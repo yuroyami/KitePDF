@@ -1,13 +1,13 @@
 [versions] #######################################################################################
 # Toolchain
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 agp = "9.4.1"
 vanniktechPublish = "0.37.0"
 dokka = "2.3.0-Beta"
 
 # Compose Multiplatform, used by :kitepdf-compose-viewer and :sample. :kitepdf never depends on it.
-composeMultiplatform = "1.12.1"
-composeMaterial3 = "1.12.0-alpha03"
+composeMultiplatform = "1.13.0-alpha02"
+composeMaterial3 = "1.13.0-alpha02"
 
 # Android platform bridge (sample only)
 activityCompose = "1.14.0-alpha03"
@@ -15,7 +15,7 @@ activityCompose = "1.14.0-alpha03"
 # Skiko: JetBrains' Skia bindings. Used by :kitepdf-skia-renderer. Compose Multiplatform
 # rides on Skiko under the hood on JVM Desktop + iOS, so this gives us the same
 # renderer Compose uses, without the Compose runtime sitting on top.
-skiko = "0.150.1"
+skiko = "0.153.0"
 
 # ImageKodec. The Kite lineage's shared image engine, and :kitepdf-core's one
 # runtime dependency beyond kotlin-stdlib. CONTRIBUTING.md describes how to test
@@ -27,7 +27,7 @@ imagekodec = "0.3.0"
 kitejs = "0.6.0"
 # KitePlayer: the Kite lineage's media player. Used ONLY by :kitepdf-media, the optional
 # EPUB audio and video artifact. It carries FFmpeg through KiteFFmpeg.
-kiteplayer = "0.2.0"
+kiteplayer = "0.3.0"
 
 # Robolectric, for the Android host tests of :kitepdf-compose-viewer only: its native graphics
 # draw a Compose canvas on the JVM, so Android text can be checked without a device.
@@ -83,7 +83,7 @@ compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMul
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
 compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
 compose-desktop-currentOs = { module = "org.jetbrains.compose.desktop:desktop", version.ref = "composeMultiplatform" }
-# Compose's back events, the version Compose 1.12.1 requires. Only the tests of :kitepdf-media use it,
+# Compose's back events, the version Compose 1.13.0-alpha02 requires. Only the tests of :kitepdf-media use it,
 # to send the back event that a desktop window makes of Escape, since a test scene has no window.
 compose-navigationevent = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version = "1.1.0" }
 

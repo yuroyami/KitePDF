@@ -83,7 +83,10 @@ internal actual fun hostTextLine(text: String, fontSpec: FontSpec, sizePx: Float
 }
 
 /** The glyph rasterization Compose's text uses on this platform. */
-private val textRasterization = FontRasterizationSettings.PlatformDefault
+private val textRasterization = run {
+    ensureComposeBackend()
+    FontRasterizationSettings.PlatformDefault
+}
 
 private val textEdging = when (textRasterization.smoothing) {
     FontSmoothing.None -> FontEdging.ALIAS

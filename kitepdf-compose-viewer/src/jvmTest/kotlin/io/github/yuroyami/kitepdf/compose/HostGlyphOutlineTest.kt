@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -28,7 +27,7 @@ import kotlin.test.assertTrue
 class HostGlyphOutlineTest {
 
     private val density = Density(1f)
-    private val measurer = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+    private val measurer = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
 
     /** A 300 x 300 page whose font /F1 is neither embedded nor one of the standard 14. */
     private fun pdf(content: String): PdfDocument {

@@ -25,7 +25,7 @@ kotlin {
 
     android {
         namespace = "io.github.yuroyami.kitepdf.nativerenderer"
-        compileSdk = 37
+        compileSdk { version = release(37) { minorApiLevel = 2 } }
         // BlendMode (Paint.setBlendMode) requires API 29. Below that, blend
         // modes silently fall back to SRC_OVER.
         minSdk = 29

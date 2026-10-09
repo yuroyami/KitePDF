@@ -17,7 +17,7 @@ It publishes the targets that KitePlayer's Compose video publishes:
 
 | Target | Plays |
 |---|---|
-| Android | Yes, from `minSdk` 26, as KitePlayer requires |
+| Android | Yes, from `minSdk` 26, as KitePlayer requires. The app compiles against API 37.2 or newer (`compileSdk`) |
 | iOS (`iosArm64`, `iosSimulatorArm64`) | Yes |
 | Desktop JVM | Yes |
 | macOS native, JS, Wasm | No artifact. The viewer shows the posters |
@@ -139,7 +139,7 @@ A pause or a move by the reader cancels `speak`, so stop the engine when its cor
 
 ```kotlin
 pageOverlay = {
-    KiteMediaOverlay(newPlayer = { KitePlayerPlatform.createOrNull(PlayerConfig(/* ... */)) })
+    KiteMediaOverlay(newPlayer = { if (KitePlayer.isAvailable) KitePlayer(PlayerConfig(/* ... */)) else null })
 }
 ```
 

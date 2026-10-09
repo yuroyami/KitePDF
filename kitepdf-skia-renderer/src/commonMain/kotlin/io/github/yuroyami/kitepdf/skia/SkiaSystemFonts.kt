@@ -7,6 +7,8 @@ import io.github.yuroyami.kitepdf.core.withLock
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontSlant
 import org.jetbrains.skia.FontStyle
+import org.jetbrains.skia.FontWeight
+import org.jetbrains.skia.FontWidth
 import org.jetbrains.skia.Typeface
 
 /**
@@ -119,7 +121,7 @@ internal object SkiaSystemFonts {
 
     /** What a face is looked up by. [codePoint] is the character of a [fallback], -1 for the face of [resolve], or -2 for [hasFace]. */
     private data class FaceKey(
-        val family: KiteFontFamily, val weight: Int, val width: Int, val slant: FontSlant, val language: String?, val codePoint: Int,
+        val family: KiteFontFamily, val weight: FontWeight, val width: FontWidth, val slant: FontSlant, val language: String?, val codePoint: Int,
     )
 
     private val cacheLock = KiteLock()

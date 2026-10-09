@@ -17,10 +17,11 @@ import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubFragmentBox
 import io.github.yuroyami.kitepdf.epub.EpubOverlayClip
+import io.github.yuroyami.kiteplayer.AudioContent
 import io.github.yuroyami.kiteplayer.KitePlayer
-import io.github.yuroyami.kiteplayer.KitePlayerPlatform
 import io.github.yuroyami.kiteplayer.PlaybackStatus
 import io.github.yuroyami.kiteplayer.SeekMode
+import io.github.yuroyami.kiteplayer.isAvailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -101,7 +102,7 @@ public fun KiteReadAloud(
     state: KiteDocViewState,
     playing: Boolean,
     color: Color? = null,
-    newPlayer: () -> KitePlayer? = { KitePlayerPlatform.createOrNull() },
+    newPlayer: () -> KitePlayer? = { if (KitePlayer.isAvailable) KitePlayer() else null },
     bookStyles: Boolean = true,
     speak: (suspend (clip: EpubOverlayClip, text: List<KiteReadingItem>) -> Unit)? = null,
     onClip: (EpubOverlayClip?) -> Unit = {},
@@ -298,7 +299,7 @@ internal class ReadAloud(
                 val player = playerOrNull() ?: return
                 try {
                     if (href != audio) {
-                        val item = withContext(Dispatchers.Default) { bookItem(book, href) }
+                        val item = withContext(Dispatchers.Default) { bookItem(book, href)?.copy(audioContent = AudioContent.Speech) }
                         if (item == null) {
                             unplayable += href
                             continue

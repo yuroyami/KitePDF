@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -29,7 +28,7 @@ internal fun renderWithCompose(bytes: ByteArray): BufferedImage {
     val h = page.height.toInt()
     val bmp = ImageBitmap(w, h)
     val density = Density(1f)
-    val tm = TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)
+    val tm = TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)
     CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
         drawRect(Color.White, size = size)
         page.renderTo(ComposeCanvas(this, tm, 1f, false, magnification = 1f, target = bmp), KiteMatrix(1.0, 0.0, 0.0, -1.0, 0.0, h.toDouble()))

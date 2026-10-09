@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -61,7 +60,7 @@ class CanvasDecoratorTest {
     private fun rasterizer(throughCompose: Boolean = false): KitePageRasterizer {
         val density = Density(1f)
         return KitePageRasterizer(density, LayoutDirection.Ltr,
-            TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr)).apply { textOffMain = !throughCompose }
+            TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr)).apply { textOffMain = !throughCompose }
     }
 
     private fun assertPaint(bitmap: ImageBitmap, left: Color) {

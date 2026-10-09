@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFontFamilyResolver
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
@@ -27,7 +26,7 @@ class FontEnvironmentSceneTest {
                 }.build(),
             )
             val renders = AtomicInteger()
-            var resolver by mutableStateOf(createFontFamilyResolver())
+            var resolver by mutableStateOf(testFontFamilyResolver())
             val (scene, driver) = drivenScene(200, 200, queued) {
                 CompositionLocalProvider(LocalFontFamilyResolver provides resolver) {
                     KiteDocView(
@@ -42,7 +41,7 @@ class FontEnvironmentSceneTest {
                 driver.pumpUntilState { renders.get() == 1 }
                 driver.pumpFrames(20)
                 assertEquals(1, renders.get(), "the page rendered again with nothing changed")
-                resolver = createFontFamilyResolver()
+                resolver = testFontFamilyResolver()
                 driver.pumpUntilState { renders.get() == 2 }
             }
         }

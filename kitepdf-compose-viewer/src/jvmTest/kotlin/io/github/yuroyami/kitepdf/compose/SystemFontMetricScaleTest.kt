@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
@@ -49,7 +48,7 @@ class SystemFontMetricScaleTest {
         // size can race Skiko's native system-font face cache during cleanup.
         val density = Density(1f)
         val textMeasurer = TextMeasurer(
-            createFontFamilyResolver(),
+            testFontFamilyResolver(),
             density,
             LayoutDirection.Ltr,
         )

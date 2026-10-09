@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.13.0] - 2026-10-08
+## [0.13.0] - 2026-10-09
 
 ### Added
 
@@ -993,6 +993,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the scene's own draw pass, where Compose draws the scene's text (#464).
 
 ### Changed
+
+- Built with Kotlin 2.4.21. The viewer depends on Compose Multiplatform 1.13.0-alpha02, and the
+  Skia renderer on Skiko 0.153.0, the version that Compose release is built on. The media module
+  plays through KitePlayer 0.3.0. The build uses Gradle 9.8.1, and the JavaScript and WebAssembly
+  tests run on Node 26.11.1.
+- Compose 1.13 sets up its text engine on the desktop JVM, Apple and web only when the first
+  window or `ImageComposeScene` opens. `KiteDocViewState` and `KitePageRasterizer` set it up
+  themselves, so they work before any window exists. A `TextMeasurer` that an app builds with
+  `createFontFamilyResolver()` still needs a window or a scene first.
+- The JavaScript module runs on KiteJS 0.7.0. In a document script, `toLocaleString` on a
+  number formats like the en-US `Intl.NumberFormat` and reads its options argument.
+  A Kotlin `Long` passed to a script keeps its exact value, and a Kotlin list or map that holds
+  itself converts without overflowing the stack.
+- KitePlayer 0.3.0 needs Android API 37.2 to compile against. An Android app that uses
+  `kitepdf-media` therefore needs `compileSdk` 37.2 or newer.
+- The default `newPlayer` of `KiteMediaOverlay`, `EpubMediaPlayer` and `KiteReadAloud` checks
+  `KitePlayer.isAvailable` and builds its player with `KitePlayer()`. KitePlayer 0.3.0 deprecates
+  `KitePlayerPlatform.createOrNull()`. The default still gives null where the platform cannot
+  play.
+- On Android and iOS, a media element that has started holds a KitePlayer media session while it
+  is on the page. The session applies the background policy when the app leaves the screen, as
+  before. A phone call pauses the player, and so does unplugging the headphones. The lock screen
+  and the system media controls follow the element.
+- Read-aloud tells the platform that its audio is speech. Android sets the speech content type,
+  and iOS uses its spoken audio mode, where another app's spoken prompt pauses the narration
+  instead of making it quieter.
 
 - The image engine is now `io.github.yuroyami:imagekodec:0.3.0`. A CMYK or YCCK
   JPEG decodes its four components once, including reduced and progressive

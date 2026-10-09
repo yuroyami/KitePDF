@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.font.FontSpec
@@ -36,7 +35,7 @@ class RtlHostTextTest {
     private val x = 20.0
     private val baseline = 70.0
     private val measurer: TextMeasurer by lazy {
-        onTestUiThread { TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr) }
+        onTestUiThread { TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr) }
     }
 
     /** [logical] as the engine draws it on its own, in a paragraph of its own direction. */

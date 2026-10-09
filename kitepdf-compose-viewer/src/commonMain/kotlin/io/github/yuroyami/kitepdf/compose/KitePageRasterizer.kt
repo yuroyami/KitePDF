@@ -60,6 +60,7 @@ public class KitePageRasterizer(
 
     init {
         require(maxBitmapPixels > 0L) { "maxBitmapPixels must be > 0" }
+        ensureComposeBackend()
     }
 
     internal companion object {

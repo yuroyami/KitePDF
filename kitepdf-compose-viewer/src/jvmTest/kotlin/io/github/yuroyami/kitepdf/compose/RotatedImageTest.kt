@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
@@ -43,7 +42,7 @@ class RotatedImageTest {
         CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bmp), Size(s, s)) {
             val canvas = ComposeCanvas(
                 this,
-                TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr),
+                TextMeasurer(testFontFamilyResolver(), Density(1f), LayoutDirection.Ltr),
             )
             canvas.drawImage(rawRedBlue2x1(), ctm)
         }

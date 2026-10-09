@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.yuroyami.kitepdf.KitePDF
@@ -117,7 +116,7 @@ class KiteDocViewerFeaturesTest {
         val density = Density(1f)
         val rasterizer = KitePageRasterizer(
             density, LayoutDirection.Ltr,
-            TextMeasurer(createFontFamilyResolver(), density, LayoutDirection.Ltr),
+            TextMeasurer(testFontFamilyResolver(), density, LayoutDirection.Ltr),
         )
 
         // 4× supersample of a 200px-wide on-screen box. The ink of a line is 255 minus the
