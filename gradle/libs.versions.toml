@@ -24,7 +24,7 @@ imagekodec = "0.3.0"
 
 # KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
 # so no other module carries a script engine. Its code sees only kitejs-api; QuickJS runs underneath.
-kitejs = "0.6.0"
+kitejs = "0.7.0"
 # KitePlayer: the Kite lineage's media player. Used ONLY by :kitepdf-media, the optional
 # EPUB audio and video artifact. It carries FFmpeg through KiteFFmpeg.
 kiteplayer = "0.3.0"
