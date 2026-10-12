@@ -1,18 +1,12 @@
 # Corpus license notices
 
-These are complete, unmodified upstream license documents obtained for the
-public corpus intakes beginning on 2026-10-01. HTML files retain the official page content;
-the Creative Commons 4.0 files use the official plain-text legal code.
-The recorded SHA-256 values identify these exact notice snapshots.
+This folder holds the complete license documents of the public corpus, as their publishers give them, without changes. The HTML files keep the content of the official pages. The Creative Commons 4.0 files are the official plain-text legal code. The SHA-256 values below identify these exact copies.
 
-Apply only the licenses named for each input in [the manifest](../manifest.json)
-and [attribution](../ATTRIBUTION.md). The SVG-in-spine EPUB has both CC BY-SA 3.0
-publication terms and CC BY 3.0 terms for specified SVG resources. Preserve
-the package-level and resource-level notices already embedded in every input.
-The W3C notice includes its copyright, permission, warranty, and name-use terms.
-The MIT notice, added on 2026-10-03, is the one jQuery 1.7.1 ships, for the copy of jQuery inside
-the Voyage of Life sample with a textual overlay; the rest of that EPUB is
-CC BY-SA 3.0.
+Apply only the licenses that [the manifest](../manifest.json) and [ATTRIBUTION.md](../ATTRIBUTION.md) name for each document. Keep the notices that each document already carries, for the whole package and for its resources.
+
+- The EPUB with SVG in its spine has CC BY-SA 3.0 terms for the publication and CC BY 3.0 terms for some of its SVG resources.
+- The Voyage of Life sample with a text overlay is CC BY-SA 3.0, except for its copy of jQuery. The MIT notice is the one that jQuery 1.7.1 ships, for that copy.
+- The W3C notice includes its copyright, permission, warranty and name-use terms.
 
 | Notice | Official source | SHA-256 |
 |---|---|---|
@@ -26,10 +20,10 @@ CC BY-SA 3.0.
 | [OFL-1.1](OFL-1.1.txt) | [Noto Sans JP notice](https://github.com/google/fonts/blob/295d98a7a0c17c68f1341eaeea354e7960ea70d3/ofl/notosansjp/OFL.txt) | `1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9` |
 | [Apache-2.0](Apache-2.0.txt) | [KitePDF project license](../../LICENSE) | `4cb4a0ad2d8f8b06ae451eabb3255878db929859de44f777fac3e9a03ea56c31` |
 
-CC BY-SA files retain their share-alike license. Derivatives must follow the
-applicable adaptation conditions and record their changes. Third-party downloads
-remain unchanged. The Japanese editions adapt CC0 chapter markup and embed a
-subset of the OFL font, with its notice retained. The JBIG2 chart is original
-Apache-2.0 material. Standard Ebooks' CC0 applies to its editorial contributions;
-retain each book's territorial notices for the underlying public-domain works.
-These notices do not relicense the KitePDF library or any private files added locally.
+- A CC BY-SA file keeps its share-alike license. A derivative must follow the conditions for adaptations and record its changes.
+- The downloads from third parties are unchanged.
+- The Japanese editions adapt CC0 chapter markup and embed a subset of the OFL font, with its notice.
+- The JBIG2 chart is original material under Apache-2.0.
+- The CC0 of Standard Ebooks applies to its editorial contributions. Keep the territorial notice of each book for the public-domain work under it.
+
+These notices do not change the license of the KitePDF library, or of any private file that you add locally.

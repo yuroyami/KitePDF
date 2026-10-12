@@ -1,140 +1,96 @@
 # Differential rendering harness
 
-The correctness scoreboard. It renders selected corpus PDF pages with **KitePDF** and
-with **MuPDF** (`mutool draw`, the in-repo oracle), pixel-diffs the two, and
-ranks the worst-rendering pages first. Every rendering fix is graded against
-it.
+The harness renders PDF pages with KitePDF and with MuPDF (`mutool draw`), compares the two images pixel by pixel, and lists the worst pages first. Every rendering fix is measured with it.
 
 ## Run
 
-The public corpus documents are tracked, and the test task checks them with
-`python3 tools/corpus.py verify` before it runs. The [corpus guide](../corpus/README.md)
-covers attribution, local drop-ins and how to add a public document.
-
-On Linux, install `fonts-noto-cjk` before running the JVM rendering tests, as CI
-does. The vertical Japanese text document has no embedded font and needs a
-host fallback. A runner without one draws missing-glyph boxes instead of text
-and fails the page baseline (#627).
+On Linux, install `fonts-noto-cjk` before you run the JVM rendering tests, as CI does. One public document has vertical Japanese text without an embedded font, so it needs a fallback font from the host. Without that font, the page shows boxes instead of text and fails its baseline.
 
 ```bash
 ./gradlew :kitepdf-native-renderer:jvmTest \
   --tests "io.github.yuroyami.kitepdf.nativerenderer.difftest.DifferentialTest"
 ```
 
-Outputs land in `kitepdf-native-renderer/build/difftest/`:
+Before the test runs, the task checks the public corpus with `python3 tools/corpus.py verify`. The [corpus guide](../corpus/README.md) explains the credits, your own documents, and how to add a public document.
+
+The output goes to `kitepdf-native-renderer/build/difftest/`:
 
 ```
 build/difftest/
-  inputs/          synthetic fixtures materialized to disk
-  out/<doc>/       p<n>.kite.png · p<n>.ref.png · p<n>.diff.png  (red = divergence)
-  report.md        worst-first table with scores + image links
+  inputs/          the synthetic fixtures, written to disk
+  out/<doc>/       p<n>.kite.png, p<n>.ref.png and p<n>.diff.png (red where they differ)
+  report.md        a table of the pages, worst first, with scores and image links
 ```
 
-Open `report.md` and start at the top. That is the worst-rendering page.
+Open `report.md` and start at the top. That row is the worst page.
 
-## Knobs (Gradle `-D` system properties)
+## Settings
+
+Set these as Gradle `-D` system properties.
 
 | Property | Default | Meaning |
 |---|---|---|
-| `kitepdf.mutool` | _auto_ | explicit `mutool` binary path |
-| `kitepdf.corpus` | repo-root `corpus/pdf` | extra real-world PDF directory |
-| `kitepdf.diff.dpi` | `96` | positive render density for both engines |
-| `kitepdf.diff.maxpages` | `6` | positive maximum evenly spaced pages selected per document |
-| `kitepdf.diff.allpages` | `false` | select every PDF page, overriding the sample limit |
-| `kitepdf.diff.budget` | `0.05` | finite max per-page MAE from `0.0` to `1.0` |
-| `kitepdf.diff.updateBaseline` | `false` | write this run's per-page scores to the baseline file instead of checking them |
-| `kitepdf.difftest.out` | `build/difftest` | output directory |
-| `kitepdf.pdfium.python` | _auto_ | Python with `pypdfium2`, for the parity check |
+| `kitepdf.mutool` | found automatically | The path of the `mutool` binary |
+| `kitepdf.corpus` | `corpus/pdf` at the repo root | A folder of PDF files to add to the run |
+| `kitepdf.diff.dpi` | `96` | The render density of both engines, a positive integer |
+| `kitepdf.diff.maxpages` | `6` | The largest number of evenly spaced pages for each document |
+| `kitepdf.diff.allpages` | `false` | Selects every page and ignores `maxpages` |
+| `kitepdf.diff.budget` | `0.05` | The largest mean error that a page may have, from `0.0` to `1.0` |
+| `kitepdf.diff.updateBaseline` | `false` | Writes the scores of this run to the baseline file instead of checking them |
+| `kitepdf.difftest.out` | `build/difftest` | The output folder |
+| `kitepdf.pdfium.python` | found automatically | A Python that has `pypdfium2`, for the parity check |
 
-Explicit corpus and `mutool` paths are strict: a missing directory, missing
-binary, or non-executable binary fails the test instead of silently reducing
-coverage.
+When you give a path for the corpus or for `mutool`, the path must be right. A missing folder, a missing binary or a binary that cannot run fails the test, so the run cannot cover less without telling you.
 
-Example: tighten the gate and crank density once correctness improves:
+The per-page baseline applies only at 96 dpi. So a run at another density checks only the budget. For example, to look at fine detail:
 
 ```bash
 ./gradlew :kitepdf-native-renderer:jvmTest \
+  --tests "io.github.yuroyami.kitepdf.nativerenderer.difftest.DifferentialTest" \
   -Dkitepdf.diff.dpi=150 -Dkitepdf.diff.budget=0.10
 ```
 
 ## The gates
 
-1. **Render success**: KitePDF must not throw on any page.
-2. **Non-blank**: synthetic fixtures must produce visible output.
-3. **Oracle completeness**: when `mutool` is found, KitePDF and MuPDF must
-   report the same page count and every KitePDF-rendered page must produce a
-   readable reference PNG. A mismatch, timeout, non-zero exit, or
-   missing/unreadable PNG fails the gate and is recorded in `report.md`.
-4. **Regression budget** (only when the oracle is present): no page may
-   exceed `kitepdf.diff.budget`. The default sits near twice the worst page
-   seen at the time it was set, so a real regression fails instead of hiding
-   under a lenient ceiling. Lower it as the score drops, and raise it for one
-   run when a deliberate change moves the baseline.
+1. **Render success.** KitePDF must not throw on any page.
+2. **Visible output.** Each synthetic fixture must draw something.
+3. **Oracle completeness.** When the harness finds `mutool`, KitePDF and MuPDF must report the same page count. Each page that KitePDF renders must also give a readable reference PNG. A page count that differs, a timeout, an exit code that is not zero, or a missing or unreadable PNG fails the gate. `report.md` records the cause.
+4. **Budget** (only when the harness finds `mutool`). No page may have a mean error above `kitepdf.diff.budget`. Lower the budget as the scores drop. Raise it for one run when a change moves the scores on purpose.
+5. **Per-page baseline** (only when the harness finds `mutool`, at 96 dpi). Each page must not score clearly worse than its entry in `src/jvmTest/resources/difftest-baseline.txt`, even when the mean holds. A page fails when one of these numbers grows past its margin:
+    - the mean error, by more than a quarter plus 0.0005
+    - the fraction of changed pixels, by more than a quarter plus 0.002
+    - the largest channel error, by more than 48 levels
 
-   The number is only as steady as the oracle. A `mutool` built without colour
-   management converts CMYK the plain arithmetic way (`0 1 1 0 k` comes out
-   pure 255/0/0), while a colour-managed build lands near 237/28/36, so the
-   same page can score two or three times higher against one build than the
-   other. Compare scores only across runs that used the same oracle.
-5. **Per-page baseline** (only when the oracle is present, at 96 dpi): each
-   page must not score clearly worse than its entry in
-   `src/jvmTest/resources/difftest-baseline.txt`, even when the mean holds.
-   A page fails when one of these grows past its margin:
-   - the mean error, by more than a quarter plus 0.0005
-   - the fraction of changed pixels, by more than a quarter plus 0.002
-   - the largest channel error, by more than 48 levels
+A fixture page without an entry fails. A corpus page without an entry is only reported. A fixture has its name as its key. A corpus document has a hash of its bytes as its key, so its file name stays out of the tracked file.
 
-   A fixture page with no entry fails. A corpus page with no entry is only
-   reported. A fixture keys by its name. A corpus document keys by a hash of
-   its bytes, so its file name stays out of the tracked file. When a change
-   moves a score on purpose, rerun with `-Dkitepdf.diff.updateBaseline=true`
-   and say why in the same commit. The sweep prints each page that got
-   better, so that its new score can be recorded.
+When a change moves a score on purpose, run the test again with `-Dkitepdf.diff.updateBaseline=true`, and say why in the same commit. The sweep prints each page that got better, so that you can record its new score.
 
 ## The corpus
 
-- **Synthetic fixtures** (`SyntheticPdfs.kt`) always run: text, vector
-  fills/strokes/curves, transparency, multi-page. Deterministic, no external
-  files, and both engines render the same bytes, so any divergence is a real
-  KitePDF gap.
-- **Public and local PDFs**: the pinned manifest supplies 49 public PDFs. Put
-  additional local `.pdf` files in the repo-root `corpus/pdf/`, or point
-  `-Dkitepdf.corpus` elsewhere. Discovery is recursive and ordered by relative
-  path; duplicate file stems receive distinct report names. Files outside the
-  public manifest remain local and are not licensed by that manifest.
-- **Page selection**: the default is up to six evenly spaced pages per document,
-  including the first and last pages. A limit of one selects page 0. Set
-  `-Dkitepdf.diff.allpages=true` to select every page. The report records the
-  selected page indices and available page counts, separate from successful
-  oracle scores. The default run selects 207 of the 249 public PDF pages.
+- **Synthetic fixtures** (`SyntheticPdfs.kt`) always run. They cover text, paths, dashes, clips, transparency, blend modes, soft masks, CMYK, five shading types, a Type 3 font, page rotation and page boxes. They need no files, and both engines render the same bytes, so a difference is a real KitePDF gap.
+- **Public PDFs** come from the manifest of the corpus. To add your own documents, put `.pdf` files in `corpus/pdf/` at the repo root, or set `-Dkitepdf.corpus` to another folder. The harness looks in subfolders too, in the order of the relative paths. Two files with the same name get different names in the report. A file that the manifest does not list stays local, and the manifest does not license it.
+- **Page selection.** By default, the harness selects up to six evenly spaced pages of each document, with the first and the last page. A limit of one selects page 0. To select every page, add `-Dkitepdf.diff.allpages=true`. The report gives the selected pages and the page count of each document, apart from the pages that the oracle scored.
 
-The EPUB sweep (`--tests '*EpubDifferentialTest*'`) renders every page produced
-by KitePDF and checks recorded per-book page counts. Its optional MuPDF
-comparison covers page 0 only and is informational because reflow can differ.
-The 46 public EPUBs include 31 complete Standard Ebooks publications and an
-embedded-font Japanese novel. The [corpus guide](../corpus/README.md) records
-the rights, coverage and regeneration recipes (#620, #621, #624).
+The EPUB sweep (`--tests '*EpubDifferentialTest*'`) renders every page that KitePDF makes, and checks the page count of each book against a recorded count. When the harness finds `mutool`, the sweep also compares page 0 with MuPDF. That score is for information only, because the two engines can reflow a book differently. The [corpus guide](../corpus/README.md) lists the public books with their rights.
 
-## The oracle (`mutool`)
+## The oracle
 
-Located automatically from `-Dkitepdf.mutool`, `$MUTOOL`, the in-repo build, or
-`$PATH`. Use an installed `mutool`, such as the Homebrew binary at
-`/opt/homebrew/bin/mutool`. The `mupdf-master/` checkout is a read-only reference
-with empty third-party submodules; do not try to build it. Record the oracle
-version when comparing scores. Without any oracle the harness still runs as a
-KitePDF-only smoke pass and emits the report without oracle scores.
+The harness looks for `mutool` in this order:
+
+1. `-Dkitepdf.mutool`
+2. `$MUTOOL`
+3. a build in `mupdf-master/build/release` or `mupdf-master/build/debug`
+4. `$PATH`
+
+The `mupdf-master/` folder is a read-only reference. Its third-party submodules are empty, so do not try to build it there. Without `mutool`, the harness still renders every page with KitePDF and writes the report without scores.
+
+A score is only as steady as the `mutool` that made it. A `mutool` built without color management converts CMYK with plain arithmetic, so `0 1 1 0 k` comes out as pure red (255, 0, 0). A build with color management gives about (237, 28, 36). So one page can score two or three times higher with one build than with the other. CI uses MuPDF 1.27.2, built with `XCFLAGS=-DFZ_ENABLE_ICC=1`, as the `build` job of `.github/workflows/ci.yml` shows. Compare scores only between runs that used the same `mutool`, and record its version.
 
 ## The parity check (PDFium)
 
-`PdfiumParityTest` asks one question: does PDFium, the PDF engine of Chrome, do
-anything better than KitePDF? It renders each page of the corpus and of the
-shared oracle fixtures three times: KitePDF on AWT (K), MuPDF (M) and PDFium
-(P). Then it compares each pair of renders.
+`PdfiumParityTest` asks one question: does PDFium, the PDF engine of Chrome, do anything better than KitePDF? It renders each page of the corpus and of the shared oracle fixtures three times: with KitePDF on AWT (K), with MuPDF (M) and with PDFium (P). Then it compares each pair of renders.
 
-MuPDF and PDFium disagree with each other in known ways: anti-aliasing, the
-weight of thin lines, mesh shadings, and the fonts that replace the standard 14
-fonts. So a difference between KitePDF and PDFium proves nothing by itself. The
-third render breaks the tie:
+MuPDF and PDFium differ from each other in known ways: anti-aliasing, the weight of thin lines, mesh shadings, and the fonts that replace the 14 standard fonts. So a difference between KitePDF and PDFium proves nothing alone. The third render decides:
 
 | Pattern | Verdict |
 |---|---|
@@ -142,46 +98,42 @@ third render breaks the tie:
 | K agrees with M or with P | The check passes. One reference goes its own way. |
 | Each engine alone differs somewhere on the page | No consensus. The check passes and lists the page for review. |
 
-`ThreeWayDiff` measures agreement on the whole page and on each tile of 24
-pixels, so a small missing element counts as well as a colour shift. An engine
-is the odd one out when its distance to each of the other two is more than
-twice their distance to each other, plus a margin.
+`ThreeWayDiff` compares the whole page and each tile of 24 by 24 pixels, so a small missing element counts as much as a color shift. An engine is the odd one out when its distance to each of the other two is more than twice their distance to each other, plus a margin.
 
-The check also fails when PDFium opens a document or finds pages that KitePDF
-does not, renders a page that KitePDF fails on, or extracts a character from a
-page that KitePDF does not extract.
+The check also fails when PDFium does one of these and KitePDF does not:
+
+- opens a document, or finds its pages
+- renders a page
+- extracts a character from a page
+
+The check writes these files:
 
 ```
 build/difftest/
-  parity.md                 every page with its three distances and its verdict
-  parity/<doc>/p<n>.*.png   kite, mupdf and pdfium renders, and the map
+  parity.md                 each page with its three distances and its verdict
+  parity/<doc>/p<n>.*.png   the KitePDF, MuPDF and PDFium renders, and the map
 ```
 
-The map is red where KitePDF alone differs, blue where PDFium alone differs,
-and green where MuPDF alone differs.
+The map is red where only KitePDF differs, blue where only PDFium differs, and green where only MuPDF differs.
 
-`PdfiumParityTest.KNOWN_GAPS` lists each page where PDFium does better today,
-with its open issue. The label `plan:pdfium-parity` groups those issues. A new
-finding needs an issue before it goes on the list.
+`PdfiumParityTest.KNOWN_GAPS` lists each page where PDFium does better, with its open issue. The label `plan:pdfium-parity` groups those issues. A new finding needs an issue before it goes on the list.
 
-Sometimes KitePDF alone differs and is still right. MuPDF and PDFium can agree
-with each other and both be wrong, or the spec can leave the look to the
-reader, such as the icon of a note. `PdfiumParityTest.EXEMPTIONS` lists those
-pages, each with its kind and the reason from the spec. An entry covers only
-the pixel finding of its page, and only up to the number of tiles it records,
-so a new fault on the same page still fails.
+Sometimes KitePDF alone differs and is still right. MuPDF and PDFium can agree and both be wrong, or the spec can leave the look to the reader, such as the icon of a note. `PdfiumParityTest.EXEMPTIONS` lists those pages, each with its kind and the reason from the spec. An entry covers only the pixel finding of its page, and only up to the number of tiles that it records. So a new fault on the same page still fails.
 
-A page on either list that stops failing must come off it, or the check fails.
+A page on either list that stops failing must come off the list, or the check fails.
 
-PDFium comes from `pypdfium2` and runs in its own Python process. Install the
-pinned version once:
+PDFium comes from `pypdfium2` and runs in its own Python process. Install the pinned version once:
 
 ```bash
 python3 -m venv ~/.cache/kitepdf/pdfium-venv
 ~/.cache/kitepdf/pdfium-venv/bin/python -m pip install --only-binary :all: --no-deps pypdfium2==5.13.0
 ```
 
-`PdfiumOracle` finds it from `-Dkitepdf.pdfium.python`, `$PDFIUM_PYTHON`, that
-virtual environment, or a `python3` on `$PATH` that imports `pypdfium2`.
-Without PDFium or `mutool`, the check reports as skipped. CI installs the same
-version.
+`PdfiumOracle` looks for Python in this order:
+
+1. `-Dkitepdf.pdfium.python`
+2. `$PDFIUM_PYTHON`
+3. `~/.cache/kitepdf/pdfium-venv/bin/python`
+4. a `python3` on `$PATH` that imports `pypdfium2`
+
+Without PDFium or `mutool`, the check reports as skipped. CI installs the same version of `pypdfium2`.

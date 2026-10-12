@@ -2,83 +2,100 @@
 
 The corpus holds the real documents that the differential harnesses render. It has two parts:
 
-- **Public documents.** The [manifest](manifest.json) lists 95 documents: 49 PDFs with 249 pages, and 46 EPUBs. The default PDF sweep selects 207 public pages. They are tracked in this repository, so a clean checkout tests them. Each one keeps its own license.
-- **Local drop-ins.** Put your own PDFs under `pdf/` and EPUBs under `epub/`. Git ignores them, because they can be copyrighted. They add to your local counts but never to the public set.
+- **Public documents.** The [manifest](manifest.json) lists PDF and EPUB files that this repository tracks, so a clean checkout tests them. Each document keeps its own license.
+- **Your own documents.** Put your own PDFs in `pdf/` and EPUBs in `epub/`. Git ignores them, because they can be under copyright. They add to your local counts, but never to the public set.
 
-The EPUBs include 31 complete Standard Ebooks publications, a complete Japanese novel with an embedded vertical font, and the original fourteen publications and conformance samples. Six carry scripts, which the scripted-book gate runs (#496). The PDF additions include 32 scientific articles, a seven-page Japanese chapter and an original JBIG2 chart. The articles alone supply 175 selected pages across 32 documents (#624).
-
-The 96 dpi sweep scores 240 pages including generated harness fixtures, with mean MAE 0.0012 against colour-managed MuPDF 1.27.2, down from 0.0015 after the image-sampling fix in [#626](https://github.com/yuroyami/KitePDF/issues/626). The two JOSS raster diagrams that exposed it remain in the corpus with improved per-page scores and no tiles where KitePDF alone differs from both references. Four generated image fixtures cover fractional reductions with and without a soft mask. The EPUB sweep renders 6,178 pages including harness fixtures; the only two blank pages are the existing Page Blanche sample pages.
+The public EPUBs include complete Standard Ebooks publications, a complete Japanese novel with an embedded vertical font, publications of the W3C and the EPUB 3 samples of the IDPF. Some of them carry scripts, which the scripted-book gate runs. The public PDFs include scientific articles, a Japanese chapter in vertical text and an original JBIG2 chart.
 
 ## Verify the public documents
 
-Run from the repository root with Python 3. No third-party package is needed.
+Run this from the repository root with Python 3. It needs no third-party package and no network.
 
 ```bash
 python3 tools/corpus.py verify
 ```
 
-`verify` checks that every manifest entry exists and matches its recorded byte count and SHA-256. It uses no network. The renderer test tasks run it first, so a changed or missing file fails the build before a test runs.
+`verify` checks that each manifest entry exists and has its recorded byte count and SHA-256. The `jvmTest` tasks of the two renderers run it first, so a changed or missing file fails the build before a test runs.
 
-`list` prints the manifest. `fetch` downloads a missing entry from its recorded URL and checks it the same way. Use it to restore a deleted file, or to get the files into another root with `--root /absolute/path`. Downloads go through a cache at `~/.cache/kitepdf/public-corpus`; `fetch --offline` reads only the cache.
+The tool has two more commands:
 
-Some download URLs can change upstream: the nine W3C EPUBs come from a GitHub Pages site, the Arabic PDF guide comes from the current-file Commons URL, and Standard Ebooks serves current editions. A changed upstream file fails `fetch` on the digest. The tracked copy stays the reference. Generated editions use repository URLs, which become available when those files are published; the recipes below can reproduce them from pinned inputs.
+- `list` prints the manifest.
+- `fetch` downloads a missing entry from its recorded URL and checks it the same way. Use it to restore a deleted file, or to get the files into another folder with `--root /absolute/path`. Downloads go through a cache in `~/.cache/kitepdf/public-corpus`. `fetch --offline` reads only the cache.
+
+Some download URLs can change upstream:
+
+- The W3C EPUBs come from a GitHub Pages site.
+- The Arabic PDF guide comes from the URL of the current file on Wikimedia Commons.
+- Standard Ebooks serves its current editions.
+
+When an upstream file changes, `fetch` fails on the digest. The tracked copy stays the reference. The generated documents have repository URLs. The recipes below reproduce them from pinned inputs.
 
 ## Run the harnesses
 
-The harnesses find PDFs and EPUBs recursively in their folders, in a stable order. They include the public documents, your drop-ins, and their own generated fixtures. Two files with the same stem get distinct report names.
+The harnesses find the PDFs and the EPUBs in their folders and in all subfolders, in a stable order. They render the public documents, your own documents and their own generated fixtures. Two files with the same name get different names in the report.
 
 ```bash
 ./gradlew :kitepdf-native-renderer:jvmTest --tests "*.difftest.DifferentialTest"
 ```
 
-The PDF sweep scores up to six evenly spaced pages per document, including the first and the last page. Set `-Dkitepdf.diff.maxpages=N` to change the number, or `-Dkitepdf.diff.allpages=true` to score every page. The report at `kitepdf-native-renderer/build/difftest/report.md` lists the available and selected pages, failures and scores. A page has a score only when KitePDF and the MuPDF oracle both render it.
+The PDF sweep scores up to six evenly spaced pages of each document, with the first and the last page. To change the number, set `-Dkitepdf.diff.maxpages=N`. To score every page, set `-Dkitepdf.diff.allpages=true`. The report in `kitepdf-native-renderer/build/difftest/report.md` lists the pages of each document, the selected pages, the failures and the scores. A page has a score only when KitePDF and MuPDF both render it.
 
 ```bash
 ./gradlew :kitepdf-native-renderer:jvmTest --tests "*EpubDifferentialTest*"
 ```
 
+The EPUB sweep renders every page that KitePDF makes, and writes the page count of each book to `kitepdf-native-renderer/build/epub-difftest/report.md`. A render failure, or a change of a recorded page count without a reason, fails the sweep. The sweep compares only page 0 with MuPDF, and that score is for information only, because the two engines can reflow a book differently.
+
 ```bash
 ./gradlew :kitepdf-javascript:jvmTest --tests "*ScriptedBookGateTest*"
 ```
 
-The scripted-book gate opens each scripted chapter of the public EPUBs through `EpubScriptRunner`, taps it, runs its timers, and checks what the page shows afterwards. A scripted book added here needs its checks there, and the gate fails until it has them.
+The scripted-book gate opens each chapter with scripts of the public EPUBs through `EpubScriptRunner`. It taps the page, runs its timers, and checks what the page shows afterwards. A book with scripts that you add here needs its checks in that gate. The gate fails until it has them.
 
-The EPUB sweep renders every page that KitePDF paginates, and writes per-book page counts to `kitepdf-native-renderer/build/epub-difftest/report.md`. A render failure or an unexplained change of a recorded page count fails the gate. MuPDF compares page 0 only, and that score is for information, because reflow can differ.
-
-Override the folders with `-Dkitepdf.corpus=/absolute/pdf/path` and `-Dkitepdf.epub.corpus=/absolute/epub/path`. A path that does not exist fails. The [harness guide](../kitepdf-native-renderer/DIFFTEST.md) covers oracle setup, PDFium parity, score budgets and baseline updates.
+To use other folders, set `-Dkitepdf.corpus=/absolute/pdf/path` and `-Dkitepdf.epub.corpus=/absolute/epub/path`. A path that does not exist fails the test. The [harness guide](../kitepdf-native-renderer/DIFFTEST.md) explains the oracle setup, the PDFium parity check, the score budget and the baseline updates.
 
 ## Rights
 
-The documents keep their upstream licenses: CC0, CC BY 3.0 and 4.0, CC BY-SA 3.0 and 4.0, the W3C Software and Document License (2015), and MIT for the copy of jQuery inside one IDPF sample. The Japanese font is SIL OFL 1.1; the original JBIG2 chart is Apache-2.0. The project license does not replace third-party terms. [ATTRIBUTION.md](ATTRIBUTION.md) credits each document, the manifest records the license evidence, and [licenses/](licenses/README.md) holds the full license texts.
+The documents keep their upstream licenses: CC0, CC BY 3.0 and 4.0, CC BY-SA 3.0 and 4.0, the W3C Software and Document License (2015), and MIT for the copy of jQuery inside one IDPF sample. The Japanese font uses the SIL OFL 1.1, and the original JBIG2 chart uses Apache-2.0. The license of the project does not replace the terms of a third party.
 
-The third-party downloads are unchanged upstream bytes. The two Japanese editions are declared adaptations, generated from CC0 chapter markup and an OFL font. Standard Ebooks dedicates its editorial contributions to CC0; the books retain their notices about the underlying texts and illustrations being public domain in the United States and potentially protected elsewhere.
+- [ATTRIBUTION.md](ATTRIBUTION.md) credits each document.
+- The manifest records the license evidence.
+- [licenses/](licenses/README.md) holds the full license texts.
 
-Keep the credits and the license notices when you share a file. Follow the share-alike terms for an adaptation. A generated or reduced derivative needs its own provenance and license review.
+The downloads from third parties are the unchanged upstream bytes. The two Japanese editions are declared adaptations, generated from CC0 chapter markup and an OFL font. Standard Ebooks dedicates its editorial contributions to CC0. The books keep their notices: the texts and illustrations are in the public domain in the United States, and they can be protected elsewhere.
+
+Keep the credits and the license notices when you share a file. Follow the share-alike terms for an adaptation. A generated or reduced derivative needs its own review of provenance and license.
 
 ## Add a public document
 
 1. Check the license of the document and of every asset inside it.
-2. Add a manifest entry: source and download URLs, revision, creators, attribution, license evidence, byte count, SHA-256, and what the document covers.
-3. Add its credits to `ATTRIBUTION.md`, and its license text to `licenses/` when it is new.
+2. Add a manifest entry with the source and download URLs, the revision, the creators, the attribution, the license evidence, the byte count, the SHA-256 and what the document covers.
+3. Add its credits to `ATTRIBUTION.md`. When its license is new, add the license text to `licenses/`.
 4. Add its path to the corpus list in the root `.gitignore`.
-5. Run `python3 tools/corpus.py verify` and the affected harnesses.
+5. Run `python3 tools/corpus.py verify` and the harnesses that it affects.
 
-Never add a private or user-supplied file to the manifest.
+Never add a private file, or a file that a user gave you, to the manifest.
 
 ## Reproduce the generated documents
 
-Normal tests use the tracked bytes and need neither generator dependency.
+The tests use the tracked bytes, so they need neither generator.
 
-For the Japanese editions (#620), download the three `inputs` URLs recorded in their manifest entries. The generator checks their SHA-256 before using them. With Python and `fonttools==4.66.1` installed in a separate virtual environment, run:
+### The Japanese editions
+
+1. Download the three `inputs` URLs that the manifest entries of the two editions record. The generator checks their SHA-256 before it uses them.
+2. In a separate virtual environment, install Python and `fonttools==4.66.1`.
+3. Run the generator:
 
 ```bash
 python tools/make_vertical_corpus.py /path/to/kusamakura-japanese-vertical-writing.epub \
   /path/to/NotoSansJP.ttf /path/to/OFL.txt
 ```
 
-The EPUB keeps all thirteen chapters and ruby, replaces the placeholder font with a static Noto Sans JP subset, and omits recordings, cover and old styles. The PDF typesets the complete first chapter without ruby readings. Both embed 3,064 glyphs with 240 `vert`/`vrt2` substitutions and vertical metrics. The font notices remain in its name table and in `licenses/OFL-1.1.txt`; the EPUB also includes that notice. Font and ZIP timestamps are fixed, so regeneration reproduces the manifest hashes.
+The EPUB keeps all thirteen chapters and the ruby. It replaces the placeholder font with a static subset of Noto Sans JP, and it leaves out the recordings, the cover and the old styles. The PDF sets the complete first chapter without ruby readings. Both embed the font with its vertical substitutions (`vert` and `vrt2`) and its vertical metrics. The font notices stay in its name table and in `licenses/OFL-1.1.txt`, and the EPUB also includes that notice. The font and ZIP timestamps are fixed, so a new run gives the same hashes as the manifest.
 
-For the JBIG2 chart (#621), check out [agl/jbig2enc](https://github.com/agl/jbig2enc) at `d0dfca46216c98f11312a9c9f15615ed490cd7b3`, then run:
+### The JBIG2 chart
+
+Check out [agl/jbig2enc](https://github.com/agl/jbig2enc) at `d0dfca46216c98f11312a9c9f15615ed490cd7b3`, then run:
 
 ```bash
 c++ -std=c++17 -O2 -I/path/to/jbig2enc/src tools/make_halftone_corpus.cpp \
@@ -86,4 +103,4 @@ c++ -std=c++17 -O2 -I/path/to/jbig2enc/src tools/make_halftone_corpus.cpp \
 /tmp/make-halftone corpus/pdf/kitepdf-jbig2-arithmetic-halftone.pdf
 ```
 
-This original eight-tone chart contains an arithmetic pattern dictionary and an immediate arithmetic halftone region, with no externally sourced image. MuPDF and PDFium reproduce all 19,200 chart pixels. Contrary to the older description in #621, the current ImageKodec 0.2.0 already renders this arithmetic template-0 case: the initial AWT score against MuPDF is 0.0010 MAE at 96 dpi. The baseline records the actual chart, without a decoder change or a dependency upgrade.
+The chart has eight tones. It holds an arithmetic pattern dictionary and an immediate arithmetic halftone region, with no image from an outside source.

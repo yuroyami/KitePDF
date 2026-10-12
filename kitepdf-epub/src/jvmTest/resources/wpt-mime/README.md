@@ -1,17 +1,13 @@
 # web-platform-tests MIME type data
 
-The test data of the MIME Sniffing Standard's MIME type parser, from
-[web-platform-tests/wpt](https://github.com/web-platform-tests/wpt) at commit
-`1d99362b6bca46cc06e731ece8e022f0f1c21695`, folder `mimesniff/mime-types/resources`, unchanged:
+This folder holds the test data of the MIME type parser of the MIME Sniffing Standard. The files come unchanged from [web-platform-tests/wpt](https://github.com/web-platform-tests/wpt) at commit `1d99362b6bca46cc06e731ece8e022f0f1c21695`, folder `mimesniff/mime-types/resources`:
 
-- `mime-types.json`: inputs with the MIME type each parses to, serialized, or null for a
-  failure, and for some the encoding its charset names.
-- `generated-mime-types.json`: the same, generated for every control and non-ASCII code point
-  in each part of a MIME type.
+- `mime-types.json`: inputs, each with the serialized MIME type that it parses to, or null for a failure. Some inputs also give the encoding that their charset names.
+- `generated-mime-types.json`: the same, generated for every control code point and every non-ASCII code point in each part of a MIME type.
 
-`WhatwgMimeTypeTest` runs both against the MIME type parser of the script layer, which
-`FileReader.readAsText` reads the charset of a blob's type through (#533). The files are under
-the 3-Clause BSD License of the web-platform-tests contributors, in `LICENSE.md`.
+`WhatwgMimeTypeTest` runs both files against the MIME type parser of the script layer. `FileReader.readAsText` uses that parser to read the charset of the type of a blob.
+
+The files are under the 3-Clause BSD License of the web-platform-tests contributors, in `LICENSE.md`.
 
 To take a newer copy:
 

@@ -1,62 +1,48 @@
 # web-platform-tests
 
-JavaScript tests from [web-platform-tests/wpt](https://github.com/web-platform-tests/wpt) at
-commit `1d99362b6bca46cc06e731ece8e022f0f1c21695`, unchanged:
+This folder holds JavaScript tests from [web-platform-tests/wpt](https://github.com/web-platform-tests/wpt) at commit `1d99362b6bca46cc06e731ece8e022f0f1c21695`, unchanged. `WebPlatformTest` runs them in the script layer of an EPUB chapter.
 
-- `url`: from the folder `url`, the tests of the WHATWG URL Standard. Every `url-*.any.js` and
-  `urlsearchparams-*.any.js` file that tests `URL` or `URLSearchParams` without a worker, a
-  window or the `<a>` element.
-- `webidl`: from the folder `webidl/ecmascript-binding/es-exceptions`, the tests of the
-  `DOMException` of Web IDL. Every `DOMException-*.any.js` file.
-- `encoding`: from the folder `encoding`, the tests of `TextEncoder` and `TextDecoder` of the
-  Encoding Standard, with the two scripts of `encoding/resources` they load. Every `*.any.js`
-  file but three: `replacement-encodings.any.js` and `unsupported-encodings.any.js` read their
-  data through `XMLHttpRequest`, which a book's scripts do not have, and `idlharness.any.js`
-  needs the IDL files and idlharness.js of web-platform-tests.
+## The tests
+
+- `url`: the tests of the WHATWG URL Standard, from the folder `url`. Every `url-*.any.js` and `urlsearchparams-*.any.js` file that tests `URL` or `URLSearchParams` without a worker, a window or the `<a>` element.
+- `webidl`: the tests of the `DOMException` of Web IDL, from the folder `webidl/ecmascript-binding/es-exceptions`. Every `DOMException-*.any.js` file.
+- `encoding`: the tests of `TextEncoder` and `TextDecoder` of the Encoding Standard, from the folder `encoding`, with the two scripts of `encoding/resources` that they load. Every `*.any.js` file except three:
+    - `replacement-encodings.any.js` and `unsupported-encodings.any.js` read their data through `XMLHttpRequest`, which the scripts of a book do not have.
+    - `idlharness.any.js` needs the IDL files and the idlharness.js of web-platform-tests.
 - `common/subset-tests.js`, which `single-byte-decoder.any.js` loads.
-- `html/webappapis/atob/base64.any.js`, the tests of `atob` and `btoa`, and
-  `fetch/data-urls/resources/base64.json`, the data it fetches.
-- `FileAPI`: from the folder `FileAPI`, the tests of `Blob`, `File`, `FileReader` and blob URLs.
-  Every `*.any.js` file of `blob`, `file` and `reading-data-section`, with `fileReader.any.js`,
-  `unicode.any.js` and `url/url-format.any.js`. The other files of `url` need a window, an
-  iframe, `fetch` or `XMLHttpRequest`, and `idlharness.any.js` needs the IDL files and
-  idlharness.js of web-platform-tests.
+- `html/webappapis/atob/base64.any.js`, the tests of `atob` and `btoa`, and `fetch/data-urls/resources/base64.json`, the data that it fetches.
+- `FileAPI`: the tests of `Blob`, `File`, `FileReader` and blob URLs, from the folder `FileAPI`. Every `*.any.js` file of `blob`, `file` and `reading-data-section`, with `fileReader.any.js`, `unicode.any.js` and `url/url-format.any.js`. The other files of `url` need a window, an iframe, `fetch` or `XMLHttpRequest`. `idlharness.any.js` needs the IDL files and the idlharness.js of web-platform-tests.
 - `common/gc.js`, which `Blob-stream.any.js` loads.
-- `html/dom`: the reflection tests of HTML, which check each IDL attribute of each element
-  against its content attribute. The nine `reflection-*.html` pages, with `reflection.js`, the
-  two harness scripts and the nine `elements-*.js` tables they load.
-- `html/semantics/interfaces.html` and `interfaces.js`, the tests of the interface of each
-  element that `document.createElement` makes.
-- `dom/nodes`: the tests of `querySelector`, `querySelectorAll`, `matches`,
-  `webkitMatchesSelector` and `closest` of the DOM Standard, which run the selectors of
-  `selectors.js` and others of their own: the twelve pages that the commands below fetch, the
-  scripts they load, and the two documents, HTML and XHTML, that their frames load. With them,
-  the tests of attributes: `Attr`, `NamedNodeMap`, the attribute methods of `Element` and
-  `createAttribute` of the DOM Standard, and the validation of names, in the thirteen pages
-  the second list below fetches, with `attributes.js` and `productions.js`, which they load.
+- `html/dom`: the reflection tests of HTML, which check each IDL attribute of each element against its content attribute. The nine `reflection-*.html` pages, with `reflection.js`, the two harness scripts and the nine `elements-*.js` tables that they load.
+- `html/semantics/interfaces.html` and `interfaces.js`, the tests of the interface of each element that `document.createElement` makes.
+- `dom/nodes`, two groups of tests of the DOM Standard:
+    - The tests of `querySelector`, `querySelectorAll`, `matches`, `webkitMatchesSelector` and `closest`, which run the selectors of `selectors.js` and some of their own. These are the twelve pages that the first `dom/nodes` command below fetches, the scripts that they load, and the HTML and XHTML documents that their frames load.
+    - The tests of attributes: `Attr`, `NamedNodeMap`, the attribute methods of `Element`, `createAttribute`, and the validation of names. These are the thirteen pages that the second `dom/nodes` command below fetches, with `attributes.js` and `productions.js`, which they load.
 
-`WebPlatformTest` runs each file in a chapter of its own, after `harness.js`, a file of this
-folder that is not from web-platform-tests: it stands in for testharness.js, and logs the count
-once every test has completed. The scripts a file names in a `// META: script=` line run before
-it. `sab.js` stands in for `/common/sab.js`, whose own copy makes a shared buffer through
-`WebAssembly.Memory`; `blob-support.js` stands in for `FileAPI/support/Blob.js`, whose own copy
-writes its promise tests as async functions, which KiteJS cannot parse yet; and `harness.js` has
-the `subsetTestByKey` of `/common/subset-tests-by-key.js`. A file named with a `?` query, such as
-`single-byte-decoder.any.js?TextDecoder`, runs with that query as `location.search`, the
-variant web-platform-tests runs it in. A page, a `.html` file, runs in a chapter served as
-`text/html`, with its `<script>` elements in order, each from the page's folder or from the root
-of this one, and `harness.js` in place of testharness.js and testharnessreport.js. A page of
-`dom/nodes`, whose tests query its own markup, is the chapter itself, served as XHTML for a `.xht`
-or `.xhtml` page; a book's chapter has no frame, so a page whose tests run in the document a frame
-loads runs as that document, its scripts at the end of the body until they leave it, and the
-frame's `load` handed the chapter's own document. `harness.js` has `setup` with `single_test`, `done`,
-`assert_idl_attribute`, and the realm's `DOMException` as the second argument of
-`assert_throws_dom`, which also takes a legacy code name such as `INDEX_SIZE_ERR`. The data that
-`url-constructor`, `url-origin` and `url-setters` fetch is the parser's test data in
-`kitepdf-epub/src/jvmTest/resources/wpt-url`, from the same commit. The test files are under
-the 3-Clause BSD License of the web-platform-tests contributors, in `LICENSE.md`.
+The data that `url-constructor`, `url-origin` and `url-setters` fetch is the test data of the URL parser in `kitepdf-epub/src/jvmTest/resources/wpt-url`, from the same commit.
 
-To take a newer copy, at the commit the data is at:
+The test files are under the 3-Clause BSD License of the web-platform-tests contributors, in `LICENSE.md`.
+
+## How the tests run
+
+`WebPlatformTest` runs each test file in a chapter of its own:
+
+- `harness.js` runs first. It stands in for testharness.js, and it logs the count after every test has completed.
+- The scripts that a file names in a `// META: script=` line run before the file.
+- A file named with a `?` query, such as `single-byte-decoder.any.js?TextDecoder`, runs with that query as `location.search`. This is the variant that web-platform-tests runs.
+- A page (a `.html` file) runs in a chapter served as `text/html`. Its `<script>` elements run in order, each from the folder of the page or from the root of this folder. `harness.js` takes the place of testharness.js and testharnessreport.js.
+- A page of `dom/nodes`, whose tests query its own markup, is the chapter itself. It is served as XHTML when it is a `.xht` or `.xhtml` page.
+- A chapter of a book has no frames. So a page whose tests run in the document of a frame runs as that document. Its scripts run at the end of the body until they leave the body, and the `load` event of the frame gets the document of the chapter.
+
+These files of this folder are not from web-platform-tests:
+
+- `harness.js` has `setup` with `single_test`, `done`, `assert_idl_attribute`, and `assert_throws_dom`, which gets the `DOMException` of the realm as its second argument and also takes a legacy code name such as `INDEX_SIZE_ERR`. It also has the `subsetTestByKey` of `/common/subset-tests-by-key.js`.
+- `sab.js` stands in for `/common/sab.js`, whose own copy makes a shared buffer through `WebAssembly.Memory`.
+- `blob-support.js` stands in for `FileAPI/support/Blob.js`, with `then` in place of `await`.
+
+## Take a newer copy
+
+Run this at the commit of the test data:
 
 ```
 C=<commit>
