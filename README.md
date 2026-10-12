@@ -3,8 +3,13 @@
 </p>
 
 <p align="center">
-  A pure-Kotlin document engine for Kotlin Multiplatform: read, create, edit and
-  render PDFs, and read reflowable EPUB 2/3, from <code>commonMain</code>.
+  A pure-Kotlin document engine for Kotlin Multiplatform.<br>
+  Read, create, edit and render PDF files. Read and render EPUB 2 and 3 books, audio and video included.<br>
+  Both formats run their own JavaScript, and all of it works from <code>commonMain</code>.
+</p>
+
+<p align="center">
+  It also reads and renders CBZ comics, SVG images, and XPS or OpenXPS documents.
 </p>
 
 <p align="center">
@@ -30,91 +35,21 @@
   <sub>A PDF, an EPUB and an SVG, each rendered by KitePDF.</sub>
 </p>
 
-## What you get
+## Why KitePDF
 
-KitePDF brings its own document engine, written in Kotlin from the ground up. There is no
-platform PDF library underneath, no JNI and no native binary. So the same code runs on
-Android, iOS, the desktop JVM, macOS, Linux, Windows and the web.
+KitePDF is a single engine written in Kotlin from the parser up. It doesn't rely on any platform PDF library, web view, JNI or native binary, which is why it behaves identically across Android, iOS, the desktop JVM, macOS, Linux, Windows and the web.
 
-<table>
-<tr>
-<td width="33%" valign="top">
+That means the logic lives in `commonMain` instead of being handed off to a different engine on each platform through expect/actual, which in many cases leads to inconsistent behavior.
 
-**Open**<br>
-PDF, EPUB 2 and 3, CBZ comic archives, SVG, and XPS or OpenXPS, all through one `KiteDoc.open` call.
-
-</td>
-<td width="33%" valign="top">
-
-**Show**<br>
-One Compose Multiplatform composable for every format, or pages rendered to PNG without a screen.
-
-</td>
-<td width="33%" valign="top">
-
-**Read**<br>
-The text of any page with its position, and search across a whole document.
-
-</td>
-</tr>
-<tr>
-<td width="33%" valign="top">
-
-**Change**<br>
-Fill forms, edit pages, redact for real, encrypt, and prepare a signature. Check the signatures that a file already has.
-
-</td>
-<td width="33%" valign="top">
-
-**Create**<br>
-New PDFs with the standard fonts, your own fonts and your images.
-
-</td>
-<td width="33%" valign="top">
-
-**Run**<br>
-The JavaScript inside PDF forms and EPUB chapters, so totals add up and a quiz answers. Experimental.
-
-</td>
-</tr>
-</table>
-
-Here is a PDF made, opened and read back:
-
-```kotlin
-import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.writer.PdfBuilder
-import io.github.yuroyami.kitepdf.writer.StandardFont
-
-val bytes = PdfBuilder()
-    .page { text(StandardFont.Helvetica, 24.0, 72.0, 700.0, "Hello from PdfBuilder") }
-    .build()
-
-val doc = PdfDocument.open(bytes)
-doc.pageCount                // 1
-doc.pages[0].extractText()   // "Hello from PdfBuilder"
-```
-
-`KitePDF.open(bytes)` is a short alias for `PdfDocument.open(bytes)`. The docs use
-`PdfDocument`, because it also has the password overload, `openOrNull` and `edit()`.
-
-> [!NOTE]
-> KitePDF is not at 1.0 yet, so the API can still change between minor versions.
+| Format | View in Compose | Render to image | Edit | Create | JavaScript |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| **PDF** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **EPUB 2 and 3** | ✓ | ✓ | Not yet | Not yet | ✓ |
+| **CBZ** | ✓ | ✓ | Not yet | Not yet | n/a |
+| **SVG** | ✓ | ✓ | Not yet | Not yet | Not yet |
+| **XPS and OpenXPS** | ✓ | ✓ | Not yet | Not yet | n/a |
 
 ## Install
-
-The examples use version `0.13.0`; artifacts are published to Maven Central.
-Most apps need just two lines: one to
-open documents, and one to show them.
-
-```kotlin
-commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf:0.13.0")                  // opens every format
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")   // shows them with KiteDocView
-}
-```
-
-Here is everything you can add:
 
 ```kotlin
 kotlin {
@@ -132,8 +67,8 @@ kotlin {
 
             // Optional, depending on what you build
             implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")   // KiteDocView for Compose Multiplatform
-            implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")  // page-to-image on the platform canvas
-            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")    // page-to-image on Skia (on Android, add one repository)
+            implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")  // page to image on the platform canvas
+            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")    // page to image on Skia (on Android, add one repository)
             implementation("io.github.yuroyami:kitepdf-javascript:0.13.0")       // runs the JavaScript inside PDFs and EPUBs (pulls in KiteJS)
             implementation("io.github.yuroyami:kitepdf-net:0.13.0")              // loads documents from a URL (add a Ktor engine too)
             implementation("io.github.yuroyami:kitepdf-media:0.13.0")            // plays EPUB audio and video in KiteDocView (pulls in KitePlayer)
@@ -142,24 +77,41 @@ kotlin {
 }
 ```
 
+For example, a reader app that shows every format in Compose with JavaScript, media playback and network loading needs these lines:
+
+```kotlin
+commonMain.dependencies {
+    implementation("io.github.yuroyami:kitepdf:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-javascript:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-media:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-net:0.13.0")
+}
+```
+
+A server or a command-line tool that only turns PDF pages into images, with no Compose UI at all, needs just two:
+
+```kotlin
+commonMain.dependencies {
+    implementation("io.github.yuroyami:kitepdf-pdf:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")   // or kitepdf-skia-renderer
+}
+```
+
 ### What else you need
 
-> [!IMPORTANT]
-> Three artifacts need something extra. Without it, the build, the download or the playback fails.
+> [!WARNING]
+> Two artifacts need something extra (without it, the build or the download fails).
 
 | If you add | You also need |
 | --- | --- |
-| `kitepdf-net` | **A Ktor client engine** such as `io.ktor:ktor-client-cio:3.6.0`, or the OkHttp, Darwin or JS engine. KitePDF downloads through the engine you pick. |
-| `kitepdf-media` | **Android `minSdk` 26 and `compileSdk` 37.2**, and on iOS the **linker flags and privacy manifest entries** that [KitePlayer's install guide](https://github.com/yuroyami/KitePlayer#install) lists. It publishes Android, iOS and the desktop JVM only. |
-| `kitepdf-skia-renderer` on Android | **One more repository**: `maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`. Skia's Android build lives there, not on Maven Central. |
+| `kitepdf-net` | A Ktor client engine (such as `io.ktor:ktor-client-cio:3.6.0`) |
+| `kitepdf-skia-renderer` on Android | One more repository (`maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`) |
 
-Good to know:
+> [!TIP]
+> On iOS, `kitepdf-media` needs a few linker flags plus two privacy manifest entries ([KitePlayer's install guide](https://github.com/yuroyami/KitePlayer#install) lists them). A missing manifest entry doesn't break the build (Apple only flags it during app review).
 
-- `kitepdf-core` comes with every document artifact, so you never add it yourself.
-- The document artifacts depend only on `kotlin-stdlib` and ImageKodec, which decodes the images. `kitepdf-epub` adds `kotlinx-coroutines-core`, which fetches the resources a book names by URL.
-- In a plain Android or JVM project, put the same lines in your usual `dependencies { }` block.
-
-## A quick tour
+## Usage
 
 ### Open a document
 
@@ -168,29 +120,22 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.document.KiteDoc
 
 val doc = PdfDocument.open(bytes)      // a PDF; PdfDocument.open(bytes, "secret") if it is locked
-val any = KiteDoc.open(bytes)          // any format: KitePDF finds out which by itself
+val any = KiteDoc.open(bytes)          // any format, detected from the bytes
 KiteDoc.formatOf(bytes)                // Pdf, Epub, Cbz, Svg, Xps, or null
 ```
 
-`open` throws when it cannot read a file, and `openOrNull` returns `null` instead. A
-damaged or cut-off PDF usually still opens. When its table of objects is broken, KitePDF
-scans the whole file for the objects instead.
-
-Bytes are the usual way in, but not the only one. You can also pass a file path, a
-`File` or an `InputStream`, an Android content `Uri`, `NSData` or `NSURL` on Apple,
-Base64 or a `data:` URI, and a URL through `kitepdf-net`. Each one also has an
-`...OrNull` form. See [Loading](https://yuroyami.github.io/KitePDF/loading/) for which
-platform takes which.
+Besides bytes, `KiteDoc` can also open a file path, a `File`, an `InputStream`, an Android content `Uri`, Apple's `NSData` or `NSURL`, Base64 text or a `data:` URI (plus a remote URL through `kitepdf-net`).
 
 ### Show it in Compose
 
-With `kitepdf-compose-viewer`, one composable shows any document, whatever its format:
+Assuming you added the `kitepdf-compose-viewer` module, you get a composable that can show any document format. Here is its full API surface:
 
 ```kotlin
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import io.github.yuroyami.kitepdf.compose.*
 import io.github.yuroyami.kitepdf.core.KiteDocument
 
@@ -199,25 +144,52 @@ fun Viewer(doc: KiteDocument) {
     KiteDocView(
         state = rememberKiteDocViewState(doc),
         modifier = Modifier.fillMaxSize(),
-        layout = KiteDocLayout.Paged(Orientation.Horizontal),   // or KiteDocLayout.Continuous()
-        zoomSpec = KiteZoomSpec(maxZoom = 6f),
-        renderSpec = KiteRenderSpec.Rasterized(),               // or KiteRenderSpec.Vectorized()
+        layout = KiteDocLayout.Paged(Orientation.Horizontal),  // or Continuous(), Spread(), SinglePage(index)
+        zoomSpec = KiteZoomSpec(maxZoom = 6f),                 // pinch, double tap, pan, zoom bounds
+        renderSpec = KiteRenderSpec.Rasterized(),              // or KiteRenderSpec.Vectorized()
+        colors = KiteDocViewColors(),                          // paper, background, highlights, reader theme
+        pageSpacing = 8.dp,
+        userScrollEnabled = true,                              // false leaves paging to the state
+        selectionEnabled = true,                               // long press selects text
+        onPageRendered = { page, bitmap -> },                  // a fresh bitmap of a page
+        pagePlaceholder = { page -> },                         // shown while a page renders
+        chapterPlaceholder = { chapter -> },                   // shown while a chapter lays out
+        overlay = { KitePageIndicator(it) },                   // floats above the pages
+        pageOverlay = { },                                     // moves with each page (KiteMediaOverlay goes here)
+        onTap = { offset -> },
+        onLinkTap = { link -> false },                         // return true once you handled the link
+        onHighlightTap = { highlight -> false },
+        scripts = null,                                        // a PdfScriptRunner runs a PDF's scripts
+        epubScripts = null,                                    // an EpubScriptRunner runs a book's scripts
+        externalLinks = KiteExternalLinks(),                   // asks before opening web or mail links
+        showMarkupErrors = true,                               // flags a chapter with broken markup
     )
 }
 ```
 
-It zooms, selects text, follows links inside the document and highlights search hits. See
-[Compose viewer](https://yuroyami.github.io/KitePDF/compose-viewer/) for everything it can do.
+The viewer can:
 
-The viewer draws pages in one of two ways, and you pick one with `renderSpec`:
+- [x] Zoom with a pinch, a double tap, Ctrl plus the wheel or the keyboard
+- [x] Lay pages out as a continuous strip, a pager, a two-page spread or a single page
+- [x] Turn pages with a swipe, the mouse wheel or the keyboard
+- [x] Select text (with draggable handles plus a selection menu)
+- [x] Follow links inside the document (it asks before opening a web or mail link)
+- [x] Highlight search hits along with your own saved highlights
+- [x] Recolor pages with a dark or sepia reader theme
+- [x] Expose the text and its links to a screen reader
 
-- `Rasterized` (the default) draws each page once into a bitmap. Scrolling and zooming
-  stay smooth, even on dense pages and slow devices.
-- `Vectorized` draws the page from its vector content each time the screen updates. It
-  uses no bitmap memory, and text and lines stay sharp at any zoom.
+`renderSpec` sets how the viewer draws a page:
 
-See [Rendering: rasterized vs. vectorized](https://yuroyami.github.io/KitePDF/compose-viewer/#rendering-rasterized-vs-vectorized)
-for the trade-offs.
+| | `Rasterized` (default) | `Vectorized` |
+| --- | --- | --- |
+| **How it draws** | It draws each page one time into a bitmap. Gestures move that bitmap. | It draws the page content again when the size, the zoom or the theme changes. |
+| **Where it draws** | It draws off the UI thread. On the web, it draws on the UI thread because the web has only one thread. | It draws on the UI thread. |
+| **First display** | A placeholder shows until the bitmap is ready. | The page shows after the first draw. This draw blocks the UI thread. |
+| **Scroll and pan** | Scroll and pan are smooth on all pages. | Scroll and pan are smooth on simple pages. On a complex page, they can be slow. |
+| **Zoom quality** | The page is not sharp during a pinch. It becomes sharp again when the zoom stops (`rerasterizeOnZoom`). | On Android, the page stays sharp during a pinch. On iOS, desktop and web, the page is not sharp during a pinch until it draws again. |
+| **Memory** | Each page uses one bitmap. `maxBitmapLongSide` sets the maximum size of the bitmap. | There is no page bitmap. Images use a shared cache of 16 MiB (`imageCacheBudgetBytes`). |
+| **Thin lines** | Thin lines stay visible when the bitmap becomes smaller (`preserveHairlines`). | A line with zero width is one device pixel wide (`hairlineWidthPx`). |
+| **Use it for** | Use it for dense pages, scans, comics, photos or slow devices. | Use it for text pages, forms, deep zoom or low memory. |
 
 ### Read and search text
 
@@ -232,15 +204,15 @@ page.search("invoice")        // the hits on this page
 doc.search("invoice")         // every hit in the document, page by page
 ```
 
-Each span knows the edges of its characters, so you can draw a text selection. The rest
-of the document is there too: `doc.info.title`, `doc.bookmarks`, page labels,
-attachments, permissions, XMP metadata and the form fields.
+Each span carries the position of its characters, which is what you need to draw a text
+selection. The document also gives you its metadata (`doc.info` and `doc.xmp`), its
+bookmarks, page labels (`page.label`), attachments, permissions and form fields.
 
 ### Fill forms, edit and redact
 
-`doc.edit()` gives you a `PdfEditor`, which collects your changes. `saveIncremental()`
-adds them to the end of the original file, and `saveRewritten()` writes a fresh, clean
-file.
+`doc.edit()` gives you a `PdfEditor` that collects your changes until you save them, either
+with `saveIncremental()` (which appends them to the original file) or with `saveRewritten()`
+(which writes a clean new file).
 
 ```kotlin
 import io.github.yuroyami.kitepdf.core.KiteRectangle
@@ -256,153 +228,278 @@ val redacted = doc.edit().apply {
 }.saveRewritten()
 ```
 
-Redaction really removes what lies inside the region: the text, images and vector paths,
-and the content of annotations and form fields there. It does not just paint a black box
-over them. That is why it needs `saveRewritten()`. `saveIncremental()` refuses, because
-the old content would still be in the file.
+Redaction removes the content inside each region (text, images, vector paths and the
+contents of annotations and form fields) instead of painting a black box over it. Some
+content can still survive, as the [limitations](#a-few-limitations-to-know-about) explain.
+
+> [!WARNING]
+> Save a redaction with `saveRewritten()`. After a redaction, `saveIncremental()` throws, because the original content would stay in the file.
 
 ### Create a PDF
 
-`PdfBuilder` writes a file page by page, as in the first example. It can also:
-
-- fill in the title and author: `setInfo(title = "Report", author = "Jane Doe")`
-- draw an image inside `page { }`: `drawImage(logo, x = 400.0, y = 700.0, width = 96.0, height = 48.0)`, with `logo = PdfImage.rgba(pixels, width = 128, height = 64)`
-- use any of the 14 standard fonts, or your own with `EmbeddedFont.load(bytes)`, which embeds only the glyphs you use
-- encrypt the file with AES-256: `encrypt(userPassword, ownerPassword, random = platformCsprng)`
-
-Encryption asks for a secure random source on purpose. KitePDF never quietly falls back to
-Kotlin's `Random.Default` for keys. Reading works with RC4, AES-128 and AES-256.
-
-### Read an EPUB
-
-```kotlin
-import io.github.yuroyami.kitepdf.epub.EpubDocument
-
-val book = EpubDocument.open(bytes, pageWidth = 400.0, pageHeight = 640.0)
-book.tableOfContents        // from nav.xhtml (EPUB 3) or toc.ncx (EPUB 2)
-book.search("chapter")
-book.withFontSize(15.0)     // lays the book out again; the old layout stays valid
-```
-
-KitePDF lays out the HTML and CSS itself:
-
-- the full CSS cascade
-- embedded TTF, OTF, WOFF and WOFF2 fonts
-- hyphenation in more than 60 languages, with the TeX patterns of the hyph-utf8 project
-- tables, floats, ruby, and right-to-left and vertical text
-- text shaping that matches HarfBuzz for complex scripts such as Arabic and the Indic scripts
-
-Big books open fast, because KitePDF lays out one chapter at a time. A reader who comes
-back to chapter 20 waits for chapter 20, not for the whole book. On a 26-chapter book, that
-cuts the wait from 986 ms to 3 ms. A saved place also survives a change of font size.
-
-```kotlin
-val state = rememberKiteDocViewState(book, savedBookmark)   // opens at the saved place
-KiteDocView(state, Modifier.fillMaxSize())
-
-savedBookmark = state.currentBookmark()                    // save it when the app pauses
-```
-
-### Render a page to an image
-
-```kotlin
-import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
-import io.github.yuroyami.kitepdf.skia.PdfPageRasterizer
-
-val awtPng = AwtPdfRasterizer.encodeToPng(doc.pages[0], scale = 2.0)    // JVM
-val skiaPng = PdfPageRasterizer.encodeToPng(doc.pages[0], scale = 2.0)  // any Skia target
-```
-
-`kitepdf-native-renderer` draws with the platform's own canvas: AWT on the JVM,
-`android.graphics`, CoreGraphics on Apple, and Canvas2D in the browser. `kitepdf-skia-renderer`
-draws with Skia, alike on every target, and renders EPUB pages too with
-`EpubPageRasterizer`.
-
-### Run the JavaScript in a PDF or an EPUB
-
-Many forms add up totals and format their fields with JavaScript. `kitepdf-javascript`
-runs those scripts on [KiteJS](https://github.com/yuroyami/KiteJS), a JavaScript engine
-written in Kotlin. It is experimental.
-
-```kotlin
-PdfScriptRunner(doc, onAlert = { alert -> showDialog(alert.message); 1 }).use { runner ->
-    runner.runDocumentOpen()                 // the document's own scripts, then its open action
-    runner.setFieldValue("price", "1200")    // runs the field's scripts, as a viewer would
-    runner.formattedValue("total")           // "$1,200.00", as the form worked it out
-}
-```
-
-`EpubScriptRunner` runs the scripts of an EPUB's chapters the same way, over the library's own
-layout, so a quiz or a scripted fixed-layout page works without a web engine. See
-[JavaScript](https://yuroyami.github.io/KitePDF/javascript/) for what scripts can reach.
-
-## Platforms
-
-The document artifacts run on every target. The viewer and the renderers cover fewer targets,
-and that difference is the usual reason a first build does not resolve.
-
-| Artifact | Where it runs |
-| --- | --- |
-| `kitepdf`, `-pdf`, `-epub`, `-cbz`, `-svg`, `-xps`, `-core` | Android (minSdk 21), JVM, iOS, macOS, tvOS, watchOS, Linux, Windows, Android Native, JS and Wasm |
-| `-compose-viewer` | Android (minSdk 24), JVM, iOS arm64 and simulator, macOS arm64, and JS and wasmJs in the browser |
-| `-native-renderer` | Android (minSdk 29), JVM, iOS, macOS arm64, tvOS, and JS in the browser |
-| `-skia-renderer` | Android (minSdk 21), JVM, iOS, macOS arm64, tvOS, Linux, and JS and wasmJs in the browser |
-| `-javascript` | Every target KiteJS builds for: Android, JVM, iOS, macOS arm64, Linux, Windows, JS and wasmJs |
-
-[Platform support](https://yuroyami.github.io/KitePDF/platforms/) has the full list,
-with the reason behind each gap.
-
-## Good to know
-
 <details>
-<summary><b>Known limits</b>: what KitePDF does not do yet, in one table</summary>
+<summary><b>The full builder DSL</b></summary>
 <br>
 
-| Topic | What to expect |
-| --- | --- |
-| Annotations | You can read them, but there is no API to create them yet. |
-| Signing | `PdfSigner` prepares the signature field and its byte range, and your app supplies the signature itself. `PdfSignature.validate` checks a signature and the revocation data that it gets, but fetches nothing and does not check the dates of the certificates. |
-| Redaction | A few things survive, such as a large background fill and a clipping path's outline. The [editing guide](https://yuroyami.github.io/KitePDF/editing/#redaction-limitations) lists them all. |
-| Encryption | Files encrypted with RC4 open, but only AES files can be edited. New files use AES-256. |
-| Colour | ICC profiles and rendering intents apply. Overprint is simulated for DeviceCMYK paths and text, and Separation/DeviceN paths, text and images. RGB backdrops make ink reconstruction approximate. |
-| Images | Damaged or unsupported image data draws as a grey placeholder on every platform. ImageKodec supplies the shared decoders. |
-| Text | Text comes as blocks, lines and spans, with no word splitting and no tag tree. |
-| Shaping | Hangul jamo are not composed into syllables. A font without its own shaping tables gets no Arabic or Thai fallback forms. |
-| EPUB | Czech, Macedonian, Indonesian, Armenian, Latvian and Romanian are not hyphenated: their hyph-utf8 patterns come under the GPL, the LGPL or no licence, which an Apache-2.0 library cannot carry. Thai is not hyphenated either. |
-| Rendering | AWT on the JVM and Skia are the two complete renderers. |
-| CI | CI runs the tests on the JVM, the Android host, the iOS simulator, macOS, Node and a headless browser. Android devices, Wasm, and native Linux and Windows are not tested there. |
+```kotlin
+import io.github.yuroyami.kitepdf.PdfPermissions
+import io.github.yuroyami.kitepdf.writer.*
+
+val font = EmbeddedFont.load(fontBytes)                           // TTF or OTF, cut down to the glyphs you use
+val photo = PdfImage.jpeg(jpegBytes, width = 640, height = 480)   // or rgba(), rgb(), gray(), jpx()
+val title = "Quarterly report"
+val titleWidth = StandardFont.HelveticaBold.stringWidth(title, fontSize = 24.0)
+
+val pdf = PdfBuilder()
+    .setInfo(
+        title = "Report",
+        author = "Jane Doe",
+        subject = "Sales",
+        keywords = "q3, sales",
+        creator = "MyApp",
+        producer = "MyApp",
+    )
+    .page(width = 595.0, height = 842.0) {                        // A4 in points (US Letter if left out)
+        // Text, the short way
+        text(StandardFont.HelveticaBold, 24.0, (595.0 - titleWidth) / 2, 780.0, title)
+        text(font, 12.0, 72.0, 750.0, "Set in an embedded font")
+
+        // Text, line by line
+        beginText()
+        setFont(StandardFont.TimesRoman, 11.0)
+        setLeading(14.0)
+        setCharSpacing(0.2)
+        setWordSpacing(1.0)
+        moveText(72.0, 720.0)
+        showText("First line")
+        nextLine()
+        showText("Second line")
+        endText()
+
+        // Lines, shapes and colors
+        setLineWidth(2.0)
+        setStrokeRgb(0.2, 0.4, 0.8)
+        setFillCmyk(0.0, 0.1, 0.9, 0.0)
+        rectangle(72.0, 560.0, 200.0, 100.0).fillAndStroke()
+        setFillGray(0.9)
+        moveTo(300.0, 560.0).lineTo(400.0, 660.0).lineTo(500.0, 560.0).closePath().fill()
+        setStrokeGray(0.5)
+        raw("[6 3] 0 d")                                          // any operator the DSL lacks (here a dash)
+        moveTo(72.0, 540.0).lineTo(523.0, 540.0).stroke()
+
+        // An image inside a clip
+        save()
+        rectangle(72.0, 300.0, 320.0, 240.0).clip().endPath()    // or clipEvenOdd()
+        drawImage(photo, x = 72.0, y = 300.0, width = 320.0, height = 240.0)
+        restore()
+
+        // A square turned 45 degrees
+        save()
+        transform(0.7071, 0.7071, -0.7071, 0.7071, 450.0, 300.0)
+        setFillRgb(1.0, 0.0, 0.0)
+        rectangle(0.0, 0.0, 50.0, 50.0).fill()
+        restore()
+    }
+    .apply {                                                      // a page built outside a block
+        addPage(content = newPageContent().text(StandardFont.Courier, 10.0, 72.0, 760.0, "Page two"))
+    }
+    .encrypt(
+        userPassword = "user-pass",
+        ownerPassword = "owner-pass",
+        permissions = PdfPermissions.allowAll.copy(canModifyContents = false),
+        encryptMetadata = true,
+        random = secureRandom,                                    // a secure random (Random.Default is not safe for keys)
+    )
+    .build(compress = true)
+```
 
 </details>
 
-## How it is tested
+> [!TIP]
+> Wrap a few drawing calls in `save()` and `restore()` to keep their settings to themselves. Anything you change in between (a color, a line width, a clip or a rotation) goes back to how it was after `restore()`.
+>
+> Without them, each setting sticks for the rest of the page:
+> - A fill color paints every later shape in that color.
+> - A rotation turns everything you draw after it.
+> - A clip cuts off everything you draw after it (only `restore()` can remove a clip).
+>
+> Always use them as a pair. A `save()` without a `restore()` means the settings stick for the rest of the page, while a `restore()` without a `save()` before it breaks the PDF rules.
 
-Around 2,000 tests run on the JVM alone. A differential test renders a set of real PDFs with
-KitePDF and with MuPDF, and compares them page by page. On the latest run of 40 pages, the
-mean difference was 0.0007 on a scale where 0 means identical. A parity check adds PDFium
-as a second reference, and it fails where MuPDF and PDFium agree and KitePDF does not. See
-[DIFFTEST.md](kitepdf-native-renderer/DIFFTEST.md). The PDFs themselves are not in the
-repository, so a fresh checkout cannot repeat that run.
+### Render a page to an image (headless rendering)
 
-Found a PDF that renders wrong? Open an issue with the file attached. Every rendering fix
-comes with a test that keeps it fixed.
+```kotlin
+/*
+ * kitepdf-native-renderer
+ * Draws with each platform's own canvas.
+ */
+
+// JVM (also renderToImage, encodeToJpeg)
+AwtPdfRasterizer.encodeToPng(pdfPage, scale = 2.0)
+
+// Android: a Bitmap
+AndroidPdfBitmapRenderer.renderToBitmap(pdfPage)
+
+// iOS, macOS, tvOS: a PNG as NSData
+ApplePdfRasterizer.renderToPngData(pdfPage)
+
+// Browser: any page, on your <canvas>
+page.renderTo(Canvas2dCanvas(context2d))
+
+/*
+ * kitepdf-skia-renderer
+ * Same result on every target.
+ */
+
+// A PNG (or a Skia Image with renderToImage)
+PdfPageRasterizer.encodeToPng(pdfPage)
+EpubPageRasterizer.encodeToPng(epubPage)
+
+/*
+ * kitepdf-compose-viewer
+ * Draws any page, CBZ, SVG and XPS included.
+ */
+
+// Inside a composable: an ImageBitmap
+val rasterizer = rememberKitePageRasterizer()
+rasterizer.rasterize(page, 1200, 1600)
+```
+
+### Play EPUB 3 audio and video
+
+Audio and video are a niche feature exclusive to EPUB 3, which is why the `kitepdf-media` module is not part of the `kitepdf` umbrella artifact (you have to add it yourself). It plays each `<audio>` or `<video>` element right on its page through [KitePlayer](https://github.com/yuroyami/KitePlayer). Without it, the viewer only shows the poster image of each element.
+
+```kotlin
+import androidx.compose.runtime.*
+import io.github.yuroyami.kitepdf.compose.*
+import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.media.KiteMediaOverlay
+import io.github.yuroyami.kitepdf.media.KiteReadAloud
+
+@Composable
+fun EpubReader(epub: EpubDocument) {
+    val state = rememberKiteDocViewState(epub)
+    var narrating by remember { mutableStateOf(false) }
+
+    // A player on each audio or video element
+    KiteDocView(state, pageOverlay = {
+        KiteMediaOverlay()
+    })
+
+    // Reads the narration aloud while narrating is true
+    KiteReadAloud(
+        state = state,
+        playing = narrating,
+        onFinished = { narrating = false },
+    )
+}
+```
+
+`KiteReadAloud` plays the media overlays of the EPUB (the EPUB 3 name for narration that follows the text). For an EPUB with text but no recorded audio, you can pass your own speech engine as `speak`.
+
+### Run the JavaScript in a PDF or an EPUB
+
+> [!WARNING]
+> The scripting API is experimental and will very probably change in a coming release (in particular, how you create a runner and hand it to the viewer).
+
+PDF forms often use JavaScript to add up totals or format what you type, while EPUB chapters can carry quizzes or interactive pages. The core library never runs these scripts by itself, which is why the `kitepdf-javascript` module is not part of the umbrella artifact either (you have to add it yourself). It runs the scripts on [KiteJS](https://github.com/yuroyami/KiteJS), a JavaScript engine for Kotlin Multiplatform, right on KitePDF's own layout (no web view involved).
+
+```kotlin
+import androidx.compose.runtime.*
+import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.compose.*
+import io.github.yuroyami.kitepdf.epub.EpubDocument
+import io.github.yuroyami.kitepdf.javascript.*
+
+/*
+ * In the viewer
+ * Taps, typing and timers reach the scripts.
+ */
+
+@Composable
+fun PdfForm(pdf: PdfDocument) {
+    val scripts = remember(pdf) { PdfScriptRunner(pdf) }
+    DisposableEffect(scripts) {
+        onDispose { scripts.close() }
+    }
+
+    KiteDocView(
+        state = rememberKiteDocViewState(pdf),
+        scripts = scripts,
+    )
+}
+
+@Composable
+fun EpubQuiz(epub: EpubDocument) {
+    val scripts = remember(epub) { EpubScriptRunner(epub) }
+    DisposableEffect(scripts) {
+        onDispose { scripts.close() }
+    }
+
+    KiteDocView(
+        state = rememberKiteDocViewState(epub),
+        epubScripts = scripts,
+    )
+}
+
+/*
+ * Without a screen
+ * Fill a form the way a viewer would.
+ */
+
+PdfScriptRunner(pdf).use { runner ->
+    // The document's own scripts, then its open action
+    runner.runDocumentOpen()
+
+    // Runs the scripts of the field
+    runner.setFieldValue("price", "1200")
+
+    // "$1,200.00", as the form worked it out
+    runner.formattedValue("total")
+}
+```
+
+## Platforms
+
+The format modules (`kitepdf` with `-pdf`, `-epub`, `-cbz`, `-svg`, `-xps` and `-core`) run on every platform below, plus watchOS, Android Native and WASI. `kitepdf-net` covers the same list except Android Native and WASI. The other modules support fewer targets, which is the most common reason a first build fails to resolve:
+
+| | Compose<br>Viewer | Native<br>Headless<br>Renderer | Skia<br>Headless<br>Renderer | JS<br>Scripts | Media |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| **Android** | 24 | 29 | 24 | 21 | 26 |
+| **JVM** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **iOS** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **macOS** | ✓ | ✓ | ✓ | ✓ | |
+| **tvOS** | | ✓ | ✓ | | |
+| **Linux** | | | ✓ | ✓ | |
+| **Windows** | | | | ✓ | |
+| **JS** | ✓ | ✓ | ✓ | ✓ | |
+| **Wasm** | ✓ | | ✓ | ✓ | |
+
+## A few limitations to know about
+
+- A redaction can leave some content in the file. The [editing guide](https://yuroyami.github.io/KitePDF/editing/#what-redaction-removes) lists all the cases.
+- KitePDF does not make a digital signature. `PdfSigner` prepares the signature field, and your app makes the signature.
+- `PdfSignature.validate` does not get revocation data from the network. It uses the data in the file and the data that you give it.
+- KitePDF can open a file that has RC4 encryption, but it cannot edit that file.
+- On an RGB page, overprint is approximately correct.
+- If image data is damaged or in a format that KitePDF cannot decode, the page shows a gray box in its place.
+- KitePDF does not hyphenate Czech, Macedonian, Indonesian, Armenian, Latvian or Romanian. The patterns for these languages use the GPL, the LGPL or no license. An Apache-2.0 library cannot include them.
+
+Missing features and known bugs are [open issues](https://github.com/yuroyami/KitePDF/issues).
 
 ## Sample app
 
-`sample/` is a Compose Multiplatform app that opens a PDF and tries out the API. The
-desktop version runs on its own. The Android and iOS entry points are meant to go into a
-host project of your own.
+`sample/` is a Compose Multiplatform app that can open any document and try out the API.
+The desktop version runs on its own (`./gradlew :sample:run`), while the Android and iOS
+entry points need a host app of your own.
 
 ## License
 
-Apache-2.0. KitePDF holds no third-party source code. It does bundle some third-party
-data, each under its own license, and [NOTICE](NOTICE) lists every piece and where it
-comes from:
-
-- the URW base 35 fonts, which draw the 14 standard fonts, under the SIL Open Font License 1.1
-- PDFium's table for DeviceCMYK, under PDFium's BSD-style license
-- Adobe's glyph lists and CJK CMaps, under BSD-3-Clause
-- the hyphenation patterns of the hyph-utf8 project, each under the license in its file header
+Apache-2.0. KitePDF contains no third-party source code, but it bundles some third-party
+data (fonts, glyph lists, CMaps, encoding tables and hyphenation patterns), each under its
+own license. [NOTICE](NOTICE) lists every piece with its source.
 
 Part of the Kite family: [KiteCore](https://github.com/yuroyami/KiteCore),
 [ImageKodec](https://github.com/yuroyami/ImageKodec),
+[KiteJS](https://github.com/yuroyami/KiteJS),
+[KitePlayer](https://github.com/yuroyami/KitePlayer),
 [KiteQR](https://github.com/yuroyami/KiteQR).
