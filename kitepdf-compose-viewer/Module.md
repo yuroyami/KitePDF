@@ -1,9 +1,7 @@
 # Module kitepdf-compose-viewer
 
-Compose Multiplatform components: `KiteDocView`, a selection menu, a thumbnail
-strip and an outline panel. One viewer path serves both PDF and EPUB.
+Compose Multiplatform components for every format: `KiteDocView`, its selection menu, a page indicator, navigation controls, a thumbnail strip and an outline panel. `KitePageRasterizer` turns any page into an image.
 
-Pair it with `kitepdf` (both formats) or a single handler module. This module
-holds its engine dependency as `implementation`, so the document types it takes
-in its own signatures are not on your compile classpath unless you add the
-engine yourself.
+Add it with `kitepdf` (every format) or with one format artifact. This module depends on the engine as `implementation`. So the document types in its own signatures are on your compile classpath only when you add the engine yourself.
+
+See [Compose viewer](https://yuroyami.github.io/KitePDF/compose-viewer/).

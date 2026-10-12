@@ -1,7 +1,5 @@
 # Module kitepdf-skia-renderer
 
-A Skiko rasterizer: one rendering path with the same output on every target,
-for PDF pages and EPUB pages alike.
+A rasterizer on Skiko, the Kotlin binding for Skia. It gives the same output on every target, for PDF pages and for EPUB pages.
 
-This is the geometrically correct one. It honours `/Rotate`, `/CropBox`,
-non-zero origins and `/UserUnit`. Pair it with `kitepdf` or a handler module.
+Add it with `kitepdf` or with a format artifact. On the JVM and on Android, it needs some setup, which [Skia on every platform](https://yuroyami.github.io/KitePDF/rendering/#skia-on-every-platform) explains.

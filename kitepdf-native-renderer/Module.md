@@ -1,8 +1,7 @@
 # Module kitepdf-native-renderer
 
-Rasterizers built on each platform's own drawing API: AWT on the JVM,
-`android.graphics` on Android, CoreGraphics on Apple, Canvas2D on the web.
-PDF pages only; use the Skia renderer or the Compose viewer for EPUB.
+Rasterizers that use the drawing API of each platform: AWT on the JVM, `android.graphics` on Android, CoreGraphics on Apple platforms and Canvas2D in the browser. They add no graphics library to your app.
 
-Smaller than the Skia renderer, but the per-platform back ends differ in what
-they support. See the README's limits. Pair it with `kitepdf` or `kitepdf-pdf`.
+They render PDF pages. For EPUB pages, use the Skia renderer. For any page in a Compose app, use `KitePageRasterizer` of the Compose viewer. The back ends differ in a few details, which [How the renderers draw](https://yuroyami.github.io/KitePDF/rendering/#how-the-renderers-draw) lists.
+
+Add it with `kitepdf` or `kitepdf-pdf`. See [Headless rendering](https://yuroyami.github.io/KitePDF/rendering/).

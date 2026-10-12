@@ -1,10 +1,7 @@
 # Module kitepdf-svg
 
-SVG support: open a standalone `.svg` as a one-page document, drawn as vectors
-at its own viewport.
+SVG support. It opens a standalone `.svg` file as a document with one page, drawn as vectors at the viewport of the file.
 
-It also holds the SVG renderer the other handlers call when a page embeds
-vector art, covering `<use>`, `<symbol>`, `<image>`, `<text>`, gradients,
-patterns, `clip-path`, `mask` and `filter`. A filter runs on the pixels of the
-canvas's raster step, so a canvas without one draws the element unfiltered.
-Pair it with `kitepdf` or add it on its own.
+It also holds the SVG renderer that the EPUB reader uses for the SVG in a book. The renderer covers `<use>`, `<symbol>`, `<image>`, `<text>`, gradients, patterns, `clip-path`, `mask` and `filter`. A filter needs a canvas with raster steps. A canvas without raster steps draws the element without its filter.
+
+Add it with `kitepdf`, or on its own.

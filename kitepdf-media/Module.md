@@ -1,14 +1,10 @@
 # Module kitepdf-media
 
-Optional. Plays the audio and video elements of an EPUB page in `KiteDocView`, and
-reads a book aloud with its media overlays.
+Optional. Plays the audio and video elements of an EPUB page in `KiteDocView`, and reads a book aloud with its media overlays.
 
-The engine and viewer artifacts carry no player and no codec, and this one exists
-so that stays true: it is the single place KitePlayer, and FFmpeg through it, enter
-the build. Add it only if your app plays the media of a book, and pass
-`KiteMediaOverlay` to the viewer's `pageOverlay`. Without it, the viewer shows the
-poster of each element. `KiteReadAloud`, placed next to the viewer, plays the
-narration of a book and highlights the text it reads.
+This is the only artifact that brings KitePlayer, and FFmpeg through it, into the build. So the other artifacts carry no player and no codec. Add it only when your app plays the media of a book:
 
-It publishes the targets that KitePlayer's Compose video publishes: Android
-(`minSdk` 26), iOS and the desktop JVM.
+- Pass `KiteMediaOverlay` to the `pageOverlay` of the viewer. Without it, the viewer shows the poster of each element.
+- Place `KiteReadAloud` next to the viewer. It plays the narration of a book and highlights the text that it reads.
+
+It builds for the targets of KitePlayer: Android (`minSdk` 26), iOS and the desktop JVM. See [EPUB audio and video](https://yuroyami.github.io/KitePDF/media/).
