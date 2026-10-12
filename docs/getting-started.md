@@ -1,218 +1,162 @@
-# Getting Started
+# Getting started
 
-Learn how to open a PDF, display it in the UI, and extract its content with KitePDF: a pure-Kotlin multiplatform PDF engine.
+This page takes you from an empty project to a document on screen. You add KitePDF, open a file, show it in Compose, read its text and render a page to an image.
 
-## Step 1: Add the dependency
+## 1. Add the dependency
 
-KitePDF is published to Maven Central as thirteen artifacts: the `kitepdf` umbrella, the `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` and `kitepdf-xps` handlers, the shared `kitepdf-core` base (it arrives with the handlers, never add it directly), the optional `kitepdf-net` URL loader, the optional `kitepdf-javascript` script runner (see [JavaScript](javascript.md)), the optional `kitepdf-media` player for book audio and video (see [Book audio and video](media.md)), and three renderers. Start with the headless engine, and add one renderer only when you need to draw pages.
+=== "Kotlin Multiplatform"
 
-=== "Kotlin (KMP)"
-
-    ```gradle
-    dependencies {
-        commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.13.0")
+    ```kotlin
+    kotlin {
+        sourceSets {
+            commonMain.dependencies {
+                implementation("io.github.yuroyami:kitepdf:0.13.0")
+            }
         }
     }
     ```
 
-=== "Android / JVM"
+=== "Android or JVM"
 
-    ```gradle
+    ```kotlin
     dependencies {
         implementation("io.github.yuroyami:kitepdf:0.13.0")
     }
     ```
 
-The core `kitepdf` artifact depends on `kotlin-stdlib`, the pure-Kotlin ImageKodec engine, and `kotlinx-coroutines-core`, which fetches the resources an EPUB names by URL. It works on every Kotlin target (JVM, Android, Native, JS, wasmJs).
+The `kitepdf` artifact holds every format (PDF, EPUB, CBZ, SVG, XPS and OpenXPS) and depends only on `kotlin-stdlib`, the pure-Kotlin ImageKodec decoders and `kotlinx-coroutines-core`. For one format only, you can add `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` instead.
 
-## Step 2: Open your first PDF
+The other artifacts are optional:
 
-Get PDF bytes from a file, network, or resources; the method depends on your platform.
+| Artifact | Add it to | You also need |
+| --- | --- | --- |
+| `kitepdf-compose-viewer` | show documents in Compose (`KiteDocView`) | |
+| `kitepdf-native-renderer` | render a page to an image on the platform canvas | |
+| `kitepdf-skia-renderer` | render a page to an image on Skia | on Android, the repository `maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`. On the JVM without Compose, the Skia runtime of each system, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.153.0` |
+| `kitepdf-javascript` | run the JavaScript of PDF forms and EPUB books | |
+| `kitepdf-media` | play EPUB audio and video in `KiteDocView` | on iOS, the linker flags and privacy manifest entries of [KitePlayer](https://github.com/yuroyami/KitePlayer#install) |
+| `kitepdf-net` | open a document from a URL | a Ktor client engine, such as `io.ktor:ktor-client-cio:3.6.0` |
 
-**JVM / Desktop:**
-```kotlin
-import java.io.File
-import io.github.yuroyami.kitepdf.KitePDF
+!!! warning
+    Without the extra item in the last column, the build, the download or the first render fails. The one exception is a missing privacy manifest entry on iOS, which Apple flags only during app review.
 
-val bytes = File("sample.pdf").readBytes()
-val doc = KitePDF.open(bytes)
+Each optional artifact runs on its own set of targets, which [Platform support](platforms.md) lists.
 
-println("${doc.pageCount} pages")
-println("PDF version ${doc.version}")
-```
-
-**Android:**
-```kotlin
-import io.github.yuroyami.kitepdf.KitePDF
-
-// From resources or assets
-val bytes = context.resources.openRawResource(R.raw.sample).readBytes()
-val doc = KitePDF.open(bytes)
-
-// Or from a file
-val bytes = File(context.cacheDir, "sample.pdf").readBytes()
-val doc = KitePDF.open(bytes)
-```
-
-**Password-protected PDFs:**
+## 2. Open a document
 
 ```kotlin
 import io.github.yuroyami.kitepdf.PdfDocument
+import java.io.File
 
-val doc = PdfDocument.open(bytes, "secret".encodeToByteArray())
+val doc = PdfDocument.open(File("sample.pdf").readBytes())
+
+println("${doc.pageCount} pages, PDF ${doc.version}")
 ```
 
-!!! tip "EPUB books"
-    The same dependency graph reads EPUBs: add `io.github.yuroyami:kitepdf-epub:0.13.0` and call `EpubDocument.open(bytes)`. See the [EPUB guide](epub.md).
+On Android, you can read the bytes from a raw resource instead:
 
-## Step 3: Show it on screen in Compose
-
-The `kitepdf-compose-viewer` artifact provides `KiteDocView`: a Compose-Multiplatform viewer supporting pinch zoom, paging, continuous scroll, and more.
-
-Add the dependency:
-
-```gradle
-dependencies {
-    commonMain.dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
-    }
-}
+```kotlin
+val bytes = context.resources.openRawResource(R.raw.sample).readBytes()
+val doc = PdfDocument.open(bytes)
 ```
 
-**Display the whole document** (vertical continuous scroll):
+A locked PDF takes its password as the second argument:
+
+```kotlin
+val doc = PdfDocument.open(bytes, password = "secret")
+```
+
+!!! tip "Other formats"
+    `EpubDocument.open(bytes)` opens an EPUB book. When you do not know the format, `KiteDoc.open(bytes)` detects it from the bytes. [Loading a document](loading.md) lists every source KitePDF can open (a file path, a stream, an Android `Uri`, `NSData`, a URL and more).
+
+## 3. Show it in Compose
+
+With `kitepdf-compose-viewer`, one composable can show the whole document as a vertical scroll:
 
 ```kotlin
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.compose.KiteDocView
 
 @Composable
-fun PdfViewer(doc: PdfDocument) {
+fun Viewer(doc: PdfDocument) {
     KiteDocView(document = doc, modifier = Modifier.fillMaxSize())
 }
 ```
 
-**Show a single page** with fit-to-viewport letterboxing:
+Pass `page = 0` to show a single page (the index starts at zero) instead of the whole document.
 
-```kotlin
-@Composable
-fun SinglePageView(doc: PdfDocument) {
-    KiteDocView(
-        document = doc,
-        page = 0,  // zero-based index
-        modifier = Modifier.fillMaxSize()
-    )
-}
-```
-
-**Full control** over layout, zoom, and rendering:
+For pages that turn, zoom limits, a dark theme or navigation controls, use the state-based `KiteDocView`:
 
 ```kotlin
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
 import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.compose.*
+import io.github.yuroyami.kitepdf.compose.KiteDocLayout
+import io.github.yuroyami.kitepdf.compose.KiteDocView
+import io.github.yuroyami.kitepdf.compose.KiteNavigationControls
+import io.github.yuroyami.kitepdf.compose.KiteZoomSpec
+import io.github.yuroyami.kitepdf.compose.rememberKiteDocViewState
 
 @Composable
-fun AdvancedViewer(doc: PdfDocument) {
+fun BookViewer(doc: PdfDocument) {
     val state = rememberKiteDocViewState(doc)
+
     KiteDocView(
         state = state,
         modifier = Modifier.fillMaxSize(),
         layout = KiteDocLayout.Paged(Orientation.Horizontal),
         zoomSpec = KiteZoomSpec(minZoom = 0.5f, maxZoom = 6f),
-        renderSpec = KiteRenderSpec.Rasterized(
-            quality = 1f,
-            maxBitmapLongSide = 4096,
-            rerasterizeOnZoom = true,
-            preserveHairlines = true
-        ),
-        colors = KiteDocViewColors(
-            pageBackground = Color.White,
-            viewportBackground = Color(0xFF1E1E1E)
-        ),
-        overlay = { state ->
-            KiteNavigationControls(state, Modifier.align(Alignment.BottomCenter))
-        }
+        overlay = {
+            KiteNavigationControls(it, Modifier.align(Alignment.BottomCenter))
+        },
     )
 }
 ```
 
-!!! tip
+The [Compose viewer](compose-viewer.md) guide shows every parameter, with the trade-off between the two ways the viewer can draw a page.
 
-    Use `KiteRenderSpec.Rasterized()` (the default) for smooth scrolling and cheap gestures. Switch to `KiteRenderSpec.Vectorized()` for resolution-independent, bitmap-free rendering: best for simple pages or when memory is tight.
-
-## Step 4: Read text out of it
-
-Extract text from any page without displaying it:
+## 4. Read the text
 
 ```kotlin
 val page = doc.pages[0]
-val text = page.extractText()
-println(text)
-```
 
-For geometry-aware extraction (to build selection rectangles or search highlights), use structured text:
+// The page as plain text
+println(page.extractText())
 
-```kotlin
-val structured = page.structuredText
-// structured.blocks → lines → spans, each with bounds
-for (block in structured.blocks) {
-    println("Block: ${block.bounds}")
+// Blocks of lines of spans, each with its bounds
+for (block in page.structuredText.blocks) {
     for (line in block.lines) {
-        println("  Line: ${line.text}")
-        for (span in line.spans) {
-            println("    Span: ${span.text} at ${span.bounds}")
-        }
+        println("${line.text} at ${line.bounds}")
     }
 }
 ```
 
-## Step 5: Render a page to PNG
+The bounds are what you need to draw a selection or a search highlight. [Reading PDFs](reading.md) covers search, metadata, outlines, annotations and form fields.
 
-Export a page as a PNG (or JPEG) without showing the UI. The `kitepdf-native-renderer` artifact provides headless rasterization using the JDK's built-in AWT + ImageIO.
+## 5. Render a page to an image
 
-Add the dependency:
-
-```gradle
-dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
-}
-```
-
-Render and encode:
+With `kitepdf-native-renderer` on the JVM, you can turn a page into a PNG with no UI at all:
 
 ```kotlin
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import java.io.File
 
-val page = doc.pages[0]
-
-// Render at 2× scale (e.g. for print or high-DPI screenshots)
-val pngBytes = AwtPdfRasterizer.encodeToPng(page, scale = 2.0)
-File("page-0.png").writeBytes(pngBytes)
-
-// Or JPEG
-val jpegBytes = AwtPdfRasterizer.encodeToJpeg(page, scale = 1.0)
-File("page-0.jpg").writeBytes(jpegBytes)
+// Twice the page size, for print or a high-DPI screen
+val png = AwtPdfRasterizer.encodeToPng(doc.pages[0], scale = 2.0)
+File("page-1.png").writeBytes(png)
 ```
 
-You can also grab the `BufferedImage` directly:
+`encodeToJpeg` writes a JPEG, while `renderToImage` gives you the `BufferedImage` itself. [Headless rendering](rendering.md) shows the same job on Android, Apple platforms, the browser and Skia.
 
-```kotlin
-val img = AwtPdfRasterizer.renderToImage(page, scale = 1.5)
-// Use img however you like...
-```
+## Where to next
 
-!!! note
-
-    The native-renderer artifact runs on JVM, Android, Apple (iOS, macOS, tvOS) and browser JS. For the targets it skips (wasmJs, Linux), use the Skia renderer (`kitepdf-skia-renderer`) or render through Compose (`kitepdf-compose-viewer`).
-
-## Where to next?
-
-- **[Compose Viewer](compose-viewer.md)**: zoom gestures, paging modes, navigation overlays, and thumbnails.
-- **[Editing & Writing](writing.md)**: modify PDFs programmatically (form fields, metadata, incremental updates).
-- **[Recipes](recipes.md)**: common patterns: search text, extract images, parse annotations, batch processing.
+- [Compose viewer](compose-viewer.md): layouts, zoom, render modes, navigation and thumbnails
+- [Creating PDFs](writing.md): the builder DSL, fonts and images
+- [Editing and redaction](editing.md): forms, stamps, page changes and redaction
+- [Recipes](recipes.md): short patterns for common tasks

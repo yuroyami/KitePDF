@@ -1,161 +1,24 @@
-# Compose viewer (KiteDocView)
+# Compose viewer
 
-Build a full-featured PDF viewer in Compose with a single composable. The `KiteDocView` family lets you display PDFs on screen with pinch zoom, paging, panning, and customizable rendering; all in pure Kotlin Multiplatform.
-
-## Run a document's scripts
-
-A PDF can carry scripts: a form that totals a column, a button that hides a field, a page that
-starts something when it opens. The viewer runs none of them unless you hand it a handler, and
-`kitepdf-javascript` provides one:
-
-```kotlin
-val runner = remember(doc) { PdfScriptRunner(doc, onAlert = { alert -> showDialog(alert.message); 1 }) }
-KiteDocView(state = state, scripts = runner)
-```
-
-With a handler the viewer fires the document and page triggers, sends a tap on a widget to the
-scripts, draws the form from its live values, and pumps the timers a script set, one frame at a
-time. The page itself is drawn once and kept: only the fields that changed are repainted, so a
-script that writes a field twenty times a second costs twenty small redraws.
-
-Without a handler nothing in the document runs, which is the default.
-
-### Filling a form
-
-With a handler, a tap on a widget does what a viewer does: a push button runs its press and
-release scripts, a check box or a radio button changes the form's value, and a text field takes
-the caret and opens the keyboard. Each character the reader types goes through the field's own
-keystroke script first, so a form that only takes digits refuses a letter, and leaving the field
-commits it: validate, then calculate, then format.
-
-`state.focusedField` says which field has the caret, and it is null when none has.
-
-Choice fields use the control their PDF flags specify (ISO 32000-1, 12.7.4.4):
-
-- A noneditable combo opens an option picker. Its entries show display labels, and choosing
-  one stores its export value without opening the text keyboard.
-- An editable combo also takes typed text and filters suggestions by their display labels.
-- A list shows its option rows inside the widget. A multiple-selection list toggles individual
-  rows while retaining the other selected options. `CommitOnSelChange` commits each proposed
-  selection immediately; otherwise leaving the list or pressing Enter commits its draft.
-
-Arrow keys, Home and End move through options. Space toggles the current row; Enter accepts
-and Escape discards a pending draft. Tab and Shift+Tab move between editable form widgets.
-Choice options expose their selected state to accessibility services. Only an editable combo
-uses text input. A refused script transaction restores the committed selection.
-
-The field model keeps option identity separately from the text that is shown or exported:
-
-```kotlin
-val field = requireNotNull(doc.formField("interests"))
-val options: List<PdfChoiceOption> = field.choiceOptions
-// Each option has index, exportValue and label. index is its original /Opt position.
-val proposed = PdfChoiceSelection(indices = options.take(2).map { it.index })
-
-// Preview runs the selection-change keystroke without changing the live value.
-val preview = runner.choiceKeystroke(field.fullyQualifiedName, proposed)
-// Commit the accepted preview when the reader accepts it or leaves the field.
-val accepted = preview != null && runner.commitChoice(field.fullyQualifiedName, preview)
-val current: PdfChoiceSelection? = runner.formState.choiceSelection(field.fullyQualifiedName)
-```
-
-`choiceKeystroke` returns the accepted, possibly rewritten draft, or null when a script
-refuses it. A deferred list calls it on each selection change and retains that draft outside
-the live form state. `commitChoice` runs the commit keystroke, validation, store, calculation
-and formatting without repeating the selection-change event. The viewer orders both calls
-on its script lane; an immediate commit runs them consecutively. Typed text in an editable
-combo uses ordinary text keystrokes before its final typed choice commit.
-
-`choiceOptions` preserves distinct options even when their labels or exports are equal, and
-retains original indices when damaged entries are skipped. The older `options: List<String>`
-remains a display-label view. Use `choiceSelection`, including its complete `indices` list,
-for selections. An editable combo can instead hold `freeText`. Empty indices with no text
-mean no selection; this differs from an option whose export string is empty. Selection lists
-are immutable snapshots. Unknown source values stay readable in `unresolvedValues` until a
-valid edit replaces them, so opening a damaged form does not silently erase its value.
-
-`PdfFormState.value(name)` and `Change.value` remain scalar compatibility views. For multiple
-selections they return the **first selected export value in original option order**. They
-never join the values into one string. `setValue(name, value)` replaces the selection with one
-matching export, choosing the first matching option when exports are duplicated. Unmatched
-text is accepted only by editable combos; an empty string clears a noneditable field when
-there is no empty-export option. Use typed indices when a duplicate or empty option must be
-identified exactly.
-
-`formState.setChoiceSelection(name, selection)` updates live state directly and returns false
-for an invalid selection. It publishes one revision and one `Change` containing the complete
-`choiceSelection`; it does not execute scripts. Programmatic writes can update read-only
-fields. Custom user transactions can capture `fieldRevision(name)` and pass that revision to
-the three-argument setter, which atomically refuses stale, hidden or read-only targets.
-That overload also restores an exact parsed source/default selection when cancelling an
-edit, including its unresolved source values. New user commits still pass through
-`field.validateChoiceSelection`; arbitrary unresolved values remain invalid.
-`cancelChoiceTransaction(name, expectedRevision)` invalidates a still-pending choice edit
-without changing its value or redraw revision. A validation result using the cancelled
-revision can no longer store its value; cancellation after an intervening commit returns
-false and preserves that committed value.
-`reset(name)` restores the file's source value, `resetAll()` also drops visibility/read-only
-overrides, and `resetForm()` applies the typed `/DV` defaults.
-
-An existing custom `PdfScriptHandler` keeps its string methods. The default `choiceKeystroke`
-adapter passes a single display label through the existing `keystroke` hook. Separately,
-the default `commitChoice` adapter passes its export value to the existing `commit` hook;
-it refuses multiple selections or a duplicate identity that the string API cannot preserve.
-A handler supporting those cases overrides `commitChoice` and `supportsMultipleChoices`,
-and overrides `choiceKeystroke` when its selection previews need custom script processing.
-The supplied `PdfScriptRunner` supports typed choices and the JavaScript `value`,
-`valueAsString`, `currentValueIndices` and `getItemAt` export/display distinctions.
-
-These are live editing APIs. They do not save the document. The writer's existing scalar
-`PdfEditor.setChoiceValue` remains separate; saving complete typed multiple selections,
-their array `/V` and `/I` entries, and matching saved appearances is outside this change.
-Do not save a multiple selection by passing the scalar `value(name)` view to that method.
-
-### A book's scripts
-
-An EPUB chapter can carry scripts too: a quiz, or a fixed-layout page whose button changes a
-picture. Pass `epubScripts`, and `kitepdf-javascript` provides a handler for it as well:
-
-```kotlin
-val scripts = remember(book) { EpubScriptRunner(book) }
-DisposableEffect(scripts) { onDispose { scripts.close() } }
-KiteDocView(state = state, epubScripts = scripts)
-```
-
-The viewer runs a scripted chapter's scripts when the reader first reaches it. A tap on one of
-its pages goes to the scripts first, as a `click` on the element under it, and the viewer
-follows a link there only when no script prevented the click. A change of `location` that a
-script asks for goes the way of a tapped link, through `onLinkTap`. The viewer pumps the timers
-the scripts set, and when a script changes its chapter, the chapter is laid out again: the
-viewer takes the page counts again, since the chapter can gain or lose pages, and draws the
-changed pages. [Scripts in an EPUB](javascript.md#scripts-in-an-epub) says what the scripts see.
-
-### Where the scripts run
-
-On a thread of their own. A form script finishes in milliseconds, but a document that carries a
-program in a page's open action can work for tens of seconds before it shows anything, and the
-reader must still be able to scroll and close it meanwhile. The viewer posts every script call to
-that one thread, in order, and repaints when the form changes.
-
-A character the reader types is shown at once and the field's keystroke script has the last word:
-if it refuses, the field goes back to what it held.
+`kitepdf-compose-viewer` gives you `KiteDocView`, one composable that can show any document KitePDF opens (PDF, EPUB, CBZ, SVG, XPS and OpenXPS) with zoom, paging, text selection and links, on every Compose Multiplatform target.
 
 ## Installation
 
-Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
-
-=== "Kotlin (KMP)"
+=== "Kotlin Multiplatform"
 
     ```kotlin
-    // commonMain
-    dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
+    kotlin {
+        sourceSets {
+            commonMain.dependencies {
+                implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
+            }
+        }
     }
     ```
 
-=== "Android / JVM"
+=== "Android or JVM"
 
-    ```gradle
+    ```kotlin
     dependencies {
         implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
     }
@@ -163,178 +26,200 @@ Add the `kitepdf-compose-viewer` artifact to your Gradle dependencies:
 
 ## Quick start
 
-The simplest viewer: a whole document in a continuous vertical scroll.
+The simplest viewer shows a whole document in one vertical scroll:
 
 ```kotlin
-val document = remember { PdfDocument.open(bytes) }
-KiteDocView(document, modifier = Modifier.fillMaxSize())
+@Composable
+fun Viewer(bytes: ByteArray) {
+    val document = remember(bytes) { PdfDocument.open(bytes) }
+    KiteDocView(document, modifier = Modifier.fillMaxSize())
+}
 ```
 
-`KiteDocView` takes any `KiteDocument`, so an EPUB goes in the same call:
+`KiteDocView` takes any `KiteDocument`, so an EPUB goes into the same call:
 
 ```kotlin
-val book = remember { EpubDocument.open(bytes) }
+val book = remember(bytes) { EpubDocument.open(bytes) }
 KiteDocView(book, modifier = Modifier.fillMaxSize())
 ```
 
-Or just one page, sized to fill the width:
+Pass `page` to show one page (the index starts at zero) at the full width:
 
 ```kotlin
 KiteDocView(document, page = 2, modifier = Modifier.fillMaxWidth())
 ```
 
-## The full KiteDocView composable
+This short form also takes a `background`, a `theme`, the `pageSpacing` and a few callbacks. For everything else on this page, use the form that takes a state.
 
-For complete control, pass a hoisted state and specify layout, zoom, render mode, and overlays:
+## The state
 
-```kotlin
-val state = rememberKiteDocViewState(document)
-
-KiteDocView(
-    state = state,
-    modifier = Modifier.fillMaxSize(),
-    layout = KiteDocLayout.Paged(Orientation.Horizontal),
-    zoomSpec = KiteZoomSpec(maxZoom = 6f),
-    renderSpec = KiteRenderSpec.Rasterized(quality = 1.5f),
-    colors = KiteDocViewColors(pageBackground = Color.White),
-    pageSpacing = 8.dp,
-    overlay = { state ->
-        KiteNavigationControls(state, Modifier.align(Alignment.BottomCenter).padding(16.dp))
-    },
-)
-```
-
-## KiteDocViewState: control and observation
-
-`KiteDocViewState` is the single point of control for all viewer behavior. Hoist it outside the `KiteDocView` so navigation widgets, sliders, and external controls all drive the same state.
+`KiteDocViewState` controls the viewer and tells you what it shows. Create it outside `KiteDocView`, so that your buttons, sliders and navigation widgets drive the same state as the viewer:
 
 ```kotlin
-val state = rememberKiteDocViewState(document)
-```
+@Composable
+fun Reader(document: KiteDocument) {
+    val state = rememberKiteDocViewState(document)
 
-### Navigation
-
-All navigation methods are suspending; call them from a coroutine scope:
-
-```kotlin
-scope.launch {
-    // Jump to a page (immediately)
-    state.scrollToPage(2)
-
-    // Animate to a page (smooth scroll)
-    state.animateScrollToPage(2)
-
-    // One page at a time
-    state.nextPage()
-    state.previousPage()
+    KiteDocView(
+        state = state,
+        modifier = Modifier.fillMaxSize(),
+        layout = KiteDocLayout.Paged(Orientation.Horizontal),
+        zoomSpec = KiteZoomSpec(maxZoom = 6f),
+        renderSpec = KiteRenderSpec.Rasterized(quality = 1.5f),
+        colors = KiteDocViewColors(pageBackground = Color.White),
+        pageSpacing = 8.dp,
+        overlay = {
+            KiteNavigationControls(
+                state,
+                Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            )
+        },
+    )
 }
 ```
 
-Call these in a `LaunchedEffect` or from a coroutine scope (e.g. a button's `onClick` via `rememberCoroutineScope()`):
+??? note "Every parameter of `KiteDocView`"
+
+    | Parameter | What it does |
+    | --- | --- |
+    | `state` | The state that this viewer shows and that your code drives |
+    | `modifier` | The modifier of the viewport |
+    | `layout` | How the pages sit and move, see [Layouts](#layouts) |
+    | `zoomSpec` | Pinch, double tap, pan and the zoom limits, see [Zoom and gestures](#zoom-and-gestures) |
+    | `renderSpec` | How a page becomes pixels, see [Rasterized or vectorized](#rasterized-or-vectorized) |
+    | `colors` | The paper, the viewport, the reading theme, the highlights and the selection, see [Colors and themes](#colors-and-themes) |
+    | `pageSpacing` | The gap between two pages. The pages of an EPUB roll have no gap. |
+    | `userScrollEnabled` | Lets a swipe, the mouse wheel and the page keys move the view |
+    | `selectionEnabled` | Lets the reader select text, see [Text selection](#text-selection) |
+    | `onPageRendered` | Gets each new screen bitmap of a page, see [When a page renders](#when-a-page-renders) |
+    | `pagePlaceholder` | Shows in a page's place until its bitmap is ready |
+    | `chapterPlaceholder` | Shows in the place of a chapter that is not laid out yet |
+    | `overlay` | Composables that float over the viewport, see [The overlay slot](#the-overlay-slot) |
+    | `pageOverlay` | Composables that draw over each page and move with it, see [Draw over a place on a page](#draw-over-a-place-on-a-page) |
+    | `onTap` | Gets a tap on the page that hits no link |
+    | `onLinkTap` | Gets every link tap before the viewer acts, see [Link taps](#link-taps) |
+    | `scripts` | Runs the scripts of a PDF, see [Scripts](#scripts) |
+    | `onHighlightTap` | Gets a tap on a highlight before any link under it, see [Highlights](#highlights) |
+    | `epubScripts` | Runs the scripts of an EPUB chapter, see [Scripts](#scripts) |
+    | `externalLinks` | Sets which web and mail addresses the viewer opens, see [Addresses outside the document](#addresses-outside-the-document) |
+    | `showMarkupErrors` | Shows a notice on the first page of an EPUB chapter whose markup is not well-formed XML |
+
+### Navigation
+
+Every navigation call suspends, so call it from a coroutine:
 
 ```kotlin
 val scope = rememberCoroutineScope()
+
 Button(onClick = { scope.launch { state.nextPage() } }) {
     Text("Next")
 }
 ```
 
+```kotlin
+// Jump to a page
+state.scrollToPage(2)
+
+// Scroll to a page with an animation
+state.animateScrollToPage(2)
+
+// One page at a time
+state.nextPage()
+state.previousPage()
+```
+
 ### Zoom and pan
 
 ```kotlin
-// Set zoom immediately (clamped to spec.minZoom..maxZoom)
+// Set the zoom at once, inside the limits of the zoom spec
 state.setZoom(2.5f)
 
-// Animate to a zoom level (e.g. double-tap at a position)
+// Zoom with an animation, about a point of the viewport
 scope.launch { state.animateZoomTo(3f, focal = tapPosition) }
 
-// Reset to minimum zoom and center
+// Go back to the smallest zoom
 state.resetZoom()
 
-// Pan by a delta (clamped to content bounds)
+// Move the view, inside the bounds of the content
 state.panBy(Offset(100f, 50f))
-
-// Query current state
-println("Zoom: ${state.zoom}") // 1.0 = fit
-println("Pan: ${state.panOffset}")
-println("Current page: ${state.currentPage}")
-println("Is zoomed in? ${state.isZoomed}")
 ```
 
-## Layout modes
+`state.zoom` is the current zoom (1 means that the page fits), `state.panOffset` is the current pan, and `state.isZoomed` is true above the smallest zoom.
 
-Control how pages are arranged and navigated:
+## Layouts
 
-### `KiteDocLayout.Continuous` (default)
+The `layout` parameter sets how the pages sit and how the reader moves between them.
 
-All pages in one lazy-loaded strip, scrollable in a single axis. Zoom is magnifier-style: the whole strip scales around the viewport center while scrolling stays native along the scroll axis.
+### Continuous
+
+`KiteDocLayout.Continuous` is the default. All pages sit in one strip that scrolls along one axis, and the viewer composes only the pages on screen. A zoom scales the whole strip about the center of the viewport, while the scroll along the strip stays the platform's own scroll.
 
 ```kotlin
 KiteDocView(
     state,
-    layout = KiteDocLayout.Continuous(orientation = Orientation.Vertical),
-    // vertical = scroll down through all pages; horizontal = scroll right
+    layout = KiteDocLayout.Continuous(
+        orientation = Orientation.Vertical,
+        fit = KitePageFit.PAGE,
+        prefetchPages = 2,
+    ),
 )
 ```
 
-- **`fit`**: `KitePageFit.WIDTH` (default) fills the width of a vertical strip, so a tall page scrolls through the viewport. `KitePageFit.PAGE` shrinks each page until the whole page shows, centred across the strip.
-- **`prefetchPages`**: once the strip rests, it draws this many pages on each side of the pages on screen into the bitmap cache, so a scroll to them shows their bitmap at once. The default is 1. Use 0 to draw nothing ahead.
+- `fit`: `KitePageFit.WIDTH` (the default) fills the width of a vertical strip, so a tall page scrolls through the viewport. `KitePageFit.PAGE` shrinks each page until the whole page shows.
+- `prefetchPages`: when the strip stops, the viewer draws this many pages on each side of the screen into its cache, so a scroll to them shows them at once. The default is 1, and 0 draws nothing ahead.
+- `contentPadding`: space at the ends of the strip for your own controls. The pages still scroll under them.
 
-```kotlin
-KiteDocView(
-    state,
-    layout = KiteDocLayout.Continuous(fit = KitePageFit.PAGE, prefetchPages = 2),
-)
-```
+Use it for documents that people read from start to end, such as papers and reports.
 
-**Best for:** reading documents end-to-end (papers, reports), where the page count matters less than the scroll position.
+### Paged
 
-### `KiteDocLayout.Paged` (snap paging)
-
-One page per screen, snapped. Swipe or drive programmatically to flip pages. Each page fits letterbox-style within the viewport.
+`KiteDocLayout.Paged` shows one page at a time. The reader swipes to turn the page, or your code turns it.
 
 ```kotlin
 KiteDocView(
     state,
     layout = KiteDocLayout.Paged(
         orientation = Orientation.Horizontal,
-        offscreenPages = 1, // pages pre-rasterized on each side
+        offscreenPages = 1,
     ),
 )
 ```
 
-**Best for:** books, slide decks, comics; anything where users think in "pages" not "scroll position".
+- `offscreenPages`: the number of pages on each side that the viewer keeps ready, so a swipe never waits for a render. The default is 1. Use a higher number for fast swipes, or 0 to use less memory.
+- `fit`: `KitePageFit.PAGE` (the default) shows the whole page. `KitePageFit.WIDTH` fills the width. A page taller than the viewport then starts at its top, and the reader drags or turns the wheel to move down the page. A sideways drag past the edge of the page turns the page.
+- `reverseLayout`: puts the next page on the left, for a right-to-left book. `nextPage()` still goes to the next index.
 
-- **`offscreenPages`**: pages kept composed and rasterized on each side of the visible page (default 1). Raise to cover faster flinging; set 0 to minimise memory. While idle, the immediate neighbours are pre-rendered so a swipe never stalls.
-- **`fit`**: `KitePageFit.PAGE` (default) shows the whole page. `KitePageFit.WIDTH` fills the width instead. A page taller than the viewport starts at its top, and the reader drags or turns the wheel down through it. A drag sideways past its edge turns the page.
+Use it for books, slides and comics, where readers think in pages.
 
-### `KiteDocLayout.Spread` (two pages side by side)
+### Spread
 
-Two pages per screen, like an open book. Swipe or drive it programmatically, as with `Paged`.
+`KiteDocLayout.Spread` shows two pages side by side, like an open book. It moves like `Paged`.
 
 ```kotlin
 KiteDocView(
     state,
     layout = KiteDocLayout.Spread(
-        reverseLayout = false, // true for a right-to-left book
-        firstPageAlone = true, // show the cover alone, then pair the pages after it
+        // True for a right-to-left book
+        reverseLayout = false,
+        // Show the cover alone, then pair the pages after it
+        firstPageAlone = true,
     ),
 )
 ```
 
-Pages pair in order, the first two, the next two and so on, except where the document says otherwise:
+The viewer pairs the pages in order (the first two, then the next two), except where the document asks for something else:
 
-- An EPUB chapter can ask for its first page on the left side, on the right side, or alone in the centre.
-- An EPUB book or chapter can ask for no spreads, or for spreads in a landscape viewport only.
-- A PDF whose `/PageLayout` is `TwoPageRight` or `TwoColumnRight` puts its first page on the right, so a left-to-right document shows it alone.
+- An EPUB chapter can put its first page on the left side, on the right side, or alone in the center.
+- An EPUB book or chapter can turn spreads off, or allow them in a landscape viewport only.
+- A PDF whose `/PageLayout` is `TwoPageRight` or `TwoColumnRight` puts its first page on the right. A left-to-right document then shows its first page alone.
 
-A page without a partner shows alone, centred. When the viewport turns between portrait and landscape, the reader stays on the same page.
+A page without a partner shows alone in the center. When the viewport turns between portrait and landscape, the reader stays on the same page. A reflowable EPUB shows a chapter placeholder until all of its chapters are laid out, because the pairs depend on the whole book.
 
-**Best for:** fixed-layout books, magazines and comics made as two-page spreads.
+Use it for fixed-layout books, magazines and comics that have two-page spreads.
 
-### `KiteDocLayout.SinglePage`
+### SinglePage
 
-Exactly one fixed page, letterboxed to fill the viewport:
+`KiteDocLayout.SinglePage` shows one fixed page, which navigation does not change:
 
 ```kotlin
 KiteDocView(state, layout = KiteDocLayout.SinglePage(pageIndex = 3))
@@ -342,24 +227,24 @@ KiteDocView(state, layout = KiteDocLayout.SinglePage(pageIndex = 3))
 
 ### The layout a document asks for
 
-`KiteDocLayout.forDocument(document)` returns the layout that a document asks for:
+`KiteDocLayout.forDocument(document)` gives the layout that a document asks for:
 
 | Document | Layout |
-|---|---|
-| EPUB roll (`rendition:layout roll`) | `Continuous()`: the plates fill the width with no gap between them |
-| EPUB with `rendition:flow` `scrolled-continuous` | `Continuous()`: the chapters follow each other in one strip |
-| EPUB with `rendition:flow` `scrolled-doc` | `Paged(fit = KitePageFit.WIDTH)`: each chapter scrolls down, and a sideways swipe moves to the next one |
-| Any other document | `KiteDocLayout.pagedFor(document)` |
+| --- | --- |
+| EPUB roll (`rendition:layout roll`) | `Continuous()`, with no gap between the pages |
+| EPUB with `rendition:flow` `scrolled-continuous` | `Continuous()`, with all chapters in one strip |
+| EPUB with `rendition:flow` `scrolled-doc` | `Paged(fit = KitePageFit.WIDTH)`, where each chapter scrolls down and a sideways swipe goes to the next chapter |
+| Any other document | `KiteDocLayout.pagedFor(document)`, which is `Paged` with `reverseLayout` set for a right-to-left document |
 
 ```kotlin
 KiteDocView(state, layout = KiteDocLayout.forDocument(book))
 ```
 
-`EpubSettings.scrolled` changes the answer for an EPUB book: `false` keeps it in pages, and `true` gives `Continuous()` to a book that sets no flow.
+`EpubSettings.scrolled` changes the answer for an EPUB. With `false`, the book stays in pages. With `true`, a book that sets no flow gets `Continuous()`.
 
-## Zoom & gesture configuration
+## Zoom and gestures
 
-Customise pinch, double-tap, pan, and zoom bounds:
+`KiteZoomSpec` sets the gestures and the zoom limits:
 
 ```kotlin
 val spec = KiteZoomSpec(
@@ -368,17 +253,19 @@ val spec = KiteZoomSpec(
     panEnabled = true,
     minZoom = 1f,
     maxZoom = 8f,
-    doubleTapZoom = 2.5f, // what double-tap toggles to
-    resetZoomOnPageChange = true, // snap to minZoom when paging
+    // The zoom that a double tap goes to
+    doubleTapZoom = 2.5f,
+    // Go back to minZoom on a page turn
+    resetZoomOnPageChange = true,
 )
 KiteDocView(state, zoomSpec = spec)
 ```
 
-These bounds are honoured by both gestures and programmatic calls (`setZoom`, `animateZoomTo`), so an app driving zoom from a slider is governed by the same range.
+The limits apply to the gestures and to your own calls (`setZoom` and `animateZoomTo`), so a zoom slider in your app has the same range as a pinch.
 
-A zoomed page pans with one finger. A quick release lets the pan go on and slow down, and a new touch stops it. In `Paged` and `Spread`, a drag that goes on past the edge of a zoomed page turns the page, the way the pager turns.
+The reader pans a zoomed page with one finger. A quick release lets the page move on and slow down, and a new touch stops it. In `Paged` and `Spread`, a drag past the edge of a zoomed page turns the page.
 
-To disable zoom entirely:
+`KiteZoomSpec.Disabled` turns off every zoom gesture:
 
 ```kotlin
 KiteDocView(state, zoomSpec = KiteZoomSpec.Disabled)
@@ -388,334 +275,350 @@ KiteDocView(state, zoomSpec = KiteZoomSpec.Disabled)
 
 On the desktop and the web, and on a tablet with a mouse or a keyboard, the viewer also takes these inputs:
 
-| Input | What it does | Turned off by |
-|---|---|---|
+| Input | What it does | What turns it off |
+| --- | --- | --- |
 | Ctrl or Cmd with the wheel, or a trackpad pinch | Zooms about the pointer | `pinchEnabled = false` |
-| Ctrl or Cmd with plus, minus or 0 | Zooms in, zooms out, goes back to fit | `pinchEnabled = false` |
-| The wheel in a horizontal `Paged` or `Spread` layout | Next or previous page, one page for each wheel gesture | `userScrollEnabled = false` |
-| The wheel on a page that overflows the view (zoomed, or `KitePageFit.WIDTH`) | Moves the page. Once the page is at its edge, the next wheel gesture turns it | `userScrollEnabled = false` |
-| Page Down, Space, the down arrow | Next page | `userScrollEnabled = false` |
-| Page Up, Shift with Space, the up arrow | Previous page | `userScrollEnabled = false` |
-| The left and right arrows | Previous and next page; swapped where pages advance to the left | `userScrollEnabled = false` |
-| Home and End | First and last page | `userScrollEnabled = false` |
+| Ctrl or Cmd with plus, minus or 0 | Zooms in, zooms out, or goes back to fit | `pinchEnabled = false` |
+| The wheel in a horizontal `Paged` or `Spread` layout | Goes to the next or the previous page, one page for each wheel gesture | `userScrollEnabled = false` |
+| The wheel on a page that is larger than the view (zoomed, or with `KitePageFit.WIDTH`) | Moves the page. At the edge of the page, the next wheel gesture turns the page. | `userScrollEnabled = false` |
+| Page Down, Space, the down arrow | Goes to the next page | `userScrollEnabled = false` |
+| Page Up, Shift with Space, the up arrow | Goes to the previous page | `userScrollEnabled = false` |
+| The left and right arrows | Go to the previous and the next page. Where the pages advance to the left, the two arrows swap. | `userScrollEnabled = false` |
+| Home and End | Go to the first and the last page | `userScrollEnabled = false` |
 | A mouse press and drag on text | Selects the text at once | `selectionEnabled = false` |
 
-The keys work once the viewer has the focus, which a press on it gives. A form field with the caret keeps its keys.
+The keys work after the viewer has the focus, which a press on the viewer gives it. A form field that has the caret keeps its keys.
 
-## Rendering: rasterized vs. vectorized
+## Rasterized or vectorized
 
-The `renderSpec` parameter controls how pages become pixels. Choose the right trade-off for your use case.
+The `renderSpec` parameter sets how a page becomes pixels:
 
-### `KiteRenderSpec.Rasterized` (default)
+| | `KiteRenderSpec.Rasterized` (default) | `KiteRenderSpec.Vectorized` |
+| --- | --- | --- |
+| Where the page draws | On a background thread, into a bitmap | On the UI thread, at each real redraw |
+| Scroll, pan and pinch | Move the bitmap. The page does not draw again. | Play back the drawing that the page recorded |
+| Memory | One bitmap for each page, and a cache of page bitmaps | No page bitmap. A cache of image bitmaps only. |
+| Deep zoom during a pinch | Soft until the zoom stops and the page renders again | Sharp on Android. Soft on iOS, the desktop and the web until the page draws again. |
+| A page of large scans, such as a comic | Fast | Slow, because the UI thread converts the images |
+| `onPageRendered` | Called | Never called |
 
-Vector-render each page once into a bitmap per (size, zoom, quality) bucket, then draw that bitmap and GPU-transform it during gestures. Scrolling and panning are cheap; the PDF engine never re-executes.
+For most apps, the default `Rasterized` spec is the better choice. Its `rerasterizeOnZoom` renders the page again after each zoom, so text stays sharp at any zoom.
+
+### Rasterized
+
+The viewer renders each page into a bitmap for its size and its zoom, then draws that bitmap. A scroll, a pan or a pinch moves the bitmap, so the page itself does not draw again.
 
 ```kotlin
 val spec = KiteRenderSpec.Rasterized(
-    quality = 1f, // supersampling multiplier over on-screen resolution
-    maxBitmapLongSide = 4096, // memory cap
-    rerasterizeOnZoom = true, // re-render at settled zoom for crispness
-    preserveHairlines = true, // compensate sub-pixel strokes
+    quality = 1f,
+    maxBitmapLongSide = 4096,
+    rerasterizeOnZoom = true,
+    preserveHairlines = true,
+    cacheBudgetBytes = 96L * 1024 * 1024,
 )
 KiteDocView(state, renderSpec = spec)
 ```
 
-**When to use:**
-- Dense pages with heavy content (graphs, photographs, detailed illustrations).
-- Lots of pinch-zooming and panning (fast gestures, content-independent cost).
-- Slow devices, where re-drawing the page every frame would stutter.
+!!! warning
+    On Android, a bitmap that is larger than the GPU texture limit draws blank. Keep `maxBitmapLongSide` at or below that limit, which is 4096 on many devices.
 
-**Parameters:**
+- `quality`: the number of bitmap pixels for each screen pixel. `1.0` renders at the screen resolution, which is the fastest and sharpest choice. A higher value (such as 1.5) gives more detail for a screenshot. A lower value gives cheap thumbnails.
+- `maxBitmapLongSide`: the largest side of a page bitmap, in pixels. A page that needs more pixels (at deep zoom, or because it is very tall) keeps this bitmap, and the viewer draws the part on screen over it in tiles of 1024 pixels at full resolution.
+- `rerasterizeOnZoom`: when a zoom stops, the viewer renders the page again at the new zoom. The zoom rounds up to the next step of 1, 1.19, 1.41, 1.68, 2 and so on (four steps for each doubling), so two pinches that stop near each other share one bitmap.
+- `preserveHairlines`: scales the thinnest strokes with the bitmap, so a stroke of width 0 stays one screen pixel wide. Other thin strokes (such as ECG traces and fine table rules) keep their weight when the viewer scales the bitmap down.
+- `cacheBudgetBytes`: the size of the cache of page bitmaps for one `KiteDocViewState`, so a page that comes back on screen needs no new render. 0 turns the cache off.
+- `canvasDecorator`: see [Canvas decorators](#canvas-decorators).
 
-- **`quality`** (default 1.0): supersampling multiplier over on-screen pixels. `1.0` = rasterize exactly at display resolution (fastest and sharpest). `>1.0` (e.g. 1.5) oversamples for screenshots or print-like export. `<1.0` undersamples for cheap thumbnails.
-- **`maxBitmapLongSide`** (default 4096): hard memory cap on a page's whole bitmap. A page that needs more pixels, at deep zoom or because it is very tall, keeps the capped bitmap, and the part on screen draws over it in tiles of 1,024 pixels at full resolution. On Android, keep it at or below the GPU's texture limit (4096 on many devices), or the page draws blank.
-- **`rerasterizeOnZoom`** (default true): after a zoom settles, re-render the visible page at the zoomed resolution so deep zoom stays crisp. The zoom rounds up to a quarter of an octave (1, 1.19, 1.41, 1.68, 2 and so on), so pinches that settle close together share one raster. Costs one extra rasterization per zoom step.
-- **`preserveHairlines`** (default true): scale the engine's stroke floors by the ratio of the raster to the screen. A zero-width stroke then stays one screen pixel wide, and other sub-pixel strokes (ECG traces, fine table rules) keep their weight when the bitmap is downscaled.
+### Vectorized
 
-### `KiteRenderSpec.Vectorized`
-
-Draw each page's content into a live Canvas, transformed by zoom/pan via a GPU layer. There is no whole-page raster; embedded images use a bounded cache of converted bitmaps shared by the pages of the viewer. The page draws again when its size, its settled zoom, the theme or the render spec changes. A change to the overlay, such as a search hit or a highlight, and each frame of a pinch replay the drawing that the page recorded.
+The viewer draws the page content on a live canvas and moves it with a GPU layer, so there is no page bitmap. The page draws again when its size, its zoom after a pinch, the theme or the render spec changes. A new search hit or highlight, and each frame of a pinch, play back the drawing that the page recorded.
 
 ```kotlin
 val spec = KiteRenderSpec.Vectorized(
-    hairlineWidthPx = 1f, // width of a zero-width stroke, in device pixels
-    imageCacheBudgetBytes = 16L * 1024 * 1024, // shared by this viewer's pages
+    hairlineWidthPx = 1f,
+    imageCacheBudgetBytes = 16L * 1024 * 1024,
 )
 KiteDocView(state, renderSpec = spec)
 ```
 
-**When to use:**
-- Simple pages with minimal content (forms, text-only documents).
-- Deep zoom crispness matters more than gesture smoothness.
-- Whole-page raster memory would be too large; tune the embedded-image budget separately.
-- Every composition must stay crisp (e.g. animation).
+- `hairlineWidthPx`: the width, in device pixels, of a stroke whose line width is 0. `1.0` is the one device pixel that ISO 32000-1, 8.4.3.2 asks for. Other thin strokes widen to a fifth of this width, as MuPDF draws them, so they stay visible but do not become solid lines.
+- `imageCacheBudgetBytes`: the size of the cache of converted images that all pages of one `KiteDocViewState` share. An image that does not change keeps its bitmap across redraws, and when its page comes back on screen. 0 turns the cache off, and a negative value throws. The cache removes the least recently used image first. An image that is larger than the budget draws without a place in the cache.
+- `canvasDecorator`: see [Canvas decorators](#canvas-decorators).
 
-**Parameters:**
+The cache lets go of its bitmaps when you leave the vectorized mode, when the viewer leaves the composition and when the budget changes. A drawing layer that Compose recorded can keep a bitmap until Compose releases that layer.
 
-- **`hairlineWidthPx`** (default 1.0): the width in device pixels of a stroke whose line width is 0. `1.0` is the one device pixel of ISO 32000-1, 8.4.3.2. Other thin strokes (ECG traces, fine borders) widen to a fifth of this width, as MuPDF draws them, so they stay visible without turning into solid pixels.
-- **`imageCacheBudgetBytes`** (default 16 MiB): the converted-image budget shared by the pages of one `KiteDocViewState`. Unchanged images reuse resident bitmaps at the same sampling size across redraws and page recycling. Zero disables reuse between draws; negative values are rejected. Least recently used entries are evicted first, and an image larger than the budget is drawn without retaining it. Leaving vector mode, disposing the viewer, or changing the budget releases the cache's references. Recorded drawing layers may still hold those bitmaps until the layers are released.
+??? note "How the image cache knows an image"
+    A PDF image XObject, a CBZ entry and an EPUB image resource each have an identity in their document. The identity lives longer than the decoded image, so an image that decodes again finds its bitmap. The keys of the cache hold only these identities, never image buffers or documents.
 
-A PDF image XObject, a CBZ entry and an EPUB image resource each carry an identity for the document. The identity outlives the decoded image, so an image decoded again reuses its bitmap. The cache keys hold only these identities, never image buffers or documents. PDF stencils, images with a `/Mask`, images under a page's default colour space, inline images and SVG resources get a new identity on each decode, so they do not reuse a bitmap. A custom image producer can give its images an identity with `KiteImageIdentity().child(resourcePath)` and `KiteImageData.withIdentity(identity)`. Keep one root identity per open document. Use a new identity when the pixels, masks, size or colour interpretation change. Do not change an image's buffers after you draw it, also in a canvas decorator.
+    These images get a new identity at each decode, so they never reuse a bitmap: PDF stencil masks, images with a `/Mask`, images in the default color space of a page, inline images and SVG resources.
 
-!!! warning "Rasterized vs. Vectorized trade-off"
+    A custom image producer can give its images an identity with `KiteImageIdentity().child(resourcePath)` and `KiteImageData.withIdentity(identity)`:
 
-    **Rasterized** wins on gesture smoothness: scroll and pan never re-execute the PDF engine. It trades memory (one bitmap) and rasterization latency for instant playback.
-    
-    **Vectorized** avoids a whole-page raster, but it draws on the UI thread. Each real redraw parses the page content. Cached image bitmaps are reused. A first conversion, an evicted image or a new sampling size still converts on the UI thread. A page of large scans, such as a comic, is better in Rasterized. On Android the vector display list replays under the live transform so zoom stays crisp mid-pinch; on Skia targets (iOS, desktop, web) the layer is texture-cached so deep in-gesture zoom softens until the draw re-runs.
-    
-    For most apps, **Rasterized with `rerasterizeOnZoom=true`** is the sweet spot: responsive gestures and crisp zoom, with a small memory footprint per page.
+    - Keep one root identity for each open document.
+    - Use a new identity when the pixels, the masks, the size or the color meaning of an image change.
+    - Do not change the buffers of an image after it draws. This also applies in a canvas decorator.
 
-### Custom canvas decorators
+### Canvas decorators
 
-Pass `canvasDecorator` to either render spec to filter ink, inspect glyphs or
-insert drawing calls inside the page's own paint pass. This hook is also
-available on `KitePageRasterizer.rasterize` and `rasterizeOffMain`.
+A canvas decorator wraps the canvas of each page, so you can change the paint, read the glyphs or add your own drawing inside the page's paint pass. Both render specs take `canvasDecorator`, and so do `KitePageRasterizer.rasterize` and `rasterizeOffMain`.
 
 ```kotlin
-val decorator: KiteCanvasDecorator = remember {
-    { inner ->
-        object : KiteCanvas by inner {
-            override fun fillPath(
-                path: KitePath, ctm: KiteMatrix, color: RgbColor,
-                evenOdd: Boolean, alpha: Double, blendMode: KiteBlendMode,
-            ) {
-                inner.fillPath(path, ctm, color, evenOdd, alpha * 0.8, blendMode)
+@Composable
+fun FadedInk(state: KiteDocViewState) {
+    val decorator: KiteCanvasDecorator = remember {
+        { inner ->
+            object : KiteCanvas by inner {
+                override fun fillPath(
+                    path: KitePath,
+                    ctm: KiteMatrix,
+                    color: RgbColor,
+                    evenOdd: Boolean,
+                    alpha: Double,
+                    blendMode: KiteBlendMode,
+                ) {
+                    // Paint every filled path at 80% of its opacity
+                    inner.fillPath(path, ctm, color, evenOdd, alpha * 0.8, blendMode)
+                }
             }
         }
     }
+    KiteDocView(
+        state = state,
+        renderSpec = KiteRenderSpec.Rasterized(canvasDecorator = decorator),
+    )
 }
-KiteDocView(
-    state = state,
-    renderSpec = KiteRenderSpec.Rasterized(canvasDecorator = decorator),
-)
 ```
 
-The supplied canvas includes the reader theme, so custom colours pass through
-its colour mapping. Paper, viewer overlays and interactive form controls are
-outside this hook. The wrapper receives the same coordinates and matrices as
-`KiteCanvas` and should delegate operations it does not customize.
+The canvas that the decorator gets already applies the reading theme, so your colors go through the theme too. The paper, the overlays of the viewer and the controls of a form do not go through the decorator. The wrapper gets the same coordinates and matrices as any `KiteCanvas`. It must pass on each call that it does not change.
 
-Some `KiteCanvas` operations have two overloads. `drawImage` has one with a
-blend mode, which the renderer calls for an image that does not paint with
-the Normal blend mode. `applySoftMask` has one with a transfer function, which
-the renderer calls for a soft mask that has one. To customize such an
-operation, override both overloads.
-With `by inner`, Kotlin sends an overload that the wrapper does not override
-straight to `inner`.
+Some `KiteCanvas` calls have two overloads:
 
-`rasterStep` needs no override. An SVG filter or a PDF transparency group that
-works on pixels paints its content back through the canvas that the document
-holds, which is the wrapper, so the wrapper sees those paints as usual.
+- `drawImage` has one with a blend mode. The renderer calls it for an image that does not paint with the Normal blend mode.
+- `applySoftMask` has one with a transfer function. The renderer calls it for a soft mask that has a transfer function.
 
-Rasterization runs on a background thread, and a page renders once, system-font
-text included: off Main on Android, the desktop JVM, iOS and macOS, and in a
-browser on its one thread (#131, #487). Create a fresh wrapper in the function,
-keep it repeatable, and never retain the supplied canvas. Cache hits do not
-invoke it.
-Remember the function for cache reuse; replace it when captured rendering
-settings change so the viewer redraws with a new cache key.
+To change one of these calls, override both overloads. With `by inner`, Kotlin sends each overload that the wrapper does not override directly to `inner`, which skips your code.
 
-## Colors
+`rasterStep` needs no override. An SVG filter or a PDF transparency group paints its result back through the canvas that the document holds, which is the wrapper, so the wrapper sees those paints as usual.
 
-Control the paper and viewport background:
+Follow these rules for a decorator:
+
+- The viewer calls the decorator on a background thread (in a browser, on the one UI thread).
+- Create a new wrapper at each call. Do not keep the canvas that the viewer gives you.
+- Give the same result for the same page at each call, because the viewer can paint a page more than once.
+- Keep the decorator in `remember`. A cache hit does not call the decorator, and a new decorator starts a new cache.
+- Make a new decorator when a setting that it captures changes. The viewer then draws the pages again.
+
+## Colors and themes
+
+`KiteDocViewColors` sets the colors that the viewer paints:
 
 ```kotlin
 val colors = KiteDocViewColors(
-    pageBackground = Color.White,      // behind page content
-    viewportBackground = Color.Black,  // letterbox / gutter
+    // Behind the page content
+    pageBackground = Color.White,
+    // Around and between the pages
+    viewportBackground = Color.Black,
 )
 KiteDocView(state, colors = colors)
 ```
 
-Most PDFs assume white paper and paint nothing behind their content, so `pageBackground` typically stays white.
+Most PDFs expect white paper and paint nothing behind their content, so `pageBackground` usually stays white. `KiteDocViewColors` also has these colors:
 
-`KiteDocViewColors` also carries `searchHighlight` (the fill for `state.searchHighlights`) and `selectionHighlight` (the fill for the active text selection).
+- `searchHighlight` fills the hits in `state.searchHighlights`.
+- `selectionHighlight` fills the text selection.
+- `selectionHandle` and `selectionHandlePainter` draw the two handles of a selection, see [Selection handles](#selection-handles).
+
+A reading theme changes the colors of the page content at render time, so a change of theme does not lay out the book again. `ReaderTheme.Dark` gives dark paper with light text, `ReaderTheme.Sepia` gives cream paper with brown text, and `ReaderTheme.Light` changes nothing. Both `Dark` and `Sepia` keep the contrast of the text: a color with a contrast of 4.5 or more on white paper keeps a contrast of 4.5 or more on the theme's paper (WCAG 2.2, 1.4.3).
+
+```kotlin
+KiteDocView(state, colors = KiteDocViewColors(theme = ReaderTheme.Dark))
+```
+
+A theme does not change images, so a photo keeps its colors. A black symbol or equation that a book draws as an image then stays black on dark paper. `withImages(ReaderImages.LineArt)` tells the theme to change line art as it changes text:
+
+```kotlin
+val theme = ReaderTheme.Dark.withImages(ReaderImages.LineArt)
+KiteDocView(state, colors = KiteDocViewColors(theme = theme))
+```
+
+Line art is an image whose visible pixels are all gray, in one or two narrow bands of lightness, such as a black or gray symbol on white or on transparent paper. A white box behind the symbol takes the color of the paper. A photo and colored artwork keep their colors.
 
 ## Highlights
 
-`KiteDocViewState` has two highlight channels, and both paint over the page in the same pass.
+`KiteDocViewState` has two lists of highlights. The viewer paints both over the page in the same pass.
 
-`searchHighlights` is the plain one. Every hit paints in `KiteDocViewColors.searchHighlight`, which is what search results want:
+`searchHighlights` is for search results. Every hit paints in `KiteDocViewColors.searchHighlight`:
 
 ```kotlin
 state.searchHighlights = document.search("invoice").toList()
 ```
 
-`highlights` is the app-owned one. Each entry is a `KiteHighlight`, which wraps a hit with its own colour and its own optional margin marker:
+`highlights` is for your app's own marks, such as notes. Each `KiteHighlight` wraps a hit with its own color and an optional marker in the page margin:
 
 ```kotlin
 state.highlights = notes.map { note ->
     KiteHighlight(
         hit = KiteSearchHit(note.location, note.quads, note.text),
-        color = note.category.tint,       // null keeps KiteDocViewColors.searchHighlight
-        edgeMarker = true,                // a pill in the page margin
+        // Null uses KiteDocViewColors.searchHighlight
+        color = note.category.tint,
+        // A small mark in the page margin, level with the text
+        edgeMarker = true,
         edgeMarkerColor = Color(0xFFEF6C00),
+        id = note.id,
     )
 }
 ```
 
-The marker sits in the page's right margin, level with the highlighted text, so a reader can tell a note lives on the page without hunting for the words. It scales with the rendered page, so it keeps its proportions in a thumbnail and at deep zoom alike, and its inner edge is clamped past the highlighted quads so it never paints over the words.
+The edge marker tells a reader that a note is on the page, without a search for the words. Its size follows the page, so it keeps its shape in a thumbnail and at deep zoom. The marker never paints over the highlighted words. On a page whose text fills that margin, the viewer draws no marker. `edgeMarkerSide` puts the marker in the start margin or the end margin (the end margin is the default).
 
-A page location is `(chapter, page within chapter)` in the current layout. Save it with
-selection quads instead of saving the selection's transient strip slot:
+To clear a list, set it to an empty list.
+
+A tap on a highlight goes to `onHighlightTap` before any link under it. Return `true` to take the tap. `state.highlightAt(offset)` gives the highlight at a point of the viewport, with the `id` that you gave it.
+
+### Where a highlight is
+
+A `KiteLocation` names a page as a chapter and a page in that chapter, in the current layout. A selection gives you its location, so you can save a note from it:
 
 ```kotlin
 state.onSelectionChange = { selection ->
-    if (selection != null) {
-        val location = requireNotNull(selection.location)
+    val location = selection?.location
+    if (selection != null && location != null) {
         state.highlights = listOf(
-            KiteHighlight(KiteSearchHit(location, selection.quads, selection.text), id = "note-1")
+            KiteHighlight(
+                KiteSearchHit(location, selection.quads, selection.text),
+                id = "note-1",
+            ),
         )
     }
 }
 ```
 
-`KiteTextSelection.location`, `KitePageHit.location` and `KiteHighlight.location` identify
-the real page even while earlier chapters are loading. Document searches also populate
-`KiteSearchHit.location`. For standalone structured text, supply the coordinate with
-`text.search("invoice", location = location)`. A location takes precedence over a hit's
-legacy integer, including when the requested page is not published yet. An unavailable
-located hit waits for its own page; it never paints at the legacy integer.
+`KiteTextSelection.location`, `KitePageHit.location` and `KiteHighlight.location` name the real page, even while earlier chapters are still laying out. A document search fills in `KiteSearchHit.location` too. For a `KiteStructuredText` of your own, pass the location to its search: `text.search("invoice", location = location)`. A hit whose page is not laid out yet waits, and paints when its page appears.
 
-An old hit with no location treats `pageIndex` as a global page index, matching document
-search. It paints only in the published prefix before the first pending chapter. PDF
-behavior is unchanged. An old persisted EPUB note containing only a strip slot needs
-its original chapter mapping to migrate; a slot alone cannot recover the intended page.
+A hit without a location reads its `pageIndex` as a page of the whole document, as a document search does. In an EPUB that is still laying out, such a hit paints only on the pages before the first chapter that is not laid out.
 
-Locations and quads survive the publication of other chapters and reopening identical
-content with identical layout settings. They must be recomputed after font, viewport,
-margin or resource changes. Durable annotations across reflow need a content range,
-which this page-coordinate API does not provide.
+!!! warning
+    A location and its quads stay correct while other chapters lay out, and when you open the same content with the same settings. After a change of font, viewport, margins or resources, they point at the wrong text. Calculate them again after such a change. A highlight holds page coordinates and no range of text, so it cannot follow its words through a reflow.
 
-`state.locationOf(slot)` and `state.slotOf(location)` are exact, nonblocking lookups of
-the published strip. They return null for pending or invalid pages and perform no layout.
-Use `state.scrollTo(location)` to prepare and navigate to a location. `currentSlot`,
-`scrollToSlot` and `animateScrollToSlot` explicitly name the strip coordinate. The older
-`currentPage`, `scrollToPage`, selection/hit `pageIndex`, thumbnail callback indices,
-`onPageRendered` and overlay indices still mean strip slots. Document-search indices
-and `SinglePage.pageIndex` retain their global-page meaning.
+A slot is the place of a page in the viewer's strip of pages. While an EPUB lays out, a chapter that is not laid out yet fills one slot, so a slot and a page of the document can differ:
 
-The original constructors and JVM `copy`/`copy$default` signatures of `KitePageHit` and
-`KiteTextSelection` are retained. A legacy copy preserves its source location; use the
-new `copy(location = ...)` argument to change it explicitly. Locations now participate
-in data-class equality, hashing and `toString`, and are the last destructured component.
-The old `KiteSearchHit` constructor and `KiteStructuredText.search` overload also remain.
-
-Clear either channel by assigning an empty list.
+- `currentPage`, `scrollToPage`, the `pageIndex` of a selection or a hit, the indices of the thumbnail strip, `onPageRendered` and the overlay count slots. `currentSlot`, `scrollToSlot` and `animateScrollToSlot` are the same calls with names that say so.
+- A document search and `SinglePage.pageIndex` count the pages of the whole document.
+- `state.locationOf(slot)` and `state.slotOf(location)` convert between the two. Both return null for a page that is not laid out, and neither starts a layout.
+- `state.scrollTo(location)` lays out the chapter that it needs, then goes there.
 
 ## Text selection
 
-A long press anchors a selection, dragging extends it, and the result lands in `state.selection` (with `state.onSelectionChange` for a callback). A mouse press and drag on text selects at once, without the long press. The viewer never touches the clipboard: read `selection.text` and copy it in your app. On a desktop, bind Ctrl or Cmd with C to that copy:
+A long press starts a selection, and a drag extends it. A mouse press and drag on text selects at once, with no long press. `state.selection` holds the result, and `state.onSelectionChange` tells you when it changes.
+
+The viewer never uses the clipboard. Read `selection.text` and copy it in your app. On a desktop, you can bind Ctrl or Cmd with C to that copy:
 
 ```kotlin
-val clipboard = LocalClipboardManager.current
-KiteDocView(
-    state = state,
-    modifier = Modifier.onKeyEvent { event ->
-        val copy = event.type == KeyEventType.KeyDown && event.key == Key.C &&
-            (event.isCtrlPressed || event.isMetaPressed)
-        val text = state.selection?.text
-        if (copy && text != null) {
-            clipboard.setText(AnnotatedString(text))
-            true
-        } else {
-            false
-        }
-    },
-)
-```
-
-While a selection is live, `state.isSelectionActive` is `true`, and the viewer suppresses one-finger panning and the list or pager's own scrolling so the page cannot move out from under the selection. Two-finger pinch zoom keeps working. The flag turns on the moment the long press fires and stays on until `state.clearSelection()`, which any tap on the page also calls.
-
-```kotlin
-val state = rememberKiteDocViewState(document)
-state.onSelectionChange = { sel -> selectedText = sel?.text }
-
-// Elsewhere, e.g. in a selection action bar:
-if (state.isSelectionActive) {
-    Button(onClick = { clipboard.setText(state.selection?.text.orEmpty()) }) { Text("Copy") }
+@Composable
+fun CopyableViewer(state: KiteDocViewState, copy: (String) -> Unit) {
+    KiteDocView(
+        state = state,
+        modifier = Modifier.onKeyEvent { event ->
+            val text = state.selection?.text
+            val isCopy = event.type == KeyEventType.KeyDown &&
+                event.key == Key.C &&
+                (event.isCtrlPressed || event.isMetaPressed)
+            if (isCopy && text != null) {
+                copy(text)
+                true
+            } else {
+                false
+            }
+        },
+    )
 }
 ```
 
-`state.selectionInProgress` is `true` only while the finger is still down on the drag that is building the selection, and drops the moment it lifts. Gate a context menu on it: a popup shown mid-drag covers the words being chosen. `isSelectionActive` cannot tell those apart, because it deliberately stays on after the finger lifts to keep the page from drifting.
+While a selection is on screen, `state.isSelectionActive` is `true`. The viewer then stops one-finger panning and the scroll of the strip or pager, so the page cannot move under the selection. A two-finger pinch still zooms. The flag turns on when the long press fires and stays on until `state.clearSelection()`, which a tap on the page also calls.
+
+`state.selectionInProgress` is `true` only while the finger is down on the drag that builds the selection. Use it to show a menu: a menu that shows during the drag covers the words that the reader is choosing. `isSelectionActive` stays on after the finger lifts, so it cannot tell these two cases apart.
 
 ### Turning selection off
 
-Some documents are pictures, not prose: a chart, a scan, an ECG trace, a generated report you only ever look at. There, a long press that paints a blue wash over a label is noise, and the gesture competes with panning. Pass `selectionEnabled = false` and the whole thing goes away:
+Some documents are pictures, not text: a chart, a scan, an ECG trace. There, a long press that paints a blue selection over a label gets in the way of panning. Pass `selectionEnabled = false` to remove the gesture:
 
 ```kotlin
 KiteDocView(state, selectionEnabled = false)
 ```
 
-No long press selects, no wash is painted, no thumbs appear, and a selection already on screen is dropped (which also hands back the pan and scroll locks it was holding). The gesture is not attached at all, so it cannot compete with panning. Everything else, zoom, pan, tap, links, page navigation, is untouched. The default stays `true`.
+A long press then selects nothing, and the viewer draws no selection and no handles. A selection that is already on screen goes away, and the viewer lets the reader pan and scroll again. Zoom, pan, taps, links and page navigation do not change.
 
 ### Selection menu
 
-`KiteSelectionMenu` is a ready-made context menu for the `overlay` slot. It appears when a selection exists and the drag has ended, lists your actions, and can offer a wrapping row of highlight-colour swatches:
+`KiteSelectionMenu` is a context menu for the `overlay` slot. It shows when a selection exists and the drag has ended. It lists your actions, and it can show a row of highlight colors:
 
 ```kotlin
 KiteDocView(state, overlay = {
     KiteSelectionMenu(
         state = state,
         items = listOf(
-            KiteSelectionMenuItem("Copy") { clipboard.setText(AnnotatedString(it.text)) },
+            KiteSelectionMenuItem("Copy") { copy(it.text) },
             KiteSelectionMenuItem("Add note", clearsSelection = false) { openNoteEditor(it) },
         ),
         highlightColors = listOf(Color(0xFFFFF176), Color(0xFFA5D6A7), Color(0xFF90CAF9)),
-        onHighlightColorPicked = { sel, color -> addHighlight(sel, color) },
+        onHighlightColorPicked = { selection, color -> addHighlight(selection, color) },
     )
 })
 ```
 
-The menu sits above the selection, or below it when there is no room above, centred on it and kept inside the viewport, so it does not cover the words.
+The menu sits above the selection, or below it when there is no room above. It stays inside the viewport and does not cover the selected words.
 
-Every visual layer is replaceable: `container` swaps the card, `itemContent` swaps how one action renders, `colorSwatch` swaps how one colour renders, and `alignment` pins the whole menu to one place in the viewport instead. For a completely different menu, skip the composable and build your own against `state.selection`, `state.selectionInProgress` and `state.selectionBounds`, the selection's box in viewport pixels; the built-in one is a default, not a contract.
+You can replace each part of the menu:
+
+- `container` replaces the card.
+- `itemContent` replaces how one action draws.
+- `colorSwatch` replaces how one color draws.
+- `alignment` puts the whole menu at one fixed place in the viewport.
+
+For a menu of your own, read `state.selection`, `state.selectionInProgress` and `state.selectionBounds` (the box of the selection, in viewport pixels).
 
 ### Selection handles
 
-The two boundary markers ("thumbs") are canvas vector drawing inside the page's draw pass, not composables, so they scale and pan in lockstep with the words they bound.
+The two handles at the ends of a selection are part of the page's drawing, not composables, so they scale and move with the words.
 
-**They drag.** Press on a thumb and that end of the selection follows your finger while the other end stays put; haul one past the other and the two ends swap, the same as a platform text field. The rest of the gesture layer is untouched: a press that misses both thumbs is still an ordinary press, so long-press selection, tap and pan behave exactly as before. Nothing to enable, and the selection stays on one page as it always did.
+A reader can drag a handle. That end of the selection follows the finger, and the other end stays. When one handle passes the other, the two ends swap, as in a platform text field. A press that misses both handles does what it does without a selection.
 
-Recolour the markers with `KiteDocViewColors.selectionHandle`, or replace the drawing entirely with `KiteDocViewColors.selectionHandlePainter`:
+`KiteDocViewColors.selectionHandle` sets the color of the handles. `KiteDocViewColors.selectionHandlePainter` replaces their drawing:
 
 ```kotlin
-KiteDocView(state, colors = KiteDocViewColors(
-    selectionHandlePainter = KiteSelectionHandlePainter { edge, x, top, bottom, color ->
-        drawCircle(color, radius = (bottom - top) * 0.35f, center = Offset(x, bottom))
-    },
-))
+KiteDocView(
+    state,
+    colors = KiteDocViewColors(
+        selectionHandlePainter = KiteSelectionHandlePainter { edge, x, top, bottom, color ->
+            drawCircle(color, radius = (bottom - top) * 0.35f, center = Offset(x, bottom))
+        },
+    ),
+)
 ```
 
-The default is `KiteSelectionHandleDefaults.CaretAndDot`: a caret spanning the boundary line with a grab dot beneath it.
+The default is `KiteSelectionHandleDefaults.CaretAndDot`, a caret along the end of the selection with a dot below it.
 
-One catch with a custom painter: the grab area is the boundary line, not the shape you paint. It is a fixed 24.dp radius in screen pixels, so the touch target stays the same size at every zoom level while the marker scales with the text. Draw your marker near its boundary and the two agree; draw it far away and readers will be grabbing empty space.
+!!! tip
+    The touch area of a handle is a circle of 24 dp around the end of the selection, not the shape that you paint. Its size stays the same at every zoom, while your drawing scales with the text. Draw your handle near the end of the selection, or readers grab empty space.
 
 ## Opening at a saved position
 
-A PDF is ready the moment it opens. A reflowable EPUB is not: it has to be laid
-out before it has pages, and a whole book takes seconds. So `KiteDocView` reads
-and lays out one chapter at a time, starting with the one the reader is on.
+A PDF has all its pages when it opens. A reflowable EPUB does not: it gets its pages from the layout, and a layout of a whole book takes seconds. So `KiteDocView` lays out one chapter at a time, starting with the reader's chapter.
 
 ```kotlin
+// When the reader comes back, open at the saved bookmark
 val state = rememberKiteDocViewState(book, savedBookmark)
 KiteDocView(state, Modifier.fillMaxSize())
 
-val savedBookmark = state.currentBookmark()   // save on pause
+// When the reader leaves, save this one
+val bookmark: KiteBookmark = state.currentBookmark()
 ```
 
-The sample app in `sample/` runs this loop against a generated 24-chapter book.
+The sample app in `sample/` runs this with a book of 24 chapters that it makes itself.
 
-The rest of the book loads in the background, nearest chapter first. A chapter
-that lands above the reader does not move their page: the strip is keyed by
-reading position and each publication corrects the pager before the frame
-draws, so the viewer holds the page, the zoom, and any active selection while
-the book fills in. A saved Flow bookmark shows its chapter's placeholder from
-the very first frame.
+The rest of the book lays out in the background, nearest chapter first. A chapter that lands above the reader does not move the page on screen. The viewer keeps the page, the zoom and any selection while the book fills in. A saved bookmark shows its chapter's placeholder from the first frame.
 
-Chapters that have not been laid out yet hold one page-shaped slot each. A
-reader can scroll onto one and wait there; when the chapter arrives they land
-on its first page. Replace what that slot shows with `chapterPlaceholder`:
+A chapter that is not laid out yet holds one page-shaped slot. A reader can scroll onto that slot and wait there. When the chapter lands, the reader is on its first page. `chapterPlaceholder` sets what the slot shows:
 
 ```kotlin
 KiteDocView(
@@ -724,71 +627,52 @@ KiteDocView(
 )
 ```
 
-A PDF of more than 200 pages shows the same slot for its first frames. It builds
-its page list off the main thread, and then opens at the page the state asked for.
+A PDF of more than 200 pages also shows this slot for its first frames, while it builds its list of pages off the main thread. Then it opens at the page that the state asks for.
 
 ### Reading the position
 
 | Member | Use it for |
-|---|---|
-| `state.currentLocation` | where the reader is, always exact |
-| `state.currentBookmark()` | a content anchor that survives EPUB reflow |
-| `state.currentScrollPosition` | the leading visible page and continuous offset in pixels |
-| `state.currentPage` | the slot on screen, for an indicator |
-| `state.knownPageCount` | pages laid out so far |
-| `state.isComplete` | true once the total is final |
-| `state.scrollTo(location)` / `scrollTo(bookmark)` | move, laying out one chapter |
+| --- | --- |
+| `state.currentLocation` | The exact page that the reader is on |
+| `state.currentBookmark()` | A place in the content that stays correct after an EPUB reflow |
+| `state.currentScrollPosition` | The first visible page, with the scroll offset into it in pixels |
+| `state.currentPage` | The slot on screen, for a page indicator |
+| `state.knownPageCount` | The number of pages laid out so far |
+| `state.isComplete` | True when the page count is final |
+| `state.scrollTo(location)` and `scrollTo(bookmark)` | Go to a place, after a layout of one chapter |
 
-For an exact continuous PDF scroll position, save `currentScrollPosition`:
+`KitePageIndicator` puts a `~` before the total until `isComplete` is true. `state.pageCount` is also exact, but it lays out every chapter. Use `knownPageCount` with `isComplete` instead.
+
+To come back to the exact scroll position of a `Continuous` strip, save `currentScrollPosition`:
 
 ```kotlin
 val saved: KiteScrollPosition = state.currentScrollPosition
-// Persist saved.location.chapter, saved.location.page and saved.offsetPx.
+
+// Save saved.location.chapter, saved.location.page and saved.offsetPx.
+// Then open a new viewer at that position
 val reopened = rememberKiteDocViewState(document, saved)
-// Or restore an existing viewer from a coroutine:
+
+// Or move a viewer that is already open, from a coroutine
 state.scrollTo(saved)
 ```
 
-This records the leading visible page, which can differ from the page nearest
-its viewport's centre (`currentLocation`), plus the unzoomed pixel offset into
-that page. Both continuous axes and right-to-left layout direction are
-supported. An exact visual match requires the same page layout, viewport and
-density; zoom and cross-axis pan are separate. For reflowable EPUBs whose font
-or page size changes, use `currentBookmark()` to retain the content anchor.
-Paged and single-page layouts report an offset of zero and restore the page.
-
-`KitePageIndicator` prefixes the total with `~` until `isComplete`.
-
-`state.pageCount` is still there and still exact, but reading it lays out every
-chapter. Prefer `knownPageCount` with `isComplete`.
+The position is the first visible page, which can differ from the page nearest the center of the viewport (`currentLocation`), and the offset into that page in pixels without zoom. It works for both orientations and for a right-to-left layout. The view matches exactly only with the same page layout, viewport and density. The zoom and the pan across the strip are not part of the position. For an EPUB whose font size or page size changes, use `currentBookmark()` instead. `Paged` and `SinglePage` give an offset of zero and come back to the page.
 
 ## Link taps
 
-Every link that the reader taps goes to `onLinkTap` first, in every format: PDF,
-EPUB, XPS and SVG. The callback runs before the viewer does anything. Return
-`true` to keep the viewer from acting, for example after you open a web address
-or show a note in a popup. Return `false`, or pass no callback, and the viewer
-does what the link asks where it can:
+Every link that the reader taps goes to `onLinkTap` first, in every format. The callback runs before the viewer does anything. Return `true` to stop the viewer, for example after you open a web address or show a note in a popup. Return `false`, or pass no callback, and the viewer does what the link asks where it can:
 
-- A link inside the document moves the view to its target. A PDF link to a
-  place on a page, such as `/XYZ` or `/FitH`, brings that place to the top of
-  the viewport at the reader's zoom. A vertical `Continuous` strip scrolls there.
-  A horizontal strip and a pager pan across the page, as far as the page lets
-  them. A pager that resets its zoom on a page turn shows the whole page, so the
-  place is on screen. An XPS or SVG link does the same with the element that it
-  names.
-- A PDF link that names a page turn (NextPage, PrevPage, FirstPage or LastPage)
-  turns the page.
+- A link inside the document moves the view to its target. A PDF link to a place on a page (such as `/XYZ` or `/FitH`) brings that place to the top of the viewport at the reader's zoom. A vertical `Continuous` strip scrolls there, while a horizontal strip and a pager pan across the page as far as the page allows. A pager that resets its zoom on a page turn shows the whole page. An XPS or SVG link does the same with the element that it names.
+- A PDF link that names a page turn (NextPage, PrevPage, FirstPage or LastPage) turns the page.
 - A PDF script link runs in `scripts`, when you pass a handler.
-- On a page of a scripted EPUB chapter, with `epubScripts`, the scripts see the tap
-  first, and a link that a script prevented is not followed.
-- A web or mail address goes to `externalLinks`: the viewer asks the reader in
-  a small prompt, then opens the address through the platform.
+- On a page of an EPUB chapter that has scripts, with `epubScripts`, the scripts see the tap first. The viewer does not follow a link that a script stopped.
+- A web or mail address goes to `externalLinks`, which asks the reader and then opens the address.
 - Anything else does nothing, and the tap goes on to `onTap`.
 
-`KiteDocLayout.SinglePage` cannot move, so there a declined link inside the
-document goes on to `onTap` too. A screen reader that activates a link goes
-through the same callback as a finger.
+`KiteDocLayout.SinglePage` cannot move, so there a link inside the document goes on to `onTap` too. A screen reader that activates a link goes through the same callback as a finger.
+
+!!! warning
+    A document can name any scheme, such as `file:`, `intent:` or `javascript:`. Open only the schemes that you trust.
 
 ```kotlin
 KiteDocView(
@@ -799,57 +683,32 @@ KiteDocView(
             openInBrowser(uri)
             true
         } else {
-            false // the viewer follows a link inside the document
+            // The viewer follows a link inside the document
+            false
         }
     },
 )
 ```
 
-A document can name any scheme, `file:`, `intent:` and `javascript:` included, so
-open only the ones you trust.
-
-### Addresses outside the document
-
-When `onLinkTap` does not take a link to an `http:`, `https:` or `mailto:`
-address, the viewer asks the reader whether to open it. After the reader taps
-Open, the viewer opens the address through Compose's `LocalUriHandler`: the
-browser, or the mail app for `mailto:`. EPUB Reading Systems 3.3 asks a reading
-system to do this. `KiteExternalLinks` sets which schemes the viewer opens and
-whether it asks first:
-
-```kotlin
-KiteDocView(
-    state = state,
-    externalLinks = KiteExternalLinks(schemes = setOf("https", "mailto"), askFirst = true),
-)
-```
-
-Pass `externalLinks = null` and the viewer opens nothing. The prompt takes its
-words from `LocalKiteViewerStrings`: `openLinkQuestion`, `openLink` and `cancel`.
-To show a prompt of your own, take the link in `onLinkTap` and return `true`.
-
 Every link gives the same facts, whatever its format:
 
 | Property | What it is |
-|---|---|
-| `uri` | the address outside the document, or null |
-| `target` | the place inside the document, as a `KiteBookmark`, or null |
-| `kind` | what the link is for: `LINK`, `NOTE_REFERENCE`, `GLOSSARY_REFERENCE` or `BIBLIOGRAPHY_REFERENCE` |
-| `pageIndex` | the page that holds the link |
-| `rect` | the link's area on that page, in display space |
+| --- | --- |
+| `uri` | The address outside the document, or null |
+| `target` | The place inside the document, as a `KiteBookmark`, or null |
+| `kind` | What the link is for: `LINK`, `NOTE_REFERENCE`, `GLOSSARY_REFERENCE` or `BIBLIOGRAPHY_REFERENCE` |
+| `pageIndex` | The page that holds the link |
+| `rect` | The area of the link on that page, in display space |
 
-`kind` comes from the document's markup. Only EPUB books mark their references
-today, so a PDF, XPS or SVG link is `LINK`. To place a popup next to a link, turn
-its `rect` into viewport coordinates with
-`state.displayRectToViewport(link.pageIndex, link.rect)`.
+`kind` comes from the document's markup. Only EPUB books mark their references, so a PDF, XPS or SVG link is always `LINK`. To show a popup next to a link, convert its `rect` to viewport coordinates with `state.displayRectToViewport(link.pageIndex, link.rect)`.
 
-When you need what only one format has, match the subclass:
+For the facts that only one format has, match the subclass:
 
-| Case | Comes from | Carries |
-|---|---|---|
-| `KiteLinkAction.Pdf` | a PDF link, or a form widget's action that the viewer does not perform | the parsed `PdfAction`: a go-to, a URI, a remote go-to, a Launch, JavaScript, a form submit |
-| `KiteLinkAction.Epub` | an EPUB link | the `EpubLink`, whose `href` `EpubDocument.linkTarget` reads |
-| `KiteLinkAction.Plain` | an XPS or SVG link | the page's `KiteLink` |
+| Subclass | Comes from | Holds |
+| --- | --- | --- |
+| `KiteLinkAction.Pdf` | A PDF link, or a form widget action that the viewer does not do | The parsed `PdfAction`: a go-to, a URI, a remote go-to, a Launch, JavaScript or a form submit |
+| `KiteLinkAction.Epub` | An EPUB link | The `EpubLink`, whose `href` `EpubDocument.linkTarget` reads |
+| `KiteLinkAction.Plain` | An XPS or SVG link | The page's `KiteLink` |
 
 ```kotlin
 onLinkTap = { link ->
@@ -863,79 +722,110 @@ onLinkTap = { link ->
 }
 ```
 
+### Addresses outside the document
+
+When `onLinkTap` does not take a link to an `http:`, `https:` or `mailto:` address, the viewer asks the reader whether to open it. After the reader taps Open, the viewer opens the address through Compose's `LocalUriHandler`, which starts the browser or the mail app. EPUB Reading Systems 3.3 asks a reading system to do this. `KiteExternalLinks` sets which schemes the viewer opens and whether it asks first:
+
+```kotlin
+KiteDocView(
+    state = state,
+    externalLinks = KiteExternalLinks(schemes = setOf("https", "mailto"), askFirst = true),
+)
+```
+
+With `externalLinks = null`, the viewer opens no address. The question takes its words from `LocalKiteViewerStrings` (`openLinkQuestion`, `openLink` and `cancel`). To ask in your own way, take the link in `onLinkTap` and return `true`.
+
 ### Notes in place
 
-An EPUB link can mark itself as a reference to a note, a glossary entry or a
-bibliography entry (see `EpubLink.kind` in [EPUB](epub.md)). Such a link arrives
-with its `kind` set. Show the note and return `true` to keep the reader on the
-page. Return `false` and the viewer scrolls to the note as usual.
+An EPUB link can say that it points to a note, a glossary entry or a bibliography entry (see `EpubLink.kind` in [Reading EPUBs](epub.md#notes-and-other-link-targets)). Such a link has its `kind` set. Show the note and return `true` to keep the reader on the page. Return `false`, and the viewer goes to the note.
 
 ```kotlin
 KiteDocView(
     state = state,
     onLinkTap = { link ->
         val href = (link as? KiteLinkAction.Epub)?.link?.href
-        val note = if (link.kind == KiteLinkKind.NOTE_REFERENCE && href != null) book.linkTarget(href) else null
-        note?.let { showNote(it.text); true } ?: false
+        val isNote = link.kind == KiteLinkKind.NOTE_REFERENCE
+        val note = if (isNote && href != null) book.linkTarget(href) else null
+        if (note != null) {
+            showNote(note.text)
+            true
+        } else {
+            false
+        }
     },
 )
 ```
 
-Some books do not mark their notes. An endnote call can be a plain
-`<a href="notes.xhtml#n19">[19]</a>`, which arrives as a `LINK`. Check where it
-leads instead:
+Some books do not mark their notes. An endnote link can be a plain `<a href="notes.xhtml#n19">[19]</a>`, which comes as a `LINK`. Check where the link goes instead:
 
 ```kotlin
 onLinkTap = { link ->
     val href = (link as? KiteLinkAction.Epub)?.link?.href
-    // This book keeps its endnotes in one chapter and does not mark the links to them.
-    val note = if (href != null && href.substringBefore('#') == notesChapter) book.linkTarget(href) else null
-    note?.let { showNote(it.text); true } ?: false
+    // This book keeps its endnotes in one chapter and does not mark the links to them
+    val isNote = href != null && href.substringBefore('#') == notesChapter
+    val note = if (isNote) book.linkTarget(href) else null
+    if (note != null) {
+        showNote(note.text)
+        true
+    } else {
+        false
+    }
 }
 ```
 
 ### A back button
 
-A link inside the document passes through `onLinkTap` before the view moves, so
-the callback can save where the reader was. Return `false` to let the viewer
-follow the link:
+A link inside the document goes through `onLinkTap` before the view moves, so the callback can save where the reader was. Return `false` to let the viewer follow the link:
 
 ```kotlin
-val history = remember { mutableStateListOf<KiteBookmark>() }
-val scope = rememberCoroutineScope()
-KiteDocView(
-    state = state,
-    onLinkTap = { link ->
-        if (link.target != null) history += state.currentBookmark()
-        false
-    },
-)
-Button(onClick = { history.removeLastOrNull()?.let { scope.launch { state.scrollTo(it, animate = true) } } }) {
-    Text("Back")
+@Composable
+fun ReaderWithBack(state: KiteDocViewState) {
+    val history = remember { mutableStateListOf<KiteBookmark>() }
+    val scope = rememberCoroutineScope()
+
+    KiteDocView(
+        state = state,
+        onLinkTap = { link ->
+            if (link.target != null) history += state.currentBookmark()
+            false
+        },
+    )
+
+    Button(onClick = {
+        val back = history.removeLastOrNull()
+        if (back != null) scope.launch { state.scrollTo(back, animate = true) }
+    }) {
+        Text("Back")
+    }
 }
 ```
 
-A bookmark survives a reflow, so the button works in a book whose font size
-changed in between.
+A bookmark stays correct after a reflow, so the button also works in a book whose font size changed in between.
+
+## Scripts
+
+The viewer runs no script of a document unless you give it a handler. `kitepdf-javascript` has a handler for each format: `PdfScriptRunner` for the `scripts` parameter and `EpubScriptRunner` for `epubScripts`. [Scripts in the Compose viewer](javascript.md#scripts-in-the-compose-viewer) shows how to set them up, how a form behaves while its scripts run, and what a script can do.
 
 ## Accessibility
 
-A screen reader finds each page of `KiteDocView` by name ("Page 3 of 12", or "Page 3" while a book still lays out), and the buttons of `KiteNavigationControls`, the thumbnails of `KiteThumbnailStrip` and the colours of `KiteSelectionMenu` by name and role. The hidden input of a form field carries the field's tooltip, or its name.
+A screen reader finds each page of `KiteDocView` by its name ("Page 3 of 12", or "Page 3" while a book still lays out). It finds the buttons of `KiteNavigationControls`, the thumbnails of `KiteThumbnailStrip` and the colors of `KiteSelectionMenu` by name and role. The hidden input of a form field has the field's tooltip, or else its name.
 
 On the page itself, a screen reader finds:
 
-- The text, one node per item of `KitePage.readingOrder()`, in that order and at its place on the page. A heading is marked as one, and a picture reads its alternative text.
-- Each link, as a button named by the words under it. Activating it follows the link, as a tap does.
-- With a `scripts` handler, each form field: a text field or a list with its value, a check box or a radio button with its state, named by the field's tooltip, or its name. Activating it acts as a tap does.
+- The text, as one node for each item of `KitePage.readingOrder()`, in that order and at its place on the page. A heading has the heading role, and a picture reads its alternative text.
+- Each link, as a button with the words under it as its name. Activating it follows the link, as a tap does.
+- With a `scripts` handler, each form field. A text field or a list has its value, and a check box or a radio button has its state. The name is the field's tooltip, or else its name. Activating a field does what a tap does.
 
-A page builds these nodes once it shows and the view rests, off the main thread.
+A page builds these nodes off the main thread, after it shows and the view stops moving.
 
-The names are English by default. Provide your own words through `LocalKiteViewerStrings`:
+The names are in English by default. `LocalKiteViewerStrings` takes your own words:
 
 ```kotlin
 CompositionLocalProvider(
     LocalKiteViewerStrings provides KiteViewerStrings(
-        page = { number, count -> if (count == null) "Seite $number" else "Seite $number von $count" },
+        page = { number, count ->
+            if (count == null) "Seite $number" else "Seite $number von $count"
+        },
         previousPage = "Vorherige Seite",
         nextPage = "Nächste Seite",
         link = "Verweis",
@@ -947,11 +837,11 @@ CompositionLocalProvider(
 
 ## Navigation widgets
 
-Ready-made UI components for common patterns. They all take a `KiteDocViewState`, so they work from anywhere in your tree; inside the viewport (via `overlay`), in your top bar, in a side panel.
+These widgets take a `KiteDocViewState`, so you can put them anywhere in your tree: in the `overlay` slot over the pages, in your top bar or in a side panel.
 
 ### Page indicator
 
-Display "current / total" page count:
+`KitePageIndicator` shows the current page and the page count:
 
 ```kotlin
 KitePageIndicator(
@@ -963,26 +853,30 @@ KitePageIndicator(
 
 ### Navigation controls
 
-Previous / page number / next pill. Made for floating over the viewport:
+`KiteNavigationControls` is a pill with a previous button, the page number and a next button. It is made to float over the viewport:
 
 ```kotlin
-overlay = { state ->
-    KiteNavigationControls(
-        state,
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(16.dp),
-        contentColor = Color.White,
-        containerColor = Color(0xB3222222), // semi-transparent dark
-    )
-}
+KiteDocView(
+    state,
+    overlay = {
+        KiteNavigationControls(
+            state,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+            contentColor = Color.White,
+            // Dark gray, partly transparent
+            containerColor = Color(0xB3222222),
+        )
+    },
+)
 ```
 
-Buttons auto-disable at the ends (no previous on page 0, no next on the last page).
+The previous button turns off on the first page, and the next button turns off on the last page. Both turn off on a `SinglePage` layout.
 
 ### Thumbnail strip
 
-Horizontal carousel of tappable page thumbnails. Current page is outlined; tap any thumbnail to animate there:
+`KiteThumbnailStrip` is a horizontal row of page thumbnails. It outlines the current page, and a tap on a thumbnail scrolls the viewer to that page:
 
 ```kotlin
 KiteThumbnailStrip(
@@ -995,20 +889,43 @@ KiteThumbnailStrip(
 )
 ```
 
-Thumbnails rasterize independently at strip resolution (cheap), so they don't block the main viewer.
+The strip renders its thumbnails at their own small size and keeps them in a cache of its own, so it does not slow down the main viewer. It draws the pages with the viewer's theme and canvas decorator.
+
+### Outline panel
+
+`KiteOutlinePanel` lists the outline of the document: the bookmarks of a PDF or the table of contents of an EPUB. It indents each entry by its depth:
+
+```kotlin
+var showOutline by remember { mutableStateOf(false) }
+
+if (showOutline) {
+    KiteOutlinePanel(
+        state,
+        modifier = Modifier.width(280.dp).fillMaxHeight(),
+        onNavigate = { showOutline = false },
+    )
+}
+```
+
+- A tap on an entry starts the scroll to its target, then calls `onNavigate`.
+- An entry without a target, such as a group label, shows in `disabledTextColor` and does not take a tap.
+- The entry of the current page shows in `currentPageColor`.
+- In an EPUB that is still paginating, a tap lays out only the chapter of the entry.
+
+To show only a part of the outline, pass a subtree as `outline`.
 
 ## The overlay slot
 
-Float HUD components over the viewport. The `overlay` lambda receives the `state` and a `BoxScope` for alignment:
+The `overlay` slot draws composables over the viewport. It runs in a `BoxScope`, so you can align each composable:
 
 ```kotlin
 KiteDocView(
     state,
-    overlay = { state ->
+    overlay = {
         // Everything here floats over the pages
         KiteNavigationControls(state, Modifier.align(Alignment.BottomCenter))
-        
-        // Add your own widgets
+
+        // Your own widgets
         Text(
             "${state.currentPage + 1}",
             modifier = Modifier
@@ -1021,13 +938,13 @@ KiteDocView(
 
 ## Draw over a place on a page
 
-The `pageOverlay` slot draws over each page, in the page's own frame. It moves and scales with the page, so an element placed on a rectangle of the page stays on that rectangle at any zoom. Use it for a note badge, a video surface or a mark of your own:
+The `pageOverlay` slot draws over each page, in the page's own frame. It moves and scales with the page, so an element on a rectangle of the page stays on that rectangle at any zoom. Use it for a note badge, a video surface or a mark of your own:
 
 ```kotlin
 KiteDocView(
     state,
     pageOverlay = {
-        // pageIndex and page name the page under this overlay.
+        // pageIndex and page name the page under this overlay
         for (note in notesOn(pageIndex)) {
             NoteBadge(Modifier.pageRect(note.rect))
         }
@@ -1035,52 +952,50 @@ KiteDocView(
 )
 ```
 
-Two modifiers size an element to a rectangle of the page and place it there:
+Two modifiers give an element the size and the place of a rectangle on the page:
 
-- `pageRect` takes the page's own space. This is the space of `hitTest` and of the `rect` of a PDF annotation.
-- `displayRect` takes display space: points from the top-left corner of the page as it is shown, y down. This is the space of `hitTestDisplay`, of search hits, and of `EpubLink.rect` and `EpubMedia.rect`.
+- `pageRect` takes the page's own space. `hitTest` and the `rect` of a PDF annotation use this space.
+- `displayRect` takes display space: points from the top-left corner of the page as it shows, with y going down. `hitTestDisplay`, search hits, `EpubLink.rect` and `EpubMedia.rect` use this space.
 
-An element that opens links, such as a web view over an embedded document, hands each one to `followLink(href, rect)`. The link goes the way of a tapped link of the page: `onLinkTap` sees it first, and when that does not take it, a link inside the document moves the view. On an EPUB page, `href` is a zip path with a fragment, as `EpubLink.href` is, or an address with a scheme.
+An element that opens links (such as a web view over an embedded document) can give each link to `followLink(href, rect)`. The link then goes the same way as a tapped link of the page: `onLinkTap` sees it first, and when the callback does not take it, a link inside the document moves the view. On an EPUB page, `href` is a path in the book's archive with a fragment, as in `EpubLink.href`, or an address with a scheme.
 
-An element in `pageOverlay` grows with the page when the reader zooms in. For an element that keeps its size on screen, such as a pin, use the `overlay` slot and ask the state where the rectangle is:
+An element in `pageOverlay` grows with the page when the reader zooms in. For an element that keeps its size on screen (such as a pin), use the `overlay` slot and ask the state where the rectangle is:
 
 ```kotlin
-KiteDocView(state, overlay = { state ->
+KiteDocView(state, overlay = {
     val bounds = state.pageRectToViewport(pageIndex = 0, rect = note.rect)
-    if (bounds != null) Pin(Modifier.absoluteOffset { bounds.topLeft.round() })
+    if (bounds != null) {
+        Pin(Modifier.absoluteOffset { bounds.topLeft.round() })
+    }
 })
 ```
 
-`pageRectToViewport` and `displayRectToViewport` are `hitTest` and `hitTestDisplay` in reverse. They return null while the page has no place in the layout. A paged layout places only its current page. A composable that reads them follows the page as it scrolls and zooms.
+`pageRectToViewport` and `displayRectToViewport` do the reverse of `hitTest` and `hitTestDisplay`. They return null while the page has no place in the layout, and a paged layout places only its current page. A composable that reads them follows the page as it scrolls and zooms.
 
-## Export rendered pages
+## When a page renders
 
-Capture a page bitmap and save it as PNG:
+`onPageRendered` gets each new screen bitmap of a page. The viewer calls it once for each page and bitmap size, so again after each zoom when `rerasterizeOnZoom` is on. A bitmap from the cache does not call it again.
 
 ```kotlin
 KiteDocView(
     state,
     onPageRendered = { pageIndex, bitmap ->
-        // bitmap is an ImageBitmap ready for export
-        val pngBytes = bitmap.encodeToPng()
-        if (pngBytes != null) {
-            // Write to file, share, or upload
-            File("page_$pageIndex.png").writeBytes(pngBytes)
-        }
+        thumbnails[pageIndex] = bitmap
     },
 )
 ```
 
-This callback fires every time a page finishes rasterizing (i.e. the bitmap is ready). In rasterized mode it fires once per bucket; in vectorized mode it never fires (no bitmap to hand back).
+The bitmap is what the screen shows, not an export. When a `scripts` handler draws a PDF form, the bitmap does not include the form widgets. In the vectorized mode, the viewer never calls `onPageRendered`, because there is no bitmap. To export a page, use [KitePageRasterizer](#render-a-page-yourself).
 
-## Custom viewer: KitePageRasterizer
+## Render a page yourself
 
-If you need a viewer that doesn't fit the built-in layouts (e.g. a thumbnail grid, an image-gallery-style pager, or a PNG batch export), use `KitePageRasterizer` directly. Start a suspend export from a coroutine:
+`KitePageRasterizer` renders a page to an `ImageBitmap`. Use it for a viewer that the built-in layouts do not fit (such as a grid of thumbnails) or for an export to PNG:
 
 ```kotlin
 @Composable
-fun MyCustomPdfViewer(document: PdfDocument, onBitmap: (ImageBitmap) -> Unit) {
+fun FirstPageImage(document: PdfDocument, onBitmap: (ImageBitmap) -> Unit) {
     val rasterizer = rememberKitePageRasterizer()
+
     LaunchedEffect(document, rasterizer) {
         val page = document.pages[0]
         val bitmap = rasterizer.rasterizeOffMain(
@@ -1095,44 +1010,36 @@ fun MyCustomPdfViewer(document: PdfDocument, onBitmap: (ImageBitmap) -> Unit) {
 }
 ```
 
-`rememberKitePageRasterizer()` wires the rasterizer to the composition's density, layout direction, and text measurement engine. For off-composition rasterization (e.g. a background job), construct `KitePageRasterizer` directly if you already have a `TextMeasurer`.
+`bitmap.encodeToPng()` gives the PNG bytes. `rememberKitePageRasterizer()` connects the rasterizer to the density, the layout direction and the text engine of the composition. Outside a composition (in a background job, for example), create a `KitePageRasterizer` yourself with a `TextMeasurer`.
 
-Since Compose 1.13, the desktop JVM, Apple and web targets set up Compose's text engine when the first window or `ImageComposeScene` opens. Before that, `createFontFamilyResolver()` throws "No Compose UI text implementation is registered". Create the `TextMeasurer` after a window or a scene exists. `KiteDocViewState` and `KitePageRasterizer` need no window themselves.
+!!! warning
+    On the desktop JVM, Apple targets and the web, Compose starts its text engine when the first window or `ImageComposeScene` opens. Before that, `createFontFamilyResolver()` throws "No Compose UI text implementation is registered". Create the `TextMeasurer` after a window or a scene exists. `KiteDocViewState` and `KitePageRasterizer` themselves need no window.
 
-Every synchronous `rasterize` overload requires the platform UI thread: Android's main
-Looper, Apple's main thread, the browser thread, or the AWT event dispatch thread on
-desktop JVM. Calls on other threads throw `IllegalStateException` before allocating or
-drawing. In a browser, the same requirement applies when a directly constructed
-`ComposeCanvas` draws system-font text or asks for host glyph outlines, since Compose's
-shared text cache is not safe for simultaneous UI and worker access (#428). On the desktop
-JVM, iOS and macOS such a canvas draws that text through Skia's own paragraph engine, and on
-Android through Android's own text stack, neither of which goes through that cache, so it
-draws on any thread (#131, #487).
-
-Use `rasterizeOffMain` from a worker coroutine or for a headless JVM export. Geometry and
-embedded outlines stay on the raster pool, and so does host text, so the page renders in
-one pass that never touches the UI thread (#131, #487). Desktop uses
-asynchronous AWT dispatch even when no coroutine Main provider is installed, and works
-with `java.awt.headless=true`. Do not block the UI thread with `runBlocking` or a future
-wait while exporting. Custom desktop `ImageComposeScene` integrations must also create,
-measure and draw their scenes on the AWT event dispatch thread. One part needs no such
-thread: a Vectorized page and the form layer draw their host text inside the scene's own
-draw pass, where Compose draws the scene's text, so a scene on a thread of its own shows
-that text too (#464). A Rasterized page and an export draw their host text on the raster
-pool (#131).
-
-Pass `formState` to export a filled form. The suspend overload copies all accepted form
-values, typed choice selections and field flags before waiting for a raster slot. Both
-paint passes see that snapshot even if the reader edits the form meanwhile:
+To export a filled form, pass `formState`. The call copies the form values, the choice selections and the field flags before it waits for a render slot, so the export shows that copy even when the reader edits the form during the render:
 
 ```kotlin
-val bitmap = rasterizer.rasterizeOffMain(page, 1240, 1754, formState = scripts.formState)
+val bitmap = rasterizer.rasterizeOffMain(page, 1240, 1754, formState = runner.formState)
 val png = bitmap.encodeToPng()
 ```
 
-## Placeholder while rasterizing
+### Threads
 
-Show a custom placeholder while a page bitmap is being rendered:
+| Call | Where it can run |
+| --- | --- |
+| `rasterizeOffMain` | Any coroutine. A page renders in one pass on the raster pool and never needs the UI thread. In a browser, the pool is the one UI thread. |
+| `rasterize` | Only the platform UI thread: Android's main Looper, Apple's main thread, the browser thread or the AWT event dispatch thread. On any other thread, it throws `IllegalStateException` before it draws. |
+
+`rasterizeOffMain` also works on a desktop that has no coroutine Main dispatcher, and with `java.awt.headless=true`. Cancel its coroutine to stop the render. A PDF page then stops between two operators and throws a `CancellationException`, so you never get part of a bitmap.
+
+These rules also apply when you draw on a `ComposeCanvas` of your own:
+
+- In a browser, draw system-font text or ask for host glyph outlines on the UI thread only, because Compose's shared text cache is not safe for use from two threads.
+- On the desktop JVM, iOS, macOS and Android, a `ComposeCanvas` draws that text through the platform's own text engine (Skia's paragraph engine, or Android's text stack). It can draw on any thread.
+- A custom desktop `ImageComposeScene` must create, measure and draw its scene on the AWT event dispatch thread. A vectorized page and the form layer draw their text inside the scene's own draw pass, so a scene on a thread of its own also shows that text.
+
+## Placeholders and fades
+
+`pagePlaceholder` sets what a page shows while its bitmap renders. By default, the page shows its `pageBackground` color.
 
 ```kotlin
 KiteDocView(
@@ -1150,24 +1057,21 @@ KiteDocView(
 )
 ```
 
-By default, pages show a solid `pageBackground` color until their raster lands.
+A new bitmap fades in over 160 ms. During a render after a zoom, the old bitmap stays on screen, so the change from the placeholder to the page, and from a soft bitmap to a sharp one, never flashes.
 
-## Crossfade on page transition
+## How the viewer stays fast
 
-Freshly rasterized pages fade in smoothly rather than popping (160 ms by default). The previous frame remains visible during re-rasterization, so placeholder → page and crisp-zoom refreshes read as a gentle dissolve, never a flash.
-
-## Performance notes
-
-- **Lazy composition**: Continuous mode composes only the visible pages. Once the strip rests, it draws `prefetchPages` pages on each side into the bitmap cache (paged mode pre-renders `offscreenPages` on each side). Millions of pages are supported; only visible ones cost anything.
-- **Rasterization is off the main thread**: `KiteDocView` renders page bitmaps through `KitePageRasterizer.rasterizeOffMain()` on a background pool after composition settles, so scrolling and input stay responsive; results land through a page-bitmap LRU cache. The jitter on a page turn is avoided by pre-fetching neighbours while idle.
-- **Two pages render at once, the visible one first**: every viewer and thumbnail strip in the process shares two render slots. A page on screen gets the next free slot before a page drawn ahead, and both come before a thumbnail. A page that scrolls into view while it waits moves ahead. A cache hit needs no slot.
-- **System-font text renders off Main**: a page whose text has no font outlines of its own, such as the text of a book without embedded fonts, renders on the raster pool in one pass. Compose's text stack is not safe to use from two threads, so that text draws through the platform's own engine with what Compose's text would give it, in the same pixels: Skia's paragraph engine on the desktop JVM, iOS and macOS (#131), and Android's text stack on Android (#487).
-- **In a browser, everything runs on the UI thread**: JS and Wasm have one thread, so rasters and chapter layout run there. The viewer lays out the reader's chapter and its neighbours at once, and every other chapter only after the view has rested for 400 ms, so a scroll or a pinch does not stall while a book loads. A chapter lays out in slices of 8 ms with a frame drawn between two, so a long chapter does not freeze the page either: an EPUB builds and lays out a block at a time through `KiteDocument.prepareChapter(chapter, checkpoint)` (#389). A page renders in one pass there, because a probe off the main thread gains nothing. A long document script still blocks the page.
-- **A page scrolled past stops rendering**: cancelling the coroutine of `rasterizeOffMain()` stops a PDF page between operators and throws a `CancellationException` instead of returning a partial bitmap.
-- **Synchronous UI export**: `KitePageRasterizer.rasterize()` requires the platform UI thread and refuses other callers before drawing. Background jobs use `rasterizeOffMain()`, including exports with live form state.
-- **Zoom settle debounce**: By default, `rerasterizeOnZoom=true` waits approximately 220 ms after zoom stops before re-rendering, so quick pinch-and-release doesn't thrash the rasterizer.
+- The viewer composes only the pages on screen. A `Continuous` strip draws `prefetchPages` pages ahead on each side when it stops, and a pager keeps `offscreenPages` pages ready on each side. The page count does not change this cost.
+- The viewer renders page bitmaps on a background pool with `rasterizeOffMain`, so a scroll or a tap never waits for a render. A cache of page bitmaps (`cacheBudgetBytes`) keeps the most recently used ones.
+- All viewers and thumbnail strips of a process share two render slots (one in a browser). A page on screen gets the next free slot before a page that the viewer draws ahead, and both come before a thumbnail. A page that scrolls into view while it waits moves to the front. A cache hit needs no slot.
+- A page renders in one pass, text included. Text without its own font outlines (such as the text of a book without embedded fonts) draws through the platform's own text engine, with the same pixels as Compose text: Skia's paragraph engine on the desktop JVM, iOS and macOS, and Android's text stack on Android.
+- A browser has one thread, so renders and chapter layout run on it. The viewer lays out the reader's chapter and its neighbors first, and the other chapters only after the view stops for 400 ms. A chapter lays out in slices of 8 ms with a frame between two slices, so a long chapter does not freeze the page. A long document script still blocks the page.
+- When a page scrolls away, the viewer cancels its render.
+- After a zoom stops, the viewer waits 220 ms before it renders the page again, so a quick pinch does not start many renders.
 
 ## See also
 
-- [Reading and writing PDFs](reading.md)
+- [Reading PDFs](reading.md)
+- [Reading EPUBs](epub.md)
 - [Headless rendering](rendering.md)
+- [JavaScript](javascript.md)

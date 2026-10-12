@@ -1,8 +1,14 @@
 # EPUB conformance
 
-How KitePDF does against the W3C EPUB 3 test suite, [w3c/epub-tests](https://github.com/w3c/epub-tests) at [`54092b42`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403), which holds a test book for each normative statement of [EPUB 3](https://www.w3.org/TR/epub/) and [EPUB Reading Systems 3](https://www.w3.org/TR/epub-rs/). The suite marks each test with the level of its statement: must, should or may, or deprecated for a feature the specifications no longer recommend.
+This page reports how KitePDF does on the W3C EPUB 3 test suite, [w3c/epub-tests](https://github.com/w3c/epub-tests) at commit [`54092b42`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403). The suite has one test book for each normative statement of [EPUB 3](https://www.w3.org/TR/epub/) and [EPUB Reading Systems 3](https://www.w3.org/TR/epub-rs/). Each test has the level of its statement: must, should or may. A test is deprecated when the specifications no longer recommend its feature.
 
-The reading system under test is the library and its viewer together: `kitepdf-epub` reads and lays out the book, `KiteDocView` shows it, pairs spreads and follows links, and `EpubScriptRunner` of `kitepdf-javascript` runs its scripts. The [implementation report](epub-conformance.json) gives each result in the suite's own format, `true`, `false` or `"n/a"`, ready to send to the suite's results page. Each failure of a must or a should names the issue that tracks it.
+The reading system under test is the library and its viewer together:
+
+- `kitepdf-epub` reads the book and lays it out.
+- `KiteDocView` shows the book, pairs the spreads and follows the links.
+- `EpubScriptRunner` of `kitepdf-javascript` runs the scripts of the book.
+
+The [implementation report](epub-conformance.json) gives each result in the format of the suite: `true`, `false` or `"n/a"`. Each failure of a must or a should names the issue that tracks it.
 
 ## Summary
 
@@ -16,11 +22,26 @@ The reading system under test is the library and its viewer together: `kitepdf-e
 
 ## How the results are known
 
-`EpubConformanceTest` in `kitepdf-compose-viewer` packs each test book from the suite and opens it as a reader does. Where the result shows in KitePDF's API, a check decides it: the text of a page, its size, its page count, what it paints on a recording canvas, the rendition of a chapter, the table of contents, the spreads the viewer pairs, the outcome of the scripts. Those rows say **Checked**, with what the check asserts, and the test fails when a check and the report part, so a change that moves a result has to move the report too.
+A test in `kitepdf-compose-viewer` packs each test book of the suite and opens it as a reader does. When the KitePDF API shows the result, a check decides it. A check can read:
 
-The rest need a person: whether a line breaks before a given character, or how read-aloud behaves while it plays. Those rows say **Judged**, with what was seen on the page or read in the code. A test is not applicable when it does not test a reading system, such as one that asks EPUBCheck to report an error, or when it says so itself for a reading system without the feature it tests.
+- the text, the size and the page count of a page
+- what a page paints on a recording canvas
+- the rendition of a chapter and the table of contents
+- the spreads that the viewer pairs
+- the outcome of the scripts
 
-CI checks the suite out at the pinned commit and runs the test on every push. To run it locally, point it at a checkout:
+These rows say **Checked** and tell what the check asserts. The test fails when a check and the report disagree, so a change that moves a result must also move the report.
+
+The other rows need a person, for example to see whether a line breaks before a given character, or how read-aloud behaves. These rows say **Judged** and tell what was seen on the page or read in the code.
+
+A test is not applicable in two cases:
+
+- It does not test a reading system. For example, it asks EPUBCheck to report an error.
+- It says that it does not apply to a reading system without the feature that it tests.
+
+## Run the test
+
+CI checks out the suite at the pinned commit and runs the test on every push. To run the test locally, give it a checkout of the suite:
 
 ```bash
 git clone https://github.com/w3c/epub-tests ../epub-tests
@@ -78,8 +99,8 @@ KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jv
 |---|---|---|---|
 | [`pub-data-urls_browsing-context`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-data-urls_browsing-context) | must | Passes | Checked: The image whose source is a `data:` URL draws. |
 | [`pub-data-urls_top-level-content`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-data-urls_top-level-content) | must | Passes | Checked: The fixed-layout page draws the SVG of its `data:` URL in place, and the book keeps its two pages. |
-| [`pub-external-links`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-external-links) | should | Passes | Judged: when `onLinkTap` does not take the web link, `KiteDocView` asks the reader and then opens the address in the browser through `LocalUriHandler` (#519). `ExternalLinkSceneTest` covers the prompt. |
-| [`pub-external-links_consent`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-external-links_consent) | should | Passes | Judged: `KiteDocView` asks the reader before it opens the mail link, and opens the mail app through `LocalUriHandler` only after the reader taps Open (#519). `ExternalLinkSceneTest` covers the prompt. |
+| [`pub-external-links`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-external-links) | should | Passes | Judged: when `onLinkTap` does not take the web link, `KiteDocView` asks the reader and then opens the address in the browser through `LocalUriHandler`. A scene test covers the prompt. |
+| [`pub-external-links_consent`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-external-links_consent) | should | Passes | Judged: `KiteDocView` asks the reader before it opens the mail link, and opens the mail app through `LocalUriHandler` only after the reader taps Open. A scene test covers the prompt. |
 | [`pub-file-urls`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-file-urls) | must | Passes | Checked: The three iframes point at `file:` URLs, none of which the book can read, and their boxes stay empty. |
 | [`pub-xml-external-id`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-xml-external-id) | must | Passes | Checked: No page shows the fail sentence: the external entity is not resolved, and stands for nothing, and the DOCTYPE's internal subset leaves nothing of itself on the page. |
 | [`pub-xml-names`](https://github.com/w3c/epub-tests/tree/54092b4233253e9aac80e93ec4782b380b4b3403/tests/pub-xml-names) | must | Passes | Checked: `EpubDocument.markupErrors` reports that `p::p` is not a name with a namespace prefix, and `KiteDocView` shows the error on the page. |

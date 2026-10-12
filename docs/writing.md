@@ -1,85 +1,75 @@
-# Creating PDFs from scratch
+# Creating PDFs
 
-Use `PdfBuilder` to create a complete PDF from nothing in pure Kotlin, on any target platform (JVM, Android, iOS, JavaScript, etc.).
-
-## Basic workflow
+`PdfBuilder` makes a new PDF in common code, so it runs on every target that KitePDF supports. It is in the `kitepdf-pdf` artifact, which the `kitepdf` artifact includes. [Getting started](getting-started.md) shows how to add it.
 
 ```kotlin
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
 
-val pdf = PdfBuilder()
+val pdf: ByteArray = PdfBuilder()
     .setInfo(title = "My Report", author = "Kotlin App")
-    .page { 
+    .page {
         text(StandardFont.Helvetica, 24.0, 72.0, 700.0, "Hello, world!")
     }
     .build()
-// pdf is a ByteArray; write it to disk or send over the network
 ```
 
-The builder handles the full PDF structure: object graph (catalog, page tree, content streams), FlateDecode compression, font and image resources, and serialization to a valid PDF 1.7 file.
+`build()` returns the whole file. Save it or send it as it is.
 
-## Installation
+## Pages
 
-Add the `kitepdf` artifact to your build:
-
-=== "Kotlin Multiplatform"
-
-    ```kotlin
-    dependencies {
-        commonMainImplementation("io.github.yuroyami:kitepdf:0.13.0")
-    }
-    ```
-
-=== "Android / JVM"
-
-    ```gradle
-    dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.13.0")
-    }
-    ```
-
-## Adding pages
-
-### Simple page with a block
+Each `page` call adds one page and runs its block at once. The pages keep the order of the calls. A page is US Letter unless you pass a width and a height in points (1/72 inch):
 
 ```kotlin
 PdfBuilder()
-    .page { 
-        text(StandardFont.Helvetica, 14.0, 50.0, 750.0, "This is page 1")
+    .page {
+        text(StandardFont.Helvetica, 14.0, 50.0, 750.0, "This page is US Letter")
     }
-    .page(width = 595.0, height = 842.0) { 
-        text(StandardFont.Helvetica, 14.0, 50.0, 750.0, "This is A4")
+    .page(width = 595.0, height = 842.0) {
+        text(StandardFont.Helvetica, 14.0, 50.0, 750.0, "This page is A4")
     }
     .build()
 ```
 
-By default, pages are US Letter size (612 × 792 points). You can customize width and height; common sizes are:
+| Size | Width × height in points |
+| --- | --- |
+| US Letter | 612 × 792 |
+| A4 | 595 × 842 |
+| A5 | 420 × 595 |
 
-- **US Letter**: 612 × 792 pt
-- **A4**: 595 × 842 pt
-- **A5**: 420 × 595 pt
+### Pages drawn outside a block
 
-Pages are added in call order and appear in the final PDF in that order.
-
-### Imperative page building
-
-If you need to drive page layout from async code, use `newPageContent()` and `addPage()`:
+The block of `page` cannot suspend. When your drawing code is a suspend function, get a content builder from `newPageContent()`, draw into it, then add it with `addPage()`:
 
 ```kotlin
-val builder = PdfBuilder()
-val content = builder.newPageContent()
-// … draw into content (fonts and images registered here)
-content.text(StandardFont.Helvetica, 14.0, 50.0, 750.0, "Async layout")
-builder.addPage(612.0, 792.0, content)
-builder.build()
+suspend fun addTitlePage(builder: PdfBuilder) {
+    val content = builder.newPageContent()
+    val title = loadTitle()
+    content.text(StandardFont.Helvetica, 14.0, 50.0, 750.0, title)
+    builder.addPage(content = content)
+}
 ```
 
-Both `newPageContent()` and `addPage()` register fonts and images with the builder when they're first used.
+## Coordinates
 
-## Document metadata
+The origin (0, 0) is the bottom-left corner of the page. X grows to the right and y grows up, in points. So text drawn at y = 700 on a US Letter page has its baseline 700 points above the bottom edge, or 92 points below the top edge.
 
-Set the PDF's `/Info` dictionary with `setInfo()`:
+To measure from the top, as on Android or on the web, subtract from the height of the page:
+
+```kotlin
+val pageHeight = 792.0
+fun fromTop(y: Double) = pageHeight - y
+
+PdfBuilder()
+    .page {
+        text(StandardFont.Helvetica, 12.0, 72.0, fromTop(100.0), "100 points below the top")
+    }
+    .build()
+```
+
+## Metadata
+
+`setInfo` writes the document information that most readers show in their document properties. It writes only the values that you pass:
 
 ```kotlin
 PdfBuilder()
@@ -89,87 +79,75 @@ PdfBuilder()
         subject = "Financial Results",
         keywords = "quarterly, revenue, forecast",
         creator = "MyApp/1.0",
-        producer = "KitePDF"
+        producer = "KitePDF",
     )
-    .page { /* … */ }
-    .build()
 ```
 
-Only non-null fields are written. Metadata appears in the PDF's document properties panel in most readers.
+## Text
 
-## Available fonts
+`text` draws one line of text with its baseline at (x, y):
 
-KitePDF uses the 14 standard Type 1 fonts, which every conforming PDF reader provides without embedding. No font files are needed.
+```kotlin
+text(StandardFont.Helvetica, 14.0, 100.0, 700.0, "Hello, world!")
+```
 
-- **Helvetica** (4 variants):
-  - `StandardFont.Helvetica`
-  - `StandardFont.HelveticaBold`
-  - `StandardFont.HelveticaOblique`
-  - `StandardFont.HelveticaBoldOblique`
+### Standard fonts
 
-- **Times Roman** (4 variants):
-  - `StandardFont.TimesRoman`
-  - `StandardFont.TimesBold`
-  - `StandardFont.TimesItalic`
-  - `StandardFont.TimesBoldItalic`
+The 14 standard fonts need no font file, because every PDF reader has them:
 
-- **Courier** (4 variants):
-  - `StandardFont.Courier`
-  - `StandardFont.CourierBold`
-  - `StandardFont.CourierOblique`
-  - `StandardFont.CourierBoldOblique`
+| Family | `StandardFont` values |
+| --- | --- |
+| Helvetica | `Helvetica`, `HelveticaBold`, `HelveticaOblique`, `HelveticaBoldOblique` |
+| Times | `TimesRoman`, `TimesBold`, `TimesItalic`, `TimesBoldItalic` |
+| Courier | `Courier`, `CourierBold`, `CourierOblique`, `CourierBoldOblique` |
+| Symbols | `Symbol`, `ZapfDingbats` |
 
-- **Symbolic** (2 fonts):
-  - `StandardFont.Symbol`
-  - `StandardFont.ZapfDingbats`
+A standard font has only the characters of Latin-1 (U+0000 to U+00FF). The builder writes a question mark for each other character. To write other scripts, [embed a font](#embedded-fonts).
 
-### Computing text width
+!!! warning
+    A character above U+007F, such as "é", can show as a different character. MuPDF and Poppler show "café" as "cafØ". Embed a font for text with accents.
 
-To lay out or truncate text, compute its width in advance:
+### Text width
+
+`stringWidth` measures a string in a standard font, so you can center it, fit it in a column or cut it short:
 
 ```kotlin
 import io.github.yuroyami.kitepdf.writer.stringWidth
 
 val width = StandardFont.Helvetica.stringWidth("Hello", fontSize = 14.0)
-// width ≈ 41 points (in text-space units)
+// About 31.9 points, so this x centers the word on a US Letter page
+val x = (612.0 - width) / 2
 ```
 
-Use this to center text, fit it in a column, or append an ellipsis when it overflows.
+### Text line by line
 
-## Drawing text
-
-The simplest form:
+For several lines in one font, use the text operators. `nextLine` moves down by the leading that `setLeading` sets:
 
 ```kotlin
-content.text(StandardFont.Helvetica, 14.0, 100.0, 700.0, "Hello, world!")
+PdfBuilder()
+    .page {
+        beginText()
+        setFont(StandardFont.TimesRoman, 18.0)
+        setLeading(22.0)
+        moveText(100.0, 700.0)
+        showText("Line 1")
+        nextLine()
+        showText("Line 2")
+        endText()
+    }
+    .build()
 ```
 
-This draws a single line of text with its baseline at coordinates (100, 700) in user space. The bottom-left corner of the page is the origin; Y increases upward.
+`setCharSpacing` adds space after each character. `setWordSpacing` adds space after each space character, in standard fonts only.
 
-For finer control, use the text operators:
+### Embedded fonts
 
-```kotlin
-content.beginText()
-content.setFont(StandardFont.TimesRoman, 18.0)
-content.moveText(100.0, 700.0)      // move baseline to (100, 700)
-content.showText("Line 1")
-content.nextLine()                   // move to next line (uses leading set by setLeading)
-content.showText("Line 2")
-content.endText()
-```
-
-!!! note
-    Text with code points above U+00FF (outside Latin-1) will substitute `?` because standard fonts are single-byte encoded. For arbitrary Unicode (CJK, Arabic, emoji fonts, ...) embed a font of your own; see below.
-
-### Custom embedded fonts
-
-Load a TrueType (`.ttf`) or OpenType/CFF (`.otf`) font and draw with it the
-same way as a standard font. The program is embedded as a composite Type0
-font (Identity-H) with a generated `/ToUnicode` map, so text extraction
-round-trips back to Unicode:
+Load a TrueType (`.ttf`) or OpenType CFF (`.otf`) font, then draw with it as with a standard font:
 
 ```kotlin
-val notoSans = EmbeddedFont.load(fontBytes)  // subset = true by default
+import io.github.yuroyami.kitepdf.writer.EmbeddedFont
+
+val notoSans = EmbeddedFont.load(fontBytes)
 
 val pdf = PdfBuilder()
     .page {
@@ -178,231 +156,235 @@ val pdf = PdfBuilder()
     .build()
 ```
 
-With `subset = true` (the default) only the glyphs the document actually
-draws are embedded, with the standard six-letter subset tag on `/BaseFont`;
-pass `subset = false` to embed the whole program.
+- The PDF gets only the glyphs that the document draws. Pass `subset = false` to embed the whole font.
+- The PDF also gets a map from each glyph back to its character, so a reader can copy and search the text.
+- A character that the font does not have draws as the font's missing-glyph shape.
+- The builder maps each character to one glyph. It does not shape text, so Arabic letters do not join and right-to-left text runs left to right.
+- `load` throws `UnsupportedOperationException` for a font that has only CFF2 outlines.
 
-A TrueType collection (`.ttc`) embeds its first face. Pass `faceIndex` to
-choose another; `TrueTypeFont.faceCount` tells how many a collection holds.
-The face is embedded as a font of its own. A font with CFF2 outlines cannot
-be embedded yet.
+A TrueType collection (`.ttc`) gives its first font. Pass `faceIndex` for another one. `TrueTypeFont.faceCount(bytes)` tells how many fonts a collection has:
 
 ```kotlin
 val mincho = EmbeddedFont.load(ttcBytes, faceIndex = 1)
 ```
 
-## Colors and graphics
+## Shapes and colors
 
-### Fill and stroke colors
+### Colors
 
-Set RGB colors for fills (areas, text fill) and strokes (outlines):
+Each color component goes from 0.0 to 1.0. The fill color paints areas and text. The stroke color paints lines:
 
 ```kotlin
-content.setFillRgb(1.0, 0.0, 0.0)      // Red fill
-content.setStrokeRgb(0.0, 0.0, 1.0)    // Blue stroke
-content.setLineWidth(2.0)               // Stroke width in points
-content.rectangle(50.0, 50.0, 200.0, 100.0)
-content.fill()                          // Fill with red
+// Red fill, blue stroke
+setFillRgb(1.0, 0.0, 0.0)
+setStrokeRgb(0.0, 0.0, 1.0)
+
+// 50% gray fill, black stroke
+setFillGray(0.5)
+setStrokeGray(0.0)
+
+// CMYK, for print
+setFillCmyk(0.0, 0.1, 0.9, 0.0)
+setStrokeCmyk(0.0, 0.0, 0.0, 1.0)
 ```
 
-For grayscale:
+### Paths
+
+Build a path with `moveTo`, `lineTo`, `rectangle` and `closePath`. Then paint it with `stroke`, `fill` or `fillAndStroke`. Each call returns the content builder, so you can chain the calls:
 
 ```kotlin
-content.setFillGray(0.5)    // 50% gray
-content.setStrokeGray(0.0)  // Black
-```
+// A stroked square, 2 points wide
+setLineWidth(2.0)
+moveTo(100.0, 100.0)
+    .lineTo(200.0, 100.0)
+    .lineTo(200.0, 200.0)
+    .lineTo(100.0, 200.0)
+    .closePath()
+    .stroke()
 
-### Paths and shapes
-
-Build a path from basic operations and paint it:
-
-```kotlin
-// Draw and stroke an outline
-content.moveTo(100.0, 100.0)
-content.lineTo(200.0, 100.0)
-content.lineTo(200.0, 200.0)
-content.lineTo(100.0, 200.0)
-content.closePath()           // Close the path (line back to start)
-content.stroke()              // Stroke with current color and line width
-
-// Draw and fill a rectangle
-content.setFillRgb(0.2, 0.8, 0.2)
-content.rectangle(50.0, 50.0, 150.0, 100.0)
-content.fill()
-
-// Fill and stroke in one operation
-content.setFillRgb(1.0, 1.0, 0.0)
-content.setStrokeRgb(0.0, 0.0, 0.0)
-content.rectangle(100.0, 100.0, 200.0, 200.0)
-content.fillAndStroke()
+// A filled rectangle with an outline
+setFillRgb(1.0, 1.0, 0.0)
+setStrokeRgb(0.0, 0.0, 0.0)
+rectangle(100.0, 100.0, 200.0, 200.0).fillAndStroke()
 ```
 
 ### Clipping
 
-Clip to the current path using the nonzero winding rule:
+`clip` cuts all later drawing to the current path, by the nonzero winding rule. `clipEvenOdd` uses the even-odd rule. A clip needs a painting call after it. Call `endPath` to clip without painting the path:
 
 ```kotlin
-content.rectangle(100.0, 100.0, 300.0, 300.0)
-content.clip()
-content.endPath()           // Painting operator required after clip()
-// All subsequent drawing is clipped to the rectangle
+rectangle(100.0, 100.0, 300.0, 300.0).clip().endPath()
 ```
 
-Or use the even-odd rule:
+Only `restore` can remove a clip.
+
+### Save and restore
+
+!!! tip
+    Wrap a few drawing calls in `save()` and `restore()` to keep their settings to themselves. Anything you change in between (a color, a line width, a clip or a rotation) goes back to how it was after `restore()`.
+
+    Without them, each setting stays for the rest of the page:
+
+    - A fill color paints every later shape in that color.
+    - A rotation turns everything that you draw after it.
+    - A clip cuts off everything that you draw after it.
+
+    Always use them as a pair. A `save()` without a `restore()` keeps the settings for the rest of the page. A `restore()` without a `save()` before it breaks the PDF rules.
+
+`transform` multiplies the current matrix by `[a b c d e f]`. This draws a red square turned 45 degrees around the point (450, 300):
 
 ```kotlin
-content.rectangle(100.0, 100.0, 300.0, 300.0)
-content.clipEvenOdd()
-content.endPath()
+save()
+transform(0.7071, 0.7071, -0.7071, 0.7071, 450.0, 300.0)
+setFillRgb(1.0, 0.0, 0.0)
+rectangle(0.0, 0.0, 50.0, 50.0).fill()
+restore()
 ```
 
-## Embedding images
+### Other operators
 
-### Image formats
+`raw` adds content stream operators that the builder has no method for, such as a dash pattern:
 
-Create images from raw pixel data or JPEG:
+```kotlin
+raw("[6 3] 0 d")
+moveTo(72.0, 540.0).lineTo(523.0, 540.0).stroke()
+```
+
+!!! warning
+    The builder does not check the text of `raw`. A mistake in it makes a page that readers draw wrong or refuse.
+
+## Images
+
+### Make an image
+
+`PdfImage` takes 8-bit pixels, top row first, or the bytes of an encoded file:
 
 ```kotlin
 import io.github.yuroyami.kitepdf.writer.PdfImage
 
-// 8-bit RGBA (4 bytes per pixel: R, G, B, A)
-val imageWithAlpha = PdfImage.rgba(pixelBytes, width = 100, height = 100)
+// 4 bytes per pixel: R, G, B, A
+val logo = PdfImage.rgba(rgbaPixels, width = 100, height = 100)
 
-// 8-bit RGB (3 bytes per pixel: R, G, B)
-val imageRgb = PdfImage.rgb(pixelBytes, width = 100, height = 100)
+// 3 bytes per pixel: R, G, B
+val photo = PdfImage.rgb(rgbPixels, width = 100, height = 100)
 
-// 8-bit grayscale (1 byte per pixel)
-val imageGray = PdfImage.gray(pixelBytes, width = 100, height = 100)
+// 1 byte per pixel
+val scan = PdfImage.gray(grayPixels, width = 100, height = 100)
 
-// JPEG passthrough (no re-encoding)
-val imageJpeg = PdfImage.jpeg(jpegBytes, width = 800, height = 600)
+// The JPEG file as it is, with no new encoding
+val picture = PdfImage.jpeg(jpegBytes, width = 800, height = 600)
+
+// A JPEG 2000 file as it is
+val map = PdfImage.jpx(jp2Bytes, width = 2000, height = 1500)
 ```
 
-RGBA images automatically separate the alpha channel into a PDF `/SMask` for transparency. If all pixels are fully opaque, the mask is omitted.
+- `rgba` puts the alpha channel in a soft mask. When every pixel is opaque, the image gets no mask.
+- `jpeg` and `jpx` do not read the size from the file, so pass the real size of the image. Pass `grayscale = true` to `jpeg` for a grayscale JPEG.
 
-!!! warning "Array ownership"
-    `rgb`, `gray`, `jpeg` and `jpx` keep a reference to your array without copying, and only read it when `build()` serializes the document. Do not modify or reuse that array until `build()` returns. If you decode frames into one reusable scratch buffer, every page would show the last frame. `rgba` converts into fresh arrays, so it has no such constraint.
+!!! warning
+    `rgb`, `gray`, `jpeg` and `jpx` keep your array and do not copy it. The builder reads the array only when `build()` runs. Do not change or reuse the array until `build()` returns. If you decode frames into one buffer, every page shows the last frame. `rgba` copies the pixels, so you can reuse its array at once.
 
-### Drawing images
+### Draw an image
 
-Only available inside `page { }` blocks:
+`drawImage` fills a rectangle with the image. (x, y) is the bottom-left corner of the rectangle:
 
 ```kotlin
 PdfBuilder()
     .page {
-        val image = PdfImage.rgb(pixels, 100, 100)
-        drawImage(image, x = 100.0, y = 500.0, width = 200.0, height = 200.0)
+        drawImage(photo, x = 100.0, y = 500.0, width = 200.0, height = 200.0)
     }
     .build()
 ```
 
-The image fills the rectangle from (x, y) to (x + width, y + height). Coordinates follow PDF's bottom-left origin and Y-up convention.
+When several pages draw the same `PdfImage` object, the PDF holds the image once.
 
-!!! tip
-    Images are deduplicated by identity. If you pass the same `PdfImage` instance to multiple pages, it's embedded once and referenced by all pages.
+## Password protection
 
-## Coordinate system
+`encrypt` protects the new document with AES-256. The user password and the owner password both open the file. The permissions ask readers not to print, copy or change the document, but a reader can ignore them (see [Permissions](reading.md#permissions)).
 
-PDF uses a **left-hand coordinate system with origin at the bottom-left**:
-
-- **X-axis** runs left-to-right.
-- **Y-axis** runs bottom-to-top (opposite of many graphics APIs).
-- **(0, 0)** is the bottom-left corner of the page.
-
-When drawing text at `(100, 700)` on a US Letter page (792 pt tall), the text baseline is 92 points above the bottom edge.
-
-If you're used to top-left origins (like Android Canvas or web DOM), remember to flip Y:
+!!! warning
+    Pass a random source that is secure for cryptography. The builder makes the file key from it. `Random.Default` is not secure. A seeded `Random(seed)` is good only for test files.
 
 ```kotlin
-// Convert from top-left (like Android) to bottom-left (PDF)
-val pageHeight = 792.0
-val textY_pdf = pageHeight - textY_topLeft
-content.text(font, size, textX, textY_pdf, "Text")
+import io.github.yuroyami.kitepdf.PdfPermissions
+import kotlin.random.asKotlinRandom
+
+// On the JVM and Android
+val secureRandom = java.security.SecureRandom().asKotlinRandom()
+
+val bytes = PdfBuilder()
+    .page {
+        text(StandardFont.Helvetica, 12.0, 72.0, 700.0, "Confidential")
+    }
+    .encrypt(
+        userPassword = "user-pass",
+        ownerPassword = "owner-pass",
+        permissions = PdfPermissions.allowAll.copy(canModifyContents = false),
+        random = secureRandom,
+    )
+    .build()
 ```
 
-## Complete example
+## Compression
 
-A titled page with a colored box and some text:
+`build()` compresses the content stream of each page. `build(compress = false)` leaves the content streams as plain text, so you can read them in a text editor. Images and embedded fonts are compressed either way.
+
+## A complete page
+
+An invoice page with a colored header, a line and a small table:
 
 ```kotlin
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import io.github.yuroyami.kitepdf.writer.StandardFont
+import java.io.File
 
 fun main() {
     val pdf = PdfBuilder()
-        .setInfo(
-            title = "Invoice #123",
-            author = "E-Commerce System",
-            creator = "MyApp/1.0"
-        )
+        .setInfo(title = "Invoice 123", author = "Example Shop", creator = "MyApp/1.0")
         .page {
-            // Draw a blue header box
+            // A blue header box
             setFillRgb(0.2, 0.4, 0.8)
-            rectangle(0.0, 650.0, 612.0, 142.0)
-            fill()
+            rectangle(0.0, 650.0, 612.0, 142.0).fill()
 
-            // Title in white
+            // The title in white
             setFillRgb(1.0, 1.0, 1.0)
             text(StandardFont.HelveticaBold, 36.0, 50.0, 730.0, "INVOICE")
-            text(StandardFont.Helvetica, 14.0, 50.0, 690.0, "Invoice #123-2025")
+            text(StandardFont.Helvetica, 14.0, 50.0, 690.0, "Invoice 123")
 
-            // Content in black
+            // The customer in black
             setFillRgb(0.0, 0.0, 0.0)
-            text(StandardFont.Helvetica, 12.0, 50.0, 600.0, "Bill To:")
-            text(StandardFont.Helvetica, 11.0, 50.0, 580.0, "John Doe")
-            text(StandardFont.Helvetica, 11.0, 50.0, 565.0, "john@example.com")
+            text(StandardFont.Helvetica, 12.0, 50.0, 600.0, "Bill to:")
+            text(StandardFont.Helvetica, 11.0, 50.0, 580.0, "Jane Doe")
 
-            // Horizontal line
+            // A gray line
             setStrokeRgb(0.8, 0.8, 0.8)
             setLineWidth(1.0)
-            moveTo(50.0, 540.0)
-            lineTo(562.0, 540.0)
-            stroke()
+            moveTo(50.0, 540.0).lineTo(562.0, 540.0).stroke()
 
-            // Table header with light gray background
+            // The table header on a light gray band
             setFillRgb(0.95, 0.95, 0.95)
-            rectangle(50.0, 520.0, 512.0, 20.0)
-            fill()
-
+            rectangle(50.0, 520.0, 512.0, 20.0).fill()
             setFillRgb(0.0, 0.0, 0.0)
             text(StandardFont.HelveticaBold, 11.0, 60.0, 528.0, "Description")
-            text(StandardFont.HelveticaBold, 11.0, 350.0, 528.0, "Unit Price")
+            text(StandardFont.HelveticaBold, 11.0, 350.0, 528.0, "Unit price")
             text(StandardFont.HelveticaBold, 11.0, 450.0, 528.0, "Qty")
             text(StandardFont.HelveticaBold, 11.0, 500.0, 528.0, "Total")
 
-            // Item rows
-            text(StandardFont.Helvetica, 10.0, 60.0, 500.0, "Consulting Services")
+            // One row
+            text(StandardFont.Helvetica, 10.0, 60.0, 500.0, "Consulting")
             text(StandardFont.Helvetica, 10.0, 350.0, 500.0, "$150.00")
             text(StandardFont.Helvetica, 10.0, 450.0, 500.0, "8")
             text(StandardFont.Helvetica, 10.0, 500.0, 500.0, "$1,200.00")
         }
         .build()
 
-    // Write to file (JVM example; use platform APIs on other targets)
-    java.nio.file.Files.write(
-        java.nio.file.Paths.get("invoice.pdf"),
-        pdf
-    )
+    // JVM only. On other targets, save the bytes with the platform's file API.
+    File("invoice.pdf").writeBytes(pdf)
 }
 ```
 
-## Compression and serialization
-
-By default, `build()` applies FlateDecode compression to all content streams:
-
-```kotlin
-val compressedPdf = PdfBuilder().page { /* … */ }.build(compress = true)   // default
-val uncompressedPdf = PdfBuilder().page { /* … */ }.build(compress = false)
-```
-
-Compressed PDFs are smaller (~40-60% for typical documents) and equally valid. Uncompressed PDFs are useful for debugging or manual inspection.
-
-## Rendering pages to images
-
-To convert PDF pages to rasterized images (PNG, Bitmap, etc.), see the [rendering guide](rendering.md). The `kitepdf-native-renderer` or `kitepdf-skia-renderer` modules provide platform-specific and unified APIs.
-
 ## See also
 
-- [Reading and extracting text](reading.md)
-- [Editing existing PDFs](editing.md)
-- [Rendering pages to images](rendering.md)
+- [Reading PDFs](reading.md)
+- [Editing and redaction](editing.md)
+- [Headless rendering](rendering.md), to turn a page into an image

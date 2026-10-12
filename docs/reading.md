@@ -1,547 +1,387 @@
 # Reading PDFs
 
-Open, decrypt, and extract content from PDF documents. KitePDF handles encrypted PDFs, pages with advanced geometry, text extraction, bookmarks, annotations, and form fields.
+`PdfDocument` reads a PDF file: its pages, text, metadata, bookmarks, annotations, form fields and signatures. It is in the `kitepdf-pdf` artifact, which the `kitepdf` artifact includes. [Loading a document](loading.md) shows every source that KitePDF can open, and how to open a file whose format you do not know.
 
 ## Opening a PDF
 
-Open any PDF from a byte array:
-
 ```kotlin
 import io.github.yuroyami.kitepdf.PdfDocument
+import java.io.File
 
-val bytes = File("example.pdf").readBytes()
-val doc = PdfDocument.open(bytes)
-println("${doc.pageCount} pages: PDF ${doc.version}")
+val doc = PdfDocument.open(File("example.pdf").readBytes())
+println("${doc.pageCount} pages, PDF ${doc.version}")
 ```
 
-`open` throws (`PdfFormatException`, `KiteWrongPasswordException`) on files it
-cannot read. When null-on-failure fits your call site better, use
-`PdfDocument.openOrNull(bytes)`; the EPUB handler has the matching pair
-(`EpubDocument.open` throws `EpubFormatException` with a message naming the
-first structural failure, `EpubDocument.openOrNull` returns null instead).
-
-Don't know which format you have? `KiteDoc.open(bytes)` sniffs it and returns
-whichever handler fits. See **[Loading a document](loading.md)** for that and
-for every other source: a file path, a stream, an Android content Uri, Base64,
-a URL.
+`open` throws `PdfFormatException` for a file that it cannot read, and `KiteWrongPasswordException` when the password is wrong. A file whose cross-reference table is damaged still opens, because KitePDF rebuilds the table from the bytes.
 
 ### Encrypted PDFs
 
-You never handle decryption yourself. Pass the password and read as normal:
+Pass the password, and KitePDF decrypts each object as it reads it:
 
 ```kotlin
-val doc = PdfDocument.open(bytes, "mypassword".encodeToByteArray())
+val doc = PdfDocument.open(bytes, password = "secret")
 ```
 
-For unencrypted PDFs, pass an empty byte array (the default):
+A `String` password goes in as UTF-8 first. When the UTF-8 bytes fail and the password has characters outside ASCII, KitePDF tries it once more as Latin-1, as MuPDF does. For any other encoding, pass the password as a `ByteArray`.
+
+With `allowInvalidPassword = true`, a wrong password does not throw. The document then opens with `isAuthenticated` set to false, and its text and images do not decode. `doc.isEncrypted` tells you whether a file has encryption at all.
+
+### Permissions
+
+An encrypted PDF can ask the reader not to print, copy or change it. KitePDF reads these permissions but does not enforce them, so your app decides whether to follow them:
 
 ```kotlin
-val doc = PdfDocument.open(bytes)  // same as PdfDocument.open(bytes, byteArrayOf())
+val permissions = doc.permissions
+if (!permissions.canCopyContents) println("The author asks you not to copy the text")
+if (!permissions.canPrintHighResolution) println("Print at low resolution only")
 ```
 
-After opening, check whether the document is encrypted and authenticated:
-
-```kotlin
-val doc = PdfDocument.open(bytes, password)
-if (doc.isEncrypted) println("Document is encrypted")
-if (!doc.isAuthenticated) println("Wrong password or needed password was empty")
-```
-
-### Document Permissions
-
-Most encrypted PDFs carry usage hints (print, copy, modify, etc.) set by the author. These permissions are advisory; KitePDF surfaces them so your application can choose to honour the author's intent:
-
-```kotlin
-val perms = doc.permissions
-if (!perms.canCopyContents) println("Author restricts copying")
-if (!perms.canPrintHighResolution) println("Low-resolution printing only")
-```
-
-Access all permissions via the `PdfPermissions` object:
-
-- `canPrint`: printing allowed
-- `canModifyContents`: editing PDF content allowed
-- `canCopyContents`: copy/extract text allowed
-- `canModifyAnnotations`: add/modify annotations allowed
-- `canFillForms`: fill form fields allowed
-- `canExtractForAccessibility`: extract for accessibility tools allowed
-- `canAssembleDocument`: insert/delete/rotate pages allowed
-- `canPrintHighResolution`: high-resolution printing allowed
-
-For unencrypted documents, `permissions` always reports allow-all.
+`PdfPermissions` has `canPrint`, `canPrintHighResolution`, `canModifyContents`, `canCopyContents`, `canModifyAnnotations`, `canFillForms`, `canExtractForAccessibility` and `canAssembleDocument` (which covers inserting, deleting and rotating pages). An unencrypted document allows everything.
 
 ## Pages
 
-Iterate the page list or access a specific page by index:
-
 ```kotlin
-val doc = PdfDocument.open(bytes)
 val page = doc.pages[0]
-println("${page.width} x ${page.height} pt")
-println("Rotation: ${page.rotation}°")
+
+// The size that a viewer shows, after the crop box and the rotation
+println("${page.displayWidth} x ${page.displayHeight} pt")
 
 for (page in doc.pages) {
-    println("Page ${page.index + 1}: ${page.label}")
+    println("Page ${page.index + 1} has the label ${page.label}")
 }
 ```
 
-### Page Boxes
+`page.width` and `page.height` give the size of the media box, which ignores `/CropBox` and `/Rotate`. Use `displayWidth` and `displayHeight` for the size on screen. `page.rotation` is the `/Rotate` value of the file, and `rotationNormalized` turns it into 0, 90, 180 or 270.
 
-PDF defines several rectangular regions on a page. The most common are:
+`page.label` is the label from `/PageLabels`, such as "iii" or "A-1". In a file without page labels, it is the page number, starting at 1.
 
-```kotlin
-val page = doc.pages[0]
-val mediaBox = page.mediaBox       // Full page boundary in user-space units (1/72 inch)
-val cropBox = page.cropBox         // Region to display (defaults to mediaBox)
-val bleedBox = page.bleedBox       // Region for printing with bleed (defaults to cropBox)
-val trimBox = page.trimBox         // Trim boundary after printing (defaults to cropBox)
-val artBox = page.artBox           // Meaningful content extent (defaults to cropBox)
-
-println("Media: ${mediaBox.width} x ${mediaBox.height} pt")
-```
-
-Each rectangle has `.left`, `.bottom`, `.right`, `.top`, `.width`, `.height` properties.
-
-### User Unit
-
-Large pages (architectural drawings, posters) may use a scaled user unit:
+### Page boxes
 
 ```kotlin
-val userUnit = page.userUnit      // Default 1.0 (each unit = 1/72 inch)
-                                   // 2.0 means each unit = 2/72 inch (page is twice as large)
-val effectiveWidth = page.width * userUnit
+// The whole sheet, in points (1/72 inch)
+val mediaBox = page.mediaBox
+
+// The part that a viewer shows (the media box when the file sets none)
+val cropBox = page.cropBox
+
+// The part to print with bleed (the crop box when the file sets none)
+val bleedBox = page.bleedBox
+
+// The finished page after the trim (the crop box when the file sets none)
+val trimBox = page.trimBox
+
+// The meaningful content (the crop box when the file sets none)
+val artBox = page.artBox
 ```
 
-## Text Extraction
+Each box is a `KiteRectangle` with `left`, `bottom`, `right`, `top`, `width` and `height`. A page with no usable media box gets a US Letter box (612 by 792 points) and a warning in the log, as in MuPDF.
 
-### Simple Text
+A very large page, such as an architectural drawing or a poster, can set a user unit. `page.userUnit` is 1.0 by default, which means 1/72 inch for each unit. A value of 2.0 makes each unit 2/72 inch:
 
-Extract all text from a page as a plain string:
+```kotlin
+val widthInInches = page.width * page.userUnit / 72.0
+```
+
+## Text
+
+### Plain text
+
+`extractText()` gives the text of a page as one string:
 
 ```kotlin
 val text = page.extractText()
 ```
 
-This walks the content stream for text-showing operators (`Tj`, `TJ`, `'`, `"`), decodes strings using PDFDocEncoding (or UTF-16BE if a BOM is present), and joins them with line breaks heuristically inserted on text-positioning commands.
+KitePDF decodes each string through the font that draws it. It uses the font's `/Encoding`, its `/Differences` and its `/ToUnicode` CMap, which covers composite Type 0 fonts and the predefined CJK CMaps. A CJK font without `/ToUnicode` finds its text through its CMap or its Adobe character collection, as ISO 32000-1, 9.10.2 describes. For text with no Unicode mapping at all (such as some symbol fonts), KitePDF gives its best reading of the bytes.
 
-!!! note
-    Extraction decodes each show string through the font that draws it, resolving `/Encoding` (with `/Differences`) and the `/ToUnicode` CMap, including composite Type0/CID fonts and the predefined CJK CMaps. A CJK font without `/ToUnicode` finds its text through its CMap or its Adobe character collection, as ISO 32000-1, 9.10.2 describes. Text without any Unicode mapping (some symbolic subsets) falls back to a best-effort byte interpretation.
+The text of a form XObject comes in its place on the page. A marked-content sequence with `/ActualText` gives that text instead of the text inside it.
 
-### Structured Text
+PDF has no lines, only positions. KitePDF adds a line break where the text moves to a new line, so the line breaks are an approximation.
 
-When you need geometry alongside text (for highlighting, search, selection), use structured text:
+### Structured text
+
+`structuredText` gives the text with its position, which you need for a selection, a highlight or a search of one area:
 
 ```kotlin
-val structured = page.structuredText
-for (block in structured.blocks) {
+for (block in page.structuredText.blocks) {
     for (line in block.lines) {
         for (span in line.spans) {
-            println("${span.text} at (${span.origin.first}, ${span.origin.second})")
-            println("  Font: ${span.fontSpec}, size: ${span.fontSize}pt")
-            println("  Bounds: ${span.bounds}")
+            println("${span.text} at ${span.origin}, ${span.fontSize} pt")
         }
     }
 }
 ```
 
-Structured text clusters character runs into:
-- **Spans**: glyphs sharing font, size, and baseline
-- **Lines**: spans whose Y origins cluster within tolerance
-- **Blocks**: lines grouped by vertical spacing (paragraph-like chunks)
+- A span is a run of glyphs with the same font, size and baseline.
+- A line is a group of spans whose baselines are at about the same height.
+- A block is a group of lines with no large gap between them, which is usually a paragraph.
 
-Vertical text forms columns instead of lines. A Type 0 font whose CMap has writing mode 1, such as `Identity-V`, stacks its glyphs down the page (ISO 32000-1, 9.7.4.3). Each column is a `PdfTextLine` whose spans run top to bottom, and the columns of a block come right to left, the order vertical CJK text reads in. In `page.textContent()`, such a line has `vertical = true`, so search and selection highlights follow the column.
+| Span property | What it is |
+| --- | --- |
+| `text` | The decoded text |
+| `fontSpec` | The family, weight and style of the font |
+| `fontSize` | The size in points as drawn: the `Tf` size times the scale of the text matrix |
+| `origin` | The start of the baseline, as (x, y) in PDF user space |
+| `bounds` | An approximate box, from the baseline and an estimate of the ascender and descender |
+| `charEdgePoints` | The point on the baseline where each character starts, or null |
 
-Each `PdfTextSpan` carries:
-- `text`: the decoded string
-- `fontSpec`: family/weight/style of the font used
-- `fontSize`: effective point size as rendered (the `Tf` size times the text-matrix scale)
-- `origin`: baseline position in PDF user units (x, y) as a `Pair<Double, Double>`
-- `bounds`: bounding rectangle (heuristic: ascender + descender estimates)
+`structuredText.plainText` joins the blocks with a blank line and the lines with a line break.
 
-Convert to plain text (with paragraph breaks) via:
+Vertical text makes columns instead of lines. A Type 0 font whose CMap has writing mode 1 (such as `Identity-V`) draws its glyphs down the page, as ISO 32000-1, 9.7.4.3 describes. Each column is a `PdfTextLine` whose spans run from top to bottom, and the columns of a block come from right to left, in the order that vertical CJK text reads.
+
+`page.textContent()` gives the same text as a `KiteStructuredText`, the shared type that EPUB pages also give. Its coordinates are in display space: points from the top-left corner of the page as it shows, with y going down. Search, selection and the Compose viewer use this form. A vertical line has `vertical = true` there, so a highlight follows the column.
+
+## Search
 
 ```kotlin
-val plainText = structured.plainText  // "\n\n" between blocks, "\n" between lines
+import io.github.yuroyami.kitepdf.text.search
+
+// Every hit in the document, one page at a time
+for (hit in doc.search("invoice")) {
+    println("Page ${hit.pageIndex + 1}: ${hit.text}")
+}
+
+// The hits on one page, with case
+val hits = doc.pages[0].search("Total", ignoreCase = false)
 ```
 
-## Document Metadata
+A hit has one rectangle (`quads`) for each line that it touches, in display space. A match can go across a line break inside a block, where the break counts as one space. After a hyphen at the end of a line, the break counts as nothing and the hyphen drops out. A match never goes from one block into the next.
 
-### Info Dictionary
+`doc.search` is a lazy `Sequence`, so a UI can show the first hits while KitePDF still reads later pages. To paint the hits in the viewer, see [Highlights](compose-viewer.md#highlights).
 
-Access the document's metadata (title, author, dates, etc.):
+## Metadata
+
+`doc.info` is the `/Info` dictionary:
 
 ```kotlin
 val info = doc.info
 println("Title: ${info.title}")
 println("Author: ${info.author}")
 println("Created: ${info.creationDate}")
-println("Custom fields: ${info.custom}")
 ```
 
-Fields in `PdfDocumentInfo`:
+`PdfDocumentInfo` has `title`, `author`, `subject`, `keywords`, `creator`, `producer`, `creationDate`, `modDate`, `trapped` and `custom` (the entries that the standard does not name).
 
-- `title`, `author`, `subject`, `keywords`: strings (nullable)
-- `creator`, `producer`: application names (nullable)
-- `creationDate`, `modDate`: `PdfDate?` (nullable)
-- `trapped`: enum: `True`, `False`, or `Unknown`
-- `custom`: map of non-standard string entries
-
-!!! tip
-    PDF 2.0 prefers XMP metadata; most PDFs still use the `/Info` dict. For raw XMP, see [XMP Metadata](#xmp-metadata).
-
-### XMP Metadata
-
-Raw XMP as UTF-8 XML:
+`doc.xmpMetadataXml` gives the XMP packet as a string, and `doc.xmp` reads its common Dublin Core, Adobe PDF and XMP Basic properties:
 
 ```kotlin
-if (doc.xmpMetadataXml != null) {
-    println(doc.xmpMetadataXml)
-}
-```
-
-Parsed XMP (Dublin Core + Adobe PDF + XMP-basic properties):
-
-```kotlin
-val xmp = doc.xmp  // PdfXmpMetadata? (null if no XMP stream)
+val xmp = doc.xmp
 if (xmp != null) {
     println("Creator tool: ${xmp.creatorTool}")
-    println("Dates: created ${xmp.createDate}, modified ${xmp.modifyDate}")
+    println("Created ${xmp.createDate}, modified ${xmp.modifyDate}")
 }
 ```
 
-Falls back to the `/Info` dict when XMP is absent.
+Both are null when the file has no XMP. PDF 2.0 prefers XMP, but most files still have an `/Info` dictionary, so read both when you need all the metadata.
 
-## Outline / Bookmarks
+## Bookmarks
 
-Navigate the document's bookmark tree:
+`doc.outline` is the outline that every format gives, as `KiteOutlineItem` entries. Each entry has a `title`, its `children`, a `pageIndex` and a `target` that the viewer can scroll to:
 
 ```kotlin
-for (outline in doc.bookmarks) {
-    println("${outline.title} (count: ${outline.count})")
-    for (child in outline.children) {
-        println("  - ${child.title}")
-    }
+for (item in doc.outline) {
+    println("${item.title} goes to page ${item.pageIndex}")
 }
 ```
 
-Each `PdfOutline` entry carries:
-
-- `title`: bookmark label
-- `children`: nested bookmarks
-- `rawDestination`: unresolved destination (use `doc.resolveDestination()` to convert)
-- `action`: typed action (GoTo, URI, Launch, JavaScript, etc.)
-- `count`: visible descendant count; negative if closed by default
-- `isOpen`: true if the outline is expanded by default
-- `italic`, `bold`: style flags
-- `color`: RGB color hint (nullable)
-
-To resolve a bookmark destination to a page index:
+For the details that only PDF has, read `doc.bookmarks`:
 
 ```kotlin
-for (outline in doc.bookmarks) {
-    val dest = doc.resolveDestination(outline.rawDestination)
-    val view = dest?.view
+for (bookmark in doc.bookmarks) {
+    val destination = doc.resolveDestination(bookmark.rawDestination)
+    val view = destination?.view
     if (view is PdfDestination.ViewFit.XYZ) {
-        println("Jumps to page ${dest.pageIndex}, position (${view.left}, ${view.top})")
+        println("${bookmark.title}: page ${destination.pageIndex}, at (${view.left}, ${view.top})")
     }
 }
 ```
+
+`PdfOutline` has `title`, `children`, `action`, `rawDestination`, `count`, `isOpen`, `italic`, `bold` and `color`. A negative `count` means that the entry starts closed. `resolveDestination` turns a raw destination (an array, a name or a dictionary) into a page index and a view, or gives null when it cannot.
 
 ## Annotations
 
-Annotations are interactive elements: links, highlights, notes, etc.
-
 ```kotlin
-val page = doc.pages[0]
-for (annot in page.annotations) {
-    println("${annot.subtype} at ${annot.rect}")
-    when (annot.subtype) {
-        PdfAnnotation.Subtype.Link -> {
-            println("  URL: ${annot.uri}")
-            println("  Destination: ${annot.rawDestination}")
-        }
-        PdfAnnotation.Subtype.Highlight -> println("  Highlight: ${annot.contents}")
-        else -> println("  Contents: ${annot.contents}")
+for (annotation in page.annotations) {
+    when (annotation.subtype) {
+        PdfAnnotation.Subtype.Link -> println("Link to ${annotation.uri}")
+        PdfAnnotation.Subtype.Highlight -> println("Highlight: ${annotation.contents}")
+        else -> println("${annotation.subtype} at ${annotation.rect}")
     }
 }
 ```
 
-Supported subtypes:
-- **Link**: URL or named-destination hyperlink
-- **Highlight**, **Underline**, **StrikeOut**, **Squiggly**: text markups
-- **Text**: sticky-note popup
-- **FreeText**, **Square**, **Circle**, **Polygon**, **PolyLine**, **Ink**: drawing/text markup
-- **Stamp**, **Caret**, **FileAttachment**, **Sound**, **Movie**: metadata or embedded content
-- **Widget**: form field annotation
-- **Other**: for unsupported annotation types
+`PdfAnnotation.Subtype` has one value for each annotation type of ISO 32000-1 (such as `Link`, `Highlight`, `Text`, `Ink` and `Widget`), and `Other` for any other type.
 
-Each `PdfAnnotation` carries:
+Each `PdfAnnotation` has its `subtype`, its `rect` in page space, its `contents`, `color`, `uri`, `action` and `rawDestination`, and its appearance stream. It also has the geometry of its type (`quadPoints`, `inkLists` or `vertices`), its border, and its `flags` with `isHidden`, `isInvisible` and `isNoZoom`. `raw` gives the annotation dictionary for any other entry.
 
-- `subtype`: annotation type
-- `rect`: placement rectangle (left, bottom, right, top)
-- `contents`: text (e.g. note text or link label)
-- `color`: border/highlight color (nullable)
-- `uri`: URL (Link annotations only)
-- `action`: typed action (GoTo, URI, Launch, etc.)
-- `rawDestination`: unresolved destination (Link annotations; resolve with `doc.resolveDestination()`)
-- `appearanceStream`: optional visual representation (Form XObject stream)
-- `raw`: the underlying PDF dictionary for callers that need fields we didn't extract
+A media annotation (`Screen`, `Movie` or `RichMedia`) draws its own appearance, which is usually a poster image. KitePDF does not play the media.
 
-## Form Fields
-
-Interactive form fields (text boxes, buttons, dropdowns, signatures):
+## Form fields
 
 ```kotlin
 for (field in doc.formFields) {
     println("${field.fullyQualifiedName}: ${field.value} (${field.type})")
 }
 
-// Look up a field by name
+// A field by its full name
 val field = doc.formField("employee.name")
-if (field != null) {
-    println("Type: ${field.type}")
+if (field != null && !field.isReadOnly) {
     println("Value: ${field.value}")
-    println("Read-only: ${field.isReadOnly}")
 }
 ```
 
-Each `PdfFormField` carries:
+`type` is `Text`, `Button`, `Choice`, `Signature` or `Unknown`. A `PdfFormField` also has these properties:
 
-- `fullyQualifiedName`: dot-separated path (e.g. "parent.child.fieldName")
-- `partialName`: this field's own name (parent names stripped), nullable
-- `type`: `Text`, `Button`, `Choice`, `Signature`, or `Unknown`
-- `value`: the current value (text for text fields, selected name for buttons/dropdowns), nullable
-- `defaultAppearance`: variable-text appearance string (`/DA`), nullable
-- `flags`: bit flags (read-only, multi-line, etc.)
-- `isReadOnly`: true if the field cannot be edited
-- `isMultiline`: true for multi-line text fields
-- `isRichText`: true for a text field whose value is also rich text, XHTML in `/RV`
-- `quadding`: text alignment: 0 = left, 1 = center, 2 = right
-- `rect`: the first widget's placement rectangle (nullable)
-- `widgets`: every place the field is drawn. A radio group has one per button, and a field
-  repeated on several pages has one per page. Each carries its rectangle, its `onStateName`
-  (the `/AP` state that selects it) and its own scripts
-- `additionalActions`: the scripts the field runs, such as `keystroke`, `calculate` and
-  `mouseDown` (see the [JavaScript guide](javascript.md))
-- `fieldReference`, `widgetReference`: indirect references (for editing via `PdfEditor`)
+| Property | What it is |
+| --- | --- |
+| `fullyQualifiedName` | The full name with its parents, such as `parent.child.name` |
+| `partialName` | The field's own name, without its parents |
+| `value` and `defaultValue` | The current value and the value after a reset |
+| `choiceOptions` | The options of a choice field, each with its index, export value and label |
+| `flags` | The field flags, also as `isReadOnly`, `isMultiline` and `isRichText` |
+| `maxLength`, `quadding`, `defaultAppearance` | The text limit, the alignment (0 left, 1 center, 2 right) and the `/DA` string |
+| `tooltip` | The `/TU` text, which a screen reader reads |
+| `widgets` | Each place where the field draws. A radio group has one widget for each button, and a field on several pages has one for each page. |
+| `additionalActions` | The scripts of the field, such as `keystroke`, `calculate` and `mouseDown`, see [JavaScript](javascript.md) |
+| `fieldReference` and `widgetReference` | The object references that `PdfEditor` uses |
 
-Some files write their widgets straight onto the page and never build the `/AcroForm` field
-tree. KitePDF reads those too, as Chrome does, so `formFields` is not empty for them.
+Some files put their widgets on the page and never build the `/AcroForm` field tree. KitePDF reads those widgets too, as Chrome does, so `formFields` is not empty for such a file.
 
-A field with no appearance of its own draws one from its entries. A rich text field draws its
-rich value: paragraphs and spans with their font family, size, weight, style, colour, alignment
-and underline, in the standard fonts, with `/DS` as the default style. A multi-line field wraps
-its value. A media annotation (`Screen`, `Movie` or `RichMedia`) draws its own appearance, usually
-a poster, and KitePDF plays nothing.
+A field with no appearance of its own draws one from its entries. A multi-line field wraps its value. A rich text field draws its rich value (paragraphs and spans with their font family, size, weight, style, color, alignment and underline) in the standard fonts, with `/DS` as the default style.
 
-To fill form fields, use the editor (see the [editing guide](editing.md)):
+To fill a field, use the editor:
 
 ```kotlin
 val editor = doc.edit()
-val field = doc.formField("employee.name")!!
-editor.setTextFieldValue(field, "Jane Doe")
-val updated = editor.saveIncremental()
+editor.setTextFieldValue(doc.formField("employee.name")!!, "Jane Doe")
+val filled: ByteArray = editor.saveIncremental()
 ```
+
+[Editing and redaction](editing.md) covers every kind of field. For a form that the reader fills in the viewer, with its scripts, see [JavaScript](javascript.md).
 
 ## Signatures
 
-`doc.signatures` lists the signed signature fields of a document. `validate` checks one
-signature against the file:
+`doc.signatures` lists the signed signature fields of a document. `validate` checks one signature against the file:
 
 ```kotlin
-val anchors = listOf(rootCertificateDer) // DER certificates that your app trusts
+// DER certificates that your app trusts
+val anchors = listOf(rootCertificateDer)
+
 for (signature in doc.signatures) {
     val result = signature.validate(anchors)
-    println("${signature.field.fullyQualifiedName}: ${result.status}, signed by ${result.signer?.commonName}")
-    if (result.isModifiedAfterSigning) println("The file changed after this signature.")
+    println("${signature.field.fullyQualifiedName}: ${result.status}")
+    println("Signed by ${result.signer?.commonName}")
+    if (result.isModifiedAfterSigning) println("The file changed after this signature")
 }
 ```
 
-`validate` hashes almost the whole file, so call it off the main thread.
+`validate` calculates the hash of almost the whole file, so call it off the main thread.
 
 | Status | Meaning |
 | --- | --- |
 | `Valid` | The signature matches the signed bytes and the signer's certificate. |
-| `DigestMismatch` | The signed bytes changed after signing. |
-| `Invalid` | The signature does not match the signer's certificate. |
-| `Unsupported` | The signature uses an algorithm that KitePDF does not check. |
-| `Malformed` | The byte range, the signature or its certificates cannot be read. |
+| `DigestMismatch` | The signed bytes changed after the signature. |
+| `Invalid` | The signature does not match the signer's certificate, or its signed attributes name a different certificate. |
+| `Unsupported` | The signature uses an algorithm or an encoding that KitePDF does not check. |
+| `Malformed` | KitePDF cannot read the byte range, the signature or its certificates. |
 
 The result also gives:
 
-- `signer` and `chain`: the signer's certificate, then each issuer that KitePDF finds in the
-  signature, in the document security store (`/DSS`) or in your trust anchors. KitePDF checks
-  the signature of each link.
-- `isTrusted`: true when the status is `Valid` and the chain contains one of your trust anchors.
-- `isModifiedAfterSigning`: true when the file holds bytes that the signature does not cover.
-  Usually a revision was appended after signing. That can be a permitted change, such as a
-  second signature or a filled field.
-- `signedTime`: the time inside the signed data. The signer states it, or for a document
-  timestamp, the timestamp authority states it.
+- `signer` and `chain`: the signer's certificate, then each issuer that KitePDF finds in the signature, in the document security store (`/DSS`) or in your trust anchors. KitePDF checks the signature of each link in the chain.
+- `isTrusted`: true when the status is `Valid` and the chain has one of your trust anchors.
+- `isModifiedAfterSigning`: true when the file has bytes that the signature does not cover. Usually a revision came after the signature. That can be a permitted change, such as a second signature or a filled field.
+- `signedTime`: the time in the signed data. The signer gives it, or for a document timestamp, the timestamp authority gives it.
 
-Each certificate of the chain has a `revocation`: `Good`, `Revoked` (with `revokedAt`) or
-`Unknown`. KitePDF reads the CRLs and OCSP responses that the document carries: in its
-document security store, in the signature's revocation field, and in Acrobat's
-`adbe-revocationInfoArchival` attribute. Data that you fetched yourself goes in as well:
+!!! warning
+    KitePDF does not check the validity dates of the certificates. `notBefore` and `notAfter` give the dates, so check them yourself.
+
+Each certificate of the chain has a `revocation`: `Good`, `Revoked` (with `revokedAt`) or `Unknown`. KitePDF reads the CRLs and OCSP responses that the document has: in its document security store, in the revocation field of the signature, and in Acrobat's `adbe-revocationInfoArchival` attribute. You can add data that you got yourself:
 
 ```kotlin
 val result = signature.validate(anchors, revocationData = listOf(crlDer, ocspResponseDer))
-if (result.signer?.revocation == PdfRevocation.Revoked) println("Revoked on ${result.signer?.revokedAt}")
+if (result.signer?.revocation == PdfRevocation.Revoked) {
+    println("Revoked on ${result.signer?.revokedAt}")
+}
 ```
 
-Only data that the certificate's issuer signed counts, or an OCSP responder that the issuer
-delegated to. A root has no issuer, so its revocation stays `Unknown`. KitePDF fetches nothing
-from the network.
+KitePDF uses only data that the certificate's issuer signed, or that an OCSP responder signed for the issuer. A root certificate has no issuer, so its revocation stays `Unknown`. KitePDF gets nothing from the network.
 
-KitePDF checks these encodings: `adbe.pkcs7.detached`, `ETSI.CAdES.detached`,
-`adbe.pkcs7.sha1`, `adbe.x509.rsa_sha1` and document timestamps (`ETSI.RFC3161`). It checks
-RSA (PKCS #1 v1.5 and PSS) and ECDSA on the P-256, P-384 and P-521 curves, with SHA-1,
-SHA-256, SHA-384 and SHA-512. The byte range must skip exactly the signature's own `/Contents`
-string, so content slipped into that gap makes the signature `Malformed`. When a CAdES
-signature names its certificate in a signed attribute, that certificate must be the one that
-signed.
+KitePDF checks these encodings: `adbe.pkcs7.detached`, `ETSI.CAdES.detached`, `adbe.pkcs7.sha1`, `adbe.x509.rsa_sha1` and document timestamps (`ETSI.RFC3161`). It checks RSA (PKCS #1 v1.5 and PSS) and ECDSA on the P-256, P-384 and P-521 curves, with SHA-1, SHA-256, SHA-384 and SHA-512.
 
-When a revision was appended after signing, `changes` lists what it changed, and
-`areChangesPermitted` says whether every change is allowed:
+The byte range must skip exactly the signature's own `/Contents` string. Content in that gap makes the signature `Malformed`. When a CAdES signature names its certificate in a signed attribute, that certificate must be the one that signed.
+
+When a revision came after the signature, `changes` lists what it changed, and `areChangesPermitted` tells you whether every change is allowed:
 
 ```kotlin
 for (change in result.changes.orEmpty()) {
-    println("${change.subject}: ${if (change.isPermitted) "permitted" else "not permitted"}")
+    val verdict = if (change.isPermitted) "permitted" else "not permitted"
+    println("${change.subject}: $verdict")
 }
 ```
 
-A certification signature sets what may change (`certificationLevel`, ISO 32000-1,
-12.8.2.2): level 1 allows nothing, level 2 allows filling in form fields and signing, and
-level 3 also allows annotations. Without a certification signature, the permissions of level 3
-apply, as Acrobat applies them. A lock on the signature field (`/Lock`) takes the fields it
-names out of what may be filled in. The document security store may always grow, and a
-document timestamp may always be added, as long-term validation does. Any other change, such as
-new page content or a new form field, is never permitted. `changes` is null when KitePDF cannot
-read the signed revision to compare it.
+A certification signature sets what may change (`certificationLevel`, ISO 32000-1, 12.8.2.2):
 
-KitePDF does not check the validity dates of the certificates (`notBefore` and `notAfter`
-give them). `name`, `reason`, `location` and `signingTime` are what the signing
-application wrote. When `isModifiedAfterSigning` is true, a later revision can have replaced
-them.
+- Level 1 allows no change.
+- Level 2 allows filling in form fields and signing.
+- Level 3 also allows annotations.
 
-## Advanced
+Without a certification signature, the rules of level 3 apply, as in Acrobat. A lock on the signature field (`/Lock`) removes the fields that it names from the fields that may change. The document security store may always grow, and a document timestamp may always come after, as long-term validation needs. Any other change (such as new page content or a new form field) is never permitted. `changes` is null when KitePDF cannot read the signed revision to compare it.
 
-### Page Labels
+`name`, `reason`, `location` and `signingTime` are what the signing app wrote. When `isModifiedAfterSigning` is true, a later revision can have replaced them.
 
-Access formatted page labels (e.g. "i", "ii", "1", "A-1"):
+## Other document properties
 
 ```kotlin
-for (page in doc.pages) {
-    println("Label: ${page.label}")  // "1", "i", "A-1", etc.
-}
-```
+// How the file asks a viewer to show it
+val layout = doc.pageLayout
+val mode = doc.pageMode
+val preferences = doc.viewerPreferences
 
-Falls back to one-based page index if `/PageLabels` is not defined.
+// The language of the document, as a BCP 47 tag such as "en-US", or null
+val language = doc.language
 
-### Viewer Preferences
-
-Access document viewer hints (single page / two-page layout, hide menus, etc.):
-
-```kotlin
-val prefs = doc.viewerPreferences
-val layout = doc.pageLayout        // SinglePage, TwoPageLeft, TwoPageRight, etc.
-val mode = doc.pageMode            // UseNone, UseOutlines, UseThumbs, UseOC, etc.
-```
-
-### Article Threads
-
-Reading-order sequences for multi-column layouts:
-
-```kotlin
+// Articles: the reading order of a layout with columns
 for (thread in doc.articleThreads) {
-    println("Thread with ${thread.beads.size} beads")
+    println("${thread.title}: ${thread.beads.size} parts")
 }
-```
 
-### Attachments
-
-Embedded files supplementary to the document:
-
-```kotlin
+// Files inside the PDF
 for (attachment in doc.attachments) {
     println("${attachment.filename}: ${attachment.size} bytes")
+    val content: ByteArray = attachment.bytes
 }
 ```
 
-### Language
+`doc.optionalContent` lists the layers of a document (optional content groups) with their names and their default visibility. KitePDF draws each layer as the default configuration of the file says, and you cannot change that visibility.
 
-Document language (BCP 47 tag):
+## Tagged PDF and reading order
 
-```kotlin
-println("Language: ${doc.language}")  // "en-US", "fr-CA", null
-```
+A tagged PDF has a structure tree that names its headings, paragraphs, lists, tables and figures. `doc.markInfo?.marked` is true for such a file.
 
-### Optional Content / Layers
-
-Visibility configuration for optional content (layers):
-
-```kotlin
-if (doc.optionalContent != null) {
-    println("This PDF has layers")
-}
-```
-
-### Tagged PDF / Accessibility
-
-Metadata for tagged PDFs (content structure for accessibility):
-
-```kotlin
-if (doc.markInfo != null) {
-    println("This PDF is tagged for accessibility")
-}
-```
-
-`readingOrder()` gives a page's content in the order a screen reader says it,
-each item with its role. It is the same call and the same `KiteReadingItem` as
-on an EPUB page, so one loop reads both formats:
+`readingOrder()` gives the content of a page in the order that a screen reader reads it, each item with its role. An EPUB page gives the same `KiteReadingItem`, so one loop reads both formats:
 
 ```kotlin
 for (item in page.readingOrder()) {
     when (item.role) {
         KiteRole.HEADING -> speakHeading(item.text, item.headingLevel)
-        KiteRole.IMAGE -> describe(item.text)          // the /Alt text
+        // A figure gives its /Alt text
+        KiteRole.IMAGE -> describe(item.text)
         else -> speak(item.text)
     }
 }
 ```
 
-A tagged page follows its structure tree, not the order the content draws in.
-Each paragraph, heading, list item, table cell, caption and figure is one item,
-and the role map turns a custom type into a standard one. `sourceType` keeps the
-type the file names, such as `Footnote`, and `language` the nearest `/Lang`.
-Artifacts, such as running heads and page numbers, and content that no element
-names stay out. Content that a form XObject draws inside a tagged sequence of
-the page belongs to that sequence. A page without tagged content gives its text
-blocks in layout order.
+A tagged page follows its structure tree, not the order in which its content draws:
 
-`bounds` gives each item's place on the page in display space: points from the
-top-left corner, y down. A text item takes the box of its words. A figure takes
-the `/BBox` of its layout attributes, or else the box of what it paints inside
-its clip. `bounds` is null when neither exists.
+- Each paragraph, heading, list item, table cell, caption and figure is one item.
+- The role map turns a custom type into a standard one. `sourceType` keeps the type that the file names, such as `Footnote`, and `language` gives the nearest `/Lang`.
+- Artifacts (such as running heads and page numbers) and content that no element names stay out.
+- Content that a form XObject draws inside a tagged sequence of the page belongs to that sequence.
 
-## Installation
+A page without tags gives its text blocks in layout order.
 
-Add KitePDF to your `build.gradle.kts`:
+`bounds` gives the place of each item on the page, in display space. A text item has the box of its words. A figure has the `/BBox` of its layout attributes, or else the box of what it paints inside its clip. `bounds` is null when neither exists.
 
-=== "Kotlin (KMP)"
+## Next
 
-    ```kotlin
-    dependencies {
-        commonMainImplementation("io.github.yuroyami:kitepdf:0.13.0")
-    }
-    ```
-
-=== "Android / JVM"
-
-    ```kotlin
-    dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.13.0")
-    }
-    ```
-
-Next: [Editing PDFs](editing.md): modify documents, fill forms, and save changes.
+[Editing and redaction](editing.md) shows how to fill forms, stamp and change pages, redact content and save the result.

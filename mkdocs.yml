@@ -87,21 +87,21 @@ extra:
 
 nav:
   - Home: index.md
-  - Getting Started: getting-started.md
+  - Getting started: getting-started.md
   - Guides:
       - Loading a document: loading.md
       - Compose viewer: compose-viewer.md
       - Reading PDFs: reading.md
       - Reading EPUBs: epub.md
-      - Book audio and video: media.md
+      - EPUB audio and video: media.md
       - XPS and OpenXPS: xps.md
       - Creating PDFs: writing.md
-      - Editing & redaction: editing.md
+      - Editing and redaction: editing.md
       - Headless rendering: rendering.md
       - JavaScript: javascript.md
   - Reference:
       - Recipes: recipes.md
       - Platform support: platforms.md
       - EPUB conformance: epub-conformance.md
-      - About & status: about.md
+      - About and status: about.md
       - API reference ▸: https://yuroyami.github.io/KitePDF/api/

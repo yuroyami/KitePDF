@@ -1,170 +1,73 @@
 # KitePDF
 
-**One pure-Kotlin document engine for Kotlin Multiplatform.** Read, create, edit and render PDFs, and read EPUBs, from `commonMain`, with the exact same code on every target: Android, iOS, desktop, web and Kotlin/Native.
+A pure-Kotlin document engine for Kotlin Multiplatform. You can read, create, edit and render PDF files, read and render EPUB 2 and 3 books (audio and video included), and run the JavaScript of both formats, all from `commonMain`. KitePDF can also read and render CBZ comics, SVG images, and XPS or OpenXPS documents.
 
 ```kotlin
-// commonMain. Nothing platform-specific. This runs everywhere Kotlin runs.
 val doc = PdfDocument.open(bytes)
 
-val text = doc.pages[0].extractText()       // read
-doc.edit().apply {                          // edit
+// Read
+val text = doc.pages[0].extractText()
+
+// Edit
+val redacted = doc.edit().apply {
     redactRegion(doc.pages[0], KiteRectangle(72.0, 700.0, 320.0, 720.0))
 }.saveRewritten()
 
-val fresh = PdfBuilder()                     // create
-    .page { text(StandardFont.Helvetica, 24.0, x = 72.0, y = 720.0, "Hello, world!") }
+// Create
+val fresh = PdfBuilder()
+    .page { text(StandardFont.Helvetica, 24.0, 72.0, 720.0, "Hello, world!") }
     .build()
 ```
 
 <div class="grid cards" markdown>
 
-- :material-rocket-launch: **New here?** [Get started in 5 minutes](getting-started.md)
-- :material-book-open-variant: **Reading EPUBs too?** The same core paginates and renders [reflowable EPUB 2/3 books](epub.md)
-- :material-code-braces: **Browse the guides** below, or jump to the [API reference](https://yuroyami.github.io/KitePDF/api/)
+- :material-rocket-launch: **New here?** [Get started](getting-started.md)
+- :material-book-open-variant: **Reading EPUBs?** [Reflowable EPUB 2 and 3](epub.md)
+- :material-code-braces: **Looking for a signature?** [API reference](https://yuroyami.github.io/KitePDF/api/)
 
 </div>
 
 ## Why KitePDF
 
-Most "Kotlin PDF libraries" are thin `expect`/`actual` wrappers around the platform's own engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser, PDFBox on the JVM. You then depend on four engines. Each one has its own bugs and its own feature set.
+KitePDF is a single engine written in Kotlin from the parser up. It doesn't rely on any platform PDF library, web view, JNI or native binary, which is why it behaves identically across Android, iOS, the desktop JVM, macOS, Linux, Windows and the web.
 
-KitePDF is a single standalone engine, written in Kotlin and almost entirely in common code. Parser, renderer, writer, editor, encryption and fonts are all included, and `kitepdf-core` carries just three `expect` declarations (a mutex, a thread id, and the deflate/inflate hook). Write your PDF code once in `commonMain` and the same implementation runs on every target.
+That means the logic lives in `commonMain` instead of being handed off to a different engine on each platform through expect/actual, which in many cases leads to inconsistent behavior.
 
-Drawing to a screen is the only job that needs a platform. KitePDF keeps that job in separate artifacts, so the engine itself stays portable.
+| Format | View in Compose | Render to image | Edit | Create | JavaScript |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| **PDF** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **EPUB 2 and 3** | ✓ | ✓ | Not yet | Not yet | ✓ |
+| **CBZ** | ✓ | ✓ | Not yet | Not yet | n/a |
+| **SVG** | ✓ | ✓ | Not yet | Not yet | Not yet |
+| **XPS and OpenXPS** | ✓ | ✓ | Not yet | Not yet | n/a |
 
 ## Install
 
-The engine is a single dependency. Add it to `commonMain` and you have everything except drawing to a screen:
-
 ```kotlin
-kotlin {
-    sourceSets {
-        commonMain.dependencies {
-            implementation("io.github.yuroyami:kitepdf:0.13.0")
-        }
-    }
+commonMain.dependencies {
+    implementation("io.github.yuroyami:kitepdf:0.13.0")
 }
 ```
 
-Its runtime dependencies are `kotlin-stdlib`, the pure-Kotlin ImageKodec engine, and `kotlinx-coroutines-core`, which fetches the resources an EPUB names by URL. It runs on every target listed under [Platform support](platforms.md).
-
-Drawing a page to the screen is the one job that needs a platform, so the rendering bindings are separate, opt-in artifacts. Add the one that matches how you draw:
-
-| Artifact | Add it when you want |
-|---|---|
-| `io.github.yuroyami:kitepdf` | The engine: read, write and edit PDFs, **and** read EPUBs. Pure Kotlin (stdlib, ImageKodec and kotlinx.coroutines). |
-| `io.github.yuroyami:kitepdf-compose-viewer` | A Compose `KiteDocView` for PDF and EPUB, drawn straight into a `DrawScope`. |
-| `io.github.yuroyami:kitepdf-net` | Optional. Opens a document straight from a URL; the only artifact that pulls in Ktor. |
-| `io.github.yuroyami:kitepdf-media` | Optional. Plays the audio and video of an EPUB in `KiteDocView`; the only artifact that pulls in a player and FFmpeg. |
-| `io.github.yuroyami:kitepdf-native-renderer` | Headless page → image through the platform canvas (AWT, CoreGraphics, `android.graphics`, Canvas2D). |
-| `io.github.yuroyami:kitepdf-skia-renderer` | Headless page → image through Skia / Skiko: one API on JVM, Android, Apple, Linux and web. |
-
-The examples use `0.13.0` for every artifact. For a single format, add `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` on its own. The `kitepdf` umbrella contains all five. See [Show it on screen](#show-it-on-screen) for each binding in use.
+The `kitepdf` artifact holds every format. [Getting started](getting-started.md) lists the optional artifacts (the Compose viewer, the headless renderers, JavaScript, media playback and network loading) with what each one needs.
 
 !!! note "Not using Kotlin Multiplatform?"
-    The same artifact works in a plain Android or JVM project. Add `io.github.yuroyami:kitepdf:0.13.0` to your normal `dependencies { }` block.
-
-## What you can do
-
-Everything in this section is pure common code from the `kitepdf` engine.
-
-### Read
-
-```kotlin
-val doc = PdfDocument.open(bytes)
-
-doc.pages[0].extractText()      // text, or structured layout with positions
-doc.pageCount                   // metadata, outlines, annotations, form fields...
-
-// Encrypted? Pass the password.
-val locked = PdfDocument.open(bytes, password = "secret".encodeToByteArray())
-require(locked.isAuthenticated)
-```
-
-Text extraction (plain and structured), document metadata and XMP, outlines and bookmarks, annotations, form fields, encryption and permissions, page labels, optional-content layers, attachments and more. See **[Reading PDFs](reading.md)**.
-
-### Create and edit
-
-```kotlin
-// Fill a form field and save (append-only)
-doc.edit().apply {
-    setTextFieldValue(doc.formField("Name")!!, "Jane Doe")
-}.saveIncremental()
-
-// Truly redact a region (the underlying content is removed, not covered)
-doc.edit().apply {
-    redactRegion(doc.pages[0], KiteRectangle(72.0, 700.0, 320.0, 720.0))
-}.saveRewritten()
-
-// Build a new PDF from scratch
-PdfBuilder()
-    .page {
-        text(StandardFont.HelveticaBold, 24.0, x = 72.0, y = 720.0, "Invoice")
-        setFillRgb(0.9, 0.95, 1.0); rectangle(72.0, 600.0, 200.0, 80.0); fill()
-    }
-    .build()
-```
-
-Build from scratch with a content DSL, fill forms, stamp and watermark, and redact for real. See **[Creating PDFs](writing.md)** and **[Editing & redaction](editing.md)**.
-
-## Show it on screen
-
-The engine is headless. Rendering is the one job that needs a platform, so it lives in separate, optional artifacts.
-
-### Compose Multiplatform: `kitepdf-compose-viewer`
-
-A PDF page is just another composable, drawn straight into a Compose `DrawScope`.
-
-```kotlin
-implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
-```
-
-```kotlin
-val state = rememberKiteDocViewState(doc)
-
-KiteDocView(
-    state = state,
-    layout = KiteDocLayout.Paged(Orientation.Horizontal),   // or Continuous / SinglePage
-    zoomSpec = KiteZoomSpec(maxZoom = 6f),                // pinch, double-tap, pan
-    renderSpec = KiteRenderSpec.Rasterized(),            // or Vectorized()
-    overlay = { KiteNavigationControls(it, Modifier.align(Alignment.BottomCenter)) },
-)
-KitePageIndicator(state)
-KiteThumbnailStrip(state)
-```
-
-See **[the Compose viewer guide](compose-viewer.md)**.
-
-### Headless: `kitepdf-native-renderer` and `kitepdf-skia-renderer`
-
-For servers, CI and thumbnails, render a page straight to image bytes with no UI:
-
-```kotlin
-implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")  // or kitepdf-skia-renderer
-```
-
-```kotlin
-val png = AwtPdfRasterizer.encodeToPng(doc.pages[0], scale = 2.0)
-```
-
-See **[Headless rendering](rendering.md)**.
+    The same artifacts work in a plain Android or JVM project. Add them to your normal `dependencies { }` block.
 
 ## Guides
 
-| | |
-|---|---|
-| **[Getting started](getting-started.md)** | Open your first PDF and display it, step by step. |
-| **[Compose viewer](compose-viewer.md)** | `KiteDocView`: layouts, zoom, render modes, navigation, export. |
-| **[Reading PDFs](reading.md)** | Text, metadata, outlines, annotations, forms, encryption. |
-| **[Reading EPUBs](epub.md)** | Reflowable EPUB 2/3: pagination, reader settings, search, typography. |
-| **[Creating PDFs](writing.md)** | Build from scratch with the content DSL. |
-| **[Editing & redaction](editing.md)** | Fill forms, stamp pages, redact, save. |
-| **[Headless rendering](rendering.md)** | Page to PNG / Bitmap without a UI. |
-| **[Recipes](recipes.md)** | Copy-paste patterns for common tasks. |
-| **[Platform support](platforms.md)** | What runs where, and why. |
-
-## Status
-
-KitePDF is pre-1.0 and actively developed. Reading, text extraction, metadata, outlines, annotations, forms, encrypted documents, the Compose viewer, headless rendering, editing, redaction, signing preparation, signature validation, PDF creation, and the supported JBIG2/JPEG 2000 profiles all work today. Less common form widgets, advanced color management, broader image-codec profiles, and more document handlers are on the way.
-
-If a PDF renders incorrectly, [open an issue](https://github.com/yuroyami/KitePDF/issues) with the file attached. Every rendering fix ships with a regression test.
+| Guide | What it covers |
+| --- | --- |
+| [Getting started](getting-started.md) | Install, open a first document and show it |
+| [Loading a document](loading.md) | Every source KitePDF can open, and how it detects the format |
+| [Compose viewer](compose-viewer.md) | `KiteDocView`: layouts, zoom, render modes, navigation, export |
+| [Reading PDFs](reading.md) | Text, metadata, outlines, annotations, forms, encryption |
+| [Reading EPUBs](epub.md) | Pagination, reader settings, search, typography |
+| [EPUB audio and video](media.md) | Playback of `<audio>`, `<video>` and media overlays |
+| [XPS and OpenXPS](xps.md) | Fixed-layout XPS documents |
+| [Creating PDFs](writing.md) | The builder DSL, fonts and images |
+| [Editing and redaction](editing.md) | Forms, stamps, page changes, redaction, saving |
+| [Headless rendering](rendering.md) | A page to PNG, `Bitmap` or `NSData` without a UI |
+| [JavaScript](javascript.md) | The scripts of PDF forms and EPUB books |
+| [Recipes](recipes.md) | Short patterns for common tasks |
+| [Platform support](platforms.md) | What runs where |

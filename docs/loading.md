@@ -1,86 +1,83 @@
 # Loading a document
 
-Every source ends the same way: a `ByteArray` handed to a handler. Bytes are read whole, so a file, a stream and a download all become one array in memory before parsing starts. Everything on this page is a thin adapter around that.
-
-Reading the bytes is not what makes a big book slow to open; parsing and laying out its chapters is, and both of those are incremental. `KiteDoc.open` on a 9.9 MB EPUB takes well under a millisecond: it reads the container, the OPF and the table of contents and stops. See [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position).
+Every source ends as a `ByteArray` that a format reader parses, so a file, a stream and a download all sit in memory as one array before parsing starts. Opening a big book is still quick, because KitePDF reads only the container, the package file and the table of contents at first, and lays out each chapter when the reader gets to it (see [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position)).
 
 ## When you know the format
 
-Call the handler directly. This has always been the shortest route and it does not need the umbrella artifact.
+Call the reader of that format directly. You don't need the `kitepdf` umbrella artifact for this.
 
 ```kotlin
-val pdf  = PdfDocument.open(bytes)                // throws on a bad file
-val book = EpubDocument.open(bytes)               // same, with EpubFormatException
-
-val maybePdf  = PdfDocument.openOrNull(bytes)     // null instead of a throw
-val maybeBook = EpubDocument.openOrNull(bytes)
+// Each one throws on a file it cannot read
+val pdf = PdfDocument.open(bytes)
+val book = EpubDocument.open(bytes)
 ```
 
 ## When you don't
 
-`KiteDoc` reads the format out of the bytes and gives you a `KiteDocument`, which is what the Compose viewer and the shared search, selection and outline APIs take.
+`KiteDoc` detects the format from the bytes and gives you a `KiteDocument`, which is what the Compose viewer and the shared search, selection and outline APIs take.
 
 ```kotlin
 import io.github.yuroyami.kitepdf.document.KiteDoc
 
-val doc = KiteDoc.open(bytes)          // whichever supported format it is
+val doc = KiteDoc.open(bytes)
 KiteDocView(doc, Modifier.fillMaxSize())
 ```
 
-Check first without opening anything:
+You can also check the format without opening anything:
 
 ```kotlin
 when (KiteDoc.formatOf(bytes)) {
-    KiteDocFormat.Pdf  -> /* ... */
-    KiteDocFormat.Epub -> /* ... */
-    KiteDocFormat.Cbz  -> /* a comic archive */
-    KiteDocFormat.Svg  -> /* one vector page */
-    KiteDocFormat.Xps  -> /* XPS or OpenXPS */
-    null               -> /* none of them */
+    KiteDocFormat.Pdf -> { }
+    KiteDocFormat.Epub -> { }
+    KiteDocFormat.Cbz -> { }
+    KiteDocFormat.Svg -> { }
+    KiteDocFormat.Xps -> { }
+    null -> { }
 }
 ```
 
-`formatOf` checks PDF, EPUB and SVG headers and ZIP entries. XPS detection also reads the package relationships and fixed document sequence, before the CBZ image-entry fallback. See [XPS and OpenXPS](xps.md).
-
-| Format | What it recognises |
+| Format | KitePDF detects it when |
 | --- | --- |
-| PDF | a `%PDF-` marker in the first kilobyte, leading junk allowed |
-| EPUB | a ZIP whose first entry is the OCF `mimetype`, or that carries `META-INF/container.xml` |
-| CBZ | any other ZIP whose real entries are all images |
-| XPS / OpenXPS | an OPC fixed document sequence, found through package relationships or recovery paths |
-| SVG | an `<svg>` element in the first half kilobyte, checked last |
+| PDF | the first kilobyte holds a `%PDF-` marker (bytes before the marker are allowed) |
+| EPUB | the file is a ZIP whose first entry is the OCF `mimetype`, or a ZIP that holds `META-INF/container.xml` |
+| XPS and OpenXPS | the file is a ZIP whose package relationships lead to a fixed document sequence |
+| CBZ | the file is any other ZIP whose entries are all images (hidden files and `ComicInfo.xml` do not count) |
+| SVG | the first 512 bytes hold an `<svg>` element |
+
+KitePDF checks a ZIP for EPUB, then XPS, then CBZ. It checks any other file for PDF, then SVG. When no format matches, `KiteDoc.open` still tries the bytes as a damaged PDF, because the PDF reader can rebuild a file that lost its header. [XPS and OpenXPS](xps.md) explains how an XPS package is found.
 
 !!! note "Which artifact"
-    `KiteDoc` lives in `io.github.yuroyami:kitepdf`, the umbrella, because it is the only artifact that sees every handler. Depending on `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` alone still gets you that handler's own entry points.
+    `KiteDoc` is in the `kitepdf` umbrella artifact, because only that artifact sees every format. With `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` alone, you open the document through the reader of that format.
 
-Formats take their own extras, and each ignores the others':
+Each format takes its own options and ignores the options of the others:
 
 ```kotlin
-KiteDoc.open(bytes, password = "secret")                       // PDF encryption
+// The password of an encrypted PDF
+KiteDoc.open(bytes, password = "secret")
+
+// The layout settings of an EPUB
 KiteDoc.open(bytes, epubSettings = EpubSettings(fontSize = 15.0))
 ```
 
 ## Every source
 
-| Source | Call | Available on |
+| Source | Call | Platforms |
 | --- | --- | --- |
-| Byte array | `KiteDoc.open(bytes)` | everywhere |
-| Base64 or `data:` URI | `KiteDoc.openBase64(text)` | everywhere |
-| File path | `KiteDoc.openFile(path)` | JVM, Android, Apple, Linux, Windows, Android NDK |
+| Byte array | `KiteDoc.open(bytes)` | all |
+| Base64 text or a `data:` URI | `KiteDoc.openBase64(text)` | all |
+| File path | `KiteDoc.openFile(path)` | JVM, Android, Apple, Linux, Windows, Android Native |
 | `java.io.File` | `KiteDoc.open(file)` | JVM, Android |
 | `InputStream` | `KiteDoc.open(stream)` | JVM, Android |
-| Android content Uri | `KiteDoc.open(context, uri)` | Android |
+| Android content `Uri` | `KiteDoc.open(context, uri)` | Android |
 | `NSData` | `KiteDoc.open(data)` | Apple |
 | `NSURL` | `KiteDoc.open(url)` | Apple |
-| Remote URL | `KiteDoc.openUrl(url, client)` | `kitepdf-net` |
+| Remote URL | `KiteDoc.openUrl(url, client)` | with `kitepdf-net` |
 
-Every one of them has an `...OrNull` twin where a throw is the wrong shape for your call site.
-
-Not available: file paths on JS and Wasm, because browsers have no filesystem. Read the bytes with the platform's own API (a `File` from an `<input>`, `fetch`, OPFS) and use `KiteDoc.open(bytes)`.
+A browser has no file system, so JS and Wasm have no file path call. Read the bytes with the browser's own API (a `File` from an `<input>`, `fetch` or OPFS) and pass them to `KiteDoc.open(bytes)`.
 
 ### Base64
 
-Takes a bare payload or a whole `;base64` data URI, standard or URL-safe alphabet, padded or not, and ignores whitespace. Malformed padding and truncated/non-canonical tails are rejected instead of being silently decoded. That covers a JSON API response, an `<embed>` attribute and a clipboard paste.
+`openBase64` takes a bare payload or a whole `data:` URI, in the standard or the URL-safe alphabet, with or without padding, and it ignores line breaks. That covers what a JSON API, an `<embed>` tag or a clipboard paste hands you.
 
 ```kotlin
 KiteDoc.openBase64("JVBERi0xLjcKJc...")
@@ -89,7 +86,7 @@ KiteDoc.openBase64("data:application/pdf;base64,JVBERi0xLjcKJc...")
 
 ### Android file picker
 
-`ACTION_OPEN_DOCUMENT` hands back a `content://` Uri, which has no file path. Read it through the content resolver:
+`ACTION_OPEN_DOCUMENT` gives back a `content://` Uri, which has no file path, so KitePDF reads it through the content resolver:
 
 ```kotlin
 val pick = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -99,77 +96,56 @@ val pick = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u
 pick.launch(arrayOf("application/pdf", "application/epub+zip"))
 ```
 
-It reads the whole document into memory, so keep it off the main thread for anything large.
+!!! tip
+    This call reads the whole document into memory. Call it off the main thread for a large file.
 
 ### Remote URL
 
-Networking lives in a separate artifact. The engine depends on `kotlin-stdlib`, ImageKodec and `kotlinx-coroutines-core` only, and `kitepdf-net` is the one place Ktor enters the build, so you pay for it only if you use it.
+Network loading is in its own artifact, so Ktor enters your build only when you add `kitepdf-net`.
+
+!!! warning
+    `kitepdf-net` needs a Ktor client engine. Without one, the build fails.
 
 ```kotlin
 dependencies {
     implementation("io.github.yuroyami:kitepdf-net:0.13.0")
-    implementation("io.ktor:ktor-client-cio:3.6.0")   // or OkHttp, Darwin, Js
+
+    // Or the OkHttp, Darwin or Js engine
+    implementation("io.ktor:ktor-client-cio:3.6.0")
 }
 ```
 
 ```kotlin
 import io.github.yuroyami.kitepdf.net.openUrl
 
-val client = HttpClient()                    // your engine, your config
+// Your engine, with your own configuration
+val client = HttpClient()
 val doc = KiteDoc.openUrl("https://example.com/book.epub", client)
 ```
 
-Downloads are streamed and capped at 128 MiB by default, because KitePDF holds
-the downloaded bytes and document model in memory. Set a smaller application
-limit, or deliberately raise it, through the overload that takes `maxBytes`:
+KitePDF keeps the whole download in memory, so it stops a download at 128 MiB. You can set a lower or a higher limit with `maxBytes`, which KitePDF checks against both the `Content-Length` header and the bytes it receives:
 
 ```kotlin
 val doc = KiteDoc.openUrl(url, client, maxBytes = 32 * 1024 * 1024)
-val bytes = KiteDoc.downloadBytes(url, client, maxBytes = 32 * 1024 * 1024)
 ```
 
-The limit is enforced against both `Content-Length` and the bytes actually
-streamed. `openUrlOrNull` still propagates coroutine cancellation, so cancelling
-a screen or request does not leave the download running.
-
-The client is yours: KitePDF neither creates nor closes it, so timeouts, retries, auth and logging stay under your control. Per-request headers go in the trailing block. Failure messages redact URL user-info, query strings and fragments:
+The client stays yours (KitePDF neither creates nor closes it), which keeps timeouts, retries, authentication and logging under your control. Headers for one request go in the trailing block:
 
 ```kotlin
 KiteDoc.openUrl(url, client) { header("Authorization", "Bearer $token") }
 ```
 
-`downloadBytes(url, client)` gets you the raw body when you want to cache or hash it before deciding what to do.
+When you want the raw bytes (to cache or hash them first), `KiteDoc.downloadBytes(url, client)` gives you the body with the same limit. An error message never shows the user name, password, query or fragment of the URL, and cancelling the coroutine also stops the download.
 
-A book can also name images and fonts by URL. `EpubResourceFetcher(client)` fetches them on the same client, over `https` only and at most 16 MiB each, when you put it in the book's settings (see [Resources on the web](epub.md#resources-on-the-web)):
+A book can also name images and fonts by URL. `EpubResourceFetcher(client)` fetches them on the same client, over `https` only and up to 16 MiB each, once you put it in the book's settings (see [Resources on the web](epub.md#resources-on-the-web)):
 
 ```kotlin
 val settings = EpubSettings(resourceFetcher = EpubResourceFetcher(client))
 val doc = KiteDoc.openUrl("https://example.com/book.epub", client, epubSettings = settings)
 ```
 
-Ktor does not ship for `androidNative*` or `wasmWasi`, so neither does `kitepdf-net`. The engine artifacts still do.
+Ktor does not ship for Android Native or WASI, so `kitepdf-net` does not either.
 
-## Remembering where the reader was
+## Coming back to the same place
 
-`KiteDoc.open` gives you the document. Where the reader left off is a
-`KiteBookmark`, which survives a font size or page size change:
-
-```kotlin
-val state = rememberKiteDocViewState(doc, savedBookmark)
-val savedBookmark = state.currentBookmark()      // save this
-```
-
-Only the bookmark's chapter is parsed and laid out before the page appears. See
-**[Reading EPUBs](epub.md)** for the detail.
-
-## Re-flowing an EPUB after opening
-
-Page size and font size are layout inputs, not parse inputs. Change them without re-reading the file:
-
-```kotlin
-val bigger = book.withFontSize(16.0)
-val resized = book.withPageSize(600.0, 900.0)
-```
-
-The parse (unzip, OPF, CSS, fonts, TOC, and whichever chapters have been read
-already) is shared, so this only re-paginates.
+A `KiteBookmark` keeps the reading position, even when the font size, the page size or the margins change in between. [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position) shows how the viewer opens a book at a bookmark. [Changing settings without losing the place](epub.md#changing-settings-without-losing-the-place) shows how to lay out a book again at a new size, without reading the file again.

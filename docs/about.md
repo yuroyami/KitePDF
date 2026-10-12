@@ -1,59 +1,67 @@
 # About KitePDF
 
-**A pure-Kotlin document engine for every platform.** KitePDF is a standalone multiplatform library. It reads, views, edits and builds PDFs, and it reads reflowable EPUB 2/3 books. One Kotlin codebase covers Android, iOS, JVM, web and Kotlin/Native. There are no platform wrappers and no native binaries.
+KitePDF is a Kotlin Multiplatform library for documents. It reads and shows PDF, EPUB 2 and 3, CBZ, SVG, and XPS or OpenXPS. It also creates and edits PDF files.
 
 ## Design
 
-Most Kotlin PDF libraries are thin wrappers around a platform engine: `PdfRenderer` on Android, `PDFKit` on iOS, PDF.js in the browser. Each platform then behaves differently, and a bug can sit in any layer.
+Many Kotlin PDF libraries wrap the PDF engine of each platform: `PdfRenderer` on Android, PDFKit on iOS and PDF.js in the browser. Each platform then behaves differently, and a bug can come from any of these engines.
 
-KitePDF uses a single engine instead. The parser, renderer, editor, writer, crypto and fonts are written in Kotlin, and almost all of that code is common. `kitepdf-core` carries three `expect` declarations: a mutex, a thread id, and the deflate/inflate hook. Nothing else in the engine branches per platform. There is no JNI, no platform PDF engine underneath and no embedded web view.
+KitePDF has one engine for every platform:
 
-The Compose binding draws into a `DrawScope`. Pages therefore scroll, zoom and animate like any other composable, not like an embedded platform view.
+- The parser, the renderer, the editor, the writer, the cryptography and the font code are in Kotlin, and almost all of that code is common.
+- `kitepdf-core` has three `expect` declarations: a lock (`KiteLock`), a thread id (`currentThreadId`) and a hook for deflate compression (`PlatformFlate`).
+- The only other platform code opens a document from a file or from a platform type, such as an Android `Uri`.
+- The engine uses no JNI, no platform PDF engine and no web view.
 
-## Current status
+Two optional artifacts use native code:
 
-KitePDF is **pre-1.0**. These features work today:
+- `kitepdf-javascript` runs scripts with QuickJS, through KiteJS.
+- `kitepdf-media` plays audio and video with FFmpeg, through KitePlayer.
+
+The Compose viewer draws each page into a `DrawScope`. So the pages scroll, zoom and animate like any other composable.
+
+## What works
+
+KitePDF is not at version 1.0 yet, so its public API can change in a minor release. The release notes list each breaking change.
 
 | Area | What works |
 | --- | --- |
-| Viewing | Compose viewer with continuous and paged layouts, two-page spreads, RTL progression, pinch-zoom, pan, double-tap, text selection, search highlights, outline panels, link taps |
-| Text | Extraction, structured text with geometry, and engine-level search for both formats |
-| Formats | PDF, reflowable EPUB 2/3, CBZ comic archives, standalone SVG and XPS/OpenXPS, all opened by the same `KiteDoc.open` |
-| EPUB | Reflowable EPUB 2/3 on the same core: CSS cascade, embedded fonts (TTF, OTF, WOFF, WOFF2), hyphenation in more than 60 languages, CJK justification, ruby, vertical writing (both directions), floats, tables, absolute positioning, an accessibility reading order, reader settings |
+| Formats | PDF, EPUB 2 and 3, CBZ comic archives, SVG, and XPS or OpenXPS. `KiteDoc.open` opens each of them. |
+| Viewing | Continuous and paged layouts, two-page spreads, right-to-left page order, pinch zoom, pan, double-tap zoom, text selection, search highlights, an outline panel and link taps |
+| Text | Text extraction, structured text with positions, and search, for PDF and EPUB |
+| EPUB | Reflowable and fixed-layout books: the CSS cascade, embedded fonts (TTF, OTF, WOFF and WOFF2), hyphenation in more than 60 languages, CJK justification, ruby, vertical writing in both directions, floats, tables, absolute positioning, an accessible reading order and reader settings |
 | Forms | Read and fill text, checkbox, radio and choice fields |
-| Annotations | View and interact with highlights, links and comments |
-| Encryption | Open, authenticate, edit and create password-protected PDFs (AES-256/R6 on write) |
-| Editing and saving | Fill forms, stamp watermarks, redact (the content is removed, not covered), incremental save or full rebuild |
-| Building | Text with standard or custom embedded fonts, including subsetting, plus shapes, images and colors |
-| Image codecs | Supplied by ImageKodec, the shared pure-Kotlin codec engine: PNG, JPEG (baseline and progressive), GIF, BMP, JPEG 2000, JBIG2 and CCITT |
-| Colour | Device spaces, CalGray/CalRGB, Lab, Indexed, Separation/DeviceN, and grey, RGB and CMYK ICC profiles, matrix/TRC and lookup-table alike, through the rendering intent the document names. A CMYK output intent converts DeviceCMYK |
-| Signing scaffold | `/ByteRange` preparation and CMS embedding. The signing key and its cryptography stay in your application. |
-| Signature validation | CMS, CAdES and PKCS #1 signatures and document timestamps, with RSA and ECDSA. Reports the signer, the certificate chain, trust in your anchors, and changes made after signing. |
+| JavaScript | The scripts of PDF forms and EPUB books, with `kitepdf-javascript` |
+| Media | The audio and video of EPUB books and their media overlays, with `kitepdf-media` |
+| Encryption | Open, edit and create PDF files with a password. New encryption uses AES-256 (revision 6). |
+| Editing | Fill forms, stamp pages, change the page order, and redact content. A redaction removes the content, not only covers it. Save incrementally or rewrite the whole file. |
+| Creating | Text in the standard fonts or in embedded fonts (as a subset), shapes, images and colors |
+| Images | ImageKodec, a pure-Kotlin codec library, decodes PNG, JPEG, GIF, BMP, TIFF, WebP, AVIF, JPEG XL and JPEG 2000 images, and the JBIG2 and CCITT data of PDF files |
+| Color | Device color spaces, CalGray and CalRGB, Lab, Indexed, Separation and DeviceN. ICC profiles for gray, RGB and CMYK, with matrix and TRC or with lookup tables, through the rendering intent of the document. A CMYK output intent converts DeviceCMYK. |
+| Signing | `PdfSigner` prepares the signature field and the byte range, then embeds the CMS signature. Your app makes the signature with its own key. |
+| Signature validation | CMS, CAdES and PKCS #1 signatures and document timestamps, with RSA and ECDSA. The result gives the signer, the certificate chain, the trust in the anchors that you give, and the changes made after signing. |
 
-Planned:
+The README lists [a few limitations to know about](https://github.com/yuroyami/KitePDF#a-few-limitations-to-know-about). Missing features and known bugs are [open issues](https://github.com/yuroyami/KitePDF/issues).
 
-- Proofing RGB content through a CMYK output intent
-- Less common form widgets (media players)
+## Report a rendering problem
 
-Known limits are listed in the [README](https://github.com/yuroyami/KitePDF#limits).
-
-## Reporting a bad rendering
-
-If a PDF renders incorrectly in KitePDF, file an issue with the file attached. The project includes a [pixel-diff harness](https://github.com/yuroyami/KitePDF/blob/main/kitepdf-native-renderer/DIFFTEST.md) for the JVM/AWT backend, and every rendering fix lands with a regression test.
+If KitePDF renders a document wrong, [open an issue](https://github.com/yuroyami/KitePDF/issues/new) and attach the document.
 
 ## Contributing
 
-Contributions are welcome. Check the [GitHub repository](https://github.com/yuroyami/KitePDF) for open issues and the developer guide. Code changes, test additions and rendering fixes are especially valuable.
+Read [CONTRIBUTING.md](https://github.com/yuroyami/KitePDF/blob/main/CONTRIBUTING.md) before you open a pull request. It has the rules of the project and the checks to run before each commit.
 
 ## License
 
-KitePDF is licensed under the **Apache License 2.0**. You can use, modify and distribute it in commercial and open-source projects.
+KitePDF uses the Apache License 2.0. You can use, change and distribute it in commercial and open-source projects.
 
 KitePDF contains no third-party source code. It bundles third-party data, each under its own license:
 
-- the URW base 35 fonts that draw the standard 14 fonts, under the SIL Open Font License 1.1;
-- PDFium's table for DeviceCMYK, under the BSD-style license of PDFium;
-- Adobe's glyph lists and CJK CMaps, under BSD-3-Clause;
-- hyphenation patterns from the hyph-utf8 project, each under the license in its file header.
+- The URW base 35 fonts, which draw the 14 standard fonts, under the SIL Open Font License 1.1.
+- The DeviceCMYK table of PDFium, under the BSD-style license of PDFium.
+- The Adobe Glyph List, under the terms of Adobe.
+- The ZapfDingbats glyph list and the CJK CMaps of Adobe, under BSD-3-Clause.
+- The encoding indexes of the WHATWG Encoding Standard, under BSD-3-Clause.
+- The hyphenation patterns of the hyph-utf8 project, each under the license in its file header.
 
-The NOTICE file in the repository lists every piece with its source.
+The [NOTICE](https://github.com/yuroyami/KitePDF/blob/main/NOTICE) file lists each piece with its source.

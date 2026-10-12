@@ -1,11 +1,8 @@
 # JavaScript
 
-PDF files carry JavaScript: a form that computes a total, a field that formats what is typed, a
-button that hides another field, a link that runs a script. EPUB chapters carry it too, as a quiz
-that checks an answer or a page whose button changes a picture. The core library reads those
-scripts and runs none of them. The `kitepdf-javascript` artifact runs them, on
-[KiteJS](https://github.com/yuroyami/KiteJS), on its QuickJS engine. The scripts of a PDF are
-below; those of an EPUB are in [Scripts in an EPUB](#scripts-in-an-epub).
+PDF files can carry JavaScript: a form that computes a total, a field that formats what the reader types, a button that hides another field, a link that runs a script. EPUB chapters can carry it too, for example a quiz that checks an answer or a page whose button changes a picture.
+
+The core library reads these scripts and runs none of them. The `kitepdf-javascript` artifact runs them on the QuickJS engine of [KiteJS](https://github.com/yuroyami/KiteJS):
 
 ```kotlin
 commonMain.dependencies {
@@ -13,77 +10,77 @@ commonMain.dependencies {
 }
 ```
 
-## Fill a form the way a viewer does
+- [PDF scripts](#pdf-scripts) covers `PdfScriptRunner`.
+- [Scripts in the Compose viewer](#scripts-in-the-compose-viewer) covers `KiteDocView`.
+- [Scripts in an EPUB](#scripts-in-an-epub) covers `EpubScriptRunner`.
+
+## PDF scripts
+
+### Fill a form as a viewer does
 
 ```kotlin
 val doc = PdfDocument.open(bytes)
 PdfScriptRunner(doc, onAlert = { alert -> showDialog(alert.message); 1 }).use { runner ->
-    runner.runDocumentOpen()                 // the document's scripts, then its open action
-    runner.setFieldValue("price", "1200")    // keystroke, validate, calculate, then format
-    runner.formState.value("total")          // what the form's own script worked out
-    runner.formattedValue("total")           // what the field shows: "$1,200.00"
+    // The document's scripts, then its open action
+    runner.runDocumentOpen()
+    // Keystroke, validate, calculate, then format
+    runner.setFieldValue("price", "1200")
+    // What the form's own script worked out
+    runner.formState.value("total")
+    // What the field shows, such as "$1,200.00"
+    runner.formattedValue("total")
 }
 ```
 
-Values land in `runner.formState`, a `PdfFormState`. The file is not touched: the viewer draws
-from that state and `PdfEditor` saves it when you ask.
+The values go into `runner.formState`, a `PdfFormState`, and the file does not change. The viewer draws from that state. To write the values to a file, see [Save the values to a file](editing.md#save-the-values-to-a-file).
 
-`PdfScriptRunner.run(action)` runs one `PdfAction.JavaScript`, such as the action of a link a
-reader tapped.
+`runner.run(action)` runs one `PdfAction.JavaScript`, such as the action of a link that the reader tapped.
 
-## Where a document keeps its scripts
+### Where a document keeps its scripts
 
-A file puts its scripts in four places, and KitePDF reads all of them:
-
-| Where | How to reach it |
-|---|---|
+| When the script runs | Where to find it |
+| --- | --- |
 | The document opens | `doc.openAction` |
-| The document is saved or printed | `doc.additionalActions`, with `willSave`, `didSave`, `willPrint`, `didPrint` and `willClose` |
+| The document is saved, printed or closed | `doc.additionalActions`, with `willSave`, `didSave`, `willPrint`, `didPrint` and `willClose` |
 | A page opens or closes | `page.openAction`, `page.closeAction` |
-| A field or a button | `field.additionalActions`, with `keystroke`, `format`, `validate`, `calculate`, `mouseDown`, `mouseUp`, `focus` and `blur` |
-| The document's own library | `doc.documentJavaScripts` |
+| The reader uses a field or a button | `field.additionalActions`, with `keystroke`, `format`, `validate`, `calculate`, `mouseDown`, `mouseUp`, `focus` and `blur` |
+| Before any other script | `doc.documentJavaScripts`, the document's own library |
 
-`PdfScriptRunner` fires the document and page triggers, and the field triggers while a form is
-filled. The Compose viewer does not fire them on its own yet.
+`PdfScriptRunner` runs the document and page scripts, and the field scripts while the reader fills in a form. `KiteDocView` calls the runner for each of these events when you [pass it a runner](#scripts-in-the-compose-viewer).
 
-## What scripts can reach
+### What scripts can reach
 
-The target is Chrome's PDF viewer: a script that works there is meant to work here. Chrome uses
-PDFium, which puts the document's own members on the global object, so both spellings work:
+The target is the PDF viewer of Chrome: a script that works there should work here. Chrome uses PDFium, which puts the members of the document on the global object, so both spellings work:
 
 ```js
-getField("total").value = 42;        // what a file written for Chrome says
-this.getField("total").value = 42;   // what a file written for Acrobat says
+getField("total").value = 42;        // a file written for Chrome
+this.getField("total").value = 42;   // a file written for Acrobat
 ```
 
-Scripts see:
-
-| Object | What is there |
-|---|---|
-| The document | `getField`, `getNthFieldName`, `numPages`, `numFields`, `pageNum`, `info`, `calculateNow`, `resetForm`, `submitForm`, `print`, `gotoNamedDest` and the rest of the document surface |
+| Object | What it has |
+| --- | --- |
+| The document | `getField`, `getNthFieldName`, `numPages`, `numFields`, `pageNum`, `info`, `calculateNow`, `resetForm`, `submitForm`, `print`, `gotoNamedDest` and the rest of the document API |
 | `Field` | `value`, `valueAsString`, `type`, `page`, `rect`, `hidden`, `display`, `readonly`, `required`, `checkThisBox`, `isBoxChecked`, `getItemAt`, `setFocus` and more |
 | `event` | `value`, `change`, `rc`, `willCommit`, `selStart`, `selEnd`, `target`, `targetName`, `name`, `type` |
 | `app` | `alert`, `response`, `beep`, `setInterval`, `setTimeOut`, `clearInterval`, `clearTimeOut`, `launchURL`, `viewerType` |
 | `util` | `printf`, `printd`, `printx`, `scand`, `byteToChar` |
-| `color`, `console`, `display`, `border`, `font`, `global` | the constants and helpers a form script expects |
+| `color`, `console`, `display`, `border`, `font`, `global` | The constants and helpers that a form script expects |
 | The `AF` library | `AFNumber_Format`, `AFNumber_Keystroke`, `AFPercent_*`, `AFDate_*`, `AFTime_*`, `AFSpecial_*`, `AFSimple`, `AFSimple_Calculate`, `AFRange_Validate`, `AFMergeChange`, `AFMakeNumber`, `AFExtractNums` |
 
-Most forms never write their own formatting code: they call the `AF` helpers, which is why they
-are here.
+Most forms do not have formatting code of their own. They call the `AF` helpers, so the runner has them.
 
-## Timers
+### Timers
 
-`app.setInterval` and `app.setTimeOut` do not run on their own. The host pumps them, so a
-document can never take the thread:
+`app.setInterval` and `app.setTimeOut` do not run on their own. The host runs them, so a document cannot keep the thread:
 
 ```kotlin
-val waitMillis = runner.pumpTimers(nowMillis)   // runs what is due, says when to come back
+// Runs the timers that are due, and returns when to call again (null when none waits)
+val waitMillis = runner.pumpTimers(nowMillis)
 ```
 
-## What a script asks of the host
+### Requests to the host
 
-Anything that reaches outside the document arrives at `onRequest` as a `PdfScriptRequest`, and
-nothing happens unless the host acts on it:
+A script that wants to reach outside the document sends a `PdfScriptRequest` to `onRequest`. Nothing happens unless the host acts on it:
 
 ```kotlin
 PdfScriptRunner(doc, onRequest = { request ->
@@ -95,377 +92,314 @@ PdfScriptRunner(doc, onRequest = { request ->
 })
 ```
 
-## Limits
+The requests are `LaunchUrl`, `SubmitForm`, `Print`, `Mail`, `Document`, `Beep`, `GoTo`, `Focus` and `MenuItem`.
 
-Document scripts are untrusted input, so `PdfScriptPolicy` decides what they may do:
+`onAlert` shows `app.alert` and returns the button that the reader pressed (1 is OK). `onResponse` answers `app.response`, or returns null when the reader cancels. `onConsole` gets `console.println`.
+
+### Limits
+
+The scripts of a document are untrusted input. `PdfScriptPolicy` decides what they can do:
 
 ```kotlin
-PdfScriptRunner(doc, policy = PdfScriptPolicy(budgetMillis = 2_000))   // stop after two seconds
-PdfScriptRunner(doc, policy = PdfScriptPolicy.DENY)                    // run nothing at all
-PdfScriptRunner(doc, policy = PdfScriptPolicy.LONG_RUNNING)            // a document that runs for minutes
+// Stop each event after two seconds
+PdfScriptRunner(doc, policy = PdfScriptPolicy(budgetMillis = 2_000))
+// Run nothing
+PdfScriptRunner(doc, policy = PdfScriptPolicy.DENY)
+// A document that runs for minutes
+PdfScriptRunner(doc, policy = PdfScriptPolicy.LONG_RUNNING)
 ```
 
-A script that passes its budget stops and is reported in `runner.failures`. `onStillRunning` is
-asked first, so a viewer can offer to keep waiting, the way a browser does. A PDF's scripts share
-one engine, so its built-in objects are read-only and one script cannot redefine what another
-relies on. A script reaches nothing outside the engine except what the runner defines.
+| Property | Default | What it does |
+| --- | --- | --- |
+| `enabled` | true | False runs no script. |
+| `budgetMillis` | 5,000 | How long one event can run before the engine stops it. 0 is no limit. |
+| `documentBudgetMillis` | 0 | How long all events together can run. 0 is no limit. |
+| `instructionBudget` | 0 | How many engine steps one call can take, for a loop that never reads the clock. 0 is no limit. |
+| `onStillRunning` | null | Called when a script passes `budgetMillis`. Return true to give the script one more budget, or false to stop it. A viewer can ask the reader, as a browser does. |
 
-Denying scripts does not stop a reader filling the form: values still go into the form state, and
-only the scripts are silent.
+- A script that goes over its budget stops, and `runner.failures` lists it. `onStillRunning` can give it more time first.
+- The scripts of a PDF share one engine. So the built-in objects are read-only, and one script cannot change what another one needs.
+- A script reaches nothing outside the engine except what the runner gives it.
+- With `DENY`, the reader can still fill in the form. The values still go into the form state, and only the scripts do nothing.
 
-## A document that carries a whole program
+### A document that carries a whole program
 
-Some PDFs hold a program compiled from C, put through Emscripten and dropped into a page's
-open action. DoomPDF is the well known one: the game runs in the script and draws itself into
-two hundred text fields, one per screen row.
+Some PDFs hold a program compiled from C with Emscripten, in the open action of a page. DoomPDF is a well-known one: the game runs in the script and draws itself into two hundred text fields, one for each screen row. Such a program runs as any other script does. Give it `PdfScriptPolicy.LONG_RUNNING`, because it runs for longer than the default budget.
 
-Such a program runs as any other script does, and nothing has to be switched on.
+## Scripts in the Compose viewer
+
+`KiteDocView` runs no script unless you give it a script handler. `kitepdf-javascript` has one for a PDF and one for a book:
+
+```kotlin
+// A PDF
+val runner = remember(doc) { PdfScriptRunner(doc, onAlert = { alert -> showDialog(alert.message); 1 }) }
+DisposableEffect(runner) { onDispose { runner.close() } }
+KiteDocView(state = state, scripts = runner)
+
+// An EPUB
+val scripts = remember(book) { EpubScriptRunner(book) }
+DisposableEffect(scripts) { onDispose { scripts.close() } }
+KiteDocView(state = state, epubScripts = scripts)
+```
+
+With a PDF handler, the viewer does these things:
+
+- It runs the document scripts and the open and close scripts of each page.
+- It sends a tap on a form field to the scripts.
+- It draws the form from its live values.
+- It runs the timers that a script set, one frame at a time.
+
+The viewer draws the page once and keeps it. It draws again only the fields that changed. So a script that writes a field twenty times a second costs twenty small redraws.
+
+### Filling in a form
+
+With a handler, a tap on a form field does what it does in a desktop viewer:
+
+- A push button runs its press and release scripts.
+- A check box or a radio button changes the value of the form.
+- A text field takes the cursor and opens the keyboard. Each character that the reader types goes through the keystroke script of the field first, so a field for digits refuses a letter. When the reader leaves the field, the viewer runs validate, then calculate, then format.
+
+The viewer shows a typed character at once. When the keystroke script refuses it, the field goes back to its earlier text.
+
+`state.focusedField` is the name of the field that has the cursor, or null.
+
+A choice field uses the control that its PDF flags ask for (ISO 32000-1, 12.7.4.4):
+
+- A combo box that the reader cannot edit opens a list of its options. The list shows the labels. A choice stores the export value and opens no keyboard.
+- An editable combo box also takes typed text, and shows the options whose labels match.
+- A list box shows its rows in the field. In a list box with multiple selection, a tap selects or clears one row and keeps the other rows. With `CommitOnSelChange`, each change commits at once. Otherwise the selection commits when the reader leaves the list or presses Enter.
+
+On a keyboard, the arrow keys, Home and End move through the options. Space selects or clears the current row. Enter accepts the selection and Escape discards it. Tab and Shift+Tab move to the next and the previous editable form field. A screen reader hears whether each option is selected.
+
+### Choice fields in code
+
+A choice option has an `index` (its place in the `/Opt` array of the file), an `exportValue` and a `label`. A `PdfChoiceSelection` names options by index, so two options with equal labels or equal export values stay different:
+
+```kotlin
+val field = requireNotNull(doc.formField("interests"))
+val options: List<PdfChoiceOption> = field.choiceOptions
+val proposed = PdfChoiceSelection(indices = options.take(2).map { it.index })
+
+// Run the keystroke script for the change, without changing the live value
+val preview = runner.choiceKeystroke(field.fullyQualifiedName, proposed)
+// Commit the selection that the script accepted
+val accepted = preview != null && runner.commitChoice(field.fullyQualifiedName, preview)
+val current: PdfChoiceSelection? = runner.formState.choiceSelection(field.fullyQualifiedName)
+```
+
+- `choiceKeystroke` returns the selection that the script accepted (a script can change it), or null when the script refuses it.
+- `commitChoice` runs the commit keystroke, validate, calculate and format, and stores the selection.
+- An editable combo box can hold `freeText` instead of indices. No indices and no text means no selection.
+- A value in the file that matches no option stays in `unresolvedValues`, so a damaged form keeps its value until the reader changes it.
+- `field.options` gives the labels only. Use `choiceOptions` and `choiceSelection` to tell options apart.
+
+`PdfFormState.value(name)` gives one string. For a multiple selection, it gives the first selected export value in the order of the options. `setValue(name, value)` selects the first option with that export value.
+
+`formState.setChoiceSelection(name, selection)` changes the live value without scripts. It returns false for a selection that the field cannot hold. For an edit of your own:
+
+1. Read `formState.fieldRevision(name)` when the edit starts.
+2. Pass that revision to `setChoiceSelection(name, selection, expectedRevision)`. The call refuses the change when the field changed in between, or when the field is hidden or read-only.
+3. To drop an edit that has not committed, call `cancelChoiceTransaction(name, expectedRevision)`.
+
+Check a selection from the reader with `field.validateChoiceSelection(selection)`, which returns null for a selection that the field cannot hold.
+
+!!! warning
+    `PdfEditor.setChoiceValue` saves one value. Do not save a multiple selection by passing `formState.value(name)` to it, because that saves only the first selected value.
+
+A `PdfScriptHandler` of your own gets typed choices through `choiceKeystroke` and `commitChoice`. By default, these call your `keystroke` and `commit` with a single string, and refuse a multiple selection. To support multiple selections, override `commitChoice`, `choiceKeystroke` and `supportsMultipleChoices`.
+
+### Scripts of a book in the viewer
+
+The viewer runs the scripts of a chapter when the reader first gets to it:
+
+- A tap on a page goes to the scripts first, as a `click` on the element under it. The viewer follows a link there only when no script prevented the click.
+- A change of `location` that a script asks for goes the same way as a tapped link, through `onLinkTap`.
+- The viewer runs the timers that the scripts set.
+- When a script changes its chapter, the viewer lays the chapter out again, counts its pages again and draws the pages that changed.
+
+[Scripts in an EPUB](#scripts-in-an-epub) tells what the scripts see.
 
 ## Threads
 
-An engine belongs to one thread, so a runner does too: make it and use it from the same thread.
-The engine itself is opened by the first script that runs, not when the runner is made, so a host
-may construct a runner on one thread and hand it to the thread that will use it. The Compose
-viewer does exactly that: it keeps a thread for scripts and posts every call to it.
+A runner can be called from any thread. It runs every call on a thread of its own, one at a time and in order, and `close()` stops that thread. The callbacks of the runner run on that thread too. A form script ends in milliseconds, but a document with a program in the open action of a page can work for tens of seconds before it shows anything. Meanwhile, the reader can still scroll and close the document.
 
-`PdfFormState` is the exception, and deliberately so: it is written by the scripts and read by
-whatever draws, so it is safe from two threads.
+`PdfFormState` can be read and written from two threads, because the scripts write it and the viewer reads it.
 
-On JavaScript and WebAssembly the engine is a WebAssembly module that loads before its first use.
-Call `prepare()` on a runner once and wait for it before the first script, as the Compose viewer
-does. A script that runs before then fails with a message that says so. On the other targets
-`prepare()` returns at once.
+On JS and Wasm, the engine is a WebAssembly module that loads before its first use. Call `prepare()` on the runner once, and wait for it before the first script, as `KiteDocView` does. A script that runs before then fails with a message that tells you so. On the other targets, `prepare()` returns at once.
 
-A browser page has one thread, so a long script would freeze the page while it runs. The event
-methods of a runner are `suspend` functions for this reason. On the web, a script that one of
-them runs pauses about every 16 ms and lets the page draw and run its timers. A call that comes
-while a script is paused waits for that script to end. The engine pauses only on a runtime
-with WebAssembly stack switching: Chrome 137 and newer, and Node 25 and newer. On any other
-runtime the script runs in one go. The synchronous helpers, such as `run` and `setFieldValue`,
-never pause. A script's time budget counts the pauses too, so it measures how long the reader
-waits.
+A browser page has one thread, so a long script would stop the page from drawing. For this reason, the event methods of a runner are `suspend` functions:
+
+- On the web, a script that one of them runs pauses about every 16 ms, so the page can draw and run its timers.
+- A call that comes while a script is paused waits until that script ends.
+- The engine pauses only on a runtime with WebAssembly stack switching: Chrome 137 and newer, and Node 25 and newer. On other runtimes, the script runs to its end in one go.
+- The other methods, such as `run` and `setFieldValue`, never pause.
+- The budget of a script counts the pauses too, so it measures how long the reader waits.
 
 ## Other engines
 
-The runner talks to the `KiteScriptEngine` interface in `kitepdf-core`. `KiteJsScriptEngine` is the KiteJS implementation. Pass your own engine to `PdfScriptRunner` to use another one.
+The runners talk to the `KiteScriptEngine` interface of `kitepdf-core`. `KiteJsScriptEngine` is the KiteJS engine. To use another engine, pass it as `engine` to `PdfScriptRunner`. The runner then runs on the thread of the caller, and the caller must make every call on the thread that made the engine.
+
+`EpubScriptSession` in `kitepdf-epub` runs the scripts of a book over any `KiteScriptEngine`, on the thread of the caller.
 
 ## Scripts in an EPUB
 
-`EpubScriptRunner` runs the scripts of a book's chapters on KiteJS, over the library's own parse
-and layout, so a scripted chapter works on every target with no web engine:
+`EpubScriptRunner` runs the scripts of the chapters of a book on KiteJS, over the parse and the layout of KitePDF. So a chapter with scripts works on every target, with no web engine:
 
 ```kotlin
 val book = EpubDocument.open(bytes)
 EpubScriptRunner(book).use { scripts ->
-    scripts.chapterOpened(0)                    // the chapter's scripts, then DOMContentLoaded and load
+    // The chapter's scripts, then DOMContentLoaded and load
+    scripts.chapterOpened(0)
     val page = book.page(KiteLocation(0, 0))
-    scripts.tap(page, x = 52.5, y = 90.0)       // a click on the element there, in display space
+    // A click on the element at this point, in display space
+    scripts.tap(page, x = 52.5, y = 90.0)
 }
 ```
 
-Each chapter is a window of its own, with an engine of its own. Its scripts run the first time it
-opens, inline and from the book, in document order. A module script does not run, and neither
-does a script at an address outside the book. Once scripts run, `noscript` content no longer
-shows. A chapter without scripts takes no engine.
+`EpubScriptPolicy` sets how long each call can run: the opening of a chapter, a tap, a round of timers. The default is five seconds. `EpubScriptPolicy.DENY` runs nothing. The budget does not count the DOM that KitePDF sets up in the engine of a chapter before the first script of the book. That setup takes a few hundred milliseconds, or seconds on a slow device, so a tight budget stops the scripts of the book and never the DOM that they need.
 
-A chapter's built-in objects are writable, as a browser's are, so a polyfill can add a method the
-engine lacks and a library can wrap one it has
-([#537](https://github.com/yuroyami/KitePDF/issues/537)). A script that breaks a built-in breaks
-only its own chapter. The DOM below is JavaScript in the same realm, and it takes every built-in it
-calls before the book's first script runs, as Node takes its primordials, so a patched method or a
-getter that a script hangs on `Object.prototype` changes nothing the DOM does
-([#540](https://github.com/yuroyami/KitePDF/issues/540)).
+`failures` keeps the last 100 failures, because a timer that fails each time would otherwise make the list grow while the book is open.
 
-At most eight chapters keep their engines open at once (`EpubScriptRunner.LIVE_CHAPTERS`). Opening
-one more closes the engine of the chapter used least recently, as a reading system unloads the
-chapters the reader left. That chapter keeps what its scripts made of it, and when it opens
-again its scripts start over from its markup, as a page does when it loads again.
-`EpubScriptSession.unloadChapters()` unloads them all at once.
+### Chapters and engines
 
-Each engine parses a large script only once for the whole process. `KiteJsScriptEngine` keeps the
-bytecode of every script of 32 KB or more, and a later engine loads that bytecode in place of a
-parse. The DOM that each chapter's engine sets up first is such a script, so a chapter after the
-first sets up in about 11 ms on the JVM, 14 ms on macOS, 15 ms on Wasm and 20 ms on Node.
+- Each chapter is a window of its own, with an engine of its own.
+- The scripts of a chapter run the first time that it opens, inline and from files of the book, in the order of the document.
+- A module script does not run, and a script at an address outside the book does not run.
+- After the scripts run, `noscript` content does not show.
+- A chapter without scripts takes no engine.
 
-An `<iframe>` whose `src` is a document of the book shows that document, and the document's
-scripts run in a window of their own, with an engine of its own. So does an `<object>` whose
-`data` is an HTML or XHTML document of the book. The frames' documents load
-before the chapter's `load` event, and each frame element then gets its own `load` event. A
-frame's window has the book's origin and `navigator.epubReadingSystem`. A frame that a script
-adds loads and runs the same way.
+The built-in objects of a chapter can be changed, as in a browser, so a polyfill can add a method that the engine does not have. A script that breaks a built-in object breaks only its own chapter. The DOM of KitePDF takes every built-in function that it calls before the first script of the book runs. So a script that changes a built-in method, or adds a getter to `Object.prototype`, does not change what the DOM does.
 
-The chapter and its frames see each other as windows of another origin. A frame's
-`contentWindow` and its `parent` and `top` have `postMessage`, `close`, `focus`, `blur`,
-`closed`, `length`, `parent` and `top`. Any other member throws a `SecurityError`, and
-`contentDocument` is null. So a frame's scripts cannot reach or change the chapter around it or
-the frame's size, as EPUB 3.3 asks of a container-constrained script. A message between two
-windows is a structured clone, and a `MessagePort` can move to another window and stay
-entangled with its partner. A stream cannot move to another window.
+At most eight chapters keep their engines open at the same time (`EpubScriptRunner.LIVE_CHAPTERS`). When one more chapter opens, the engine of the chapter used least recently closes. That chapter keeps what its scripts made of it. When it opens again, its scripts start again from its markup, as a web page does when it loads again. `EpubScriptSession.unloadChapters()` closes them all at once.
 
-A tap on a frame goes to the frame's document. A frame's script can move to a fragment of its
-own document, and nothing else: the reader keeps the book's place. A chapter whose frames run
-scripts counts as scripted, even with no script of its own. An engine that cannot share its
-thread, as Rhino's, runs no frame scripts.
+`KiteJsScriptEngine` keeps the bytecode of every script of 32 KB or more, and a later engine loads that bytecode instead of parsing the script again. The DOM that each chapter sets up first is such a script, so each chapter after the first sets up faster.
 
-They see a DOM over the chapter: `document` with `getElementById`, `querySelector`,
-`querySelectorAll` and the other finders, `createElement` and fragments; nodes and elements with
-the tree walk, `appendChild` and its relatives, `textContent`, `innerHTML` and `outerHTML`,
-attributes, `id`, `className`, `classList`, `dataset`, `hidden`, `style`, `matches` and
-`closest`; events with `addEventListener`, `on` attributes and properties, capture and bubbling,
-`preventDefault` and `stopPropagation`; `setTimeout`, `setInterval` and `requestAnimationFrame`;
-`console`; `localStorage` and `sessionStorage`, in memory for the book; and
-`navigator.epubReadingSystem`, whose `hasFeature` answers true for `dom-manipulation`,
-`layout-changes`, `spine-scripting` and `mouse-events`, false for `touch-events` and
-`keyboard-events`, and undefined for a feature it does not know. A check box, a radio
-button, a label, a `summary` and a submit button do what a click on them does in a browser.
-`getComputedStyle` answers `display`, `visibility`, `color`, `background-color`, `font-size`,
-`font-weight`, `font-style`, `opacity`, `text-align`, `position`, `float`, `width`, `height`,
-`z-index`, `left`, `top` and `transform`, which it writes as a `matrix()`. An element's `style` answers the CSS properties by their camel-case
-and dashed names, with a number as a browser writes it back, `0.5` for `.5`, and any other name
-is a plain property of the object. `getBoundingClientRect`, `offsetWidth` and their relatives
-answer where the element is on its page, in CSS pixels; when the script changed the chapter
-since it was laid out, it is laid out again first, as a browser does, so an element the script
-just added has its size.
+### Frames
 
-`DOMPoint`, `DOMQuad` and `DOMMatrix` are the Geometry Interfaces', with their read-only
-versions and `WebKitCSSMatrix`. A `DOMMatrix` takes six or sixteen numbers, a matrix dictionary,
-or a CSS transform list such as `getComputedStyle(el).transform`. A length in that list must be
-absolute, so `em` and percentages throw a `SyntaxError`, as in a browser.
+An `<iframe>` whose `src` is a document of the book shows that document. The scripts of the document run in a window of their own, with an engine of their own. An `<object>` whose `data` is an HTML or XHTML document of the book works the same way.
 
-A `<canvas>` gives a script its 2D context, `CanvasRenderingContext2D`, with `Path2D`,
-`CanvasGradient`, `CanvasPattern` and `TextMetrics`. What a script draws shows on the page where
-the canvas sits, and a later drawing paints the page again. The context keeps what it draws as
-SVG, so a canvas looks the same on every target. Paths, fills, strokes, dashes, clips,
-transforms, gradients (linear, radial and conic), patterns, images and other canvases, text,
-shadows, `filter`, every `globalCompositeOperation` and every blend mode work.
-`isPointInPath` and `isPointInStroke` answer as Chromium does, a point on an edge included. Text
-uses the metrics of the standard fonts, so `measureText` is near a browser's but not equal. A
-context other than `2d` answers `null`.
+- The documents of the frames load before the `load` event of the chapter. Then each frame element gets its own `load` event.
+- The window of a frame has the origin of the book and `navigator.epubReadingSystem`.
+- A frame that a script adds loads and runs the same way.
+- A tap on a frame goes to the document of the frame.
+- The script of a frame can move to a fragment of its own document, and nowhere else. The reader keeps the place in the book.
+- A chapter whose frames run scripts counts as a chapter with scripts, also when it has no script of its own.
+- An engine that cannot share its thread, such as Rhino, runs no frame scripts.
 
-An `<img>` loads its picture as in a browser. Setting `src` makes it pending, and a later task
-fires `load` with its natural size, or `error` for a file that is missing or does not decode.
-The images of the chapter load before the window's `load` event, and a URL that loaded once is
-there at once the next time. `decode()` waits for the load, and a canvas draws nothing of an
-image that has not loaded yet.
+The chapter and its frames see each other as windows of another origin, as EPUB 3.3 asks for a script in a container:
 
-A script can read and write the pixels of a canvas with `ImageData`, `createImageData`,
-`getImageData` and `putImageData`, in `rgba-unorm8` or `rgba-float16`, and in sRGB or Display
-P3. `toDataURL` and `toBlob` make a PNG, or a JPEG when asked; any other type makes a PNG. The
-pixels come from `KiteRasterCanvas`, a rasterizer in plain Kotlin, so they are the same on every
-target. They keep each colour premultiplied by its alpha in 8 bits, as Chromium does, so a value
-that a script writes reads back rounded as Chromium rounds it. Text reads back only when the host
-passes `fontOutlines` to `EpubScriptRunner`, for example the outlines of the canvas the app draws
-with. Without it, text reads back as blank, though the page still shows it.
+- `contentWindow`, `parent` and `top` have `postMessage`, `close`, `focus`, `blur`, `closed`, `length`, `parent` and `top`. Any other member throws a `SecurityError`.
+- `contentDocument` is null.
+- So the scripts of a frame cannot reach or change the chapter around it, or the size of the frame.
+- A message between two windows is a structured clone. A `MessagePort` can move to another window and stays linked to its partner. A stream cannot move to another window.
 
-Each object of the DOM has the interface a browser gives it, with its class string, so
-`String(document.body)` is `[object HTMLBodyElement]`, and each interface is a property of the
-window, so `document.body instanceof HTMLBodyElement` holds. An element of HTML has the interface HTML
-names for its tag, such as `HTMLDivElement`, `HTMLHeadingElement` for `h1` to `h6` and
-`HTMLUnknownElement` for a name HTML does not have, with each attribute that reflects its markup
-reading and writing it with the type, the default and the keywords HTML gives it. An element of
-SVG has its SVG interface and one of MathML is a `MathMLElement`. `WebPlatformTest` runs HTML's
-reflection tests, some 59,000 of them, and its test of the element interfaces in a chapter.
+### The DOM
 
-`childNodes`, `children`, the collections of `getElementsByTagName`, `getElementsByClassName` and
-`getElementsByName`, and those of a form, a select, a table, a row, a map and the document, such
-as `elements`, `options`, `rows`, `forms` and `links`, are live: each is the same object on each
-read and follows the tree as it changes, so a loop that removes `childNodes[0]` until none is
-left ends. A collection is a `NodeList` or an `HTMLCollection`, not an array, and an
-`HTMLCollection` also answers the `id` or `name` of an element. `querySelectorAll` answers a
-`NodeList` of the elements found when it ran.
+The scripts see a DOM over the chapter.
 
-A chapter whose manifest item is `application/xhtml+xml` is an `XMLDocument`, as a browser opens
-an XHTML page: a tag name keeps its case, so `tagName` is `p` and an SVG gradient's is
-`linearGradient`, and `createElement` keeps the case of its argument. A chapter served as
-`text/html` is an `HTMLDocument`, where an HTML element's `tagName` is upper case and
-`createElement` lowercases its argument. `document.contentType` says which it is.
+**The document and its elements**
 
-An attribute has its namespace, its prefix and its local name, as the DOM Standard gives it. An
-XHTML chapter names its attributes as XML does, so `viewBox` keeps its case and `xlink:href` is
-`href` in the XLink namespace once the prefix is declared, and an HTML chapter names them as
-HTML's parser does: lower case, with SVG's names such as `viewBox` and MathML's `definitionURL`
-given their case back, and `xlink:`, `xml:` and `xmlns` attributes of a foreign element put in
-their namespaces. `getAttribute` finds an attribute by its qualified name, lower-cased first on an
-HTML element of an HTML chapter, and `getAttributeNS` by its namespace and local name.
-`element.attributes` is a live `NamedNodeMap` of `Attr` nodes, whose named properties are the
-qualified names, and the layout reads the attributes by their local names, as it always has.
+- `document` has `getElementById`, `querySelector`, `querySelectorAll` and the other finders, `createElement`, `createComment` and fragments.
+- Nodes and elements have the tree walk, `appendChild` and its relatives, `textContent`, `innerHTML`, `outerHTML`, attributes, `id`, `className`, `classList`, `dataset`, `hidden`, `style`, `matches` and `closest`.
+- Each object has the interface and the class string that a browser gives it. So `String(document.body)` is `[object HTMLBodyElement]`, and `document.body instanceof HTMLBodyElement` is true.
+- An HTML element has the interface that HTML names for its tag, such as `HTMLDivElement`, or `HTMLUnknownElement` for a tag that HTML does not have. Each attribute that reflects its markup reads and writes it with the type, the default and the keywords of HTML.
+- An SVG element has its SVG interface, and a MathML element is a `MathMLElement`.
+- `childNodes`, `children`, the results of `getElementsByTagName`, `getElementsByClassName` and `getElementsByName`, and collections such as `elements`, `options`, `rows`, `forms` and `links` are live. Each one is the same object on each read and follows the tree as it changes. `querySelectorAll` gives a `NodeList` of the elements that it found when it ran.
+- The tree has the comments of the chapter, as in a browser. The page draws none of them, and `textContent` leaves them out.
+- The document starts with its document type. An XHTML chapter that is well-formed XML also has its processing instructions and CDATA sections.
+- An HTML chapter with no document type, or with an old one, is in quirks mode, and `document.compatMode` is `BackCompat`. The layout does not change with the mode.
 
-The tree of a chapter's scripts has the chapter's comments, which `childNodes`, `nodeType` 8 and
-`innerHTML` show as a browser does, and `createComment` makes one. The page has none of them,
-since a comment draws nothing, and an element's `textContent` leaves them out.
+**XHTML and HTML chapters**
 
-A tap goes to the element under it as `pointerdown`, `mousedown`, `pointerup`, `mouseup` and
-`click`. `tap` answers true when a script prevented the click, and then a viewer does not follow
-a link there. A script that changes its chapter has it laid out again from the changed tree as
-soon as the script returns, and the chapter may gain or lose pages: `book.chapterChanges` moves
-for a viewer to take the page counts again, and `page.chapterVersion` for it to draw the page
-again. The changes belong to the book, so a new font size keeps them.
+| | XHTML chapter (`application/xhtml+xml`) | HTML chapter (`text/html`) |
+| --- | --- | --- |
+| Document | `XMLDocument` | `HTMLDocument` |
+| `tagName` | Keeps its case (`p`, `linearGradient`) | Upper case for HTML elements |
+| `createElement` | Keeps the case of its argument | Makes its argument lower case |
+| Attribute names | As XML names them. `xlink:href` is `href` in the XLink namespace once the prefix is declared. | As the HTML parser names them: lower case, with the case of SVG and MathML names such as `viewBox` given back |
+| Names in selectors | Compared as written | Compared without case, as Blink does |
+| `innerHTML`, `outerHTML`, `insertAdjacentHTML` | Read and write XML. Markup that is not well-formed throws a `SyntaxError` and changes nothing. | Read and write HTML |
+| `document.write`, `writeln`, `open`, `close` | Throw an `InvalidStateError` | Work |
 
-Each callback that the reader calls itself runs in a call of its own: a listener or an `on`
-handler of a tap or of the load events, a timer, an animation frame. The promise jobs it queued
-run as soon as it returns, before the next callback, as HTML runs a microtask checkpoint after
-each callback it invokes. A script's own `dispatchEvent` or `click()` runs its listeners at once,
-and their jobs wait until the script is done, as in a browser. The timers that fall due together
-run in the order they fell due, and a timer or a frame that an earlier callback cancels does not
-run.
+`document.contentType` tells which kind a chapter is. `getAttribute` finds an attribute by its qualified name, and `getAttributeNS` by its namespace and local name. `element.attributes` is a live `NamedNodeMap` of `Attr` nodes.
 
-An `on` handler is an entry of its target's list of listeners, as HTML makes it: it takes its
-place in the list when it is first set, keeps that place when it is set again, and leaves the list
-when it is set to null or its attribute is removed, so a listener added before it runs before it
-and one that calls `stopImmediatePropagation()` keeps it from running. A handler of the markup
-takes its place when a browser's parser would have made its element, so a script adds its
-listeners after the handlers of the elements before it and ahead of those after it. The code of
-an `on` attribute runs with the names of the document, the form of its control and the element in
-scope, and a window handler from an attribute of the body with the global names alone. The window
-handlers of the body element, `onload` among them, are the window's, through the element or the
-window alike, and `document.onreadystatechange` runs as the document's state changes.
+**Style and layout**
 
-Each book has an origin of its own, shared by its chapters: `epub://` and a host made from the
-package's unique identifier and the runner's `instanceKey`. An app that passes the same key, such
-as an install id it keeps, gives the book the same origin each time it opens, and another
-reader's copy gets another origin, as EPUB 3.3 asks. Without a key each runner makes a random
-one. `self.origin` and
-`location.origin` answer it, and `location.href` is the origin and the chapter's path.
+- `getComputedStyle` answers `display`, `visibility`, `color`, `background-color`, `font-size`, `font-weight`, `font-style`, `opacity`, `text-align`, `position`, `float`, `width`, `height`, `z-index`, `left`, `top` and `transform`, which it writes as a `matrix()`.
+- The `style` of an element answers the CSS properties by their camel-case and dashed names. It writes a number back as a browser does, so `.5` reads as `0.5`. Any other name is a plain property of the object.
+- `getBoundingClientRect`, `offsetWidth` and their relatives give the place of the element on its page, in CSS pixels. When the script changed the chapter after the last layout, the chapter lays out again first, as in a browser.
+- `DOMPoint`, `DOMQuad`, `DOMMatrix`, their read-only versions and `WebKitCSSMatrix` follow the Geometry Interfaces. A `DOMMatrix` takes 6 or 16 numbers, a matrix dictionary, or a CSS transform list. A length in that list must be absolute, so `em` and percentages throw a `SyntaxError`.
+- `querySelector`, `querySelectorAll`, `matches` and `closest` read Selectors 4, as the layout reads the style sheets of a book. A selector that a browser rejects throws a `SyntaxError`.
+- The states of a form control, such as `:checked`, `:placeholder-shown` and `:indeterminate`, follow what the reader or a script did to the control, and the page restyles when they change. Setting `checked` or `selected` does not write an attribute. The input type of a control cleans its value, as HTML says.
+- A pseudo-class that cannot be true in a book of pages, such as `:hover`, matches nothing.
 
-The fragment that the reader went to in a chapter, through a link, the table of contents or a
-bookmark, is the fragment of its URL, so `location.hash` gives it. `EpubDocument.fragmentOf`
-answers it outside the scripts, and `KiteDocView` passes the fragment to the book with
-`EpubDocument.setFragment`. The element that the fragment names matches `:target` from the
-moment the chapter is parsed, before its `readystatechange` to `complete`, as in Chromium. A
-move to another fragment of the chapter fires `popstate` at once and `hashchange` as a task, with
-the old and new URL. A link the reader follows makes such a move, and so does a script that sets
-`location.hash` or clicks a link.
+**Events and timing**
 
-`URL` and `URLSearchParams` are the WHATWG URL Standard's, with every getter and setter,
-`URL.canParse`, `URL.parse` and `toJSON`, and a `searchParams` that writes itself back to the
-query. A URL against the chapter's address resolves inside the book, and `..` stops at the
-book's root as it stops at a site's, so a script cannot build an address above the container. A
-URL of the book has the book's origin, so `new URL(location.href).origin` is `location.origin`.
-Host names go through UTS #46 of Unicode 17, with Punycode, IPv4 and IPv6 hosts as a browser
-reads them. The web-platform-tests of the standard check it: `WhatwgUrlTest` runs its URL,
-setter and host data against the parser, and `WebPlatformTest` runs its JavaScript tests in a chapter.
+- Events have `addEventListener`, `on` attributes and properties, capture and bubbling, `preventDefault` and `stopPropagation`.
+- A tap goes to the element under it as `pointerdown`, `mousedown`, `pointerup`, `mouseup` and `click`. `tap` returns true when a script prevented the click, and a viewer then does not follow a link there.
+- A check box, a radio button, a label, a `summary` and a submit button do what a click on them does in a browser.
+- `setTimeout`, `setInterval` and `requestAnimationFrame` work.
+- Each callback runs on its own: a listener, an `on` handler, a timer or an animation frame. The promise jobs that it queued run when it returns, before the next callback, as HTML does after each callback. A script's own `dispatchEvent` or `click()` runs the listeners at once, and their jobs wait until the script ends.
+- Timers that are due at the same time run in the order in which they fell due. A timer or a frame that an earlier callback cancels does not run.
+- An `on` handler is an entry in the list of listeners of its target, as in HTML. It takes its place when it is first set, keeps that place when it is set again, and leaves the list when it is set to null. A handler in the markup takes its place when the parser of a browser would make its element.
+- The code of an `on` attribute runs with the names of the document, the form of its control and the element in scope.
+- The window handlers of the body element, such as `onload`, belong to the window. `document.onreadystatechange` runs when the state of the document changes.
 
-`DOMException` is the one of Web IDL, with `name`, `message` and the legacy `code` as getters of
-its prototype, the 25 legacy constants such as `NOT_FOUND_ERR` and the derived
-`QuotaExceededError`. An instance is an `Error` underneath, so it has a stack where an `Error`
-has one. The DOM methods throw one with the name the DOM Standard gives, such as `SyntaxError`
-for a selector that does not parse, and `WebPlatformTest` runs the `DOMException` tests of
-web-platform-tests in a chapter.
+**Changes to the chapter**
 
-`TextEncoder` and `TextDecoder` are the Encoding Standard's, with every encoding and label of its
-table: UTF-8, UTF-16, the 28 single-byte encodings, gb18030 and GBK, Big5, EUC-JP, ISO-2022-JP,
-Shift_JIS, EUC-KR, `replacement` and `x-user-defined`, each with the error mode the standard
-gives it. `fatal`, `ignoreBOM`, `{ stream: true }` across calls and `encodeInto` behave as the
-standard says. `atob` and `btoa` are the HTML Standard's, with forgiving base64, and throw an
-`InvalidCharacterError`. The decoders live in Kotlin over the standard's own indexes, and
-`WebPlatformTest` runs the `encoding` tests and the `atob` tests of web-platform-tests in a
-chapter.
+When a script changes its chapter, the chapter lays out again from the changed tree as soon as the script returns. The chapter can gain or lose pages. `book.chapterChanges` changes so that a viewer counts the pages again, and `page.chapterVersion` changes so that it draws the page again. The changes belong to the book, so a new font size keeps them.
 
-`Blob`, `File` and `FileReader` are the File API's. A blob takes strings, buffers, views and
-other blobs, with `endings` and a `type` kept as the standard keeps it, and `slice`, `text`,
-`arrayBuffer` and `bytes`, whose promises settle in a task. A `FileReader` reads in tasks of its
-own and fires `loadstart`, `progress`, `load` and `loadend` in that order, or `abort` and
-`loadend` when `abort()` stops it; `readAsText` takes the encoding its argument names, else the
-charset of the blob's type, else UTF-8, and a byte order mark wins over all three, through the
-decoders of `TextDecoder`.
+**Canvas and images**
 
-`FormData` takes the entries of a form as HTML builds them, with a submitter, a `select`'s
-chosen options, `_charset_` and `dirname`, and fires `formdata` at the form. A click on a submit
-button, `requestSubmit` and `submit` fire `submit`, as a `SubmitEvent` with its submitter, and
-`formdata` as a browser does, but the book goes nowhere after them.
+- A `<canvas>` gives its 2D context, `CanvasRenderingContext2D`, with `Path2D`, `CanvasGradient`, `CanvasPattern` and `TextMetrics`. A context other than `2d` is `null`.
+- What a script draws shows on the page where the canvas is, and a later drawing paints the page again. The context keeps its drawing as SVG, so a canvas looks the same on every target.
+- Paths, fills, strokes, dashes, clips, transforms, gradients (linear, radial and conic), patterns, images and other canvases, text, shadows, `filter`, every `globalCompositeOperation` and every blend mode work.
+- `isPointInPath` and `isPointInStroke` answer as Chromium does, with a point on an edge inside.
+- Text uses the metrics of the standard fonts, so `measureText` is near the value of a browser but not equal to it.
+- `ImageData`, `createImageData`, `getImageData` and `putImageData` read and write pixels, in `rgba-unorm8` or `rgba-float16`, and in sRGB or Display P3. The pixels come from `KiteRasterCanvas`, a rasterizer in plain Kotlin, so they are the same on every target. They keep each color multiplied by its alpha in 8 bits, so a value that a script writes reads back rounded as in Chromium.
+- `toDataURL` and `toBlob` make a PNG, or a JPEG when the script asks for one. Any other type makes a PNG.
+- Text reads back only when the host passes `fontOutlines` to `EpubScriptRunner`, for example the outlines of the canvas that the app draws with. Without it, text reads back blank, but the page still shows it.
+- An `<img>` loads its picture as in a browser. Setting `src` makes it pending, and a later task fires `load` with its natural size, or `error` for a file that is missing or does not decode. The images of a chapter load before the `load` event of the window. `decode()` waits for the load. A canvas draws nothing of an image that has not loaded.
 
-`structuredClone` copies a value as HTML does: primitives and their wrappers, `Date`, `RegExp`,
-buffers and views, `Map`, `Set`, errors, `Blob`, `File` and `DOMException`, with cycles kept. A
-function, a node or another platform object throws a `DataCloneError`. A `transfer` list
-detaches its buffers and moves its ports and streams. `window.postMessage` sends a clone to the chapter's own
-window in a task, with the book's origin. A target origin of `*`, `/` or the book's origin
-delivers the message, and any other origin drops it. `MessageChannel` makes two entangled
-`MessagePort` objects. A port holds its messages until `start()` runs or a script sets
-`onmessage`, and a port that moves in a transfer takes its held messages with it.
+**Origin, location and navigation**
 
-`AbortController` and `AbortSignal` are the DOM Standard's, with `AbortSignal.abort`, `timeout`
-and `any`. A listener added with a `signal` goes away when the signal aborts. A signal that `any`
-makes follows its sources, and an abort sets every follower's reason before any `abort` event
-fires.
+- Each book has an origin of its own, which its chapters share: `epub://` and a host made from the unique identifier of the package and the `instanceKey` of the runner.
+- Pass the same `instanceKey` each time (for example an install ID that your app keeps) to give the book the same origin each time that it opens. Another reader's copy then gets another origin, as EPUB 3.3 asks. Without a key, each runner makes a random one.
+- `self.origin` and `location.origin` give the origin. `location.href` is the origin and the path of the chapter.
+- The fragment that the reader went to (through a link, the table of contents or a bookmark) is the fragment of the URL, so `location.hash` gives it. `EpubDocument.fragmentOf` gives it outside the scripts, and `KiteDocView` passes it to the book with `EpubDocument.setFragment`.
+- The element that the fragment names matches `:target` from the moment the chapter is parsed.
+- A move to another fragment of the chapter fires `popstate` at once and `hashchange` as a task. A link that the reader follows makes such a move, and so does a script that sets `location.hash` or clicks a link.
+- Nothing reaches outside the book. There is no `fetch` and no `XMLHttpRequest`.
+- A change of `location`, `window.open` and a click of a script on a link go to the listeners of `onNavigate`, as a zip path and its fragment.
+- `alert`, `confirm` and `prompt` go to `onConsole` and answer as if the reader dismissed them.
 
-The streams are the Streams Standard's: `ReadableStream` with its default and byte readers and
-controllers, `ReadableStream.from`, `tee`, `pipeTo`, `pipeThrough` and async iteration,
-`WritableStream`, `TransformStream`, the two queuing strategies, `TextEncoderStream` and
-`TextDecoderStream`. `Blob.stream()` gives a byte stream of the blob in chunks of 64 KiB, and
-`Blob.textStream()` decodes it as UTF-8. A stream in the `transfer` list of `postMessage` or
-`structuredClone` moves: the original stays locked, and the new stream reads or writes through it.
+**Web APIs**
 
-`URL.createObjectURL` gives a blob a `blob:` URL of the book's origin, and the reader loads an
-image, a style sheet, an `@import` or a font from it as it loads a file of the book.
-`URL.revokeObjectURL` takes it away from the scripts, but what the chapter shows keeps it, as a
-browser keeps an image it loaded: an image whose script revoked its URL right after setting it
-still shows, and still does at another font size. A chapter whose engine closes revokes the URLs
-its scripts made, as a page that unloads does.
+| API | Follows | Notes |
+| --- | --- | --- |
+| `URL`, `URLSearchParams` | WHATWG URL Standard | A URL against the address of the chapter resolves inside the book. `..` stops at the root of the book. Host names use UTS #46 of Unicode 17. |
+| `DOMException` | Web IDL | With `name`, `message`, the legacy `code` and constants such as `NOT_FOUND_ERR`. DOM methods throw the name that the DOM Standard gives. |
+| `TextEncoder`, `TextDecoder` | Encoding Standard | Every encoding and label of the standard, with `fatal`, `ignoreBOM`, `stream` and `encodeInto` |
+| `atob`, `btoa` | HTML Standard | Forgiving base64. Bad input throws an `InvalidCharacterError`. |
+| `Blob`, `File`, `FileReader` | File API | `Blob.stream()` gives chunks of 64 KiB. `readAsText` takes the encoding of its argument, then the charset of the blob type, then UTF-8. A byte order mark wins over all three. |
+| `FormData` | HTML Standard | A submit fires `submit` and `formdata`, but the book goes nowhere after them. |
+| `structuredClone`, `postMessage`, `MessageChannel` | HTML Standard | A clone keeps cycles. A function or a node throws a `DataCloneError`. `postMessage` delivers to a target origin of `*`, `/` or the origin of the book, and drops any other. |
+| `AbortController`, `AbortSignal` | DOM Standard | With `abort`, `timeout` and `any` |
+| Streams | Streams Standard | Readable, writable and transform streams, both queuing strategies, `TextEncoderStream` and `TextDecoderStream`. A stream in a `transfer` list moves. |
+| `URL.createObjectURL` | File API | A `blob:` URL of the book's origin. Images, style sheets, `@import` and fonts load from it. A revoked URL keeps what the chapter already shows. |
+| `DOMParser`, `XMLSerializer` | HTML Standard, DOM Parsing and Serialization | HTML for `text/html`, XML for the four XML types. XML that is not well-formed gives a document with one `parsererror` element. The scripts of a parsed document do not run. |
+| `localStorage`, `sessionStorage` | HTML Standard | In memory, for the book |
 
-`WebPlatformTest` runs the File API tests of web-platform-tests in a chapter, and each of them
-passes.
+`navigator.epubReadingSystem.hasFeature` answers true for `dom-manipulation`, `layout-changes`, `spine-scripting` and `mouse-events`, false for `touch-events` and `keyboard-events`, and undefined for a feature that it does not know.
 
-Nothing reaches outside the book. There is no `fetch` or `XMLHttpRequest`. A change of
-`location`, `window.open` and a script's own click on a link go to the listeners of
-`onNavigate`, with a zip path and its fragment for a place in the book; an address under the
-book's origin is such a place. `alert`, `confirm` and `prompt` go to `onConsole`, and answer as
-dismissed. `failures` keeps the last hundred, since a timer that throws each time it runs would
-otherwise grow it for as long as the book is open.
+A script that calls a method that the DOM does not have fails, and `failures` lists it. The chapter continues as its other scripts leave it.
 
-`querySelector`, `querySelectorAll`, `matches` and `closest` read the selectors of Selectors 4,
-as the layout reads a book's style sheets, and throw a `SyntaxError` for one that a browser
-rejects. An HTML chapter compares the names of elements and attributes ignoring case, as Blink
-does, and an XHTML chapter compares them as written. The states of a form control, as
-`:checked`, `:placeholder-shown` and `:indeterminate`, follow what the reader or a script made of
-the control, its checkedness, selectedness and value, as in a browser, and the page restyles when
-they change. Setting `checked` or `selected` never writes an attribute. A control's value is
-sanitized by its input type, as HTML says, so a script and the selectors read the same value. A pseudo-class that never holds
-in a paginated book, as `:hover`, matches nothing.
+### Threads of a book
 
-`DOMParser` parses a string into a document of its own: HTML for `text/html`, and XML with
-namespaces for the four XML types. XML that is not well-formed gives a document whose one
-element is `parsererror`, as the HTML standard names it. A document of an XHTML type reads
-HTML's named characters, as browsers do. `XMLSerializer` writes any node as XML, with the
-namespace declarations its elements need. The scripts of a parsed document do not run.
+On the JVM, Android and the native targets, `EpubScriptRunner` runs its calls on a thread of its own, as `PdfScriptRunner` does, and opens the engine of each chapter on a thread of its own too. On the web, it runs them on the thread of the page, and a long script pauses as [Threads](#threads) says. Call `prepare()` once before the first chapter opens.
 
-A chapter's document starts with its document type, as a browser's does. An XHTML chapter that is
-well-formed XML also has its processing instructions and CDATA sections. An HTML chapter without a
-document type, or with an old one, is in quirks mode, and `document.compatMode` says `BackCompat`.
-The layout does not change with the mode.
-
-In an XHTML chapter, as in any XML document, `innerHTML`, `outerHTML` and `insertAdjacentHTML`
-read and write XML, as browsers do. Each element they write declares its namespace, and markup
-that is not well-formed XML throws a `SyntaxError` and changes nothing. `document.write`,
-`writeln`, `open` and `close` throw an `InvalidStateError` there, as a browser's do in an XML
-document.
-
-Not there yet: a frame's window does not close when a script removes the frame, and two frames
-that show one document share one window; form controls drawn on the page, since an `<input>` has no box yet, though scripts read and set
-its value and checkedness. A script that calls a missing method fails and is
-listed in `failures`, and the chapter goes on as its other scripts leave it.
-
-Real books keep this true: `ScriptedBookGateTest` runs the scripted books of the public corpus,
-the W3C tests of spine-level scripting and an IDPF sample that drives its pages with jQuery 1.7.1,
-and checks what each page shows afterwards. A failure a book is known to hit is listed there with
-its issue.
-
-In `KiteDocView`, pass the runner as `epubScripts`, and the viewer opens chapters, sends taps,
-pumps timers and follows the scripts' changes itself; see
-[A book's scripts](compose-viewer.md#a-books-scripts).
-
-`EpubScriptPolicy` sets how long each call may run: opening a chapter, a tap, a round of timers.
-The DOM the library sets up in a chapter's engine before the book's first script is not counted,
-as it takes a few hundred milliseconds and on a slow device seconds, so a tight budget stops the
-book's scripts and never the DOM they need ([#554](https://github.com/yuroyami/KitePDF/issues/554)).
-`EpubScriptPolicy.DENY` runs nothing. On the JVM, Android and native targets, the runner runs
-its calls on a thread of its own, as `PdfScriptRunner` does, and opens each chapter's engine on a
-thread of its own too. On the web it runs them on the page's thread, and a long script pauses
-there as described in [Threads](#threads). Call
-`prepare()` once before the first chapter opens, as for a PDF. A listener of `onNavigate` or `onTimersChanged`
-runs on one of them while a script waits for it, so it hands its work on rather than calling the
-runner. `EpubScriptSession` in `kitepdf-epub` is the same thing over any `KiteScriptEngine`, on
-the caller's thread; its `liveChapters` says how many chapters' engines stay open.
+A listener of `onNavigate` or `onTimersChanged` runs on one of these threads while a script waits for it. So the listener must hand its work on to another thread and must not call the runner.
 
 ## Targets
 
-JVM, Android, iOS, macOS, Linux, Windows, JavaScript and WebAssembly: the targets KiteJS builds for. tvOS, watchOS and Android native are not covered.
+`kitepdf-javascript` runs on the targets that KiteJS builds for: JVM, Android, iOS, macOS, Linux, Windows, JS and Wasm. It does not run on tvOS, watchOS or Android native.
