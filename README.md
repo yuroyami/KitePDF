@@ -13,8 +13,8 @@
 </p>
 
 <p align="center">
-  <sub>AI tools wrote much of the code, tests and documentation in this project, under the direction
-  and review of its author.</sub>
+  <sub>AI tools helped a great deal in building this project, which would not have been possible
+  without them. Its author directed and reviewed all of the work.</sub>
 </p>
 
 <p align="center">

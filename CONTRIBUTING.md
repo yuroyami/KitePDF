@@ -6,7 +6,8 @@ Read this once before your first change. It is short on purpose.
 
 Breaking any of these fails the change, however good the code is.
 
-- **Work on `main`.** Do not create branches. Do not add AI attribution to commits, tags, pull requests or files.
+- **Work on `main`.** Do not create branches.
+- **AI use is stated once, in the README.** AI tools, Claude among them, helped build KitePDF, and the README says so. Commits, tags, pull requests and source files do not repeat that statement in a `Co-Authored-By` or "Generated with" line.
 - **No em dashes** in any file, comment, commit message or document. Use commas, colons or brackets.
 - **No new dependencies in `:kitepdf-core`, `:kitepdf-pdf` and `:kitepdf-epub`.** Besides the Kotlin standard library and other KitePDF modules, these three modules use two libraries: ImageKodec, the image codec library, and kotlinx.coroutines, which `:kitepdf-epub` uses for background work such as fetching the resources that a book names by URL. Do not add another. If a change seems to need a library, write `expect`/`actual` platform code instead. The JVM may use the JDK, Apple targets may use platform frameworks, JavaScript may use browser APIs, and common code stays pure Kotlin.
 - **Never break lenient salvage.** A corrupt object, image, font or annotation becomes a skip or a placeholder. It never stops the page or the document. Every parser that you touch keeps this property.
