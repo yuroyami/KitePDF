@@ -7,11 +7,11 @@ The harness renders PDF pages with KitePDF and with MuPDF (`mutool draw`), compa
 On Linux, install `fonts-noto-cjk` before you run the JVM rendering tests, as CI does. One public document has vertical Japanese text without an embedded font, so it needs a fallback font from the host. Without that font, the page shows boxes instead of text and fails its baseline.
 
 ```bash
-./gradlew :kitepdf-native-renderer:jvmTest \
-  --tests "io.github.yuroyami.kitepdf.nativerenderer.difftest.DifferentialTest"
+./kotlin test -m kitepdf-native-renderer -p jvm \
+  --include-classes='io.github.yuroyami.kitepdf.nativerenderer.difftest.DifferentialTest'
 ```
 
-Before the test runs, the task checks the public corpus with `python3 tools/corpus.py verify`. The [corpus guide](../corpus/README.md) explains the credits, your own documents, and how to add a public document.
+`./kotlin check corpus` checks the public corpus with `python3 tools/corpus.py verify`. CI runs it before the tests. The [corpus guide](../corpus/README.md) explains the credits, your own documents, and how to add a public document.
 
 The output goes to `kitepdf-native-renderer/build/difftest/`:
 
@@ -26,7 +26,7 @@ Open `report.md` and start at the top. That row is the worst page.
 
 ## Settings
 
-Set these as Gradle `-D` system properties.
+Pass these as `-D` system properties in `--jvm-args`, for example `--jvm-args='-Dkitepdf.diff.dpi=150'`.
 
 | Property | Default | Meaning |
 |---|---|---|
@@ -45,9 +45,9 @@ When you give a path for the corpus or for `mutool`, the path must be right. A m
 The per-page baseline applies only at 96 dpi. So a run at another density checks only the budget. For example, to look at fine detail:
 
 ```bash
-./gradlew :kitepdf-native-renderer:jvmTest \
-  --tests "io.github.yuroyami.kitepdf.nativerenderer.difftest.DifferentialTest" \
-  -Dkitepdf.diff.dpi=150 -Dkitepdf.diff.budget=0.10
+./kotlin test -m kitepdf-native-renderer -p jvm \
+  --include-classes='io.github.yuroyami.kitepdf.nativerenderer.difftest.DifferentialTest' \
+  --jvm-args='-Dkitepdf.diff.dpi=150 -Dkitepdf.diff.budget=0.10'
 ```
 
 ## The gates
@@ -56,7 +56,7 @@ The per-page baseline applies only at 96 dpi. So a run at another density checks
 2. **Visible output.** Each synthetic fixture must draw something.
 3. **Oracle completeness.** When the harness finds `mutool`, KitePDF and MuPDF must report the same page count. Each page that KitePDF renders must also give a readable reference PNG. A page count that differs, a timeout, an exit code that is not zero, or a missing or unreadable PNG fails the gate. `report.md` records the cause.
 4. **Budget** (only when the harness finds `mutool`). No page may have a mean error above `kitepdf.diff.budget`. Lower the budget as the scores drop. Raise it for one run when a change moves the scores on purpose.
-5. **Per-page baseline** (only when the harness finds `mutool`, at 96 dpi). Each page must not score clearly worse than its entry in `src/jvmTest/resources/difftest-baseline.txt`, even when the mean holds. A page fails when one of these numbers grows past its margin:
+5. **Per-page baseline** (only when the harness finds `mutool`, at 96 dpi). Each page must not score clearly worse than its entry in `testResources@jvm/difftest-baseline.txt`, even when the mean holds. A page fails when one of these numbers grows past its margin:
     - the mean error, by more than a quarter plus 0.0005
     - the fraction of changed pixels, by more than a quarter plus 0.002
     - the largest channel error, by more than 48 levels

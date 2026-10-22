@@ -21,7 +21,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TARGET = os.path.join(ROOT, "kitepdf-epub", "src", "commonMain", "kotlin", "io", "github", "yuroyami",
+TARGET = os.path.join(ROOT, "kitepdf-epub", "src", "io", "github", "yuroyami",
                       "kitepdf", "epub", "script", "EncodingData.kt")
 DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 # A JVM class file holds no string constant over 65535 bytes.

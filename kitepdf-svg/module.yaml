@@ -1,0 +1,228 @@
+# The SVG renderer that EPUB and CBZ draw inside their pages, and a handler for a standalone .svg file.
+
+product:
+  type: kmp/lib
+  platforms:
+    - jvm
+    - android
+    - js
+    - wasmJs
+    - wasmWasi
+    - iosArm64
+    - iosSimulatorArm64
+    - iosX64
+    - macosArm64
+    - tvosArm64
+    - tvosSimulatorArm64
+    - watchosArm32
+    - watchosArm64
+    - watchosDeviceArm64
+    - watchosSimulatorArm64
+    - linuxX64
+    - linuxArm64
+    - mingwX64
+    - androidNativeArm32
+    - androidNativeArm64
+    - androidNativeX86
+    - androidNativeX64
+
+description: >-
+  Pure-Kotlin Multiplatform SVG support for KitePDF - opens a standalone .svg as a one-page document and draws
+  vector art embedded in other formats.
+
+apply:
+  - //common.module-template.yaml
+  - //library.module-template.yaml
+
+dependencies:
+  - //kitepdf-core: exported
+
+settings:
+  kotlin:
+    optIns: [ kotlin.RequiresOptIn, kotlin.experimental.ExperimentalNativeApi ]
+  android:
+    namespace: io.github.yuroyami.kitepdf.svg
+  publishing:
+    pom:
+      name: KitePDF SVG
+
+# Gradle named the klib "io.github.yuroyami:kitepdf-svg". Keep that name, or libraries built against
+# earlier releases fail to link on Kotlin/Native. Set it per platform: on @native, it also
+# renames the klibs of shared native code, which must keep their own names.
+settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-svg ]
+
+settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-svg ]
+
+settings@wasmWasi:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-svg ]
+
+settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@watchosArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@watchosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@watchosDeviceArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@watchosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@mingwX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@androidNativeArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@androidNativeArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@androidNativeX86:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+settings@androidNativeX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-svg, -Xshort-module-name=kitepdf-svg ]
+
+# Tests compile into their own klib, which needs a different name. The test blocks name the
+# same platforms as the blocks above, so the toolchain applies them last.
+test-settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-svg_test ]
+
+test-settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-svg_test ]
+
+test-settings@wasmWasi:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-svg_test ]
+
+test-settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@watchosArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@watchosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@watchosDeviceArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@watchosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@mingwX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@androidNativeArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@androidNativeArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@androidNativeX86:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+test-settings@androidNativeX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-svg_test, -Xshort-module-name=kitepdf-svg_test ]
+
+plugins:
+  abi-check:
+    enabled: true
+    # Also checks the Android classes against api/android, as the Gradle build did.
+    android: true
+    # The klibAbi check reads the klibs of these platforms, so run `./kotlin build` first.
+    klibPlatforms: [ androidNativeArm32, androidNativeArm64, androidNativeX64, androidNativeX86, iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, wasmJs, wasmWasi, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64 ]
+  dokka:
+    enabled: true
+    moduleName: kitepdf-svg
+    includes: [ Module.md ]
+    customStyleSheets: [ ../docs/api-theme/kite.css ]
+    templatesDir: ../dokka-templates
+    footerMessage: Apache-2.0 · KitePDF is part of the Kite family.
+    sourceLinkUrl: https://github.com/yuroyami/KitePDF/blob/main/kitepdf-svg/src

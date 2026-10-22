@@ -35,24 +35,24 @@ When an upstream file changes, `fetch` fails on the digest. The tracked copy sta
 The harnesses find the PDFs and the EPUBs in their folders and in all subfolders, in a stable order. They render the public documents, your own documents and their own generated fixtures. Two files with the same name get different names in the report.
 
 ```bash
-./gradlew :kitepdf-native-renderer:jvmTest --tests "*.difftest.DifferentialTest"
+./kotlin test -m kitepdf-native-renderer -p jvm --include-classes='*.difftest.DifferentialTest'
 ```
 
-The PDF sweep scores up to six evenly spaced pages of each document, with the first and the last page. To change the number, set `-Dkitepdf.diff.maxpages=N`. To score every page, set `-Dkitepdf.diff.allpages=true`. The report in `kitepdf-native-renderer/build/difftest/report.md` lists the pages of each document, the selected pages, the failures and the scores. A page has a score only when KitePDF and MuPDF both render it.
+The PDF sweep scores up to six evenly spaced pages of each document, with the first and the last page. To change the number, pass `-Dkitepdf.diff.maxpages=N` in `--jvm-args`. To score every page, pass `-Dkitepdf.diff.allpages=true`. The report in `kitepdf-native-renderer/build/difftest/report.md` lists the pages of each document, the selected pages, the failures and the scores. A page has a score only when KitePDF and MuPDF both render it.
 
 ```bash
-./gradlew :kitepdf-native-renderer:jvmTest --tests "*EpubDifferentialTest*"
+./kotlin test -m kitepdf-native-renderer -p jvm --include-classes='*EpubDifferentialTest*'
 ```
 
 The EPUB sweep renders every page that KitePDF makes, and writes the page count of each book to `kitepdf-native-renderer/build/epub-difftest/report.md`. A render failure, or a change of a recorded page count without a reason, fails the sweep. The sweep compares only page 0 with MuPDF, and that score is for information only, because the two engines can reflow a book differently.
 
 ```bash
-./gradlew :kitepdf-javascript:jvmTest --tests "*ScriptedBookGateTest*"
+./kotlin test -m kitepdf-javascript -p jvm --include-classes='*ScriptedBookGateTest*'
 ```
 
 The scripted-book gate opens each chapter with scripts of the public EPUBs through `EpubScriptRunner`. It taps the page, runs its timers, and checks what the page shows afterwards. A book with scripts that you add here needs its checks in that gate. The gate fails until it has them.
 
-To use other folders, set `-Dkitepdf.corpus=/absolute/pdf/path` and `-Dkitepdf.epub.corpus=/absolute/epub/path`. A path that does not exist fails the test. The [harness guide](../kitepdf-native-renderer/DIFFTEST.md) explains the oracle setup, the PDFium parity check, the score budget and the baseline updates.
+To use other folders, pass `-Dkitepdf.corpus=/absolute/pdf/path` and `-Dkitepdf.epub.corpus=/absolute/epub/path` in `--jvm-args`. A path that does not exist fails the test. The [harness guide](../kitepdf-native-renderer/DIFFTEST.md) explains the oracle setup, the PDFium parity check, the score budget and the baseline updates.
 
 ## Rights
 

@@ -15,7 +15,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TARGET = os.path.join(ROOT, "kitepdf-epub", "src", "commonMain", "kotlin", "io", "github", "yuroyami",
+TARGET = os.path.join(ROOT, "kitepdf-epub", "src", "io", "github", "yuroyami",
                       "kitepdf", "epub", "FullWidth.kt")
 
 

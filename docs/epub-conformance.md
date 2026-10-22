@@ -46,7 +46,7 @@ CI checks out the suite at the pinned commit and runs the test on every push. To
 ```bash
 git clone https://github.com/w3c/epub-tests ../epub-tests
 git -C ../epub-tests checkout 54092b4233253e9aac80e93ec4782b380b4b3403
-KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./gradlew :kitepdf-compose-viewer:jvmTest --tests "*EpubConformanceTest*"
+KITEPDF_EPUB_TESTS=$PWD/../epub-tests/tests ./kotlin test -m kitepdf-compose-viewer -p jvm --include-classes='*EpubConformanceTest*'
 ```
 
 ## Open Container Format

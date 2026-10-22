@@ -1,0 +1,14 @@
+# The desktop sample. `./kotlin run -m sample-desktop` opens it in a window.
+product: jvm/app
+
+apply:
+  - //common.module-template.yaml
+  - //compose.module-template.yaml
+
+dependencies:
+  - //sample
+  - $compose.desktop.currentOs
+
+settings:
+  jvm:
+    mainClass: sample.MainKt

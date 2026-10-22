@@ -1,0 +1,142 @@
+# Runs the JavaScript that documents carry, on KiteJS. It is the one module with a script engine, so every
+# other module talks to the KiteScriptEngine interface in kitepdf-core. Its targets are the ones KiteJS builds for.
+
+product:
+  type: kmp/lib
+  platforms:
+    - jvm
+    - android
+    - js
+    - wasmJs
+    - iosArm64
+    - iosSimulatorArm64
+    - iosX64
+    - macosArm64
+    - linuxX64
+    - linuxArm64
+    - mingwX64
+
+description: >-
+  Runs the JavaScript that PDF documents carry, on the KiteJS engine: document-level scripts and JavaScript actions,
+  under an instruction budget so a script cannot hang the app. Every other KitePDF module stays free of any script
+  engine.
+
+apply:
+  - //common.module-template.yaml
+  - //library.module-template.yaml
+
+dependencies:
+  - //kitepdf-pdf: exported
+  - //kitepdf-epub: exported
+  - $libs.kitejs.api
+  - $libs.kitejs.quickjs
+
+test-dependencies:
+  - $libs.kotlinx.coroutines.test
+
+test-dependencies@jvm:
+  - //kitepdf-native-renderer
+
+# The Android host tests run on the JVM. The desktop QuickJS jar brings the engine for the host.
+test-dependencies@android:
+  - $libs.kitejs.quickjs.jvm
+
+settings:
+  android:
+    namespace: io.github.yuroyami.kitepdf.javascript
+  publishing:
+    pom:
+      name: KitePDF JavaScript
+
+# Gradle named the klib "io.github.yuroyami:kitepdf-javascript". Keep that name, or libraries built against
+# earlier releases fail to link on Kotlin/Native. Set it per platform: on @native, it also
+# renames the klibs of shared native code, which must keep their own names.
+settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-javascript ]
+
+settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-javascript ]
+
+settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-javascript, -Xshort-module-name=kitepdf-javascript ]
+
+settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-javascript, -Xshort-module-name=kitepdf-javascript ]
+
+settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-javascript, -Xshort-module-name=kitepdf-javascript ]
+
+settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-javascript, -Xshort-module-name=kitepdf-javascript ]
+
+settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-javascript, -Xshort-module-name=kitepdf-javascript ]
+
+settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-javascript, -Xshort-module-name=kitepdf-javascript ]
+
+settings@mingwX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-javascript, -Xshort-module-name=kitepdf-javascript ]
+
+# Tests compile into their own klib, which needs a different name. The test blocks name the
+# same platforms as the blocks above, so the toolchain applies them last.
+test-settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-javascript_test ]
+
+test-settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-javascript_test ]
+
+test-settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-javascript_test, -Xshort-module-name=kitepdf-javascript_test ]
+
+test-settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-javascript_test, -Xshort-module-name=kitepdf-javascript_test ]
+
+test-settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-javascript_test, -Xshort-module-name=kitepdf-javascript_test ]
+
+test-settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-javascript_test, -Xshort-module-name=kitepdf-javascript_test ]
+
+test-settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-javascript_test, -Xshort-module-name=kitepdf-javascript_test ]
+
+test-settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-javascript_test, -Xshort-module-name=kitepdf-javascript_test ]
+
+test-settings@mingwX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-javascript_test, -Xshort-module-name=kitepdf-javascript_test ]
+
+plugins:
+  abi-check:
+    enabled: true
+    # Also checks the Android classes against api/android, as the Gradle build did.
+    android: true
+    # The klibAbi check reads the klibs of these platforms, so run `./kotlin build` first.
+    klibPlatforms: [ iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, wasmJs ]
+  dokka:
+    enabled: true
+    moduleName: kitepdf-javascript
+    includes: [ Module.md ]
+    customStyleSheets: [ ../docs/api-theme/kite.css ]
+    templatesDir: ../dokka-templates
+    footerMessage: Apache-2.0 · KitePDF is part of the Kite family.
+    sourceLinkUrl: https://github.com/yuroyami/KitePDF/blob/main/kitepdf-javascript/src

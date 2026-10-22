@@ -1,0 +1,128 @@
+# Maps the render Canvas to each platform's own canvas: java.awt.Graphics2D on the JVM, android.graphics.Canvas,
+# CoreGraphics on Apple and CanvasRenderingContext2D on JS. No Compose, no Skia, no third-party renderer.
+
+product:
+  type: kmp/lib
+  platforms:
+    - jvm
+    - android
+    - js
+    - iosArm64
+    - iosSimulatorArm64
+    - iosX64
+    - macosArm64
+    - tvosArm64
+    - tvosSimulatorArm64
+
+description: >-
+  Platform-native rasterizers for KitePDF - render PDF pages through AWT, android.graphics.Canvas, CoreGraphics or
+  Canvas2D with no extra runtime dependencies.
+
+apply:
+  - //common.module-template.yaml
+  - //library.module-template.yaml
+
+dependencies:
+  - //kitepdf-pdf
+
+# src@js gets kotlinx.browser and org.w3c.dom from this library. The Kotlin Gradle plugin added it to every JS target.
+dependencies@js:
+  - $libs.kotlin.dom.api.compat
+
+test-dependencies@jvm:
+  - //kitepdf-epub
+  - //kitepdf-difftest
+
+test-dependencies@android:
+  - $libs.robolectric
+
+settings:
+  kotlin:
+    optIns: [ kotlin.RequiresOptIn ]
+  android:
+    namespace: io.github.yuroyami.kitepdf.nativerenderer
+    minSdk: 29
+  publishing:
+    pom:
+      name: KitePDF Native Renderer
+
+# Gradle named the klib "io.github.yuroyami:kitepdf-native-renderer". Keep that name, or libraries built against
+# earlier releases fail to link on Kotlin/Native. Set it per platform: on @native, it also
+# renames the klibs of shared native code, which must keep their own names.
+settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-native-renderer ]
+
+settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-native-renderer, -Xshort-module-name=kitepdf-native-renderer ]
+
+settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-native-renderer, -Xshort-module-name=kitepdf-native-renderer ]
+
+settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-native-renderer, -Xshort-module-name=kitepdf-native-renderer ]
+
+settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-native-renderer, -Xshort-module-name=kitepdf-native-renderer ]
+
+settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-native-renderer, -Xshort-module-name=kitepdf-native-renderer ]
+
+settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-native-renderer, -Xshort-module-name=kitepdf-native-renderer ]
+
+# Tests compile into their own klib, which needs a different name. The test blocks name the
+# same platforms as the blocks above, so the toolchain applies them last.
+test-settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-native-renderer_test ]
+
+test-settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-native-renderer_test, -Xshort-module-name=kitepdf-native-renderer_test ]
+
+test-settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-native-renderer_test, -Xshort-module-name=kitepdf-native-renderer_test ]
+
+test-settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-native-renderer_test, -Xshort-module-name=kitepdf-native-renderer_test ]
+
+test-settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-native-renderer_test, -Xshort-module-name=kitepdf-native-renderer_test ]
+
+test-settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-native-renderer_test, -Xshort-module-name=kitepdf-native-renderer_test ]
+
+test-settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-native-renderer_test, -Xshort-module-name=kitepdf-native-renderer_test ]
+
+plugins:
+  # `./kotlin check corpus` verifies the public documents that the differential tests read.
+  public-corpus:
+    enabled: true
+  abi-check:
+    enabled: true
+    # Also checks the Android classes against api/android, as the Gradle build did.
+    android: true
+    # The klibAbi check reads the klibs of these platforms, so run `./kotlin build` first.
+    klibPlatforms: [ iosArm64, iosSimulatorArm64, iosX64, js, macosArm64, tvosArm64, tvosSimulatorArm64 ]
+  dokka:
+    enabled: true
+    moduleName: kitepdf-native-renderer
+    includes: [ Module.md ]
+    platformSourceDirs: [ src@jvm, src@android, src@apple, src@js ]
+    customStyleSheets: [ ../docs/api-theme/kite.css ]
+    templatesDir: ../dokka-templates
+    footerMessage: Apache-2.0 · KitePDF is part of the Kite family.
+    sourceLinkUrl: https://github.com/yuroyami/KitePDF/blob/main/kitepdf-native-renderer/src

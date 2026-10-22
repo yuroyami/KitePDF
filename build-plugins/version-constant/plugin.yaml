@@ -1,0 +1,19 @@
+tasks:
+  check:
+    action: !io.github.yuroyami.buildplugins.version.checkVersionConstant
+      moduleName: ${module.name}
+      version: ${module.settings.publishing.version}
+      sourceFile: ${pluginSettings.file}
+
+  update:
+    action: !io.github.yuroyami.buildplugins.version.updateVersionConstant
+      version: ${module.settings.publishing.version}
+      sourceFile: ${pluginSettings.file}
+
+checks:
+  - name: version
+    performedBy: check
+
+commands:
+  - name: updateVersion
+    performedBy: update

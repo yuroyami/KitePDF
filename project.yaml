@@ -1,0 +1,30 @@
+modules:
+  - build-plugins/abi-check
+  - build-plugins/dokka
+  - build-plugins/public-corpus
+  - build-plugins/version-constant
+  - kitepdf
+  - kitepdf-cbz
+  - kitepdf-compose-viewer
+  - kitepdf-core
+  - kitepdf-difftest
+  - kitepdf-epub
+  - kitepdf-javascript
+  - kitepdf-media
+  - kitepdf-native-renderer
+  - kitepdf-net
+  - kitepdf-pdf
+  - kitepdf-skia-renderer
+  - kitepdf-svg
+  - kitepdf-xps
+  - sample
+  - sample-android
+  - sample-desktop
+  - sample-ios
+  - tools/jpx-fixture
+
+plugins:
+  - //build-plugins/abi-check
+  - //build-plugins/dokka
+  - //build-plugins/public-corpus
+  - //build-plugins/version-constant

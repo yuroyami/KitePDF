@@ -19,7 +19,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TARGET = os.path.join(ROOT, "kitepdf-epub", "src", "commonMain", "kotlin", "io", "github", "yuroyami",
+TARGET = os.path.join(ROOT, "kitepdf-epub", "src", "io", "github", "yuroyami",
                       "kitepdf", "epub", "css", "QuoteData.kt")
 VERSION = "48.2.0"
 BASE = f"https://raw.githubusercontent.com/unicode-org/cldr-json/{VERSION}/cldr-json"

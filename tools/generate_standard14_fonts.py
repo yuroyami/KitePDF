@@ -15,7 +15,7 @@ import zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "mupdf-master", "resources", "fonts", "urw")
-TARGET = os.path.join(ROOT, "kitepdf-core", "src", "commonMain", "kotlin", "io", "github", "yuroyami",
+TARGET = os.path.join(ROOT, "kitepdf-core", "src", "io", "github", "yuroyami",
                       "kitepdf", "core", "font", "Standard14FontData.kt")
 FILES = [
     "NimbusSans-Regular", "NimbusSans-Bold", "NimbusSans-Italic", "NimbusSans-BoldItalic",

@@ -1,0 +1,28 @@
+# The shared code of the sample apps: one App() composable that shows a PDF and an EPUB in the viewer.
+# sample-desktop, sample-android and sample-ios start it on each platform.
+product:
+  type: kmp/lib
+  platforms: [ jvm, android, js, iosArm64, iosSimulatorArm64 ]
+
+apply:
+  - //common.module-template.yaml
+  - //compose.module-template.yaml
+
+dependencies:
+  - //kitepdf: exported
+  - //kitepdf-compose-viewer: exported
+  - $compose.runtime: exported
+  - $compose.foundation: exported
+  - $compose.ui: exported
+  - $compose.components.resources
+  - $libs.compose.material3: exported
+
+settings:
+  kotlin:
+    optIns: [ androidx.compose.material3.ExperimentalMaterial3Api, androidx.compose.ui.ExperimentalComposeUiApi ]
+  android:
+    namespace: io.github.yuroyami.kitepdf.sample
+    compileSdk:
+      apiLevel: 37
+      minorApiLevel: 2
+    minSdk: 24

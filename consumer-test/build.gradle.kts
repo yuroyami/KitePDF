@@ -1,12 +1,13 @@
-import java.util.Properties
-
 plugins {
-    alias(libs.plugins.kotlin.jvm)
+    kotlin("jvm")
 }
 
-// The version under test: -PkitepdfVersion=..., else the version the source tree is at.
+// The version under test: -PkitepdfVersion=..., else the version the source tree is at
+// (settings.publishing.version in ../library.module-template.yaml).
 val kitepdfVersion: String = providers.gradleProperty("kitepdfVersion").orNull
-    ?: Properties().apply { file("../gradle.properties").inputStream().use { load(it) } }.getProperty("version")
+    ?: Regex("""(?ms)^  publishing:.*?^    version:\s*(\S+)""")
+        .find(file("../library.module-template.yaml").readText())?.groupValues?.get(1)
+    ?: error("no settings.publishing.version in ../library.module-template.yaml")
 
 dependencies {
     testImplementation("io.github.yuroyami:kitepdf:$kitepdfVersion")

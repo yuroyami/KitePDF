@@ -1,0 +1,224 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXFileReference section */
+		312EA06BC9A3F27EEF5BA491 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.info; name = Info.plist; path = src/Info.plist; sourceTree = "<group>"; };
+		312EA06C08BC68EA5388F288 /* sample-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "sample-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		312EAD2BDA1B76614C0E11D4 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				MainViewController.kt,
+			);
+			target = 312EA1D8F62C0673A95CB08B /* app */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		312EACB2D00C7A64D40DF8AA /* src */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				312EAD2BDA1B76614C0E11D4 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			path = src;
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		312EAB49168E14ACA45B81EA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		312EA690FB8A9B61CC7330D7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				312EA06C08BC68EA5388F288 /* sample-ios.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		312EAD66152593F4BE8BBA4E = {
+			isa = PBXGroup;
+			children = (
+				312EA690FB8A9B61CC7330D7 /* Products */,
+				312EA06BC9A3F27EEF5BA491 /* Info.plist */,
+				312EACB2D00C7A64D40DF8AA /* src */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		312EA1D8F62C0673A95CB08B /* app */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 312EA804D9F6C3DCFB518881 /* Build configuration list for PBXNativeTarget "app" */;
+			buildPhases = (
+				312EAB7B3EF4352A3C7D574D /* Build Kotlin */,
+				312EA2967355704F9CE1B01F /* Sources */,
+				312EAB49168E14ACA45B81EA /* Frameworks */,
+				312EA30C8C4C751D6B435D53 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				312EACB2D00C7A64D40DF8AA /* src */,
+			);
+			name = app;
+			productName = app;
+			productReference = 312EA06C08BC68EA5388F288 /* sample-ios.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		312EA36DC6989D4D8009588A /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 312EA5975800D7FEEAD29E5A /* Build configuration list for PBXProject "module" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 312EAD66152593F4BE8BBA4E;
+			productRefGroup = 312EA690FB8A9B61CC7330D7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				312EA1D8F62C0673A95CB08B /* app */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		312EA30C8C4C751D6B435D53 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		312EAB7B3EF4352A3C7D574D /* Build Kotlin */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			inputPaths = (
+			);
+			name = "Build Kotlin";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# !KOTLIN INTEGRATION STEP!\n# This script is managed by the Kotlin Toolchain, do not edit manually!\n\"${KOTLIN_CLI_WRAPPER_PATH}\" tool xcode-integration\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		312EA2967355704F9CE1B01F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		312EA0388B321A10C84EBC6B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				INFOPLIST_FILE = src/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				KOTLIN_CLI_WRAPPER_PATH = ../kotlin;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.yuroyami.kitepdf.sample;
+				PRODUCT_MODULE_NAME = app;
+				PRODUCT_NAME = "sample-ios";
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = (
+					1,
+					2,
+				);
+			};
+			name = Debug;
+		};
+		312EA300320FC583344EFFBB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		312EA3BD20B5AAAC7090FBF4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		312EA527D6DE8FA7B538DB96 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				INFOPLIST_FILE = src/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				KOTLIN_CLI_WRAPPER_PATH = ../kotlin;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.yuroyami.kitepdf.sample;
+				PRODUCT_MODULE_NAME = app;
+				PRODUCT_NAME = "sample-ios";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = (
+					1,
+					2,
+				);
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		312EA5975800D7FEEAD29E5A /* Build configuration list for PBXProject "module" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				312EA300320FC583344EFFBB /* Debug */,
+				312EA3BD20B5AAAC7090FBF4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		312EA804D9F6C3DCFB518881 /* Build configuration list for PBXNativeTarget "app" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				312EA0388B321A10C84EBC6B /* Debug */,
+				312EA527D6DE8FA7B538DB96 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 312EA36DC6989D4D8009588A /* Project object */;
+}

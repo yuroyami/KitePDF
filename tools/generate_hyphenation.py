@@ -32,10 +32,10 @@ import unicodedata
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CORE = os.path.join(ROOT, "kitepdf-core", "src")
+CORE = os.path.join(ROOT, "kitepdf-core")
 PACKAGE_PATH = os.path.join("io", "github", "yuroyami", "kitepdf", "core", "text", "hyphen")
-MAIN_DIR = os.path.join(CORE, "commonMain", "kotlin", PACKAGE_PATH)
-TEST_FILE = os.path.join(CORE, "commonTest", "kotlin", "io", "github", "yuroyami", "kitepdf", "core",
+MAIN_DIR = os.path.join(CORE, "src", PACKAGE_PATH)
+TEST_FILE = os.path.join(CORE, "test", "io", "github", "yuroyami", "kitepdf", "core",
                          "HyphenationGolden.kt")
 UPSTREAM_DIR = os.path.join("hyph-utf8", "tex", "generic", "hyph-utf8", "patterns")
 

@@ -1,24 +1,19 @@
 name: CI
 
-# Build + test gates.
+# Build and test gates. Every job builds with the Kotlin Toolchain (the ./kotlin script), which downloads
+# its own JDK, Kotlin/Native, Node and Chrome into a cache folder.
 #
-# - `build` (Linux JVM) is the REQUIRED gate: the JVM target is the canonical
-#   build of commonMain, and the differential/oracle suites run here (they
-#   use a pinned, colour-managed mutool build, and a pinned PDFium for the
-#   parity check).
-#   It runs on every push and pull request.
-# - `apple` and `js` prove the non-JVM targets compile AND pass the common
-#   tests before merge. Platform regressions are therefore merge-blocking,
-#   instead of being discovered only after they land on main.
-# - `other-targets` does the same for the rest of what we publish: it runs the
-#   common tests on Linux x64, wasmJs and wasmWasi, and compiles Linux arm64,
-#   Windows and the Android native ABIs, so none of them rots unseen (#562).
-# - `api` checks the public API of each published module against the dump in
-#   its api/ directory. It runs on macOS, the one host that compiles every
-#   target, so the Apple-only declarations are checked too.
-# - `consumer` publishes the JVM artifacts to Maven Local and builds the
-#   project in consumer-test/ against them, by coordinates, as an application
-#   does. A broken POM or a missing dependency fails there before a release.
+# - `jvm` (Linux) is the REQUIRED gate: the JVM target is the canonical build of the common code, and
+#   the differential and oracle suites run here (they use a pinned, colour-managed mutool build, and a
+#   pinned PDFium for the parity check). It also runs the common tests through the Android host tests.
+# - `apple` and `web` prove the non-JVM targets compile AND pass the common tests before merge.
+#   Platform regressions are therefore merge-blocking, instead of being discovered only after they land.
+# - `other-targets` does the same for the rest of what we publish: it runs the common tests on Linux x64,
+#   and compiles Linux arm64, Windows and the Android native ABIs, so none of them rots unseen (#562).
+# - `api` builds every target on macOS, the one host that compiles them all, and checks the public API of
+#   each published module against the dumps in its api/ directory. It then publishes the libraries to
+#   Maven Local and builds the Gradle project in consumer-test/ against them, by coordinates, as an
+#   application does. A broken POM or a missing dependency fails there before a release.
 
 on:
   push:
@@ -33,23 +28,27 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  KOTLIN_CLI_NO_WELCOME_BANNER: 1
+
 jobs:
-  build:
+  jvm:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Cache the Kotlin Toolchain downloads
+        uses: actions/cache@v4
         with:
-          distribution: temurin
-          java-version: '21'
+          path: ~/.cache/JetBrains/Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Install the Android SDK platform
+        run: sdkmanager 'platforms;android-37.2' 'build-tools;37.0.0'
 
       # The vertical-text corpus PDF names a Japanese font without embedding it.
       # Without a CJK fallback, AWT draws boxes and fails the page baseline (#627).
@@ -63,7 +62,7 @@ jobs:
 
       # The public documents are in the checkout; this fails on a changed or missing one.
       - name: Verify the licensed public documents
-        run: python3 tools/corpus.py verify
+        run: ./kotlin check corpus
 
       # The W3C EPUB test suite at the commit docs/epub-conformance.json answers.
       # EpubConformanceTest runs it and fails without it on CI (#497).
@@ -127,47 +126,19 @@ jobs:
             --only-binary :all: --no-deps pypdfium2==5.13.0
           echo "PDFIUM_PYTHON=$RUNNER_TEMP/pdfium-venv/bin/python" >> "$GITHUB_ENV"
 
-      - name: Compile commonMain (JVM)
-        run: ./gradlew :kitepdf:compileKotlinJvm --stacktrace
+      # Also builds the debug APK of the Android sample.
+      - name: Build every module (JVM, Android)
+        run: ./kotlin build -p jvm -p android
 
-      - name: Test every module (JVM)
-        run: >
-          ./gradlew
-          :kitepdf-difftest:jvmTest :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest
-          :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest :kitepdf-xps:jvmTest
-          :kitepdf-skia-renderer:jvmTest :kitepdf-compose-viewer:jvmTest
-          :kitepdf:jvmTest :kitepdf-net:jvmTest :kitepdf-javascript:jvmTest :kitepdf-media:jvmTest
-          :sample:jvmTest --continue --stacktrace
-
-      - name: Test common code through Android host variants
-        run: >
-          ./gradlew
-          :kitepdf-core:testAndroidHostTest :kitepdf-pdf:testAndroidHostTest
-          :kitepdf-epub:testAndroidHostTest :kitepdf-cbz:testAndroidHostTest
-          :kitepdf-svg:testAndroidHostTest :kitepdf-xps:testAndroidHostTest :kitepdf:testAndroidHostTest
-          :kitepdf-javascript:testAndroidHostTest
-          :kitepdf-compose-viewer:testAndroidHostTest :kitepdf-native-renderer:testAndroidHostTest
-          --continue --stacktrace
-
-      - name: Compile Android rendering backends
-        run: >
-          ./gradlew
-          :kitepdf-native-renderer:compileAndroidMain
-          :kitepdf-skia-renderer:compileAndroidMain
-          :kitepdf-compose-viewer:compileAndroidMain
-          :kitepdf-media:compileAndroidMain
-          :sample:compileAndroidMain
-          --continue --stacktrace
-
-      - name: Test :kitepdf-native-renderer (JVM oracle + fuzz tests)
-        run: ./gradlew :kitepdf-native-renderer:jvmTest --stacktrace
+      - name: Test every module (JVM, Android host tests)
+        run: ./kotlin test -p jvm -p android
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports-jvm
-          path: '**/build/reports/tests/**'
+          path: build/reports/
           if-no-files-found: ignore
 
       - name: Upload public-corpus inventory and credits
@@ -201,177 +172,59 @@ jobs:
 
   apple:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache Konan (native compiler + prebuilt deps)
+      - name: Cache the Kotlin Toolchain downloads
         uses: actions/cache@v4
         with:
-          path: ~/.konan
-          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: konan-${{ runner.os }}-
+          path: ~/Library/Caches/JetBrains/Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
 
-      - name: Test iOS simulator common suites
-        run: >
-          ./gradlew
-          :kitepdf-core:iosSimulatorArm64Test
-          :kitepdf-pdf:iosSimulatorArm64Test
-          :kitepdf-epub:iosSimulatorArm64Test
-          :kitepdf-cbz:iosSimulatorArm64Test
-          :kitepdf-svg:iosSimulatorArm64Test
-          :kitepdf-xps:iosSimulatorArm64Test
-          :kitepdf-javascript:iosSimulatorArm64Test --continue --stacktrace
+      # Every Apple target compiles the same src@apple code, so one simulator and macOS are enough for tests.
+      - name: Build every module (iOS simulator, macOS)
+        run: ./kotlin build -p iosSimulatorArm64 -p macosArm64
 
-      - name: Compile iOS rendering backends
-        run: >
-          ./gradlew
-          :kitepdf-native-renderer:compileKotlinIosSimulatorArm64
-          :kitepdf-skia-renderer:compileKotlinIosSimulatorArm64
-          :kitepdf-compose-viewer:compileKotlinIosSimulatorArm64
-          :kitepdf-media:compileKotlinIosSimulatorArm64
-          :sample:compileKotlinIosSimulatorArm64
-          --continue --stacktrace
+      - name: Test the iOS simulator and macOS arm64 suites
+        run: ./kotlin test -p iosSimulatorArm64 -p macosArm64
 
-      - name: Test macOS arm64 suites and CoreGraphics renderer
-        run: >
-          ./gradlew
-          :kitepdf-core:macosArm64Test
-          :kitepdf-pdf:macosArm64Test
-          :kitepdf-epub:macosArm64Test
-          :kitepdf-cbz:macosArm64Test
-          :kitepdf-svg:macosArm64Test
-          :kitepdf-xps:macosArm64Test
-          :kitepdf:macosArm64Test
-          :kitepdf-native-renderer:macosArm64Test
-          :kitepdf-javascript:macosArm64Test --continue --stacktrace
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports-apple
-          path: '**/build/reports/tests/**'
-          if-no-files-found: ignore
-
-  api:
-    runs-on: macos-latest
+  web:
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache Konan (native compiler + prebuilt deps)
+      - name: Cache the Kotlin Toolchain downloads
         uses: actions/cache@v4
         with:
-          path: ~/.konan
-          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: konan-${{ runner.os }}-
+          path: ~/.cache/JetBrains/Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
 
-      # A failure here means the public API changed. If the change is intended,
-      # run ./gradlew updateKotlinAbi and commit the api/ files with it.
-      - name: Check the public API against the dumps
-        run: ./gradlew checkKotlinAbi --continue --stacktrace
-
-  consumer:
-    runs-on: macos-latest
-    # A passing run takes about 35 minutes, so a slow runner needs the margin.
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
+      # The JS, wasmJs and wasmWasi tests run on a Node new enough for WebAssembly stack switching (#489).
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          persist-credentials: false
+          node-version: '26.11.1'
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
+      - name: Build every module (JS, wasmJs, wasmWasi)
+        run: ./kotlin build -p js -p wasmJs -p wasmWasi
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      # The toolchain runs the wasmJs tests in headless Chrome, with 30 seconds for each module.
+      # That is enough for the viewer. The other modules run in Node in the next step.
+      - name: Test the viewer on wasmJs in headless Chrome
+        run: ./kotlin test -p wasmJs -m kitepdf-compose-viewer
 
-      - name: Cache Konan (native compiler + prebuilt deps)
-        uses: actions/cache@v4
-        with:
-          path: ~/.konan
-          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: konan-${{ runner.os }}-
-
-      # Maven Local needs no signing key, so the signing that a release uses is off here.
-      - name: Publish the JVM artifacts to Maven Local
-        run: >
-          ./gradlew publishKotlinMultiplatformPublicationToMavenLocal publishJvmPublicationToMavenLocal
-          -PRELEASE_SIGNING_ENABLED=false --stacktrace
-
-      - name: Build and test a consumer against them
-        run: ./gradlew -p consumer-test test --stacktrace
-
-  js:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Test JS on Node
-        run: >
-          ./gradlew
-          :kitepdf-core:jsNodeTest :kitepdf-pdf:jsNodeTest
-          :kitepdf-epub:jsNodeTest :kitepdf-cbz:jsNodeTest
-          :kitepdf-svg:jsNodeTest :kitepdf-xps:jsNodeTest :kitepdf:jsNodeTest
-          :kitepdf-net:jsNodeTest :kitepdf-javascript:jsNodeTest --continue --stacktrace
-
-      - name: Compile browser rendering backends
-        run: >
-          ./gradlew
-          :kitepdf-native-renderer:compileKotlinJs
-          :kitepdf-skia-renderer:compileKotlinJs
-          :kitepdf-compose-viewer:compileKotlinJs
-          :sample:compileKotlinJs
-          --continue --stacktrace
-
-      - name: Test the browser canvas in headless Chrome
-        run: ./gradlew :kitepdf-native-renderer:jsBrowserTest --continue --stacktrace
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports-js
-          path: '**/build/reports/tests/**'
-          if-no-files-found: ignore
+      # `./kotlin test` does not run JS or wasmWasi tests. The script links them and runs them in Node with
+      # the wasmJs tests, and the Canvas2D tests of kitepdf-native-renderer in headless Chrome.
+      - name: Test JS, wasmJs and wasmWasi
+        run: python3 scripts/web-tests/run.py
 
   other-targets:
     runs-on: ubuntu-latest
@@ -381,65 +234,64 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Cache the Kotlin Toolchain downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/JetBrains/Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
+
+      - name: Test the Linux x64 suites
+        run: ./kotlin test -p linuxX64
+
+      - name: Compile the other native targets
+        run: >
+          ./kotlin build -p linuxArm64 -p mingwX64
+          -p androidNativeArm32 -p androidNativeArm64 -p androidNativeX64 -p androidNativeX86
+
+  api:
+    runs-on: macos-latest
+    # A full build of every target, then a publish of the JVM consumers' dependencies.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Cache the Kotlin Toolchain downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/JetBrains/Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
+
+      - name: Install the Android SDK platform
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2" "build-tools;37.0.0"'
+
+      - name: Build every module and target
+        run: ./kotlin build
+
+      # A failure here means the public API changed. If the change is intended, run
+      # ./kotlin do updateAbi, updateAndroidAbi or updateKlibAbi and commit the api/ files with it.
+      - name: Check the public API against the dumps, and KITEPDF_VERSION
+        run: ./kotlin check abi androidAbi klibAbi version
+
+      # Maven Local needs no real signing key, so this job signs with a throwaway one.
+      - name: Publish the consumer's dependencies to Maven Local
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --pinentry-mode loopback --passphrase '' --quick-gen-key 'KitePDF CI <ci@invalid>' rsa3072 sign never
+          KOTLIN_TOOLCHAIN_SIGNING_KEY="$(gpg --batch --pinentry-mode loopback --passphrase '' --armor --export-secret-keys)"
+          export KOTLIN_TOOLCHAIN_SIGNING_KEY
+          ./kotlin publish mavenLocal --transitive -m kitepdf -m kitepdf-native-renderer -m kitepdf-javascript
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache Konan (native compiler + prebuilt deps)
-        uses: actions/cache@v4
-        with:
-          path: ~/.konan
-          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: konan-${{ runner.os }}-
-
-      - name: Test Linux x64 common suites
-        run: >
-          ./gradlew
-          :kitepdf-core:linuxX64Test :kitepdf-pdf:linuxX64Test
-          :kitepdf-epub:linuxX64Test :kitepdf-cbz:linuxX64Test
-          :kitepdf-svg:linuxX64Test :kitepdf-xps:linuxX64Test :kitepdf:linuxX64Test
-          :kitepdf-javascript:linuxX64Test
-          --continue --stacktrace
-
-      # Two workers: linking the wasm test binaries four at a time ran a
-      # 4-core, 15 GB machine out of memory and killed the daemon (#562).
-      - name: Test wasmJs and wasmWasi on Node
-        run: >
-          ./gradlew --max-workers=2
-          :kitepdf-core:wasmJsNodeTest :kitepdf-pdf:wasmJsNodeTest
-          :kitepdf-epub:wasmJsNodeTest :kitepdf-cbz:wasmJsNodeTest
-          :kitepdf-svg:wasmJsNodeTest :kitepdf-xps:wasmJsNodeTest :kitepdf:wasmJsNodeTest
-          :kitepdf-javascript:wasmJsNodeTest
-          :kitepdf-core:wasmWasiNodeTest :kitepdf-pdf:wasmWasiNodeTest
-          :kitepdf-epub:wasmWasiNodeTest :kitepdf-cbz:wasmWasiNodeTest
-          :kitepdf-svg:wasmWasiNodeTest :kitepdf-xps:wasmWasiNodeTest :kitepdf:wasmWasiNodeTest
-          --continue --stacktrace
-
-      - name: Compile the other native and wasm targets
-        run: |
-          tasks=""
-          for m in kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps kitepdf; do
-            for t in LinuxArm64 MingwX64 AndroidNativeArm32 AndroidNativeArm64 AndroidNativeX64 AndroidNativeX86; do
-              tasks="$tasks :$m:compileKotlin$t"
-            done
-          done
-          ./gradlew $tasks \
-            :kitepdf-net:compileKotlinLinuxX64 :kitepdf-net:compileKotlinLinuxArm64 \
-            :kitepdf-net:compileKotlinMingwX64 :kitepdf-net:compileKotlinWasmJs \
-            :kitepdf-javascript:compileKotlinLinuxArm64 :kitepdf-javascript:compileKotlinMingwX64 \
-            :kitepdf-skia-renderer:compileKotlinLinuxX64 :kitepdf-skia-renderer:compileKotlinLinuxArm64 \
-            :kitepdf-skia-renderer:compileKotlinWasmJs :kitepdf-compose-viewer:compileKotlinWasmJs \
-            --continue --stacktrace
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports-other-targets
-          path: '**/build/reports/tests/**'
-          if-no-files-found: ignore
+      - name: Build and test a consumer against them
+        working-directory: consumer-test
+        run: ./gradlew test --stacktrace

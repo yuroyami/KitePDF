@@ -1,0 +1,13 @@
+# Writes corpus/pdf/testPDF_JPX.pdf, a JPEG 2000 fixture for the differential tests. A tool, not a test:
+# ./kotlin run -m jpx-fixture -- /path/file.jp2 [width] [height]
+product: jvm/app
+
+apply:
+  - //common.module-template.yaml
+
+dependencies:
+  - //kitepdf-pdf
+
+settings:
+  jvm:
+    mainClass: io.github.yuroyami.kitepdf.tools.MakeJpxFixtureKt

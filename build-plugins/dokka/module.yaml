@@ -1,0 +1,11 @@
+product: jvm/amper-plugin
+
+description: Generates the HTML API reference of a library's common code with the Dokka CLI.
+
+pluginInfo:
+  settingsClass: io.github.yuroyami.buildplugins.dokka.DokkaSettings
+
+settings:
+  kotlin:
+    version: 2.4.21
+    serialization: json

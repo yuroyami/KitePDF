@@ -1,0 +1,6 @@
+# The Compose Multiplatform version of kitepdf-compose-viewer, kitepdf-media and the sample.
+# The $compose.* libraries follow it.
+settings:
+  compose:
+    enabled: true
+    version: 1.13.0-alpha02

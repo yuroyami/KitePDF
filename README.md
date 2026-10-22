@@ -77,6 +77,14 @@ kotlin {
 }
 ```
 
+In a [Kotlin Toolchain](https://github.com/JetBrains/kotlin-toolchain) project, the same coordinates go in `module.yaml`:
+
+```yaml
+dependencies:
+  - io.github.yuroyami:kitepdf:0.13.0
+  - io.github.yuroyami:kitepdf-compose-viewer:0.13.0
+```
+
 For example, a reader app that shows every format in Compose with JavaScript, media playback and network loading needs these lines:
 
 ```kotlin
@@ -488,9 +496,12 @@ Missing features and known bugs are [open issues](https://github.com/yuroyami/Ki
 
 ## Sample app
 
-`sample/` is a Compose Multiplatform app that can open any document and try out the API.
-The desktop version runs on its own (`./gradlew :sample:run`), while the Android and iOS
-entry points need a host app of your own.
+`sample/` holds the shared code of a Compose Multiplatform app that can open any document and try out the API.
+Three app modules start it:
+
+- `sample-desktop`: `./kotlin run -m sample-desktop` opens it in a window.
+- `sample-android`: `./kotlin run -m sample-android` installs it on a running device or emulator. With more than one device connected, add `--device-id <serial>` (from `adb devices`).
+- `sample-ios`: `./kotlin run -m sample-ios` starts it on an iOS simulator (macOS with Xcode only).
 
 ## License
 

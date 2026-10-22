@@ -1,0 +1,12 @@
+# The iOS sample. `./kotlin run -m sample-ios` builds it and starts it on a simulator.
+product: ios/app
+
+apply:
+  - //compose.module-template.yaml
+
+dependencies:
+  - //sample
+
+settings:
+  kotlin:
+    version: 2.4.21

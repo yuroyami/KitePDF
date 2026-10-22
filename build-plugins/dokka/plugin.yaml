@@ -1,0 +1,41 @@
+tasks:
+  generate:
+    action: !io.github.yuroyami.buildplugins.dokka.runDokka
+      settings: ${pluginSettings}
+      moduleVersion: ${module.settings.publishing.version}
+      kotlinVersion: ${module.settings.kotlin.version}
+      sources:
+        from: ${module.self}
+        includeGenerated: true
+      moduleSourceDir: ${module.rootDir}/src
+      classpath: ${module.runtimeClasspath}
+      dokkaCli:
+        - org.jetbrains.dokka:dokka-cli:2.3.0-Beta
+      dokkaPlugins:
+        - org.jetbrains.dokka:dokka-base:2.3.0-Beta
+        - org.jetbrains.dokka:analysis-kotlin-symbols:2.3.0-Beta
+      workDir: ${taskOutputDir}
+      outputDir: ${project.rootDir}/build/dokka/modules/${module.name}
+
+  site:
+    action: !io.github.yuroyami.buildplugins.dokka.runDokkaSite
+      settings: ${pluginSettings}
+      moduleVersion: ${module.settings.publishing.version}
+      modulesDir: ${project.rootDir}/build/dokka/modules
+      dokkaCli:
+        - org.jetbrains.dokka:dokka-cli:2.3.0-Beta
+      dokkaPlugins:
+        - org.jetbrains.dokka:dokka-base:2.3.0-Beta
+        - org.jetbrains.dokka:analysis-kotlin-symbols:2.3.0-Beta
+        - org.jetbrains.dokka:all-modules-page-plugin:2.3.0-Beta
+        - org.jetbrains.dokka:templating-plugin:2.3.0-Beta
+      workDir: ${taskOutputDir}
+      siteDir: ${project.rootDir}/build/dokka/html
+
+commands:
+  # Writes the partial pages of each module to build/dokka/modules/<module>.
+  - name: dokka
+    performedBy: generate
+  # Merges them into build/dokka/html. It reads the output of `dokka`, so it runs `dokka` first.
+  - name: dokkaSite
+    performedBy: site

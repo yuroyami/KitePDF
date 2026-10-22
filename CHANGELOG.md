@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- KitePDF builds with the [Kotlin Toolchain](https://github.com/JetBrains/kotlin-toolchain) instead of
+  Gradle: the `./kotlin` script, `project.yaml` and one `module.yaml` per module. CONTRIBUTING.md has the
+  new commands. Kotlin stays at 2.4.21. The coordinates, the artifact IDs and the klib names stay the same,
+  so code built against 0.13.0 links against the next release.
+- The published files change in a few places that a consumer can see:
+  - The wasmJs artifacts are named `<artifact>-wasmjs` instead of `<artifact>-wasm-js`, and the wasmWasi
+    artifacts `<artifact>-wasmwasi` instead of `<artifact>-wasm-wasi`. Gradle finds them through the module
+    metadata, so only a direct dependency on the old name breaks.
+  - The root POM depends on `<artifact>-jvm`, so a plain Maven project can use the root artifact.
+  - The AAR keeps its classes in `libs/<artifact>-jvm.jar` instead of `classes.jar`. It has no
+    `aar-metadata.properties`, and its manifest sets `targetSdkVersion` to 37.
+  - The javadoc jars are empty. The API reference is on the docs site.
+  - The native targets have no `-metadata.jar` of their own. The shared native code is in the metadata jar
+    of the root artifact.
+  - `kitepdf-compose-viewer` and `kitepdf-media` also depend on
+    `org.jetbrains.compose.components:components-resources`, which the Kotlin Toolchain adds to every
+    Compose module.
+  - The JS artifacts no longer depend on `org.jetbrains.kotlin:kotlin-dom-api-compat`, except
+    `kitepdf-native-renderer`. The Kotlin Gradle plugin adds that library to every JS project anyway.
+  - `kotlin-stdlib` is a runtime dependency now, not an API dependency. The Kotlin plugin of a consumer adds it
+    to the compile classpath itself.
+- The sample app is four modules: `sample` holds the shared code, and `sample-desktop`, `sample-android` and
+  `sample-ios` start it. `sample-android` and `sample-ios` are new, so the Android and iOS versions no longer
+  need a host app of your own.
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

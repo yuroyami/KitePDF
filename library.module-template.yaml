@@ -1,0 +1,45 @@
+# Settings that the published libraries share. Each module.yaml applies this file and
+# common.module-template.yaml, then adds its platforms, dependencies, Android namespace and POM name.
+
+# `./kotlin publish mavenLocal -m <module>` puts a build into ~/.m2 for tests in other projects.
+repositories:
+  - url: mavenLocal
+    publish: true
+    resolve: false
+
+settings:
+  kotlin:
+    explicitApi: strict
+  android:
+    compileSdk:
+      apiLevel: 37
+      minorApiLevel: 2
+    minSdk: 21
+  publishing:
+    enabled: true
+    group: io.github.yuroyami
+    # After a change, run `./kotlin do updateVersion` to update KITEPDF_VERSION in kitepdf-pdf.
+    version: 0.13.0
+    pom:
+      url: https://github.com/yuroyami/KitePDF
+      licenses:
+        - name: The Apache License, Version 2.0
+          url: https://www.apache.org/licenses/LICENSE-2.0.txt
+      developers:
+        - id: yuroyami
+          name: yuroyami
+          url: https://github.com/yuroyami
+      scm:
+        url: https://github.com/yuroyami/KitePDF
+        connection: scm:git:git://github.com/yuroyami/KitePDF.git
+        developerConnection: scm:git:ssh://git@github.com/yuroyami/KitePDF.git
+    signArtifacts: true
+    publishSources: true
+    mavenCentral:
+      enabled: true
+      publishingMode: auto
+
+# -Xexport-kdoc keeps the KDoc in the native klibs, so Apple framework headers keep the docs.
+settings@native:
+  kotlin:
+    freeCompilerArgs: [ -Xexport-kdoc ]

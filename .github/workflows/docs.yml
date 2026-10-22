@@ -11,13 +11,14 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - '**/*.kt'
-      - '**/build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - 'gradle/libs.versions.toml'
-      - 'gradle/wrapper/**'
-      - 'gradlew'
-      - 'gradlew.bat'
+      - '**/Module.md'
+      - '**/module.yaml'
+      - '*.module-template.yaml'
+      - 'project.yaml'
+      - 'libs.versions.toml'
+      - 'kotlin'
+      - 'build-plugins/**'
+      - 'dokka-templates/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -29,10 +30,14 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  KOTLIN_CLI_NO_WELCOME_BANNER: 1
+
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The API reference documents src@apple, which only a Mac has the platform libraries for.
+    runs-on: macos-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,17 +54,28 @@ jobs:
       - name: Build the docs site
         run: mkdocs build --strict --site-dir site
 
-      - name: Set up JDK
-        uses: actions/setup-java@v4
+      - name: Cache the Kotlin Toolchain downloads
+        uses: actions/cache@v4
         with:
-          distribution: temurin
-          java-version: '21'
+          path: ~/Library/Caches/JetBrains/Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      # src@android pages resolve the Android API from this platform.
+      - name: Install the Android SDK platform
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2"'
+
+      # The pages of src@apple, src@posixFile and src@js resolve the types of other modules from their klibs.
+      # Dokka reads them from build/tasks, and the standard libraries from the toolchain cache.
+      - name: Build the klibs that the platform pages read
+        run: ./kotlin build -p macosArm64 -p linuxX64 -p js
 
       - name: Generate the Dokka API reference
-        run: ./gradlew dokkaGenerate --no-configuration-cache
+        run: |
+          # `do` is a command of the kotlin script here, not the shell keyword.
+          # `dokkaSite` reads the output of `dokka`, so it runs `dokka` first.
+          # shellcheck disable=SC1010
+          ./kotlin do dokkaSite
 
       - name: Verify the complete API reference
         run: |
@@ -69,6 +85,7 @@ jobs:
           do
             test -f "build/dokka/html/$module/index.html"
           done
+          if grep -rl 'ERROR CLASS' build/dokka/html; then exit 1; fi
 
       - name: Merge the API reference into the site
         run: |

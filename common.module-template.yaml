@@ -1,0 +1,17 @@
+# Settings that every module shares: the Kotlin compiler, the JDK and the test runner.
+settings:
+  kotlin:
+    # Keep abi-tools in build-plugins/abi-check/module.yaml and kotlin-dom-api-compat in libs.versions.toml
+    # at the same version.
+    version: 2.4.21
+  jvm:
+    jdk:
+      version: 21
+    # The JVM and Android bytecode target.
+    release: 21
+    test:
+      # The decompression-bomb tests inflate up to the 512 MiB FilterChain cap, plus the builder's
+      # grow-by-doubling copy. The JVM default heap cannot hold that.
+      freeJvmArgs: [ -Xmx3g ]
+  # The tests use JUnit 4 (org.junit.Assume, Robolectric).
+  junit: junit-4

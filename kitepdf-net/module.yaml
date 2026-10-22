@@ -1,0 +1,189 @@
+# The ONLY module allowed to depend on Ktor. ktor-client-core carries no engine on purpose: the consumer picks
+# one. The targets are the ones Ktor ships, so androidNative* and wasmWasi are absent here.
+
+product:
+  type: kmp/lib
+  platforms:
+    - jvm
+    - android
+    - js
+    - wasmJs
+    - iosArm64
+    - iosSimulatorArm64
+    - iosX64
+    - macosArm64
+    - tvosArm64
+    - tvosSimulatorArm64
+    - watchosArm32
+    - watchosArm64
+    - watchosDeviceArm64
+    - watchosSimulatorArm64
+    - linuxX64
+    - linuxArm64
+    - mingwX64
+
+description: >-
+  Optional remote loading for KitePDF - open a PDF or EPUB straight from a URL with Ktor. The engine artifacts do
+  not depend on Ktor; only add this if you need it.
+
+apply:
+  - //common.module-template.yaml
+  - //library.module-template.yaml
+
+dependencies:
+  - //kitepdf: exported
+  - $libs.ktor.client.core: exported
+
+test-dependencies@jvm:
+  - $libs.ktor.client.cio
+  - $libs.ktor.client.mock
+
+settings:
+  kotlin:
+    optIns: [ kotlin.RequiresOptIn, kotlin.experimental.ExperimentalNativeApi ]
+  android:
+    namespace: io.github.yuroyami.kitepdf.net
+  publishing:
+    pom:
+      name: KitePDF Net
+
+# Gradle named the klib "io.github.yuroyami:kitepdf-net". Keep that name, or libraries built against
+# earlier releases fail to link on Kotlin/Native. Set it per platform: on @native, it also
+# renames the klibs of shared native code, which must keep their own names.
+settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-net ]
+
+settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-net ]
+
+settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@watchosArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@watchosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@watchosDeviceArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@watchosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+settings@mingwX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-net, -Xshort-module-name=kitepdf-net ]
+
+# Tests compile into their own klib, which needs a different name. The test blocks name the
+# same platforms as the blocks above, so the toolchain applies them last.
+test-settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-net_test ]
+
+test-settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-net_test ]
+
+test-settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@watchosArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@watchosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@watchosDeviceArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@watchosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+test-settings@mingwX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-net_test, -Xshort-module-name=kitepdf-net_test ]
+
+plugins:
+  abi-check:
+    enabled: true
+    # Also checks the Android classes against api/android, as the Gradle build did.
+    android: true
+    # The klibAbi check reads the klibs of these platforms, so run `./kotlin build` first.
+    klibPlatforms: [ iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, wasmJs, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64 ]
+  dokka:
+    enabled: true
+    moduleName: kitepdf-net
+    includes: [ Module.md ]
+    customStyleSheets: [ ../docs/api-theme/kite.css ]
+    templatesDir: ../dokka-templates
+    footerMessage: Apache-2.0 · KitePDF is part of the Kite family.
+    sourceLinkUrl: https://github.com/yuroyami/KitePDF/blob/main/kitepdf-net/src

@@ -1,0 +1,22 @@
+# The Android sample. `./kotlin run -m sample-android` installs it on a running device or emulator.
+product: android/app
+
+apply:
+  - //common.module-template.yaml
+  - //compose.module-template.yaml
+
+dependencies:
+  - //sample
+  - $libs.android.activity.compose
+
+settings:
+  android:
+    namespace: io.github.yuroyami.kitepdf.sample.android
+    applicationId: io.github.yuroyami.kitepdf.sample
+    versionCode: 1
+    versionName: "1.0"
+    compileSdk:
+      apiLevel: 37
+      minorApiLevel: 2
+    targetSdk: 37
+    minSdk: 24

@@ -1,0 +1,230 @@
+# The shared core: geometry, the render Canvas, the font engine, compression, hyphenation data and the
+# shared value model. Every document handler and every render backend depends on it.
+
+product:
+  type: kmp/lib
+  platforms:
+    - jvm
+    - android
+    - js
+    - wasmJs
+    - wasmWasi
+    - iosArm64
+    - iosSimulatorArm64
+    - iosX64
+    - macosArm64
+    - tvosArm64
+    - tvosSimulatorArm64
+    - watchosArm32
+    - watchosArm64
+    - watchosDeviceArm64
+    - watchosSimulatorArm64
+    - linuxX64
+    - linuxArm64
+    - mingwX64
+    - androidNativeArm32
+    - androidNativeArm64
+    - androidNativeX86
+    - androidNativeX64
+
+description: >-
+  Shared core for KitePDF - geometry, zip, fonts and the render canvas. Comes with any KitePDF handler; never add it
+  directly.
+
+apply:
+  - //common.module-template.yaml
+  - //library.module-template.yaml
+
+# The one runtime dependency beyond kotlin-stdlib: the image codecs of the Kite lineage.
+dependencies:
+  - $libs.imagekodec
+
+settings:
+  kotlin:
+    optIns: [ kotlin.RequiresOptIn, kotlin.experimental.ExperimentalNativeApi ]
+  android:
+    namespace: io.github.yuroyami.kitepdf.core
+  publishing:
+    pom:
+      name: KitePDF Core
+
+# Gradle named the klib "io.github.yuroyami:kitepdf-core". Keep that name, or libraries built against
+# earlier releases fail to link on Kotlin/Native. Set it per platform: on @native, it also
+# renames the klibs of shared native code, which must keep their own names.
+settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-core ]
+
+settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-core ]
+
+settings@wasmWasi:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-core ]
+
+settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@watchosArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@watchosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@watchosDeviceArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@watchosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@mingwX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@androidNativeArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@androidNativeArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@androidNativeX86:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+settings@androidNativeX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-core, -Xshort-module-name=kitepdf-core ]
+
+# Tests compile into their own klib, which needs a different name. The test blocks name the
+# same platforms as the blocks above, so the toolchain applies them last.
+test-settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-core_test ]
+
+test-settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-core_test ]
+
+test-settings@wasmWasi:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-core_test ]
+
+test-settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@watchosArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@watchosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@watchosDeviceArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@watchosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@mingwX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@androidNativeArm32:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@androidNativeArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@androidNativeX86:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+test-settings@androidNativeX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-core_test, -Xshort-module-name=kitepdf-core_test ]
+
+plugins:
+  abi-check:
+    enabled: true
+    # Also checks the Android classes against api/android, as the Gradle build did.
+    android: true
+    # The klibAbi check reads the klibs of these platforms, so run `./kotlin build` first.
+    klibPlatforms: [ androidNativeArm32, androidNativeArm64, androidNativeX64, androidNativeX86, iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, wasmJs, wasmWasi, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64 ]
+  dokka:
+    enabled: true
+    moduleName: kitepdf-core
+    includes: [ Module.md ]
+    customStyleSheets: [ ../docs/api-theme/kite.css ]
+    templatesDir: ../dokka-templates
+    footerMessage: Apache-2.0 · KitePDF is part of the Kite family.
+    sourceLinkUrl: https://github.com/yuroyami/KitePDF/blob/main/kitepdf-core/src

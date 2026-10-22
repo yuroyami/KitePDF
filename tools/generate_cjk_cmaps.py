@@ -20,7 +20,7 @@ import zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CMAPS = os.path.join(ROOT, "mupdf-master", "resources", "cmaps")
-FONT_DIR = os.path.join(ROOT, "kitepdf-core", "src", "commonMain", "kotlin", "io", "github", "yuroyami",
+FONT_DIR = os.path.join(ROOT, "kitepdf-core", "src", "io", "github", "yuroyami",
                         "kitepdf", "core", "font")
 ORDERINGS = ["Japan1", "GB1", "CNS1", "Korea1"]
 

@@ -15,7 +15,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TARGET = os.path.join(ROOT, "kitepdf-core", "src", "commonMain", "kotlin", "io", "github", "yuroyami",
+TARGET = os.path.join(ROOT, "kitepdf-core", "src", "io", "github", "yuroyami",
                       "kitepdf", "core", "render", "AdobeCmykTable.kt")
 
 

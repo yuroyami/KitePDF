@@ -1,0 +1,158 @@
+# An optional, Compose-free Skia binding: the renderer that Compose uses, without the Compose runtime.
+# The sources are common org.jetbrains.skia API, so it ships for every target Skiko publishes, minus the
+# deprecated Intel Apple ones. No Skiko variant exists for Windows native or watchOS.
+
+product:
+  type: kmp/lib
+  platforms:
+    - jvm
+    - android
+    - js
+    - wasmJs
+    - iosArm64
+    - iosSimulatorArm64
+    - iosX64
+    - macosArm64
+    - tvosArm64
+    - tvosSimulatorArm64
+    - linuxX64
+    - linuxArm64
+
+description: >-
+  Compose-free Skia (Skiko) rasterizer for KitePDF - headless page-to-PNG rendering of PDF and EPUB for JVM servers
+  and CLIs.
+
+apply:
+  - //common.module-template.yaml
+  - //library.module-template.yaml
+
+# Skiko's Android artifact is only in the Compose dev repository, not on Maven Central.
+repositories:
+  - id: compose-dev
+    url: https://maven.pkg.jetbrains.space/public/p/compose/dev
+
+dependencies:
+  - //kitepdf-pdf
+  - //kitepdf-epub
+  - $libs.skiko: exported
+
+# A module file has no host condition, so all six Skiko native runtimes are listed.
+# Skiko loads the one that matches the host.
+test-dependencies@jvm:
+  - //kitepdf-difftest
+  - $libs.skiko.awt.runtime.macos.arm64
+  - $libs.skiko.awt.runtime.macos.x64
+  - $libs.skiko.awt.runtime.linux.x64
+  - $libs.skiko.awt.runtime.linux.arm64
+  - $libs.skiko.awt.runtime.windows.x64
+  - $libs.skiko.awt.runtime.windows.arm64
+
+settings:
+  kotlin:
+    optIns: [ kotlin.RequiresOptIn ]
+  android:
+    namespace: io.github.yuroyami.kitepdf.skia
+  publishing:
+    pom:
+      name: KitePDF Skia Renderer
+
+# Gradle named the klib "io.github.yuroyami:kitepdf-skia-renderer". Keep that name, or libraries built against
+# earlier releases fail to link on Kotlin/Native. Set it per platform: on @native, it also
+# renames the klibs of shared native code, which must keep their own names.
+settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-skia-renderer ]
+
+settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=io.github.yuroyami:kitepdf-skia-renderer ]
+
+settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-skia-renderer, -Xshort-module-name=kitepdf-skia-renderer ]
+
+settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-skia-renderer, -Xshort-module-name=kitepdf-skia-renderer ]
+
+settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-skia-renderer, -Xshort-module-name=kitepdf-skia-renderer ]
+
+settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-skia-renderer, -Xshort-module-name=kitepdf-skia-renderer ]
+
+settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-skia-renderer, -Xshort-module-name=kitepdf-skia-renderer ]
+
+settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-skia-renderer, -Xshort-module-name=kitepdf-skia-renderer ]
+
+settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-skia-renderer, -Xshort-module-name=kitepdf-skia-renderer ]
+
+settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=io.github.yuroyami:kitepdf-skia-renderer, -Xshort-module-name=kitepdf-skia-renderer ]
+
+# Tests compile into their own klib, which needs a different name. The test blocks name the
+# same platforms as the blocks above, so the toolchain applies them last.
+test-settings@js:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@wasmJs:
+  kotlin:
+    freeCompilerArgs: [ -Xir-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@iosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@iosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@iosX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@macosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@tvosArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@tvosSimulatorArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+
+test-settings@linuxArm64:
+  kotlin:
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+
+plugins:
+  abi-check:
+    enabled: true
+    # Also checks the Android classes against api/android, as the Gradle build did.
+    android: true
+    # The klibAbi check reads the klibs of these platforms, so run `./kotlin build` first.
+    klibPlatforms: [ iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, tvosArm64, tvosSimulatorArm64, wasmJs ]
+  dokka:
+    enabled: true
+    moduleName: kitepdf-skia-renderer
+    includes: [ Module.md ]
+    customStyleSheets: [ ../docs/api-theme/kite.css ]
+    templatesDir: ../dokka-templates
+    footerMessage: Apache-2.0 · KitePDF is part of the Kite family.
+    sourceLinkUrl: https://github.com/yuroyami/KitePDF/blob/main/kitepdf-skia-renderer/src

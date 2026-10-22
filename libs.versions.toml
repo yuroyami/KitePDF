@@ -1,0 +1,90 @@
+[versions] #######################################################################################
+# Kotlin, Compose Multiplatform and the Android SDK levels are settings in the module.yaml files and their
+# templates (common.module-template.yaml, compose.module-template.yaml, library.module-template.yaml).
+
+# Compose Multiplatform material3, used by :sample only. The other Compose libraries come from the toolchain's
+# $compose catalog, which follows settings.compose.version.
+composeMaterial3 = "1.13.0-alpha02"
+
+# Android platform bridge (sample only)
+activityCompose = "1.14.0-alpha03"
+
+# Skiko: JetBrains' Skia bindings. Used by :kitepdf-skia-renderer. Compose Multiplatform
+# rides on Skiko under the hood on JVM Desktop + iOS, so this gives us the same
+# renderer Compose uses, without the Compose runtime sitting on top.
+skiko = "0.153.0"
+
+# ImageKodec. The Kite lineage's shared image engine, and :kitepdf-core's one
+# runtime dependency beyond kotlin-stdlib. CONTRIBUTING.md describes how to test
+# an unpublished revision in an isolated local Maven repository.
+imagekodec = "0.3.0"
+
+# KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
+# so no other module carries a script engine. Its code sees only kitejs-api; QuickJS runs underneath.
+kitejs = "0.7.0"
+# KitePlayer: the Kite lineage's media player. Used ONLY by :kitepdf-media, the optional
+# EPUB audio and video artifact. It carries FFmpeg through KiteFFmpeg.
+kiteplayer = "0.3.0"
+
+# Robolectric, for the Android host tests of :kitepdf-compose-viewer and :kitepdf-native-renderer only: its
+# native graphics draw a canvas on the JVM, so Android drawing and text can be checked without a device.
+robolectric = "4.17"
+
+# Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
+# No other module may depend on it: the engine stays kotlin-stdlib + ImageKodec.
+ktor = "3.6.0"
+
+# kotlinx.coroutines. :kitepdf-epub fetches a book's remote resources with it (#38), and Compose and
+# Ktor bring the same library to the viewer and :kitepdf-net. The version Ktor itself depends on.
+kotlinxCoroutines = "1.11.0"
+
+# Compose's back events, the version Compose 1.13.0-alpha02 requires. Only the tests of :kitepdf-media use it.
+navigationevent = "1.1.0"
+
+[libraries] ######################################################################################
+# ImageKodec supplies every image codec :kitepdf-core decodes through: JPEG
+# PNG, GIF, BMP, WebP, TIFF, JPEG 2000, AVIF, JPEG XL, JBIG2 and CCITT.
+imagekodec = { module = "io.github.yuroyami:imagekodec", version.ref = "imagekodec" }
+
+# KiteJS runs document JavaScript, :kitepdf-javascript only.
+kitejs-api = { module = "io.github.yuroyami:kitejs-api", version.ref = "kitejs" }
+kitejs-quickjs = { module = "io.github.yuroyami:kitejs-quickjs", version.ref = "kitejs" }
+# The desktop QuickJS jar, with the host's native engine. The Android host tests of :kitepdf-javascript
+# run on the JVM, where the Android variant finds no engine.
+kitejs-quickjs-jvm = { module = "io.github.yuroyami:kitejs-quickjs-jvm", version.ref = "kitejs" }
+kiteplayer = { module = "io.github.yuroyami:kiteplayer", version.ref = "kiteplayer" }
+kiteplayer-compose = { module = "io.github.yuroyami:kiteplayer-compose", version.ref = "kiteplayer" }
+
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+
+# The browser API of Kotlin/JS (kotlinx.browser, org.w3c.dom), for :kitepdf-native-renderer. Keep the version
+# at settings.kotlin.version in common.module-template.yaml.
+kotlin-dom-api-compat = { module = "org.jetbrains.kotlin:kotlin-dom-api-compat", version = "2.4.21" }
+
+# Ktor, :kitepdf-net only. ktor-client-core carries no engine; the consumer
+# picks one (CIO, OkHttp, Darwin, Js...) exactly as with any Ktor library.
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+
+# Skia (no Compose), used by :kitepdf-skia-renderer. `skiko` is the multiplatform
+# root (common org.jetbrains.skia API; resolves skiko-awt on JVM, native
+# klibs on Apple/Linux, CanvasKit on js/wasm). The JVM tests list every AWT native
+# runtime, because a module file has no host condition. Skiko loads the one for the host.
+skiko = { module = "org.jetbrains.skiko:skiko", version.ref = "skiko" }
+skiko-awt-runtime-macos-arm64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-macos-arm64", version.ref = "skiko" }
+skiko-awt-runtime-macos-x64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-macos-x64", version.ref = "skiko" }
+skiko-awt-runtime-linux-x64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-linux-x64", version.ref = "skiko" }
+skiko-awt-runtime-linux-arm64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-linux-arm64", version.ref = "skiko" }
+skiko-awt-runtime-windows-x64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-windows-x64", version.ref = "skiko" }
+skiko-awt-runtime-windows-arm64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-windows-arm64", version.ref = "skiko" }
+
+# Compose Multiplatform material3, for the sample app ONLY. The :kitepdf module must NEVER depend on Compose.
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
+compose-navigationevent = { module = "org.jetbrains.androidx.navigationevent:navigationevent-compose", version.ref = "navigationevent" }
+
+# Android (sample only)
+android-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }

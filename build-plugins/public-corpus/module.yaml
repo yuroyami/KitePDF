@@ -1,0 +1,10 @@
+product: jvm/amper-plugin
+
+description: Verifies the licensed public test documents in corpus/ against corpus/manifest.json, without network access.
+
+pluginInfo:
+  settingsClass: io.github.yuroyami.buildplugins.corpus.PublicCorpusSettings
+
+settings:
+  kotlin:
+    version: 2.4.21

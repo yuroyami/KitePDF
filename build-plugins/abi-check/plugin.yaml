@@ -1,0 +1,72 @@
+tasks:
+  dump:
+    action: !io.github.yuroyami.buildplugins.abi.dumpJvmAbi
+      classes: ${module.classes}
+      dumpFile: ${taskOutputDir}/jvm.api
+
+  check:
+    action: !io.github.yuroyami.buildplugins.abi.checkJvmAbi
+      moduleName: ${module.name}
+      builtDump: ${tasks.dump.action.dumpFile}
+      committedDump: ${module.rootDir}/${pluginSettings.dumpDir}/${module.name}.api
+
+  update:
+    action: !io.github.yuroyami.buildplugins.abi.updateJvmAbi
+      builtDump: ${tasks.dump.action.dumpFile}
+      committedDump: ${tasks.check.action.committedDump}
+
+  dumpKlib:
+    action: !io.github.yuroyami.buildplugins.abi.dumpKlibAbi
+      moduleName: ${module.name}
+      platforms: ${pluginSettings.klibPlatforms}
+      buildDir: ${project.rootDir}/build
+      dumpFile: ${taskOutputDir}/klib.api
+
+  checkKlib:
+    action: !io.github.yuroyami.buildplugins.abi.checkKlibAbi
+      moduleName: ${module.name}
+      builtDump: ${tasks.dumpKlib.action.dumpFile}
+      committedDump: ${module.rootDir}/${pluginSettings.klibDumpDir}/${module.name}.klib.api
+
+  updateKlib:
+    action: !io.github.yuroyami.buildplugins.abi.updateJvmAbi
+      builtDump: ${tasks.dumpKlib.action.dumpFile}
+      committedDump: ${tasks.checkKlib.action.committedDump}
+
+  dumpAndroid:
+    action: !io.github.yuroyami.buildplugins.abi.dumpAndroidAbi
+      moduleName: ${module.name}
+      enabled: ${pluginSettings.android}
+      buildDir: ${project.rootDir}/build
+      dumpFile: ${taskOutputDir}/android.api
+
+  checkAndroid:
+    action: !io.github.yuroyami.buildplugins.abi.checkAndroidAbi
+      moduleName: ${module.name}
+      enabled: ${pluginSettings.android}
+      builtDump: ${tasks.dumpAndroid.action.dumpFile}
+      committedDump: ${module.rootDir}/${pluginSettings.androidDumpDir}/${module.name}.api
+
+  updateAndroid:
+    action: !io.github.yuroyami.buildplugins.abi.updateAndroidAbi
+      enabled: ${pluginSettings.android}
+      builtDump: ${tasks.dumpAndroid.action.dumpFile}
+      committedDump: ${tasks.checkAndroid.action.committedDump}
+
+checks:
+  - name: abi
+    performedBy: check
+  # Run `./kotlin build` for every platform in klibPlatforms first.
+  - name: klibAbi
+    performedBy: checkKlib
+  # Run `./kotlin build -p android` first.
+  - name: androidAbi
+    performedBy: checkAndroid
+
+commands:
+  - name: updateAbi
+    performedBy: update
+  - name: updateKlibAbi
+    performedBy: updateKlib
+  - name: updateAndroidAbi
+    performedBy: updateAndroid

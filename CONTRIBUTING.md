@@ -34,31 +34,29 @@ Breaking any of these fails the change, however good the code is.
 
 ## The gate
 
+KitePDF builds with the [Kotlin Toolchain](https://github.com/JetBrains/kotlin-toolchain): the `./kotlin` script in the repo root, with `project.yaml` and one `module.yaml` per module. The script downloads its own JDK, Kotlin/Native, Node and Chrome on the first run. The Android steps need an Android SDK with the `platforms;android-37.2` and `build-tools;37.0.0` packages. The script reads its location from `ANDROID_HOME`.
+
 ### Required checks
 
 Run this before every commit:
 
 ```bash
-./gradlew :kitepdf-core:jvmTest :kitepdf-pdf:jvmTest :kitepdf-epub:jvmTest \
-          :kitepdf-cbz:jvmTest :kitepdf-svg:jvmTest :kitepdf-xps:jvmTest \
-          :kitepdf-compose-viewer:jvmTest :kitepdf-skia-renderer:jvmTest \
-          :kitepdf-native-renderer:jvmTest :kitepdf-javascript:jvmTest \
-          :kitepdf-difftest:jvmTest :kitepdf:jvmTest :kitepdf-net:jvmTest \
-          :kitepdf-media:jvmTest :sample:jvmTest
+./kotlin test -p jvm
 ```
 
 This also runs the differential sweep, which compares the pages that KitePDF renders with the pages of `mutool`. Then read `kitepdf-native-renderer/build/difftest/report.md`. The mean error must not be worse than before your change. Record the number and explain any movement.
 
-The sweep also compares each page with its own score in `kitepdf-native-renderer/src/jvmTest/resources/difftest-baseline.txt`. A page fails when one of these numbers gets clearly worse, even when the mean holds:
+The sweep also compares each page with its own score in `kitepdf-native-renderer/testResources@jvm/difftest-baseline.txt`. A page fails when one of these numbers gets clearly worse, even when the mean holds:
 
 - its mean error
 - its fraction of changed pixels
 - its largest channel error
 
-A new fixture fails until it has a score. When your change moves a score on purpose, run the sweep again with `-Dkitepdf.diff.updateBaseline=true`, and say why in the same commit. The sweep also names each page that got better. Record the new score, so that the page cannot slip back unnoticed.
+A new fixture fails until it has a score. When your change moves a score on purpose, run the sweep again with the system property `kitepdf.diff.updateBaseline=true`, and say why in the same commit. The sweep also names each page that got better. Record the new score, so that the page cannot slip back unnoticed.
 
 ```bash
-./gradlew :kitepdf-native-renderer:jvmTest --tests "*.difftest.DifferentialTest" -Dkitepdf.diff.updateBaseline=true
+./kotlin test -m kitepdf-native-renderer -p jvm --include-classes='*.difftest.DifferentialTest' \
+  --jvm-args='-Dkitepdf.diff.updateBaseline=true'
 ```
 
 The gate also runs the PDFium parity check. When it fails, read `kitepdf-native-renderer/build/difftest/parity.md`. A page that your change fixes must come off `PdfiumParityTest.KNOWN_GAPS`. A new finding needs an issue before it goes on that list.
@@ -66,22 +64,25 @@ The gate also runs the PDFium parity check. When it fails, read `kitepdf-native-
 To run one sweep alone:
 
 ```bash
-./gradlew :kitepdf-native-renderer:jvmTest --tests "*.difftest.DifferentialTest"
+./kotlin test -m kitepdf-native-renderer -p jvm --include-classes='*.difftest.DifferentialTest'
 ```
 
 ```bash
-./gradlew :kitepdf-skia-renderer:jvmTest --tests "*SkiaDifferentialTest*"
+./kotlin test -m kitepdf-skia-renderer -p jvm --include-classes='*SkiaDifferentialTest*'
 ```
 
 ```bash
-./gradlew :kitepdf-native-renderer:jvmTest --tests "*EpubDifferentialTest*"
+./kotlin test -m kitepdf-native-renderer -p jvm --include-classes='*EpubDifferentialTest*'
 ```
 
-The EPUB sweep compares the page count of each book with `kitepdf-native-renderer/src/jvmTest/resources/epub-sweep-pages.txt`, so a count that moves without a reason stops the line. Some changes move a count on purpose. When yours does, run the sweep again with `-Dkitepdf.epub.updatePages=true`, and say why in the same commit:
+The EPUB sweep compares the page count of each book with `kitepdf-native-renderer/testResources@jvm/epub-sweep-pages.txt`, so a count that moves without a reason stops the line. Some changes move a count on purpose. When yours does, run the sweep again with the system property `kitepdf.epub.updatePages=true`, and say why in the same commit:
 
 ```bash
-./gradlew :kitepdf-native-renderer:jvmTest --tests "*EpubDifferentialTest*" -Dkitepdf.epub.updatePages=true
+./kotlin test -m kitepdf-native-renderer -p jvm --include-classes='*EpubDifferentialTest*' \
+  --jvm-args='-Dkitepdf.epub.updatePages=true'
 ```
+
+Every `-Dkitepdf.*` system property that the tests read goes into `--jvm-args` in the same way.
 
 The render benchmark runs with the other JVM tests of `kitepdf-native-renderer`. Machine load does not fail it, for two reasons:
 
@@ -90,42 +91,59 @@ The render benchmark runs with the other JVM tests of `kitepdf-native-renderer`.
 
 With `KITEPDF_BENCH=true`, it also renders the scanned books that `ScannedPdfs` makes. Their budget is the same, but it applies to thread CPU time. A scanned page is large, so a machine that is short of memory stretches its wall time.
 
-### Public API
+### Other platforms
 
-Each published module keeps a dump of its public API in its `api/` directory. A change to the public API changes that dump too. Run this, and commit the changed `api/` files in the same commit:
+`./kotlin test -p <platform>` runs the tests of one platform, for example `-p android` for the Android host tests, or `-p iosSimulatorArm64 -p macosArm64` on a Mac. `./kotlin test` does not run JS and wasmWasi tests. It runs wasmJs tests in headless Chrome, but gives each module 30 seconds, which is too short for `kitepdf-pdf`. This script links the JS, wasmJs and wasmWasi tests and runs them in Node, and the Canvas2D tests of `kitepdf-native-renderer` in headless Chrome. It first installs the npm packages that the linked code imports, such as `@js-joda/core`, into `build/node_modules`:
 
 ```bash
-./gradlew updateKotlinAbi
+python3 scripts/web-tests/run.py
 ```
 
-CI runs `checkKotlinAbi` on macOS, the one host that compiles every target. It fails when the code and the dump differ. A diff in `api/` that you did not intend is an API change by accident.
+### Public API
+
+Each published module keeps a dump of its public API in its `api/` directory: `api/jvm/` for the JVM classes, `api/android/` for the Android classes, and one `.klib.api` file for the native and web targets. A change to the public API changes these dumps too. Build every target on a Mac, update the dumps, and commit the changed `api/` files in the same commit:
+
+```bash
+./kotlin build
+./kotlin do updateAbi
+./kotlin do updateAndroidAbi
+./kotlin do updateKlibAbi
+```
+
+CI runs `./kotlin check abi androidAbi klibAbi` on macOS, the one host that compiles every target. It fails when the code and the dumps differ. A diff in `api/` that you did not intend is an API change by accident.
+
+### Version
+
+`settings.publishing.version` in `library.module-template.yaml` is the version of every published module. The `KITEPDF_VERSION` constant in `kitepdf-pdf` repeats it, so `KitePDF.VERSION` needs no generated code. After a version change, run `./kotlin do updateVersion`. CI runs `./kotlin check version`, which fails when the two differ.
 
 ### Consumer check
 
-`consumer-test/` is an application that uses KitePDF the way the app of a user does: by coordinates, from a repository, never from the source tree. It opens a PDF, a book and an SVG and draws them. It also runs the script of a book and the script of a form through `kitepdf-javascript`, which gets KiteJS from Maven Central. So a broken POM, a missing dependency or a packaging mistake fails there. CI publishes the JVM artifacts to Maven Local and runs it on every push. Before a release, run the same two steps:
+`consumer-test/` is an application that uses KitePDF the way the app of a user does: by coordinates, from a repository, never from the source tree. It opens a PDF, a book and an SVG and draws them. It also runs the script of a book and the script of a form through `kitepdf-javascript`, which gets KiteJS from Maven Central. So a broken POM, a missing dependency or a packaging mistake fails there. `consumer-test/` stays a Gradle project with a wrapper of its own, because it checks what a Gradle application sees. CI publishes the libraries to Maven Local and runs it on every push. Before a release, run the same two steps:
 
 ```bash
-./gradlew publishKotlinMultiplatformPublicationToMavenLocal publishJvmPublicationToMavenLocal -PRELEASE_SIGNING_ENABLED=false
+./kotlin publish mavenLocal --transitive -m kitepdf -m kitepdf-native-renderer -m kitepdf-javascript
 ```
 
 ```bash
-./gradlew -p consumer-test test
+cd consumer-test && ./gradlew test
 ```
+
+The publish signs the artifacts, so it needs a signing key in `KOTLIN_TOOLCHAIN_SIGNING_KEY` (and `KOTLIN_TOOLCHAIN_SIGNING_KEY_PASSPHRASE` when the key has one). For Maven Local, a throwaway key is enough. The CI workflow shows how to make one.
 
 After the release reaches Maven Central, check the released artifacts too:
 
 ```bash
-./gradlew -p consumer-test test -PkitepdfRepo=central
+cd consumer-test && ./gradlew test -PkitepdfRepo=central
 ```
 
-The first command writes to `~/.m2`, where other projects on the machine can pick up the build. To keep it apart, add `-Dmaven.repo.local=/some/folder` to both commands.
+The publish writes to `~/.m2`, where other projects on the machine can pick up the build.
 
 ### Benchmarks
 
 The performance benchmark runs only when you ask for it:
 
 ```bash
-KITEPDF_BENCH=true ./gradlew :kitepdf-native-renderer:jvmTest --tests "*BenchmarkTest*"
+KITEPDF_BENCH=true ./kotlin test -m kitepdf-native-renderer -p jvm --include-classes='*BenchmarkTest*'
 ```
 
 ## Build with a local ImageKodec or KiteJS
@@ -133,41 +151,23 @@ KITEPDF_BENCH=true ./gradlew :kitepdf-native-renderer:jvmTest --tests "*Benchmar
 > [!WARNING]
 > Do not release KitePDF with a local dependency. Switch back to the published version first.
 
-To develop ImageKodec or KiteJS together with KitePDF, point the build at a local checkout:
+To develop ImageKodec or KiteJS together with KitePDF, publish the other library to Maven Local and build KitePDF against that build. The Kotlin Toolchain cannot include the other repository as source, as a Gradle composite build did.
 
-```bash
-./gradlew :kitepdf-core:jvmTest -PimageKodecPath=../ImageKodec
-```
+1. In the other repository, give the build a version of its own, so that it cannot replace a released artifact. For ImageKodec, set `settings.publishing.version` to a version such as `0.3.1-dev`.
+2. Publish it from that repository, for example `./kotlin publish mavenLocal -m imagekodec`.
+3. In `library.module-template.yaml` of KitePDF, set `resolve: true` on the `mavenLocal` repository.
+4. In `libs.versions.toml`, set `imagekodec` (or `kitejs`) to the same version.
+5. Run the gate as usual.
 
-```bash
-./gradlew :kitepdf-javascript:jvmTest -PkiteJsPath=../KiteJS
-```
-
-This composite build can fail when the two builds use different versions of the Kotlin plugin. In that case, publish ImageKodec to a Maven folder of its own, and point the build at that folder. Give the local build a version of its own, so that it cannot replace a released artifact:
-
-```bash
-../ImageKodec/gradlew -p ../ImageKodec \
-  :imagekodec:publishKotlinMultiplatformPublicationToMavenLocal \
-  :imagekodec:publishJvmPublicationToMavenLocal \
-  -Pversion=0.3.1-dev -PRELEASE_SIGNING_ENABLED=false \
-  -Dmaven.repo.local="$PWD/../imagekodec-maven" \
-  -x :imagekodec:dokkaGeneratePublicationHtml
-```
-
-```bash
-./gradlew :kitepdf-core:jvmTest \
-  -PimageKodecRepository="$PWD/../imagekodec-maven" -PimageKodecVersion=0.3.1-dev
-```
-
-The documentation task of ImageKodec needs the Android SDK, so the first command skips it. Pass the same two `imageKodec` properties to the gate commands. To test another target, also publish its artifact, for example `:imagekodec:publishJsPublicationToMavenLocal`. The consumer check resolves the metadata of every native target, so it needs the complete publication of ImageKodec.
+Maven Local then serves every artifact that it holds, not only the library that you published. Undo steps 3 and 4 before you commit.
 
 ## The corpus
 
-The repo root holds `corpus/pdf/` and `corpus/epub/`. The public documents that `corpus/manifest.json` lists are tracked with their credits and license texts, so a clean checkout tests them. The `jvmTest` tasks of the two renderers run `python3 tools/corpus.py verify` first. It checks the byte count and the SHA-256 of every listed file. The [corpus guide](corpus/README.md) explains how to add a public document.
+The repo root holds `corpus/pdf/` and `corpus/epub/`. The public documents that `corpus/manifest.json` lists are tracked with their credits and license texts, so a clean checkout tests them. `./kotlin check corpus` runs `python3 tools/corpus.py verify`. It checks the byte count and the SHA-256 of every listed file. CI runs it before the tests. The [corpus guide](corpus/README.md) explains how to add a public document.
 
 Your own documents go in the same folders and stay git-ignored. They make your local counts differ from CI.
 
-The PDF sweep scores up to six evenly spaced pages of each document. To score every page, add `-Dkitepdf.diff.allpages=true`, and read the selected and scored counts in the report. The EPUB sweep renders every page. Its comparison of page 0 with MuPDF is for information only.
+The PDF sweep scores up to six evenly spaced pages of each document. To score every page, add `--jvm-args='-Dkitepdf.diff.allpages=true'`, and read the selected and scored counts in the report. The EPUB sweep renders every page. Its comparison of page 0 with MuPDF is for information only.
 
 When you touch a feature that no real document covers, grow the corpus. Add a generated fixture at once, and ask for a real file when a synthetic one cannot prove the case.
 
@@ -178,7 +178,7 @@ Some oracle tests read fonts from `mupdf-master/resources/fonts/`, which is also
 DoomPDF is a PDF whose page-open script runs a port of Doom. It is the benchmark of `kitepdf-javascript`. Download it from https://doompdf.pages.dev/doom.pdf to `corpus/pdf/doom.pdf`, then run:
 
 ```bash
-KITEPDF_DOOM=true ./gradlew :kitepdf-javascript:jvmTest --tests '*DoomPdfBenchmark*'
+KITEPDF_DOOM=true ./kotlin test -m kitepdf-javascript -p jvm --include-classes='*DoomPdfBenchmark*'
 ```
 
 It runs the script on KiteJS and reports the start-up time and the frame times. The same flag turns on the KiteJS probes next to it. Without the flag and the file, these tests report as skipped.

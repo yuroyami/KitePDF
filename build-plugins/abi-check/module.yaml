@@ -1,0 +1,14 @@
+product: jvm/amper-plugin
+
+description: Checks the public JVM, Android and klib API of a library against committed ABI dumps, like the Kotlin Gradle plugin's abiValidation.
+
+pluginInfo:
+  settingsClass: io.github.yuroyami.buildplugins.abi.AbiCheckSettings
+
+dependencies:
+  - org.jetbrains.kotlin:abi-tools-api:2.4.21
+  - org.jetbrains.kotlin:abi-tools:2.4.21: runtime-only
+
+settings:
+  kotlin:
+    version: 2.4.21

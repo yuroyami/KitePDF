@@ -1,0 +1,8 @@
+# Internal test infrastructure, never published: the hardened MuPDF oracle and the image differ that the
+# differential tests of kitepdf-native-renderer, kitepdf-skia-renderer and kitepdf-compose-viewer share.
+product:
+  type: kmp/lib
+  platforms: [ jvm ]
+
+apply:
+  - //common.module-template.yaml

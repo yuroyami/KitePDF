@@ -1,0 +1,10 @@
+tasks:
+  verify:
+    action: !io.github.yuroyami.buildplugins.corpus.verifyPublicCorpus
+      rootDir: ${project.rootDir}
+      python: ${pluginSettings.python}
+
+checks:
+  # Fails on a missing or changed public corpus file. The differential tests read these files.
+  - name: corpus
+    performedBy: verify
