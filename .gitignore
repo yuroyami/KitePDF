@@ -61,13 +61,6 @@ corpus/epub/*
 !corpus/pdf/public-wikimedia-editing-arabic-wikipedia.pdf
 readium-kt-toolkit/
 
-# Project ledger (audit, roadmap and execution history). Lives in its own
-# private repo, checked out here; never part of this one.
-.ledger/
-
-# Local remediation plans and tracker snapshots.
-/SOLISTIC_PLANS/
-
 # The W3C EPUB test suite, checked out for EpubConformanceTest (#497).
 .epub-tests/
 
