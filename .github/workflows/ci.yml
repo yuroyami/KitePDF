@@ -10,10 +10,12 @@ name: CI
 #   Platform regressions are therefore merge-blocking, instead of being discovered only after they land.
 # - `other-targets` does the same for the rest of what we publish: it runs the common tests on Linux x64,
 #   and compiles Linux arm64, Windows and the Android native ABIs, so none of them rots unseen (#562).
-# - `api` builds every target on macOS, the one host that compiles them all, and checks the public API of
-#   each published module against the dumps in its api/ directory. It then publishes the libraries to
-#   Maven Local and builds the Gradle project in consumer-test/ against them, by coordinates, as an
-#   application does. A broken POM or a missing dependency fails there before a release.
+# - `other-apple` builds the Apple targets that `apple` does not: iOS devices, the Intel iOS simulator,
+#   tvOS and watchOS.
+# - `api` compiles the libraries of every target on macOS, the one host that compiles them all, and checks
+#   the public API of each published module against the dumps in its api/ directory. It then publishes the
+#   libraries to Maven Local and builds the Gradle project in consumer-test/ against them, by coordinates,
+#   as an application does. A broken POM or a missing dependency fails there before a release.
 
 on:
   push:
@@ -47,8 +49,9 @@ jobs:
           key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
           restore-keys: kotlin-toolchain-${{ runner.os }}-
 
+      # The runner has sdkmanager only under the SDK, not on PATH.
       - name: Install the Android SDK platform
-        run: sdkmanager 'platforms;android-37.2' 'build-tools;37.0.0'
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2" "build-tools;37.0.0"'
 
       # The vertical-text corpus PDF names a Japanese font without embedding it.
       # Without a CJK fallback, AWT draws boxes and fails the page baseline (#627).
@@ -229,6 +232,11 @@ jobs:
   other-targets:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # The toolchain runs one task for each core, and each Kotlin/Native compiler takes up to 3 GB.
+      # With four at once this 16 GB runner shut down mid-build, most likely out of memory.
+      # So the toolchain sees 3 cores. It never runs fewer than 3 tasks at once.
+      KOTLIN_CLI_JAVA_OPTIONS: -XX:ActiveProcessorCount=3
     steps:
       - uses: actions/checkout@v4
         with:
@@ -249,9 +257,30 @@ jobs:
           ./kotlin build -p linuxArm64 -p mingwX64
           -p androidNativeArm32 -p androidNativeArm64 -p androidNativeX64 -p androidNativeX86
 
+  other-apple:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Cache the Kotlin Toolchain downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/JetBrains/Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
+
+      # The tests of these targets compile and link here, but CI does not run them.
+      - name: Build every module (iOS devices, Intel iOS simulator, tvOS, watchOS)
+        run: >
+          ./kotlin build -p iosArm64 -p iosX64 -p tvosArm64 -p tvosSimulatorArm64
+          -p watchosArm32 -p watchosArm64 -p watchosDeviceArm64 -p watchosSimulatorArm64
+
   api:
     runs-on: macos-latest
-    # A full build of every target, then a publish of the JVM consumers' dependencies.
+    # The libraries of every target, then a publish of the JVM consumers' dependencies.
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -268,8 +297,15 @@ jobs:
       - name: Install the Android SDK platform
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2" "build-tools;37.0.0"'
 
-      - name: Build every module and target
-        run: ./kotlin build
+      # The API checks read the library klibs of every platform and the Android debug classes from build/.
+      # Only those compile here: a full build also links every test, and it ran out of time on this runner.
+      # The other jobs build the tests of every platform.
+      - name: Compile the libraries that the API checks read
+        run: |
+          tasks=$(./kotlin show tasks | sed -nE 's/^task (:kitepdf[a-z-]*:compile[A-Za-z0-9]+)( .*)?$/\1/p' | grep -vE 'Test|Release|Metadata|Jvm$')
+          test -n "$tasks"
+          # shellcheck disable=SC2086
+          ./kotlin task $tasks
 
       # A failure here means the public API changed. If the change is intended, run
       # ./kotlin do updateAbi, updateAndroidAbi or updateKlibAbi and commit the api/ files with it.

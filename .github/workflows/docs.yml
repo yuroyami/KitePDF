@@ -37,7 +37,8 @@ jobs:
   build:
     # The API reference documents src@apple, which only a Mac has the platform libraries for.
     runs-on: macos-latest
-    timeout-minutes: 60
+    # A cold toolchain cache downloads Kotlin/Native and its LLVM first. A job that times out saves no cache.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,8 +68,13 @@ jobs:
 
       # The pages of src@apple, src@posixFile and src@js resolve the types of other modules from their klibs.
       # Dokka reads them from build/tasks, and the standard libraries from the toolchain cache.
+      # Only the library klibs compile here: a full build also links every test and the sample.
       - name: Build the klibs that the platform pages read
-        run: ./kotlin build -p macosArm64 -p linuxX64 -p js
+        run: |
+          tasks=$(./kotlin show tasks | sed -nE 's/^task (:kitepdf[a-z-]*:compile(MacosArm64Debug|LinuxX64Debug|Js))( .*)?$/\1/p')
+          test -n "$tasks"
+          # shellcheck disable=SC2086
+          ./kotlin task $tasks
 
       - name: Generate the Dokka API reference
         run: |
