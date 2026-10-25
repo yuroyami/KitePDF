@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="art/kitepdf-logo.svg" width="360" alt="KitePDF logo">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="art/kitepdf-feature-graphic.png">
+    <img src="art/kitepdf-feature-graphic-light.png" width="100%" alt="KitePDF, a pure Kotlin document engine for Kotlin Multiplatform. It reads PDF, EPUB 2 and 3, CBZ, SVG and XPS or OpenXPS. It renders in Compose Multiplatform, creates and edits PDFs, runs JavaScript, and plays EPUB 3 audio and video.">
+  </picture>
 </p>
 
 <p align="center">

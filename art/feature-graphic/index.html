@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KitePDF feature graphic</title>
+<!--
+  The KitePDF feature graphic, as a fixed 1920 x 1080 page.
+  Open this file in a browser, or run render.sh to get a PNG at 3840 x 2160.
+  Add ?theme=light to the URL for the ivory variant. The default is the dark variant.
+  The logo comes from ../kitepdf-logo.svg, so the lettering is always the real one.
+-->
+<style>
+  @font-face {
+    font-family: "Manrope";
+    src: url("fonts/manrope-latin.woff2") format("woff2");
+    font-weight: 200 800;
+    font-display: block;
+  }
+  @font-face {
+    font-family: "JetBrains Mono";
+    src: url("fonts/jetbrains-mono-latin.woff2") format("woff2");
+    font-weight: 100 800;
+    font-display: block;
+  }
+
+  :root {
+    /* Brand colours, taken from kitepdf-logo.svg. */
+    --ivory: #FEF5ED;
+    --plum: #523757;
+    --lavender: #AA94DF;
+    --pink: #DD9CCF;
+    --peach: #F4B997;
+
+    /* Dark variant. */
+    --bg: #1A1420;
+    --bg-lift: #2B1F33;
+    --ink: var(--ivory);
+    --ink-2: rgba(254, 245, 237, 0.76);
+    --ink-3: rgba(254, 245, 237, 0.52);
+    --rule: rgba(254, 245, 237, 0.16);
+    --grad: linear-gradient(135deg, var(--lavender) 0%, var(--pink) 50%, var(--peach) 100%);
+    --grad-v: linear-gradient(180deg, var(--lavender) 0%, var(--pink) 50%, var(--peach) 100%);
+    --tag: var(--lavender);
+    --kite-4: var(--ivory);
+    --kite-tail: rgba(254, 245, 237, 0.62);
+    --kite-shadow: drop-shadow(0 28px 44px rgba(0, 0, 0, 0.55));
+  }
+  :root[data-theme="light"] {
+    --bg: #FEF5ED;
+    --bg-lift: #F8E6DB;
+    --ink: var(--plum);
+    --ink-2: rgba(82, 55, 87, 0.82);
+    --ink-3: rgba(82, 55, 87, 0.60);
+    --rule: rgba(82, 55, 87, 0.20);
+    /* Deeper versions of the same three hues, so text keeps its contrast on ivory. */
+    --grad: linear-gradient(135deg, #7A58C9 0%, #B9519F 50%, #DB7A4E 100%);
+    --grad-v: linear-gradient(180deg, #7A58C9 0%, #B9519F 50%, #DB7A4E 100%);
+    --tag: #7A58C9;
+    --kite-4: var(--plum);
+    --kite-tail: rgba(82, 55, 87, 0.62);
+    --kite-shadow: drop-shadow(0 28px 44px rgba(82, 55, 87, 0.22));
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1920px;
+    height: 1080px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Manrope", system-ui, sans-serif;
+    font-feature-settings: "ss01", "cv05";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  .canvas {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    padding: 72px 96px 64px;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    background:
+      radial-gradient(1400px 900px at 14% -10%, var(--bg-lift) 0%, transparent 62%),
+      var(--bg);
+  }
+
+  /* Header: logo and tagline. The kite sits to the right of these. */
+  .header { display: flex; flex-direction: column; align-items: flex-start; gap: 30px; }
+  .logo { display: block; height: 168px; width: auto; }
+  .tagline {
+    margin: 0;
+    font-size: 54px;
+    line-height: 1.14;
+    font-weight: 500;
+    letter-spacing: -0.016em;
+    color: var(--ink);
+  }
+  .tagline strong { font-weight: 700; }
+
+  /* Format line. */
+  .formats {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    margin-top: 38px;
+    font-size: 38px;
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: -0.012em;
+    white-space: nowrap;
+  }
+  .formats .sep {
+    flex: none;
+    width: 4px;
+    height: 32px;
+    border-radius: 2px;
+    background: var(--grad-v);
+    transform: skewX(-20deg);
+  }
+  .formats .hero {
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Feature grid: two by two, hairlines between. */
+  .features {
+    margin-top: 42px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    align-self: start;
+  }
+  .feature { padding: 26px 48px 28px 0; }
+  .feature:nth-child(2n) { padding-left: 56px; border-left: 1px solid var(--rule); }
+  .feature:nth-child(n + 3) { border-top: 1px solid var(--rule); }
+  .feature h2 {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin: 0;
+    font-size: 40px;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.016em;
+    color: var(--ink);
+  }
+  .feature .mark { flex: none; width: 24px; height: 34px; stroke: var(--bg); stroke-width: 14; stroke-linejoin: round; }
+  .feature .tag {
+    margin: 12px 0 0 42px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 19px;
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--tag);
+  }
+  .feature ul {
+    list-style: none;
+    margin: 14px 0 0 42px;
+    padding: 0;
+    font-size: 28px;
+    line-height: 1.45;
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+
+  /* Footer. */
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 28px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+  .footer .repo { display: flex; align-items: center; gap: 16px; }
+  .footer .repo svg { width: 32px; height: 32px; fill: var(--ink); }
+  .footer .license { color: var(--ink-3); }
+
+  /* The kite. Top right, beside the header and format line. */
+  .kite {
+    position: absolute;
+    top: 20px;
+    right: 96px;
+    width: 540px;
+    height: 492px;
+    stroke: var(--bg);
+    stroke-width: 6;
+    stroke-linejoin: round;
+    filter: var(--kite-shadow);
+  }
+  .kite .tail { fill: none; stroke: var(--kite-tail); stroke-width: 4; stroke-linecap: round; }
+  .kite .bow { stroke: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- One kite, four paper quadrants. Reused for the hero and the small group marks. -->
+    <symbol id="kite-shape" viewBox="-110 -165 220 370" overflow="visible">
+      <polygon points="0,-150 -95,-30 0,-30" fill="#AA94DF"/>
+      <polygon points="0,-150 95,-30 0,-30" fill="#DD9CCF"/>
+      <polygon points="95,-30 0,190 0,-30" fill="#F4B997"/>
+      <polygon points="-95,-30 0,190 0,-30" fill="var(--kite-4)"/>
+    </symbol>
+    <!-- One bow tie for the tail: two triangles that meet in the middle. -->
+    <symbol id="kite-bow" viewBox="-20 -10 40 20" overflow="visible">
+      <path d="M-20,-10 L0,0 L-20,10 Z M20,-10 L0,0 L20,10 Z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<main class="canvas" data-theme-root>
+  <header class="header">
+    <img class="logo" src="../kitepdf-logo.svg" alt="KitePDF">
+    <p class="tagline"><strong>Pure Kotlin</strong> document engine<br>for Kotlin Multiplatform</p>
+  </header>
+
+  <div class="formats" aria-label="Supported formats">
+    <span class="hero">PDF</span><span class="sep"></span>
+    <span>EPUB 2/3</span><span class="sep"></span>
+    <span>CBZ</span><span class="sep"></span>
+    <span>SVG</span><span class="sep"></span>
+    <span>XPS / OpenXPS</span>
+  </div>
+
+  <section class="features">
+    <article class="feature">
+      <h2><svg class="mark"><use href="#kite-shape"/></svg>Rendering</h2>
+      <ul>
+        <li>Compose Multiplatform</li>
+        <li>Vector and raster rendering, image export</li>
+        <li>EPUB reflow, search and text selection</li>
+      </ul>
+    </article>
+    <article class="feature">
+      <h2><svg class="mark"><use href="#kite-shape"/></svg>PDF creation &amp; editing</h2>
+      <ul>
+        <li>Page editing, forms and redaction</li>
+        <li>Encryption and text extraction</li>
+        <li>Bookmarks and metadata</li>
+      </ul>
+    </article>
+    <article class="feature">
+      <h2><svg class="mark"><use href="#kite-shape"/></svg>JavaScript</h2>
+      <p class="tag">Optional · Experimental</p>
+      <ul>
+        <li>PDF forms and EPUB chapters</li>
+        <li>Powered by KiteJS</li>
+      </ul>
+    </article>
+    <article class="feature">
+      <h2><svg class="mark"><use href="#kite-shape"/></svg>EPUB 3 media</h2>
+      <p class="tag">Optional · Android / iOS / JVM</p>
+      <ul>
+        <li>Audio, video and read-aloud</li>
+        <li>Text highlighting</li>
+      </ul>
+    </article>
+  </section>
+
+  <footer class="footer">
+    <span class="repo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+      github.com/yuroyami/KitePDF
+    </span>
+    <span class="license">Apache-2.0</span>
+  </footer>
+
+  <svg class="kite" viewBox="0 0 540 492" aria-hidden="true">
+    <g transform="translate(395 172) rotate(22)">
+      <use href="#kite-shape" x="-110" y="-165" width="220" height="370"/>
+      <path class="tail" d="M0,182 C -4,220 -42,234 -52,270 C -62,306 -22,318 -42,344"/>
+      <use class="bow" href="#kite-bow" x="-20" y="-10" width="40" height="20" fill="#AA94DF" transform="translate(-24 227) rotate(41)"/>
+      <use class="bow" href="#kite-bow" x="-20" y="-10" width="40" height="20" fill="#DD9CCF" transform="translate(-52 293) rotate(-17)"/>
+      <use class="bow" href="#kite-bow" x="-20" y="-10" width="40" height="20" fill="#F4B997" transform="translate(-37 333) rotate(11)"/>
+    </g>
+  </svg>
+</main>
+
+<script>
+  // ?theme=light switches to the ivory variant. Anything else keeps the dark one.
+  var theme = new URLSearchParams(location.search).get("theme");
+  if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
+</script>
+</body>
+</html>
