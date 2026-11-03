@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CHATEAUROUX, FRANCECHATEAUROUX, FRANCE`. A glyph drawn again within a tenth of an em of the same glyph,
   at the same size and in the same direction, now drops out, as MuPDF's test for fake bold drops it. A space
   never matches, and a pass in another font drops out only as a whole run (#642, #643).
+- `extractText()` reads such a label once as well. It still reads the content stream in order, and it now
+  moves a pen as the renderer does, through the CTM, the text matrix and the advance of each glyph. A string
+  drops out when an earlier string drew the same text at the same size and in the same direction, with both
+  of its ends less than a tenth of an em away. So a fill and a stroke, a second fill, a halo and a form drawn
+  twice in one place read once. A string never matches the strings that it follows along a line, so double
+  letters in tight type stay. The plain text of every page of the corpus stays the same (#644).
 
 ## [0.13.0] - 2026-10-09
 

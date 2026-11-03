@@ -57,10 +57,12 @@ class TextExtractorScopesTest {
             "BT /F1 12 Tf 36 200 Td (outer) Tj ET /Fm1 Do",
             "<< /Font << /F1 4 0 R >> /XObject << /Fm1 7 0 R >> >>",
         )
+        // The second Do draws 20 points lower: drawn in the same place, it would be a second pass of
+        // the same text, which reads once (#644).
         assertEquals(
             "page outer inner outer inner end",
             text(
-                "BT /F1 12 Tf 36 700 Td (page) Tj ET /Fm0 Do /Fm0 Do BT /F1 12 Tf 36 50 Td (end) Tj ET",
+                "BT /F1 12 Tf 36 700 Td (page) Tj ET /Fm0 Do q 1 0 0 1 0 -20 cm /Fm0 Do Q BT /F1 12 Tf 36 50 Td (end) Tj ET",
                 "<< /Font << /F1 4 0 R >> /XObject << /Fm0 6 0 R >> >>",
                 outer, inner,
             ),

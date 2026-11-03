@@ -236,6 +236,12 @@ public class PdfPage internal constructor(
      * The page's text as one string, in the order of its content stream. Text inside form
      * XObjects counts, and `/ActualText` replaces the text it marks. Use [structuredText] for
      * positions and reading order.
+     *
+     * A label that the page draws twice in one place reads once. A fake bold fills a label and
+     * then strokes it, or fills it again a fraction of a point aside, and a halo strokes it under
+     * its fill, each pass a string of its own (ISO 32000-1, 9.4.3). A string drops out when an
+     * earlier string drew the same text at the same size and in the same direction, with both of
+     * its ends less than a tenth of an em away, as the renderer places them (9.4.4, #644).
      */
     public fun extractText(): String = TextExtractor.extract(this)
 

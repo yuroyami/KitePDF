@@ -116,6 +116,16 @@ class VerticalTextTest {
             pdf("BT /V 20 Tf 300 700 Td <000100020003> Tj ET 0.2 w BT 1 Tr /V 20 Tf 300 700 Td <000100020003> Tj ET"),
         ).pages[0]
         assertEquals("字文書", page.structuredText.plainText)
+        // The plain text moves its pen down the column by the vertical metrics, so it ends both
+        // passes in one place too (#644).
+        assertEquals("字文書", page.extractText())
+        // 字 moves the pen 18 points down by its /W2 metrics, so a 文 drawn again at 682 is a second pass.
+        val second = PdfDocument.open(pdf("BT /V 20 Tf 300 700 Td <0001> Tj <0002> Tj ET BT /V 20 Tf 300 682 Td <0002> Tj ET")).pages[0]
+        assertEquals("字文", second.extractText())
+        val elsewhere = PdfDocument.open(
+            pdf("BT /V 20 Tf 300 700 Td <000100020003> Tj ET BT /V 20 Tf 270 700 Td <000100020003> Tj ET"),
+        ).pages[0]
+        assertEquals("字文書\n字文書", elsewhere.extractText())
     }
 
     @Test

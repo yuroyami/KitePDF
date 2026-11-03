@@ -143,7 +143,7 @@ internal object RedrawnText {
     }
 
     /** Whether [text] is empty or white space alone, as the text of a space glyph is. */
-    private fun blank(text: String): Boolean {
+    internal fun blank(text: String): Boolean {
         for (i in text.indices) if (!text[i].isWhitespace()) return false
         return true
     }
@@ -308,10 +308,10 @@ internal object RedrawnText {
     private fun cellSize(sizeClass: Int): Double = 2.0.pow(sizeClass)
 
     /** MuPDF's `FAKE_BOLD_MAX_DIST`: how far two passes of one glyph may lie apart on each axis, in ems. */
-    private const val MAX_DIST = 0.1
+    internal const val MAX_DIST = 0.1
 
     /** The cosine above which two baselines run the same way, MuPDF's test for one line. */
-    private const val SAME_DIRECTION = 0.999
+    internal const val SAME_DIRECTION = 0.999
 
     /**
      * How many filed glyphs one lookup reads at most. A cell holds a glyph or two of one text,

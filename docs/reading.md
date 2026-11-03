@@ -98,6 +98,8 @@ The text of a form XObject comes in its place on the page. A marked-content sequ
 
 PDF has no lines, only positions. KitePDF adds a line break where the text moves to a new line, so the line breaks are an approximation.
 
+Some producers draw a label twice in one place: a fake bold fills the label and then strokes it, or fills it again a fraction of a point to the side, and a halo strokes it in white under its fill. Such a label reads once. A string drops out when an earlier string drew the same text in its place: at the same size and in the same direction, with both of its ends less than a tenth of an em away. The test compares whole strings, so a second pass that splits the label into other strings than the first reads twice. A string never matches the strings that it follows along a line, so double letters in tight type stay.
+
 ### Structured text
 
 `structuredText` gives the text with its position, which you need for a selection, a highlight or a search of one area:
@@ -127,7 +129,7 @@ for (block in page.structuredText.blocks) {
 
 `structuredText.plainText` joins the blocks with a blank line and the lines with a line break.
 
-Text in every render mode counts, invisible and outlined text too. Some producers draw a label twice in one place: a fake bold fills the label and then strokes it, and a halo strokes it in white under its fill. Such a label reads once. A glyph drawn again within a tenth of an em of the same glyph, at the same size and in the same direction, drops out. `extractText()` reads the content stream without positions, so it gives both passes.
+Text in every render mode counts, invisible and outlined text too. Some producers draw a label twice in one place: a fake bold fills the label and then strokes it, and a halo strokes it in white under its fill. Such a label reads once. A glyph drawn again within a tenth of an em of the same glyph, at the same size and in the same direction, drops out. `extractText()` reads such a label once as well, by whole strings, as the section on plain text describes.
 
 Vertical text makes columns instead of lines. A Type 0 font whose CMap has writing mode 1 (such as `Identity-V`) draws its glyphs down the page, as ISO 32000-1, 9.7.4.3 describes. Each column is a `PdfTextLine` whose spans run from top to bottom, and the columns of a block come from right to left, in the order that vertical CJK text reads.
 
