@@ -110,6 +110,15 @@ class VerticalTextTest {
     }
 
     @Test
+    fun a_column_drawn_twice_in_one_place_reads_once() {
+        // A fake bold strokes the column over its fill, and both runs reach the text layer (#642).
+        val page = PdfDocument.open(
+            pdf("BT /V 20 Tf 300 700 Td <000100020003> Tj ET 0.2 w BT 1 Tr /V 20 Tf 300 700 Td <000100020003> Tj ET"),
+        ).pages[0]
+        assertEquals("字文書", page.structuredText.plainText)
+    }
+
+    @Test
     fun redaction_removes_a_column_where_it_is_drawn_and_nowhere_else() {
         val content = "BT /V 20 Tf 100 700 Td <000200020002> Tj <0003> Tj ET\n" +
             "BT /F1 12 Tf 72 100 Td (public footer text) Tj ET"

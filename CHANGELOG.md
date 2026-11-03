@@ -34,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sample-ios` start it. `sample-android` and `sample-ios` are new, so the Android and iOS versions no longer
   need a host app of your own.
 
+### Fixed
+
+- A label that a page draws twice in one place reads once in `structuredText`, in search and selection, and
+  in the reading order. Aeronautical charts make a label bold by filling it and then stroking it, or by
+  filling it twice a fraction of a point apart. A second fill always read twice, and since 0.11.0 the text
+  layer takes the runs of every render mode (#274), so a stroke read twice as well:
+  `CHATEAUROUX, FRANCECHATEAUROUX, FRANCE`. A glyph drawn again within a tenth of an em of the same glyph,
+  at the same size and in the same direction, now drops out, as MuPDF's test for fake bold drops it. A space
+  never matches, and a pass in another font drops out only as a whole run (#642, #643).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

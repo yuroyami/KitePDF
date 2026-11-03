@@ -193,7 +193,8 @@ internal object StructuredTextExtractor {
         collector.actualText = { renderer.currentActualText }
         renderer.render(page, KiteMatrix.IDENTITY)
 
-        val spans = withActualText(collector.runs).mapNotNull { it.toSpan() }
+        // A label drawn twice in one place, such as a fake bold, reads once (#642, #643).
+        val spans = RedrawnText.drop(withActualText(collector.runs)).mapNotNull { it.toSpan() }
         if (spans.isEmpty()) {
             return PdfStructuredText(page.width, page.height, emptyList())
         }

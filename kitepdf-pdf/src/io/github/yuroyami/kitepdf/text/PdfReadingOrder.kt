@@ -63,7 +63,7 @@ internal object PdfReadingOrder {
         collector.mcid = { renderer.currentMcid }
         runCatching { renderer.render(page, KiteMatrix.IDENTITY) }
         val out = LinkedHashMap<Int, Marked>()
-        for (run in collector.runs) {
+        for (run in RedrawnText.drop(collector.runs)) {
             val id = run.mcid ?: continue
             val span = run.toSpan() ?: continue
             val marked = out.getOrPut(id) { Marked(StringBuilder(), span, span) }

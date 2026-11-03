@@ -65,3 +65,5 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A recorded glyph run's text-to-device y runs up the page, while an EPUB page's link and embed rectangles run down it. A check that mixes them looks for a superscript below its base.
 - The EPUB layout places marks in typing order and reverses a right-to-left line afterwards, so a mark draws before its base and its offset must not count the base's advance. An oracle of glyph ids cannot see a mark in the wrong place. Compare positions with `hb-shape` (#622).
 - A corpus page whose font is not embedded scores by the host's fonts. `public-pdfa-vertical-text` scored 0.0046 and later 0.0066 on a Mac and 0.017 on CI's Linux at one commit. Record CI's score in the differential baseline.
+- A space paints nothing, and a right-to-left line of the Arabic Wikipedia corpus PDF sets the space after a dot leader 1.2 points from the space before the next word. A test for text drawn twice that lets spaces match joins the word to the leader (#642).
+- `RedrawnText` returns at once for a page of one run, so a test of a rule inside it needs two runs on its page, or it passes with the rule removed.

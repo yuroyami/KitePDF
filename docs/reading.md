@@ -127,6 +127,8 @@ for (block in page.structuredText.blocks) {
 
 `structuredText.plainText` joins the blocks with a blank line and the lines with a line break.
 
+Text in every render mode counts, invisible and outlined text too. Some producers draw a label twice in one place: a fake bold fills the label and then strokes it, and a halo strokes it in white under its fill. Such a label reads once. A glyph drawn again within a tenth of an em of the same glyph, at the same size and in the same direction, drops out. `extractText()` reads the content stream without positions, so it gives both passes.
+
 Vertical text makes columns instead of lines. A Type 0 font whose CMap has writing mode 1 (such as `Identity-V`) draws its glyphs down the page, as ISO 32000-1, 9.7.4.3 describes. Each column is a `PdfTextLine` whose spans run from top to bottom, and the columns of a block come from right to left, in the order that vertical CJK text reads.
 
 `page.textContent()` gives the same text as a `KiteStructuredText`, the shared type that EPUB pages also give. Its coordinates are in display space: points from the top-left corner of the page as it shows, with y going down. Search, selection and the Compose viewer use this form. A vertical line has `vertical = true` there, so a highlight follows the column.

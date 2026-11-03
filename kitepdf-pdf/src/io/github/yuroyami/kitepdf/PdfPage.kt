@@ -244,6 +244,12 @@ public class PdfPage internal constructor(
      * blocks. Use this when you need geometry (selection rectangles,
      * search highlights) alongside the text. For a plain string, prefer
      * [extractText].
+     *
+     * Text in every render mode counts, invisible and outlined text too (ISO 32000-1,
+     * 9.3.6, #274). So a label that the page draws twice in one place, as a fake bold
+     * that fills and then strokes it does, would read twice. A glyph drawn again
+     * within a tenth of an em of the same glyph, at the same size and in the same
+     * direction, drops out instead, and the label reads once (#642, #643).
      */
     public val structuredText: io.github.yuroyami.kitepdf.text.PdfStructuredText by lazy {
         io.github.yuroyami.kitepdf.text.StructuredTextExtractor.extract(this)
