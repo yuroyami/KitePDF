@@ -1,0 +1,61 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 612 792] /CropBox [50 50 400 500] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 7 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+5 0 obj
+<<  /Length 38 >>
+stream
+BT /F1 24 Tf 72 400 Td (CropOne) Tj ET
+endstream
+endobj
+6 0 obj
+<<  /Length 38 >>
+stream
+BT /F1 24 Tf 72 400 Td (CropTwo) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000176 00000 n 
+0000000278 00000 n 
+0000000380 00000 n 
+0000000469 00000 n 
+0000000558 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+628
+%%EOF
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 7 0 R >> >> /Contents 5 0 R /MediaBox [0 0 612 792] >>
+endobj
+xref
+0 1
+0000000000 65535 f 
+2 2
+0000000851 00000 n 
+0000000908 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /ID [<0FA439050F15ACBD2A721C9F1DF59A07> <0FA439050F15ACBD2A721C9F1DF59A07>] /Prev 628 >>
+startxref
+1034
+%%EOF
