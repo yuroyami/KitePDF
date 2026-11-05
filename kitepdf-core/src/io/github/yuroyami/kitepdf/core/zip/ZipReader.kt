@@ -103,7 +103,7 @@ public class ZipReader private constructor(
     private val entries: Map<String, Entry> = runCatching { parseCentralDirectory() }.getOrElse { emptyMap() }
 
     /** Every local header offset, sorted, so an entry of unknown size ends where the next begins. */
-    private val headerOffsets: LongArray = entries.values.map { it.localHeaderOffset }.sorted().toLongArray()
+    private val headerOffsets: List<Long> = entries.values.map { it.localHeaderOffset }.sorted()
 
     /** Entry names, in central-directory order. */
     public val names: Set<String> get() = entries.keys
@@ -437,12 +437,6 @@ public class ZipReader private constructor(
     }
 
     /**
-     * The most deflate input that can decode to [outputBytes]. Stored blocks add 5 bytes per
-     * 65,535 (RFC 1951 section 3.2.4), so this bound covers every stream but one padded with empty
-     * blocks, which then reads as truncated. It keeps a reader on a [KiteRandomAccess] from
-     * fetching the rest of the archive for one entry.
-     */
-    /**
      * Where the entry whose local header sits at [localHeader] must end: at the next local header,
      * or at the central directory. An entry sized only by its data descriptor reads no further, so a
      * reader on a [KiteRandomAccess] does not fetch the entries after it.
@@ -453,6 +447,12 @@ public class ZipReader private constructor(
         return if (i < headerOffsets.size) headerOffsets[i] else directoryStart
     }
 
+    /**
+     * The most deflate input that can decode to [outputBytes]. Stored blocks add 5 bytes per
+     * 65,535 (RFC 1951 section 3.2.4), so this bound covers every stream but one padded with empty
+     * blocks, which then reads as truncated. It keeps a reader on a [KiteRandomAccess] from
+     * fetching the rest of the archive for one entry.
+     */
     private fun deflateInputBound(outputBytes: Int): Long = outputBytes.toLong() + outputBytes / 1024 + 1024
 
     private fun diagnosticName(name: String): String = buildString(minOf(name.length, 160)) {
