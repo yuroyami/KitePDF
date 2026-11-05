@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.core.xml.KiteXmlError
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlToken
 
+import io.github.yuroyami.kitepdf.core.zip.KiteRandomAccess
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 import io.github.yuroyami.kitepdf.core.KiteLock
@@ -679,8 +680,12 @@ internal class ParsedEpub(
          *
          * @throws EpubFormatException when the bytes are not a readable EPUB.
          */
-        fun parse(bytes: ByteArray): ParsedEpub {
-            val zip = ZipReader(bytes)
+        fun parse(bytes: ByteArray): ParsedEpub = parse(ZipReader(bytes))
+
+        /** [parse] over a container that reads its entries from [source] as they are asked for. */
+        fun parse(source: KiteRandomAccess): ParsedEpub = parse(ZipReader(source))
+
+        private fun parse(zip: ZipReader): ParsedEpub {
             val opfPath = containerOpfPath(zip)
                 ?: throw EpubFormatException("META-INF/container.xml missing or unreadable")
             val opf = Opf.parse(zip, opfPath)

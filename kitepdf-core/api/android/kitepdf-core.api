@@ -2748,6 +2748,11 @@ public final class io/github/yuroyami/kitepdf/core/zip/Crc32 {
 	public static synthetic fun of$default (Lio/github/yuroyami/kitepdf/core/zip/Crc32;[BIIILjava/lang/Object;)J
 }
 
+public abstract interface class io/github/yuroyami/kitepdf/core/zip/KiteRandomAccess {
+	public abstract fun getSize ()J
+	public abstract fun read (J[BII)I
+}
+
 public final class io/github/yuroyami/kitepdf/core/zip/ZipEntryInfo {
 	public final fun getCompressedSize ()J
 	public final fun getCrc32 ()J
@@ -2760,6 +2765,8 @@ public final class io/github/yuroyami/kitepdf/core/zip/ZipReader {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/zip/ZipReader$Companion;
 	public static final field DEFAULT_MAX_ENTRIES I
 	public static final field DEFAULT_MAX_ENTRY_BYTES I
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/zip/KiteRandomAccess;ZII)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/zip/KiteRandomAccess;ZIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> ([BZ)V
 	public fun <init> ([BZII)V
 	public synthetic fun <init> ([BZIIILkotlin/jvm/internal/DefaultConstructorMarker;)V

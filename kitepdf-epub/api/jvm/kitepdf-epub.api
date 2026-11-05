@@ -59,10 +59,13 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubDocument$Companion {
+	public final fun open (Lio/github/yuroyami/kitepdf/core/zip/KiteRandomAccess;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun open ([BDDDD)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun open ([BLio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BDDDDILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public final fun openOrNull (Lio/github/yuroyami/kitepdf/core/zip/KiteRandomAccess;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun openOrNull ([BLio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;Lio/github/yuroyami/kitepdf/core/zip/KiteRandomAccess;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BLio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 }
 
