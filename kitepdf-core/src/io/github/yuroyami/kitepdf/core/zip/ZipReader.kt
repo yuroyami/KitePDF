@@ -96,10 +96,10 @@ public class ZipReader private constructor(
         val localHeaderOffset: Long,
     )
 
-    // A source that fails mid-read leaves the archive as unreadable as a truncated file would.
     /** Where the central directory starts, once it parses; the archive's end before that. */
     private var directoryStart: Long = bytes.size
 
+    // A source that fails mid-read leaves the archive as unreadable as a truncated file would.
     private val entries: Map<String, Entry> = runCatching { parseCentralDirectory() }.getOrElse { emptyMap() }
 
     /** Every local header offset, sorted, so an entry of unknown size ends where the next begins. */
