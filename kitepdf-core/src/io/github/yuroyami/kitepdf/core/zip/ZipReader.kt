@@ -448,12 +448,12 @@ public class ZipReader private constructor(
     }
 
     /**
-     * The most deflate input that can decode to [outputBytes]. Stored blocks add 5 bytes per
-     * 65,535 (RFC 1951 section 3.2.4), so this bound covers every stream but one padded with empty
-     * blocks, which then reads as truncated. It keeps a reader on a [KiteRandomAccess] from
-     * fetching the rest of the archive for one entry.
+     * The most deflate input that can decode to [outputBytes]. A literal costs at most 15 bits
+     * (RFC 1951 section 3.2.7), so twice the output and a block header cover every stream but one
+     * cut into tiny blocks or padded with empty ones, which then reads as truncated. The bound
+     * keeps a reader on a [KiteRandomAccess] from fetching the rest of the archive for one entry.
      */
-    private fun deflateInputBound(outputBytes: Int): Long = outputBytes.toLong() + outputBytes / 1024 + 1024
+    private fun deflateInputBound(outputBytes: Int): Long = 2L * outputBytes + 1024
 
     private fun diagnosticName(name: String): String = buildString(minOf(name.length, 160)) {
         for (c in name) {
