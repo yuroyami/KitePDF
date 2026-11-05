@@ -2,7 +2,7 @@
 
 These defects and proposals belong to [KiteJS](https://github.com/yuroyami/KiteJS). They come from the November 2026 audits and were proven against KiteJS `5882331`, the source of the 0.7.0 release that KitePDF uses. The session that consumed the audits could not write to the KiteJS repository, so each is kept here as a finished issue: a title, its labels and its body. File each one in KiteJS as it stands, then delete it from this file.
 
-Security findings for KiteJS are not in this file; they are reported with the other security findings.
+The last ones are security findings (a script that runs past its budget, overflows the stack or slows the host), which the owner chose to report as ordinary public issues, like the KitePDF ones.
 
 ## The kitejs-quickjs artifacts ship compiled QuickJS-ng with no copy of its MIT licence, and their POM names only MPL-2.0
 
@@ -43,7 +43,7 @@ Found by the November 2026 audits: FABLE BUILD-DOCS-TESTS-01.
 
 ## A push to main cancels the CI run of the commit before it, so commits on main can get no CI result
 
-Labels: `kind:test-gap`
+Labels: kind:test-gap
 
 Audit ids: FABLE BUILD-DOCS-TESTS-05
 
@@ -174,7 +174,7 @@ Link `KiteJSApi.framework` with `python3 tools/apple_frameworks.py --platforms m
 
 - `expect`/`actual` cannot change whether a class is inline, so the choices are a regular class everywhere (one allocation per value), or an Apple-facing reader object with the `JsValue` members as functions over `Any?`, exported from the frameworks and documented.
 - Traced in the source and the Kotlin documentation, not linked: this needs a Mac.
-- The missing `@Throws` is a separate problem: the draft "No KiteJS function declares @Throws, so a script error from Swift ends the app".
+- The missing `@Throws` is a separate problem: the issue "No KiteJS function declares @Throws, so a script error from Swift ends the app".
 - Found by the November 2026 audits: FABLE KITEJS-05.
 
 ## No KiteJS function declares @Throws, so a script error from Swift ends the app
@@ -227,7 +227,7 @@ The coroutine layer is tested with Rhino alone, so `asyncKiteJs(QuickJs)`, `susp
 - `grep -rn QuickJs kitejs-coroutines/test*` finds nothing. The five test files (`AsyncKiteJsTest`, `AwaitTest`, `ShutdownTest`, `CancellationTest`, `EngineThreadTest`) use Rhino.
 - `.github/workflows/quickjs.yml` does not list `kitejs-coroutines/**` in its paths, so a change there does not run the QuickJS workflow.
 
-The engines differ in what the coroutine layer relies on: how often and when the interrupt hook is asked (on Rhino it is not asked at all once a budget is set, see the draft "Rhino never asks interruptWhen when an instruction budget is set"), that a QuickJS host function failure surfaces only at the outermost call, QuickJS's own job queue, pausing inside the engine on the web, and freeing a C runtime in `close()`.
+The engines differ in what the coroutine layer relies on: how often and when the interrupt hook is asked (on Rhino it is not asked at all once a budget is set, see the issue "Rhino never asks interruptWhen when an instruction budget is set"), that a QuickJS host function failure surfaces only at the outermost call, QuickJS's own job queue, pausing inside the engine on the web, and freeing a C runtime in `close()`.
 
 ### What should happen
 
@@ -246,7 +246,7 @@ The coroutine suite runs against both engines, as the `kitejs-testkit` contracts
 ### Notes
 
 - A fix turns the tests into an abstract suite with a `JsEngine` parameter, instantiates it for Rhino and QuickJS, adds `../kitejs-quickjs` as a test dependency, and adds `kitejs-coroutines/**` to the QuickJS workflow.
-- The Apple stack failure in the draft "asyncKiteJs(QuickJs) on Apple puts a 512 KiB stack limit on a 512 KiB thread, so runaway recursion ends the process" is the kind of defect this suite would catch.
+- The Apple stack failure in the issue "asyncKiteJs(QuickJs) on Apple puts a 512 KiB stack limit on a 512 KiB thread, so runaway recursion ends the process" is the kind of defect this suite would catch.
 - Found by the November 2026 audits: FABLE KITEJS-06.
 
 ## A call that throws leaves the Promise reactions it queued, and they run after the next call's own script
@@ -338,7 +338,7 @@ Load `kitejs-api`, `kitejs-quickjs` and their dependencies through two `URLClass
 ### Notes
 
 - Likely a side effect of #125, which replaced a new temporary copy per load with one shared path to save macOS's 350 ms check; with a copy per load each class loader had its own file. Inferred from #125's description, since the old loader is not in this tree.
-- The error type is a separate defect: the draft "When the JNI library cannot load, KiteJs(QuickJs) throws an Error, not a JsEngineError".
+- The error type is a separate defect: the issue "When the JNI library cannot load, KiteJs(QuickJs) throws an Error, not a JsEngineError".
 - Found by the November 2026 audits: FABLE KITEJS-08.
 
 ## When the JNI library cannot load, KiteJs(QuickJs) throws an Error, not a JsEngineError
@@ -589,7 +589,7 @@ KiteJs(QuickJs).use { js ->
 ### Notes
 
 - A fix defines `name` from the UTF-16 string after the function is made (a `JS_DefinePropertyValue` of `JS_ATOM_name`), and passes the file name with its length or replaces a NUL in it.
-- Low impact; found while writing the test of the draft "No contract test sends a lone surrogate or a NUL through the engines".
+- Low impact; found while writing the test of the issue "No contract test sends a lone surrogate or a NUL through the engines".
 - Found by the November 2026 audits: FABLE KITEJS-13.
 
 ## Two QuickJs.load() calls at once on the web decompress and instantiate the module twice
@@ -694,7 +694,7 @@ In `kitejs-quickjs` (common): `KiteJs(QuickJs).use { assertEquals(6.0, it.evalua
 ### Notes
 
 - A fix passes `false`. In that mode `JS_ToCStringLen2` joins a valid pair into one 4-byte sequence and still writes a lone surrogate as 3 bytes, so string literals with lone surrogates are unchanged.
-- No KiteJS test has a source with a supplementary character; see the draft "No contract test sends a lone surrogate or a NUL through the engines".
+- No KiteJS test has a source with a supplementary character; see the issue "No contract test sends a lone surrogate or a NUL through the engines".
 - Found by the November 2026 audits: OPUS KJ-06.
 
 ## Rhino on the JVM and Android leaves an array unsorted when its comparator is inconsistent, and the other targets sort it
@@ -891,3 +891,417 @@ On wasmJs with QuickJS, a test runs a script of a few hundred milliseconds throu
 Read from source. Related: #130 (pausing scripts on the web), #131 (the cost of a pause in a browser).
 
 Proposed by the November 2026 audits: FABLE, KiteJS lane opportunities.
+
+## KiteJS has no security policy, though it runs untrusted scripts
+
+Labels: kind:feature, area:docs (use the KiteJS equivalents)
+
+Audit ids: FABLE BUILD-DOCS-TESTS-19
+
+Security: yes
+
+KiteJS runs the JavaScript that documents carry, under an instruction budget so that a script cannot hang the host. It has no `SECURITY.md`, so a reporter who finds a sandbox escape, a budget bypass or a native crash in the QuickJS build has no private channel.
+
+### What happens
+
+- No `SECURITY.md` at the root or in `.github/` of KiteJS (checked at `5882331`). The owner has no public `.github` repository that could supply a default policy.
+- KiteJS ships a native engine (QuickJS-ng, compiled into `kitejs-quickjs`) and a ported interpreter (`kitejs-rhino`). KitePDF hands it the scripts of PDF forms and EPUB books, which `docs/javascript.md` of KitePDF calls untrusted input.
+- ImageKodec, from the same owner, has a `SECURITY.md` with a private advisory form and a scope.
+
+### What should happen
+
+A `SECURITY.md` that names a private reporting channel (GitHub's private vulnerability reporting, turned on for the repository), the versions that get fixes, and the scope: for example a script that runs past its instruction budget, reaches a host object it was not given, or crashes the native engine.
+
+### How to reproduce
+
+`ls SECURITY.md .github/SECURITY.md` in the KiteJS repository finds none.
+
+### Notes
+
+Read at HEAD of KiteJS (`5882331`). ImageKodec's `SECURITY.md` can serve as the model.
+
+Found by the November 2026 audits: FABLE BUILD-DOCS-TESTS-19.
+
+## The KiteJS workflows run with the default token permissions and keep the checkout credentials
+
+Labels: kind:bug, area:ci (use the KiteJS equivalents)
+
+Audit ids: FABLE BUILD-DOCS-TESTS-20
+
+Security: yes
+
+`ci.yml` and `quickjs.yml` of KiteJS set no `permissions:`, and no checkout in the four workflows sets `persist-credentials: false`. So the jobs run with the repository's default `GITHUB_TOKEN` scope, and the token stays in `.git/config` for every later step, including the build tools that the jobs download and run.
+
+### What happens
+
+| Workflow | Triggers | Top-level `permissions:` | Checkouts | `persist-credentials: false` |
+| --- | --- | --- | --- | --- |
+| `ci.yml` | `push`, `pull_request` | none | 3 | 0 |
+| `quickjs.yml` | `push`, `pull_request`, `workflow_dispatch` | none | 3 | 0 |
+| `docs.yml` | `push`, `workflow_dispatch` | `contents: read` (plus Pages) | 1 | 0 |
+| `test262.yml` | `schedule`, `workflow_dispatch` | `contents: read` | 2 | 0 |
+
+- Without `permissions:`, a job gets the repository's default token scope, which is read and write unless the repository setting restricts it. A pull request from a fork gets a read-only token either way.
+- `actions/checkout` writes the token into `.git/config` unless `persist-credentials: false` is set. The jobs then run the Kotlin Toolchain, which downloads its JDK, Kotlin/Native and Node, and `quickjs.yml` runs C toolchains on the QuickJS sources. Any of these can read the token.
+- KitePDF's workflows set `permissions: contents: read` at the top and `persist-credentials: false` on every checkout.
+
+### What should happen
+
+Each workflow sets `permissions: contents: read` at the top (and widens it per job only where a job needs more, as `docs.yml` does for Pages), and each `actions/checkout` sets `persist-credentials: false`.
+
+### How to reproduce
+
+`grep -c "^permissions" .github/workflows/*.yml` and `grep -c "persist-credentials: false" .github/workflows/*.yml` in the KiteJS repository give the counts in the table.
+
+### Notes
+
+Read at HEAD of KiteJS (`5882331`). The scope that the token gets today depends on the repository's Actions setting "Workflow permissions", which the files do not show. The fix is four lines per workflow, as in KitePDF's `ci.yml`.
+
+Found by the November 2026 audits: FABLE BUILD-DOCS-TESTS-20.
+
+## One built-in call on QuickJS runs past the instruction budget and the interrupt hook
+
+Labels: kind:bug, area:quickjs, upstream:quickjs-ng, QuickJS
+
+Audit ids: FABLE KITEJS-02, OPUS KJ-01
+
+Security: yes
+
+A script can loop inside one QuickJS built-in for as long as it likes. Neither `instructionBudget` nor `interruptWhen` is asked while the built-in runs, so one statement holds the engine's thread for hours.
+
+### What happens
+
+QuickJS asks the interrupt handler only from `js_poll_interrupts`. The interpreter polls at calls and backward jumps, and a few built-ins poll in their own loops (`every`, `reduce`, `includes`, `indexOf`, `lastIndexOf`, `find`). The other array built-ins loop over `length` in C with no poll. `kitejs_quickjs.c` charges the budget and asks the host only inside `interrupt_handler`, so both settings are blind while such a loop runs.
+
+On a plain object `length` can be up to 2^53 - 1, and no element has to exist. `join` with an empty separator, `reverse` and `copyWithin` then allocate nothing, so `memoryLimit` does not end them either.
+
+Measured with the vendored QuickJS and `kitejs_quickjs.c` built with gcc `-O2 -include kitejs_config.h`, driven the way `QuickJsKiteJs` drives them (`kite_enter`, `kite_set_budget`, `kite_compile`, `kite_run`). The interrupt hook answers "stop" once one second has passed:
+
+| Script | Result | Hook asked |
+|---|---|---|
+| `for (;;) {}` | stopped after 1.00 s | 1,623,942 times |
+| `Array.prototype.lastIndexOf.call({length: 1e8}, 1)` | stopped after 1.00 s | 246,969 times |
+| `Array.prototype.join.call({length: 1e8}, '')` | returned after 1.15 s | once |
+| `Array.prototype.reverse.call({length: 1e8})` | returned after 1.43 s | once |
+| `Array.prototype.copyWithin.call({length: 1e8}, 0, 1)` | returned after 2.54 s | once |
+| `Array.prototype.fill.call({length: 1e7}, 0)` | returned after 1.78 s | once |
+| `new Array(2147483647).join('')` | returned after 32.9 s | once |
+| `join`, `reverse` and `copyWithin` on `{length: 2**53 - 1}` | still running when killed at 20 s | once |
+
+The same `join` with `instructionBudget = 1000` and no hook was still running when killed at 20 s, while `for (;;) {}` under that budget stops at once. The resident memory of the process stayed at 1.8 MB while `join` ran. The time is linear in the length, so the last rows would run for years.
+
+The published `kitejs-quickjs-jvm` 0.7.0 does the same on the JVM: `Array.prototype.join.call({length: 1e8}, '')` under a budget of 1000 and a one-second hook returns after 2.5 s with the hook never asked, and the `2**53 - 1` forms do not return in 20 s.
+
+### What should happen
+
+The budget and the hook stop any script, a single built-in call included. `docs/limits.md` opens with "Stop a script that will not return" and says "When one call passes the budget it gives up and throws JsEngineError". `KiteJsConfig.interruptWhen` is "how an outside signal reaches a running script".
+
+### How to reproduce
+
+As a test in `kitejs-quickjs` (common), which hangs today:
+
+```kotlin
+@Test
+fun aBuiltInLoopStopsAtTheBudget() {
+    KiteJs(QuickJs) { instructionBudget = 100_000 }.use { js ->
+        val start = TimeSource.Monotonic.markNow()
+        assertFailsWith<JsEngineError> { js.evaluate("Array.prototype.join.call({ length: 2 ** 53 - 1 }, '')") }
+        assertTrue(start.elapsedNow() < 5.seconds)
+    }
+}
+```
+
+The same with `interruptWhen = { deadline.hasPassedNow() }` in place of the budget, and with `reverse` and `copyWithin(0, 1)`.
+
+### Where
+
+- `kitejs-quickjs/native/quickjs/quickjs.c`: `js_array_join` (line 44139, also `toLocaleString`), `js_array_reverse` (44315), `js_array_copyWithin` (44616), `js_array_fill` (43848). Compare `js_array_lastIndexOf` (43984), which polls.
+- `kitejs-quickjs/native/quickjs/quickjs.c:8689` `__js_poll_interrupts` and `:8702` `js_poll_interrupts`.
+- `kitejs-quickjs/native/kitejs_quickjs.c:163` `interrupt_handler`, the only place the budget is charged.
+- `kitejs-quickjs/native/kitejs-quickjs.patch`, where a poll in these loops would go.
+
+### Notes
+
+- The fix fits the existing patch: a `js_poll_interrupts(ctx)` every iteration (the counter makes it cheap) in each length-driven loop that does not poll today. A sweep of `quickjs.c` for `for` and `while` loops over an `int64_t` length that do not poll finds the full list. `String.prototype.padStart`, `repeat` and `Array.from` deserve a look too, though they allocate as they go.
+- KitePDF is exposed: every document script runs on QuickJS, and `PdfScriptPolicy.budgetMillis` is enforced only through `interruptWhen`. A PDF whose open script is the `join` above holds the script thread for good, and the runner's `close()` then blocks its caller. Measured through KitePDF's `PdfScriptRunner` on the JVM: `for (;;) {}` stops after 5.2 s, the `join` script is still running after 25 s, and `close()` is still blocked 10 s later. KitePDF tracks its part in the issue KitePDF #996 ("A document script that is one long built-in call runs past the five-second budget, and closing the runner then blocks").
+- Rhino has the same gap in its own built-ins: the issue "On Rhino a built-in that loops over a length the script chose is never charged to the budget".
+- Related: #15 (Promise reaction chains that skipped the checks on Rhino) and #29 (recursive asm.js work past the budget) closed other ways around the budget.
+- Found by the November 2026 audits: FABLE KITEJS-02, OPUS KJ-01.
+
+## On Rhino a built-in that loops over a length the script chose is never charged to the budget
+
+Labels: kind:bug, area:interpreter, Rhino
+
+Audit ids: FABLE KITEJS-02, OPUS KJ-01
+
+Security: yes
+
+On Rhino, `Array.prototype.reverse`, `indexOf`, `lastIndexOf`, `includes` and `copyWithin` loop over a length the script controls without charging the instruction budget, so one call runs past both the budget and `interruptWhen`.
+
+### What happens
+
+Rhino charges the budget only in the interpreter, in `AsmRunner`, in the regexp matcher (`NativeRegExp.kt:2861`) and for microtasks. The generic paths of the `NativeArray` built-ins loop over a `Long` length with `getRawElem`, `hasElem` and `setElem` and never call `cx.addInstructionCount`. So the observer that holds both the budget and the hook is not reached while they run. On a plain object such as `{length: 2**53 - 1}` the loops allocate nothing.
+
+Measured on the JVM with the published `kitejs-rhino-jvm` 0.7.0, with `instructionBudget = 1000` and a hook that answers "stop" after one second:
+
+| Script | Result | Hook asked |
+|---|---|---|
+| `Array.prototype.includes.call({length: 1e8}, 1)` | `false` after 0.43 s | 0 times |
+| `Array.prototype.reverse.call({length: 1e8}).length` | `1e8` after 0.46 s | 0 times |
+| `new Array(2147483647).lastIndexOf(1)` | `-1` after 26 s | 0 times |
+| `Array.prototype.reverse.call({length: 2**53 - 1})` | still running when killed at 20 s | |
+| `Array.prototype.includes.call({length: 2**53 - 1}, 1)` | still running when killed at 20 s | |
+
+A budget of 1000 stops `for (;;) {}` at once.
+
+### What should happen
+
+The budget and the hook stop a single built-in call, as `docs/limits.md` promises for any call ("When one call passes the budget it gives up and throws JsEngineError").
+
+### How to reproduce
+
+```kotlin
+KiteJs(Rhino) { instructionBudget = 100_000 }.use { js ->
+    js.evaluate("Array.prototype.reverse.call({ length: 2 ** 53 - 1 })")   // never returns
+}
+```
+
+### Where
+
+- `kitejs-rhino/src/io/github/yuroyami/kitejs/rhino/NativeArray.kt`: `js_reverse` (line 944), `js_indexOf` (1381), `js_lastIndexOf` (1432), `js_includes` (1488), `js_fill` (1528), `js_copyWithin` (1548), each in its generic path after the dense fast path.
+- `kitejs-rhino/src/io/github/yuroyami/kitejs/rhino/Context.kt:378` `addInstructionCount`, which the regexp matcher already calls per step.
+
+### Notes
+
+- A fix charges `cx.addInstructionCount` once per iteration or per block of iterations in each length-driven loop, as `NativeRegExp` does. The typed array views and `NativeString` have loops of the same shape and want the same sweep.
+- `js_join` is not in the list: its generic path allocates an array of `length` strings, so a large length ends in an `OutOfMemoryError` the facade reports, not in a hang. `js_fill` on a plain object grows the heap until the host runs out of memory, which Rhino cannot limit (`docs/limits.md`, Memory).
+- KitePDF runs document scripts on QuickJS only, so this is a KiteJS issue for other embedders. QuickJS has the same gap: the issue "One built-in call on QuickJS runs past the instruction budget and the interrupt hook".
+- Traced in the source and measured with the published 0.7.0 jar, whose `RhinoKiteJs` and `EngineFactory` bytecode matches the source at 5882331.
+- Found by the November 2026 audits: FABLE KITEJS-02, OPUS KJ-01.
+
+## Releasing collected handles is quadratic, so a script can make the next call run for minutes outside its budget
+
+Labels: kind:bug, kind:perf, area:quickjs, QuickJS
+
+Audit ids: FABLE KITEJS-04, SOL KJS-01
+
+Security: yes
+
+On QuickJS, every handle whose wrapper the host's collector took is queued by copying a list, so freeing n of them costs n²/2 copies. The queue is drained at the start of the next outermost call, before the budget is set, so a script that hands the host many objects makes that next call run for minutes.
+
+### What happens
+
+- `QuickJsKiteJs.collected` is an `AtomicReference<List<Int>>`, and the `HandleCleaner` callback queues each handle with `collected.compareAndSet(now, now + h)`. `List.plus` copies the list, so queueing n handles copies n²/2 elements.
+- On the JVM, `HandleCleaner.poll()` drains the `ReferenceQueue` and calls that callback once per handle. `sweep()` runs `poll()` at the start of every outermost call, on the engine's thread, before `bridge.enter` and `setBudget`. On Kotlin/Native the callback runs on the cleaner thread, with the same copying.
+- Every object, array or function that reaches the host becomes a wrapper with a handle. That includes every argument of a host function, and every nested value that `toKotlin()` reads.
+
+Measured on the JVM with the published `kitejs-quickjs-jvm` 0.7.0 (the cleaner callback's bytecode calls `CollectionsKt.plus`, as the source does). The host holds n `newObject()` wrappers, drops them, forces a GC, then times the next `evaluate("0")`:
+
+| Wrappers collected | Allocated by the next `evaluate("0")` | Time |
+|---:|---:|---:|
+| 1,000 | 4.1 MB | 16 ms |
+| 4,000 | 64 MB | 108 ms |
+| 16,000 | 1.0 GB | 460 ms |
+| 64,000 | 16.4 GB | 4.3 s |
+
+The call after it allocates 256 bytes.
+
+A script can choose n. A host function that reads its arguments with `toKotlin()` makes one wrapper per element, so `f(Array.from({length: n}, () => ({})))` queues n handles in one call:
+
+| n | The script's own call | The next `evaluate("0")` after a GC |
+|---:|---:|---:|
+| 100,000 | 0.2 to 0.9 s | 9.5 to 14.8 s, 40 GB allocated |
+| 200,000 | 0.6 s | 286 s, 160 GB allocated |
+
+Neither the budget nor `interruptWhen` reaches the sweep, since it runs before the call starts metering.
+
+### What should happen
+
+Releasing a collected handle costs O(1), and a script cannot buy host work beyond its budget.
+
+### How to reproduce
+
+On the JVM:
+
+```kotlin
+KiteJs(QuickJs).use { js ->
+    js.global.function("f", 1) { args -> args.forEach { it.toKotlin() }; null }
+    js.evaluate("f(Array.from({ length: 200000 }, function () { return {} }))")   // under a second
+    repeat(3) { System.gc(); Thread.sleep(100) }
+    js.evaluate("0")                                                               // minutes
+}
+```
+
+### Where
+
+- `kitejs-quickjs/src/io/github/yuroyami/kitejs/quickjs/facade/QuickJsKiteJs.kt`: `collected` and the `HandleCleaner` callback (lines 102 to 109), `sweep()` (281), called from `guarded` before `bridge.enter`.
+- `kitejs-quickjs/src@jni/io/github/yuroyami/kitejs/quickjs/bridge/JniBridge.kt:121` `HandleCleaner.poll`.
+- `kitejs-quickjs/src@native/io/github/yuroyami/kitejs/quickjs/bridge/NativeBridge.kt:213` `HandleCleaner`, whose callback runs on the cleaner thread.
+- `kitejs-api/src/io/github/yuroyami/kitejs/api/Converters.kt:235` `toKotlin`, one wrapper per nested value.
+
+### Notes
+
+- On the JVM `poll()` already runs on the engine's thread and can call `bridge.release` directly. Kotlin/Native needs a queue that is cheap to append to from the cleaner thread: a lock-free linked stack, or a growable `IntArray` under a lock, drained in one pass.
+- KitePDF is exposed. `KiteJsScriptEngine.defineFunction` reads every host function's arguments with `toKotlin()`, and the Acrobat API leaves its host object `__kite` on the global object. Measured through KitePDF's `PdfScriptRunner` on the JVM: an open script `__kite.hasField(Array.from({length: 100000}, function () { return {} }))` returns in 0.6 s, and the next script, `1 + 1`, takes 8.6 s. With 200,000 objects the open script takes 1.9 s and `1 + 1` takes 178 s. Neither run records a budget failure.
+- Found by the November 2026 audits: FABLE KITEJS-04, SOL KJS-01.
+
+## Rhino parses a long decimal string in quadratic time, and the budget cannot stop it
+
+Labels: kind:perf, area:interpreter, Rhino
+
+Audit ids: FABLE KITEJS-09
+
+Security: yes
+
+`DecimalParser` builds one big integer from every significant digit of a decimal string, at a cost that grows with the square of the length. On Rhino, `Number`, `parseFloat`, a numeric literal and `JsValue.asDouble()` all go through it, and the budget is not charged while it runs.
+
+### What happens
+
+- `DecimalParser.parse` keeps every significant digit. A value with more than 15 of them goes to `exactPath`, which calls `KBigInt.parse(significant, 10)` and then divides by a power of ten as long as the digits.
+- `KBigInt.parse` multiplies the growing magnitude by 10^9 per chunk of nine digits with `magMulAddSmall`, which allocates a new array each time. The division is schoolbook. Both cost the square of the length.
+- A value whose leading digit lies beyond 10^309 returns infinity before any of this, so `Number('9'.repeat(400000))` is fast. A long value inside the range of a double is not, for example `'0.' + '1'.repeat(n)`.
+
+Measured on the JVM with the published `kitejs-rhino-jvm` 0.7.0 and `instructionBudget = 1000`:
+
+| Script | Result | Time |
+|---|---|---:|
+| `Number('9'.repeat(400000))` | `Infinity` | 0.21 s |
+| `Number('0.' + '1'.repeat(100000))` | `0.1111111111111111` | 0.54 s |
+| `Number('0.' + '1'.repeat(200000))` | same | 1.38 s |
+| `Number('0.' + '1'.repeat(400000))` | same | 6.84 s |
+| `Number('0.' + '1'.repeat(800000))` | same | 17.8 s |
+
+QuickJS answers the 800,000-digit case in 0.01 s with its own parser. A budget of 1000 stops `for (;;) {}` at once on Rhino.
+
+### What should happen
+
+The same answer in linear time. Only the first 768 or so significant digits can change the rounding of a double. A parser can keep those and one sticky flag that says whether any dropped digit was not zero, and round from that, as V8 and QuickJS do.
+
+### How to reproduce
+
+```kotlin
+KiteJs(Rhino) { instructionBudget = 1000 }.use { js ->
+    js.evaluate("Number('0.' + '1'.repeat(800000))")   // 18 s on the JVM
+}
+```
+
+### Where
+
+- `kitejs-api/src/io/github/yuroyami/kitejs/api/dtoa/DecimalParser.kt`: `parse` (line 51) and `exactPath` (146).
+- `kitejs-api/src/io/github/yuroyami/kitejs/api/KBigInt.kt`: `parse` (328) and `magMulAddSmall` (638).
+- Callers: `kitejs-rhino/.../ScriptRuntime.kt` (lines 107 and 327), `kitejs-rhino/.../TokenStream.kt:635` for numeric literals, `kitejs-api/.../JsNumbers.kt:57` for `JsValue.asDouble()` on a string with either engine.
+
+### Notes
+
+- The cost is outside every instruction count, as for the other built-in loops of Rhino (the issue "On Rhino a built-in that loops over a length the script chose is never charged to the budget"), but the fix here is the truncation, which makes the work small rather than metered.
+- KitePDF runs scripts on QuickJS, so it reaches this only through `JsValue.asDouble()` on a string, which it does not call on script data today.
+- The audit's example `Number('9'.repeat(400000))` returns infinity before the slow path, so it does not show the cost; the table uses values inside the range of a double.
+- Found by the November 2026 audits: FABLE KITEJS-09.
+
+## asyncKiteJs(QuickJs) on Apple puts a 512 KiB stack limit on a 512 KiB thread, so runaway recursion ends the process
+
+Labels: kind:bug, area:quickjs, area:coroutines, QuickJS
+
+Audit ids: FABLE KITEJS-03, OPUS KJ-03
+
+Security: yes
+
+On iOS and macOS, `asyncKiteJs(QuickJs)` with its defaults runs the engine on a thread whose whole stack is 512 KiB, with QuickJS allowed 512 KiB of recursion below the point where the call entered. A script that recurses without end runs off the thread's stack before QuickJS throws its RangeError, and the process dies.
+
+### What happens
+
+- `asyncKiteJs` opens the engine on an `EngineThread` unless the caller passes a dispatcher. On Kotlin/Native, `EngineThread` is `newSingleThreadContext("KiteJS engine")`. kotlinx.coroutines 1.11.0 builds that on a `Worker`, and the Kotlin/Native runtime starts a worker with `pthread_create(&thread_, nullptr, workerRoutine, this)` (`Worker.cpp` at v2.4.21), so the thread gets the platform's default stack. On Apple that is 512 KiB for a secondary thread.
+- `QuickJsConfig.maxStackSize` is 512 KiB by default. `kite_enter` calls `JS_UpdateStackTop` at each outermost call, and QuickJS sets its limit to `stack_top - stack_size` (`update_stack_limit`). The worker has already used part of its stack when the call enters, so the limit lies below the end of the stack, and `js_check_stack_overflow` never fires before the guard page.
+- The KDoc of `maxStackSize` says that "a thread with a smaller stack, such as a secondary thread on iOS at 512 KiB, needs a smaller value". Here KiteJS picks both the thread and the value, and `asyncKiteJs` neither lowers the limit nor says so.
+- `ErrorsContract.deepRecursionIsARangeErrorTheScriptCanCatch` runs on the test runner's main thread, and no coroutine test recurses or runs on QuickJS.
+
+### What should happen
+
+`docs/engines.md` (QuickJS, Memory and the stack): "A script that recurses past `maxStackSize` gets a `RangeError`, which it can catch like any other." That must hold for the thread KiteJS makes itself.
+
+### How to reproduce
+
+A `kitejs-coroutines` test on `macosArm64` or `iosSimulatorArm64`, with `kitejs-quickjs` as a test dependency:
+
+```kotlin
+@Test
+fun deepRecursionOnTheEngineThreadIsARangeError() = runTest {
+    val js = asyncKiteJs(QuickJs)
+    try {
+        assertEquals("RangeError", js.evaluate("try { (function f() { return f() + 1 })() } catch (e) { e.name }").asString())
+    } finally {
+        js.close()
+    }
+}
+```
+
+Expected from the trace: the test process ends with EXC_BAD_ACCESS instead of a failed assertion.
+
+### Where
+
+- `kitejs-coroutines/src@native/io/github/yuroyami/kitejs/coroutines/EngineThread.native.kt`: `newSingleThreadContext`.
+- `kitejs-coroutines/src/io/github/yuroyami/kitejs/coroutines/AsyncKiteJs.kt:288` `asyncKiteJs`, `dispatcher: CoroutineDispatcher = EngineThread()`.
+- `kitejs-quickjs/src/io/github/yuroyami/kitejs/quickjs/QuickJs.kt:61` `maxStackSize = 512L * 1024`.
+- `kitejs-quickjs/native/kitejs_quickjs.c:395` `kite_enter`; `kitejs-quickjs/native/quickjs/quickjs.c:3152` `update_stack_limit`, `:2310` `js_check_stack_overflow`.
+
+### Notes
+
+- Two fixes, either enough: give `EngineThread` on Kotlin/Native a thread with an explicit stack (a `pthread_attr_setstacksize` thread, as KitePDF's script threads use), or clamp the limit in `kite_enter` to the current thread's remaining stack minus a reserve where the platform can say (`pthread_get_stacksize_np` and `pthread_get_stackaddr_np` on Apple, `pthread_getattr_np` on Linux). The Windows `NativeStackProbe` of Rhino is a model.
+- Traced in the source, not run: this needs an Apple device or simulator. The 512 KiB default for secondary threads is Apple's documented pthread default; KitePDF's CLAUDE.md records it for its own threads (yuroyami/KitePDF#450).
+- KitePDF is not affected: it starts its own script threads with an explicit stack size and passes `maxStackSize` to match (`kitepdf-javascript/src@apple/.../NativeThread.apple.kt`).
+- Related: #118 and #119, the same failure on the web and through a host function.
+- Found by the November 2026 audits: FABLE KITEJS-03, OPUS KJ-03.
+
+## JSON.parse and JSON.stringify on Rhino recurse with no limit, so deep nesting overflows the host stack
+
+Labels: kind:bug, area:interpreter, Rhino
+
+Audit ids: OPUS KJ-04
+
+Security: yes
+
+On Rhino, `JSON.parse` of a deeply nested text and `JSON.stringify` of a deeply nested object recurse on the host's stack with no depth limit. The script's `catch` never sees the failure: on the JVM the call ends in an engine error, and on Kotlin/Native the process ends.
+
+### What happens
+
+- `JsonParser.readValue` calls `readArray` or `readObject`, which call `readValue` again for each element: one pair of Kotlin frames per level. Nothing counts the depth, and no interpreter frame is entered, so neither `maxCallDepth`, `maxHostCallDepth` nor `hasNativeStackSpace` is consulted.
+- `NativeJSON.str`, `jo` and `ja` recurse the same way for `stringify`.
+- `'['.repeat(n)` costs a single call of budget, so a short script reaches any depth.
+
+Measured on the JVM with the published `kitejs-rhino-jvm` 0.7.0 and `kitejs-quickjs-jvm` 0.7.0:
+
+| Script | Rhino | QuickJS |
+|---|---|---|
+| `try { JSON.parse('['.repeat(1e6) + ']'.repeat(1e6)); 'parsed' } catch (e) { e.name }` | `JsEngineError: StackOverflowError` reaches the host | `RangeError: Maximum call stack size exceeded`, caught by the script |
+| `var o = {}; for (var i = 0; i < 1e6; i++) o = {a: o}; try { JSON.stringify(o).length } catch (e) { e.name }` | `JsEngineError: StackOverflowError` reaches the host | `RangeError`, caught by the script |
+
+On Kotlin/Native a stack overflow cannot be caught, so the same script ends the process there (read from the platform's rules, not run).
+
+### What should happen
+
+Deep JSON ends in a `RangeError` the script can catch, on every target, as on QuickJS, whose JSON parser and serializer check the stack.
+
+### How to reproduce
+
+On Rhino, on `linuxX64` or `macosArm64`:
+
+```kotlin
+KiteJs(Rhino).use { js ->
+    js.evaluate("try { JSON.parse('['.repeat(1e6) + ']'.repeat(1e6)); 'parsed' } catch (e) { e.name }")
+}
+```
+
+Expected `"RangeError"`. The JVM gives a `JsEngineError` today, and a native test process ends.
+
+### Where
+
+- `kitejs-rhino/src/io/github/yuroyami/kitejs/rhino/json/JsonParser.kt`: `readValue` (line 29), `readObject` (47), `readArray` (88).
+- `kitejs-rhino/src/io/github/yuroyami/kitejs/rhino/NativeJSON.kt`: `parse` (74), `str` (204), `jo` (264), `ja` (302).
+
+### Notes
+
+- A depth counter in `JsonParser` and in the stringify state, with the engine's own `RangeError` past a fixed limit, works on every target. Upstream Rhino 1.9.1 has no limit either; there the JVM's `StackOverflowError` ends the call.
+- `jo` and `ja` also check for cycles with `state.stack.contains`, a linear scan per level, so stringify of deep data is quadratic before it overflows.
+- KitePDF runs scripts on QuickJS only and is not affected.
+- Related: #139 (the same missing guard in the source parser) and #120 (recursion at run time). Neither covers JSON.
+- Found by the November 2026 audits: OPUS KJ-04.
