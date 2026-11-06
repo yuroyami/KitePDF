@@ -54,7 +54,7 @@ class ZipRandomAccessTest {
         }
     }
 
-    /** The case the source exists for: a large entry beside the one being read is never fetched (#378 of Contauri). */
+    /** The case the source exists for: a large entry beside the one being read is never fetched. */
     @Test
     fun reading_one_entry_does_not_fetch_another() {
         val big = ByteArray(8 * 1024 * 1024) { (it * 31).toByte() }
