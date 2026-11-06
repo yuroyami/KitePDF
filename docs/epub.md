@@ -18,6 +18,22 @@ val fromDisk = EpubDocument.openFile("/books/moby-dick.epub")
 
 [Loading a document](loading.md) shows every other source, and how to open a file whose format you do not know.
 
+`open(bytes)` holds the whole book in memory. To open a book that can be larger than the heap, give `open` a `KiteRandomAccess` instead. KitePDF then reads each entry of the container from it when layout needs that entry. Keep the source open while you use the document, and close it after:
+
+```kotlin
+val file = RandomAccessFile("/books/illustrated.epub", "r")
+val source = object : KiteRandomAccess {
+    override val size = file.length()
+    override fun read(position: Long, buffer: ByteArray, offset: Int, length: Int): Int {
+        file.seek(position)
+        return file.read(buffer, offset, length)
+    }
+}
+val book = EpubDocument.open(source, EpubSettings())
+// ... read the book ...
+file.close()
+```
+
 `open` throws `EpubFormatException` when the book has no `META-INF/container.xml`, no package file, an empty spine, or no document that KitePDF can read. The message names the first failure.
 
 KitePDF lays out a reflowable book at the page size that you give:

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `EpubDocument.open` and `openOrNull` take a `KiteRandomAccess`, such as a file read at any
+  offset, as well as a `ByteArray`. The book's `ZipReader` then reads the central directory once
+  and each entry when layout needs it, so a book larger than the heap opens. A 210 MiB book with
+  one large resource failed on a 192 MB Android heap; it now holds only what its chapters read.
+  `ZipReader` takes the same source.
+
 ### Changed
 
 - KitePDF builds with the [Kotlin Toolchain](https://github.com/JetBrains/kotlin-toolchain) instead of

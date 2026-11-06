@@ -8,6 +8,7 @@ import io.github.yuroyami.kitepdf.svg.SvgTextContent
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlError
 
+import io.github.yuroyami.kitepdf.core.zip.KiteRandomAccess
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
@@ -1741,6 +1742,21 @@ public class EpubDocument internal constructor(
         /** [open], but null instead of [EpubFormatException] on a malformed book. */
         public fun openOrNull(bytes: ByteArray, settings: EpubSettings = EpubSettings()): EpubDocument? =
             try { open(bytes, settings) } catch (_: EpubFormatException) { null }
+
+        /**
+         * Open the book in [source] at [settings], holding only the container's directory and the
+         * entries that layout reads, so a book larger than the heap opens. Each entry is read from
+         * [source] when a chapter, a style sheet, a font or an image needs it, so the caller keeps
+         * [source] open until it drops the document, and closes it after.
+         *
+         * @throws EpubFormatException when the source is not a readable EPUB.
+         */
+        public fun open(source: KiteRandomAccess, settings: EpubSettings): EpubDocument =
+            EpubDocument(ParsedEpub.parse(source), settings)
+
+        /** [open] from a [KiteRandomAccess], but null instead of [EpubFormatException] on a malformed book. */
+        public fun openOrNull(source: KiteRandomAccess, settings: EpubSettings = EpubSettings()): EpubDocument? =
+            try { open(source, settings) } catch (_: EpubFormatException) { null }
 
         /**
          * Resolve a relative href against [baseDir], normalizing `.`/`..` + percent-decode. An

@@ -1,6 +1,6 @@
 # Loading a document
 
-Every source ends as a `ByteArray` that a format reader parses, so a file, a stream and a download all sit in memory as one array before parsing starts. Opening a big book is still quick, because KitePDF reads only the container, the package file and the table of contents at first, and lays out each chapter when the reader gets to it (see [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position)).
+Every source ends as a `ByteArray` that a format reader parses, so a file, a stream and a download all sit in memory as one array before parsing starts. Opening a big book is still quick, because KitePDF reads only the container, the package file and the table of contents at first, and lays out each chapter when the reader gets to it (see [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position)). An EPUB is the one exception: `EpubDocument.open` also takes a `KiteRandomAccess`, which reads each entry of the container from a file when a chapter needs it (see [EPUB](epub.md)).
 
 ## When you know the format
 
