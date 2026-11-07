@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `KiteByteSource` in `kitepdf-core`: bytes that a reader fetches at any offset, such as a file.
+  `EpubDocument.open` and `openOrNull` take one as well as a `ByteArray`, and so does `ZipReader`.
+  The book's `ZipReader` then reads the central directory once and each entry when layout needs
+  it, so a book larger than the heap opens. A 210 MiB book with one large resource failed on a
+  192 MB Android heap; it now holds only what its chapters read. Contributed by alvechy in #645.
+  The PDF parser and `kitepdf-net` still read one array (#906).
+
 ### Changed
 
 - KitePDF builds with the [Kotlin Toolchain](https://github.com/JetBrains/kotlin-toolchain) instead of

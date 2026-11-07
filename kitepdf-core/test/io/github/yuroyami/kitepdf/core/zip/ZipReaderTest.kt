@@ -58,6 +58,53 @@ class ZipReaderTest {
         assertNull(r.readPrefix("s.bin", 0))
     }
 
+    /**
+     * A fixed-Huffman block spends 9 bits on every byte from 144 up (RFC 1951 section 3.2.6), so a
+     * valid stream can be an eighth larger than what it decodes to. The reader hands the inflater
+     * enough of such a stream for the prefix asked for, with or without a declared size.
+     */
+    @Test
+    fun a_prefix_of_a_stream_larger_than_its_output_reads_whole() {
+        val data = ByteArray(20_000) { (200 + it % 50).toByte() }
+        val stream = fixedHuffmanLiterals(data)
+        assertTrue(stream.size > data.size + data.size / 64, "the stream must be larger than its output")
+        val zip = ZipFixture.build(
+            listOf(
+                ZipFixture.Spec("d.bin", data, deflate = true, payload = stream),
+                ZipFixture.Spec("h.bin", data, deflate = true, dataDescriptor = true, hideSizes = true, payload = stream),
+            ),
+        )
+        val r = ZipReader(zip)
+        for (name in listOf("d.bin", "h.bin")) {
+            assertContentEquals(data, r.read(name), name)
+            assertContentEquals(data, r.readPrefix(name, data.size), name)
+        }
+    }
+
+    /** One final fixed-Huffman block of literals, each 144 or more, as RFC 1951 section 3.2.6 codes them. */
+    private fun fixedHuffmanLiterals(data: ByteArray): ByteArray {
+        val out = ArrayList<Byte>(data.size + data.size / 8 + 2)
+        var buf = 0
+        var filled = 0
+        fun bit(b: Int) {
+            buf = buf or (b shl filled)
+            if (++filled == 8) { out.add(buf.toByte()); buf = 0; filled = 0 }
+        }
+        // A header field goes out least-significant bit first, a Huffman code most-significant first.
+        fun field(value: Int, bits: Int) { for (i in 0 until bits) bit((value ushr i) and 1) }
+        fun code(value: Int, bits: Int) { for (i in bits - 1 downTo 0) bit((value ushr i) and 1) }
+        field(1, 1) // BFINAL
+        field(1, 2) // BTYPE = 01, fixed Huffman
+        for (b in data) {
+            val literal = b.toInt() and 0xFF
+            require(literal >= 144) { "a literal under 144 takes 8 bits, not 9" }
+            code(0b110010000 + (literal - 144), 9)
+        }
+        code(0, 7) // end of block
+        if (filled > 0) out.add(buf.toByte())
+        return out.toByteArray()
+    }
+
     /* ─── ZIP64 ──────────────────────────────────────────────────────────── */
 
     @Test
@@ -249,6 +296,8 @@ internal object ZipFixture {
         val zip64Extra: Boolean = false,
         /** Flip one payload byte after the CRC is computed. */
         val corruptData: Boolean = false,
+        /** Write these bytes as the entry's payload instead of encoding [data]. */
+        val payload: ByteArray? = null,
     )
 
     fun build(specs: List<Spec>, zip64Eocd: Boolean = false): ByteArray {
@@ -257,7 +306,7 @@ internal object ZipFixture {
 
         val placed = ArrayList<Placed>()
         for (s in specs) {
-            var payload = if (s.deflate) Deflate.encode(s.data) else s.data
+            var payload = s.payload ?: if (s.deflate) Deflate.encode(s.data) else s.data
             val crc = Crc32.of(s.data)
             if (s.corruptData) {
                 payload = payload.copyOf()

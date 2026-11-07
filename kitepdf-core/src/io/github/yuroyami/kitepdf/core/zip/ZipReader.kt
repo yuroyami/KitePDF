@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.core.zip
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
+import io.github.yuroyami.kitepdf.core.KiteByteSource
 import io.github.yuroyami.kitepdf.core.compression.Inflate
 import io.github.yuroyami.kitepdf.core.compression.Inflater
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
@@ -31,8 +32,10 @@ private data class ZipLimits(val maxEntryBytes: Int, val maxEntries: Int)
  * directory pair and the per-entry extra field), entries whose sizes live in a
  * trailing data descriptor, and CRC-32 verification.
  *
- * What it does not: encryption, multi-disk archives, and archives above 2 GB
- * (the whole file is held in one `ByteArray`).
+ * What it does not: encryption, and multi-disk archives. A reader built on a
+ * `ByteArray` also stops at 2 GB; one built on a [KiteByteSource] holds only
+ * the central directory and the entry it is reading, so the archive can be
+ * larger than the heap.
  *
  * CRC mismatches are lenient by default: [read] hands the bytes back and logs,
  * because half a broken book beats no book. Pass `strictCrc` to get null
@@ -40,14 +43,14 @@ private data class ZipLimits(val maxEntryBytes: Int, val maxEntries: Int)
  * `maxEntries` bound decompression and central-directory resource use.
  */
 public class ZipReader private constructor(
-    private val bytes: ByteArray,
+    private val bytes: ZipBytes,
     private val strictCrc: Boolean,
     limits: ZipLimits,
 ) {
 
     /** Open [bytes] with default resource ceilings. */
     public constructor(bytes: ByteArray, strictCrc: Boolean = false) : this(
-        bytes,
+        ZipBytes.Array(bytes),
         strictCrc,
         ZipLimits(DEFAULT_MAX_ENTRY_BYTES, DEFAULT_MAX_ENTRIES),
     )
@@ -58,7 +61,20 @@ public class ZipReader private constructor(
         strictCrc: Boolean = false,
         maxEntryBytes: Int = DEFAULT_MAX_ENTRY_BYTES,
         maxEntries: Int = DEFAULT_MAX_ENTRIES,
-    ) : this(bytes, strictCrc, ZipLimits(maxEntryBytes, maxEntries))
+    ) : this(ZipBytes.Array(bytes), strictCrc, ZipLimits(maxEntryBytes, maxEntries))
+
+    /**
+     * Open the archive in [source], reading entries from it as they are asked for. The caller
+     * keeps [source] open while this reader lives. A failed read of the source makes the entry
+     * unreadable, or the archive empty when it hits the central directory, as a damaged archive
+     * would.
+     */
+    public constructor(
+        source: KiteByteSource,
+        strictCrc: Boolean = false,
+        maxEntryBytes: Int = DEFAULT_MAX_ENTRY_BYTES,
+        maxEntries: Int = DEFAULT_MAX_ENTRIES,
+    ) : this(ZipBytes.Source(source), strictCrc, ZipLimits(maxEntryBytes, maxEntries))
 
     private val maxEntryBytes: Int = limits.maxEntryBytes
     private val maxEntries: Int = limits.maxEntries
@@ -81,7 +97,14 @@ public class ZipReader private constructor(
         val localHeaderOffset: Long,
     )
 
-    private val entries: Map<String, Entry> = parseCentralDirectory()
+    /** Where the central directory starts, once it parses; the archive's end before that. */
+    private var directoryStart: Long = bytes.size
+
+    // A source that fails mid-read leaves the archive as unreadable as a truncated file would.
+    private val entries: Map<String, Entry> = runCatching { parseCentralDirectory() }.getOrElse { emptyMap() }
+
+    /** Every local header offset, sorted, so an entry of unknown size ends where the next begins. */
+    private val headerOffsets: List<Long> = entries.values.map { it.localHeaderOffset }.sorted()
 
     /** Entry names, in central-directory order. */
     public val names: Set<String> get() = entries.keys
@@ -94,7 +117,7 @@ public class ZipReader private constructor(
 
     /** Decompressed bytes of [name], or null if absent / unreadable. */
     public fun read(name: String): ByteArray? {
-        val body = readBody(name) ?: return null
+        val body = readBodyOrNull(name) ?: return null
         if (body.crcOk == false) {
             if (strictCrc) return null
             kiteWarn { "zip: CRC mismatch on '${diagnosticName(name)}'; using the bytes anyway" }
@@ -107,22 +130,27 @@ public class ZipReader private constructor(
      * when it is absent or unreadable. It inflates only as far as it needs and checks no
      * CRC-32, so it reads a file's header without the rest of it.
      */
-    public fun readPrefix(name: String, maxBytes: Int): ByteArray? {
+    public fun readPrefix(name: String, maxBytes: Int): ByteArray? =
+        runCatching { readPrefixOrNull(name, maxBytes) }.getOrNull()
+
+    private fun readPrefixOrNull(name: String, maxBytes: Int): ByteArray? {
         val e = entries[name] ?: return null
         if ((e.flags and 0x41) != 0 || maxBytes <= 0) return null
-        val lo = e.localHeaderOffset.toIntOrNull() ?: return null
+        val lo = e.localHeaderOffset
         if (!hasRange(lo, 30) || u32(lo) != LOCAL_FILE_SIG) return null
         if ((u16(lo + 6) and 0x41) != 0 || u16(lo + 8) != e.method) return null
-        val dataStart = checkedEnd(lo.toLong(), 30L + u16(lo + 26).toLong() + u16(lo + 28).toLong()) ?: return null
+        val dataStart = checkedEnd(lo, 30L + u16(lo + 26).toLong() + u16(lo + 28).toLong()) ?: return null
         val limit = minOf(maxBytes, maxEntryBytes)
         // A streaming writer leaves the sizes unknown; then the prefix may run into what follows.
-        val dataEnd = if (e.compressedSize >= 0) checkedEnd(dataStart.toLong(), e.compressedSize) ?: return null else bytes.size
+        val dataEnd = if (e.compressedSize >= 0) checkedEnd(dataStart, e.compressedSize) ?: return null else nextHeaderAfter(lo)
         return when (e.method) {
-            0 -> bytes.copyOfRange(dataStart, minOf(dataEnd, dataStart + limit))
+            0 -> bytes.copy(dataStart, minOf(dataEnd - dataStart, limit.toLong()).toInt())
             8 -> {
+                val span = deflateInputSpan(dataEnd - dataStart, limit).toInt()
+                val input = bytes.window(dataStart, span) ?: return null
                 val out = ByteArrayBuilder(initialCapacity = minOf(limit, 64 * 1024))
                 // The inflater throws once it passes the limit, which ends the read with the prefix in hand.
-                runCatching { Inflater(bytes, dataStart, dataEnd, limit).inflateTo(out) }
+                runCatching { Inflater(input.array, input.offset, input.offset + span, limit).inflateTo(out) }
                 out.toByteArray().let { if (it.size > limit) it.copyOf(limit) else it }.takeIf { it.isNotEmpty() }
             }
             else -> null
@@ -134,7 +162,7 @@ public class ZipReader private constructor(
      * they do not, null when the entry is absent, unreadable, or carries no
      * CRC to check against.
      */
-    public fun verify(name: String): Boolean? = readBody(name)?.crcOk
+    public fun verify(name: String): Boolean? = readBodyOrNull(name)?.crcOk
 
     /**
      * Text of [name], or null. The encoding is sniffed rather than assumed:
@@ -146,18 +174,20 @@ public class ZipReader private constructor(
 
     private class Body(val data: ByteArray, val crcOk: Boolean?)
 
+    private fun readBodyOrNull(name: String): Body? = runCatching { readBody(name) }.getOrNull()
+
     private fun readBody(name: String): Body? {
         val e = entries[name] ?: return null
         if ((e.flags and 0x41) != 0) return null // traditional or strong encryption
         if (e.uncompressedSize > maxEntryBytes.toLong()) return null
         // Local file header: sig(4) ver(2) flags(2) method(2) time(2) date(2)
         // crc(4) csize(4) usize(4) nameLen(2) extraLen(2), then name+extra, then data.
-        val lo = e.localHeaderOffset.toIntOrNull() ?: return null
+        val lo = e.localHeaderOffset
         if (!hasRange(lo, 30) || u32(lo) != LOCAL_FILE_SIG) return null
         val localFlags = u16(lo + 6)
         if ((localFlags and 0x41) != 0 || u16(lo + 8) != e.method) return null
         val dataStart = checkedEnd(
-            lo.toLong(),
+            lo,
             30L + u16(lo + 26).toLong() + u16(lo + 28).toLong(),
         ) ?: return null
 
@@ -172,22 +202,26 @@ public class ZipReader private constructor(
         var crc = e.crc
         when (e.method) {
             0 -> {
-                val size = if (streamed) storedSizeFromDescriptor(dataStart) ?: return null else csize
+                val size = if (streamed) storedSizeFromDescriptor(dataStart, nextHeaderAfter(lo)) ?: return null else csize
                 if (!streamed && e.uncompressedSize != size.toLong()) return null
                 if (size > maxEntryBytes || !hasRange(dataStart, size)) return null
-                data = bytes.copyOfRange(dataStart, dataStart + size)
+                data = bytes.copy(dataStart, size) ?: return null
                 if (streamed) crc = descriptorCrc(dataStart + size) ?: -1L
             }
             8 -> {
                 if (!streamed) {
+                    val input = bytes.window(dataStart, csize) ?: return null
                     data = runCatching {
-                        Inflate.decodePlatform(bytes, dataStart, csize, maxEntryBytes)
+                        Inflate.decodePlatform(input.array, input.offset, csize, maxEntryBytes)
                     }.getOrNull() ?: return null
                 } else {
                     // The payload's own end is the only size marker: inflate to
-                    // the end of the archive and ask how far the decoder got.
+                    // the next local header and ask how far the decoder got.
+                    val span = deflateInputSpan(nextHeaderAfter(lo) - dataStart, maxEntryBytes).toInt()
+                    if (span < 0) return null
+                    val input = bytes.window(dataStart, span) ?: return null
                     val out = ByteArrayBuilder(initialCapacity = 4096)
-                    val inflater = Inflater(bytes, dataStart, bytes.size, maxEntryBytes)
+                    val inflater = Inflater(input.array, input.offset, input.offset + span, maxEntryBytes)
                     runCatching { inflater.inflateTo(out) }.getOrNull() ?: return null
                     data = out.toByteArray()
                     crc = descriptorCrc(dataStart + inflater.consumedBytes) ?: -1L
@@ -205,30 +239,30 @@ public class ZipReader private constructor(
      * Payload length of a STORED entry that declared none: scan for the data
      * descriptor whose own size fields agree with the distance travelled.
      */
-    private fun storedSizeFromDescriptor(dataStart: Int): Int? {
+    private fun storedSizeFromDescriptor(dataStart: Long, entryEnd: Long): Int? {
         var p = dataStart
         var crcState = Crc32.INITIAL_STATE
-        val scanEnd = minOf(bytes.size.toLong(), dataStart.toLong() + maxEntryBytes + 16L).toInt()
+        val scanEnd = minOf(entryEnd, dataStart + maxEntryBytes + 16L)
         while (hasRange(p, 12, scanEnd)) {
-            val n = (p - dataStart).toLong()
+            val n = p - dataStart
             val crc = Crc32.finish(crcState)
             if (u32(p) == DESCRIPTOR_SIG && hasRange(p, 16, scanEnd) &&
                 u32(p + 8) == n && u32(p + 12) == n &&
                 u32(p + 4) == crc
-            ) return (p - dataStart)
+            ) return (p - dataStart).toInt()
             // The signature is optional; a bare descriptor is crc/csize/usize.
             if (
                 u32(p + 4) == n && u32(p + 8) == n && n > 0 &&
                 u32(p) == crc
-            ) return (p - dataStart)
-            crcState = Crc32.update(crcState, bytes[p])
+            ) return (p - dataStart).toInt()
+            crcState = Crc32.update(crcState, bytes.byteAt(p).toByte())
             p++
         }
         return null
     }
 
     /** CRC field of the data descriptor sitting at [at], signature optional. */
-    private fun descriptorCrc(at: Int): Long? {
+    private fun descriptorCrc(at: Long): Long? {
         if (!hasRange(at, 12)) return null
         return if (u32(at) == DESCRIPTOR_SIG) {
             if (!hasRange(at, 16)) null else u32(at + 4)
@@ -257,10 +291,10 @@ public class ZipReader private constructor(
         val locator = eocd - ZIP64_LOCATOR_SIZE
         if (locator >= 0 && u32(locator) == ZIP64_LOCATOR_SIG) {
             if (u32(locator + 4) != 0L || u32(locator + 16) != 1L) return emptyMap()
-            val z64 = u64(locator + 8).toIntOrNull()
-            if (z64 != null && hasRange(z64, ZIP64_EOCD_MIN_SIZE, locator) && u32(z64) == ZIP64_EOCD_SIG) {
+            val z64 = u64(locator + 8)
+            if (hasRange(z64, ZIP64_EOCD_MIN_SIZE, locator) && u32(z64) == ZIP64_EOCD_SIG) {
                 val recordBodySize = u64(z64 + 4)
-                val recordEnd = checkedEnd(z64.toLong(), 12L + recordBodySize, locator) ?: return emptyMap()
+                val recordEnd = checkedEnd(z64, 12L + recordBodySize, locator) ?: return emptyMap()
                 if (recordBodySize < 44L || recordEnd != locator) return emptyMap()
                 if (u32(z64 + 16) != 0L || u32(z64 + 20) != 0L) return emptyMap()
                 val zip64EntriesOnDisk = u64(z64 + 24)
@@ -285,9 +319,10 @@ public class ZipReader private constructor(
             kiteWarn { "zip: central directory declares $count entries; limit is $maxEntries" }
             return emptyMap()
         }
-        var at = p.toIntOrNull() ?: return emptyMap()
+        var at = p
         val directoryEnd = checkedEnd(p, directorySize, trailerStart) ?: return emptyMap()
         if (directoryEnd != trailerStart) return emptyMap()
+        directoryStart = p
         val out = LinkedHashMap<String, Entry>()
         var i = 0L
         while (i < count) {
@@ -304,9 +339,10 @@ public class ZipReader private constructor(
             val commentLen = u16(at + 32)
             var localOff = u32(at + 42)
             val recordSize = CENTRAL_FILE_HEADER_SIZE.toLong() + nameLen + extraLen + commentLen
-            val recordEnd = checkedEnd(at.toLong(), recordSize, directoryEnd) ?: return emptyMap()
+            val recordEnd = checkedEnd(at, recordSize, directoryEnd) ?: return emptyMap()
             val nameStart = at + CENTRAL_FILE_HEADER_SIZE
-            val name = bytes.decodeToString(nameStart, nameStart + nameLen)
+            val name = bytes.window(nameStart, nameLen)?.let { it.array.decodeToString(it.offset, it.offset + nameLen) }
+                ?: return emptyMap()
 
             // ZIP64 extra field (id 0x0001) replaces whatever was sentinelled,
             // in this fixed order: uncompressed, compressed, local offset, disk.
@@ -316,7 +352,7 @@ public class ZipReader private constructor(
                 while (hasRange(x, 4, xEnd)) {
                     val id = u16(x)
                     val len = u16(x + 2)
-                    val fieldEnd = checkedEnd(x.toLong(), 4L + len, xEnd) ?: return emptyMap()
+                    val fieldEnd = checkedEnd(x, 4L + len, xEnd) ?: return emptyMap()
                     if (id == 0x0001) {
                         var f = x + 4
                         if (usize == U32_MAX) {
@@ -362,15 +398,15 @@ public class ZipReader private constructor(
     }
 
     /** Scan backward for the End Of Central Directory signature (0x06054b50). */
-    private fun findEocd(): Int? {
+    private fun findEocd(): Long? {
         val minEocd = EOCD_MIN_SIZE
         if (bytes.size < minEocd) return null
-        val limit = maxOf(0, bytes.size - minEocd - 0xFFFF)   // + max comment length
+        val limit = maxOf(0L, bytes.size - minEocd - 0xFFFF)   // + max comment length
         var p = bytes.size - minEocd
         while (p >= limit) {
             if (
                 u32(p) == EOCD_SIG &&
-                p.toLong() + minEocd + u16(p + 20) == bytes.size.toLong() &&
+                p + minEocd + u16(p + 20) == bytes.size &&
                 plausibleEocdAt(p)
             ) {
                 return p
@@ -380,7 +416,7 @@ public class ZipReader private constructor(
         return null
     }
 
-    private fun plausibleEocdAt(at: Int): Boolean {
+    private fun plausibleEocdAt(at: Long): Boolean {
         val locator = at - ZIP64_LOCATOR_SIZE
         if (locator >= 0 && u32(locator) == ZIP64_LOCATOR_SIG) return true
         // 0xFFFF is a legal literal entry count (65535 entries), so only the
@@ -389,17 +425,45 @@ public class ZipReader private constructor(
         val size = u32(at + 12)
         val offset = u32(at + 16)
         if (size == U32_MAX || offset == U32_MAX) return false
-        return offset <= at.toLong() && size == at.toLong() - offset
+        return offset <= at && size == at - offset
     }
 
-    private fun hasRange(start: Int, length: Int, endExclusive: Int = bytes.size): Boolean =
+    private fun hasRange(start: Long, length: Int, endExclusive: Long = bytes.size): Boolean =
         start >= 0 && length >= 0 && endExclusive in 0..bytes.size && start <= endExclusive - length
 
-    private fun checkedEnd(start: Long, length: Long, endExclusive: Int = bytes.size): Int? {
-        if (start < 0 || length < 0 || start > endExclusive.toLong()) return null
-        if (length > endExclusive.toLong() - start) return null
-        return (start + length).toInt()
+    private fun checkedEnd(start: Long, length: Long, endExclusive: Long = bytes.size): Long? {
+        if (start < 0 || length < 0 || start > endExclusive) return null
+        if (length > endExclusive - start) return null
+        return start + length
     }
+
+    /**
+     * Where the entry whose local header sits at [localHeader] must end: at the next local header,
+     * or at the central directory. An entry sized only by its data descriptor reads no further, so a
+     * reader on a [KiteByteSource] does not fetch the entries after it.
+     */
+    private fun nextHeaderAfter(localHeader: Long): Long {
+        // The first offset strictly past this header: two records that name one local header
+        // (a damaged or crafted directory) must not end the entry before it starts.
+        var lo = 0
+        var hi = headerOffsets.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (headerOffsets[mid] <= localHeader) lo = mid + 1 else hi = mid
+        }
+        return if (lo < headerOffsets.size) headerOffsets[lo] else directoryStart
+    }
+
+    /**
+     * The most deflate input that can decode to [outputBytes]. A literal costs at most 15 bits
+     * (RFC 1951 section 3.2.7), so twice the output and a block header cover every stream but one
+     * cut into tiny blocks or padded with empty ones, which then reads as truncated. The bound
+     * keeps a reader on a [KiteByteSource] from fetching the rest of the archive for one entry.
+     * A reader on an array fetches nothing, so it hands the inflater all of [available], as it
+     * always has, and a stream that the bound would cut still reads whole there.
+     */
+    private fun deflateInputSpan(available: Long, outputBytes: Int): Long =
+        if (bytes is ZipBytes.Array) available else minOf(available, 2L * outputBytes + 1024)
 
     private fun diagnosticName(name: String): String = buildString(minOf(name.length, 160)) {
         for (c in name) {
@@ -412,18 +476,17 @@ public class ZipReader private constructor(
     private fun Long.toIntOrNull(): Int? =
         if (this in 0..Int.MAX_VALUE.toLong()) toInt() else null
 
-    private fun u16(o: Int): Int =
-        (bytes[o].toInt() and 0xFF) or ((bytes[o + 1].toInt() and 0xFF) shl 8)
+    private fun u16(o: Long): Int = bytes.byteAt(o) or (bytes.byteAt(o + 1) shl 8)
 
-    private fun u32(o: Int): Long =
-        (bytes[o].toLong() and 0xFF) or
-            ((bytes[o + 1].toLong() and 0xFF) shl 8) or
-            ((bytes[o + 2].toLong() and 0xFF) shl 16) or
-            ((bytes[o + 3].toLong() and 0xFF) shl 24)
+    private fun u32(o: Long): Long =
+        bytes.byteAt(o).toLong() or
+            (bytes.byteAt(o + 1).toLong() shl 8) or
+            (bytes.byteAt(o + 2).toLong() shl 16) or
+            (bytes.byteAt(o + 3).toLong() shl 24)
 
-    private fun u64(o: Int): Long {
+    private fun u64(o: Long): Long {
         var v = 0L
-        for (i in 7 downTo 0) v = (v shl 8) or (bytes[o + i].toLong() and 0xFF)
+        for (i in 7 downTo 0) v = (v shl 8) or bytes.byteAt(o + i).toLong()
         return v
     }
 

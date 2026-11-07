@@ -213,6 +213,13 @@ abstract interface io.github.yuroyami.kitepdf.core.script/KiteScriptEngine : kot
     open suspend fun evaluatePausing(kotlin/String, kotlin/String = ...): kotlin/String? // io.github.yuroyami.kitepdf.core.script/KiteScriptEngine.evaluatePausing|evaluatePausing(kotlin.String;kotlin.String){}[0]
 }
 
+abstract interface io.github.yuroyami.kitepdf.core/KiteByteSource { // io.github.yuroyami.kitepdf.core/KiteByteSource|null[0]
+    abstract val size // io.github.yuroyami.kitepdf.core/KiteByteSource.size|{}size[0]
+        abstract fun <get-size>(): kotlin/Long // io.github.yuroyami.kitepdf.core/KiteByteSource.size.<get-size>|<get-size>(){}[0]
+
+    abstract fun read(kotlin/Long, kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteByteSource.read|read(kotlin.Long;kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+}
+
 abstract interface io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.yuroyami.kitepdf.core/KiteDocument|null[0]
     abstract val pageCount // io.github.yuroyami.kitepdf.core/KiteDocument.pageCount|{}pageCount[0]
         abstract fun <get-pageCount>(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteDocument.pageCount.<get-pageCount>|<get-pageCount>(){}[0]
@@ -1905,6 +1912,7 @@ final class io.github.yuroyami.kitepdf.core.zip/ZipEntryInfo { // io.github.yuro
 }
 
 final class io.github.yuroyami.kitepdf.core.zip/ZipReader { // io.github.yuroyami.kitepdf.core.zip/ZipReader|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteByteSource, kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.core.zip/ZipReader.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteByteSource;kotlin.Boolean;kotlin.Int;kotlin.Int){}[0]
     constructor <init>(kotlin/ByteArray, kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.core.zip/ZipReader.<init>|<init>(kotlin.ByteArray;kotlin.Boolean){}[0]
     constructor <init>(kotlin/ByteArray, kotlin/Boolean = ..., kotlin/Int = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.core.zip/ZipReader.<init>|<init>(kotlin.ByteArray;kotlin.Boolean;kotlin.Int;kotlin.Int){}[0]
 

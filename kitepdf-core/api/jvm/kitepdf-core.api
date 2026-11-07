@@ -68,6 +68,11 @@ public final class io/github/yuroyami/kitepdf/core/KiteBookmark$Page : io/github
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class io/github/yuroyami/kitepdf/core/KiteByteSource {
+	public abstract fun getSize ()J
+	public abstract fun read (J[BII)I
+}
+
 public abstract interface class io/github/yuroyami/kitepdf/core/KiteCancellation {
 	public abstract fun isCancelled ()Z
 }
@@ -2760,6 +2765,8 @@ public final class io/github/yuroyami/kitepdf/core/zip/ZipReader {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/zip/ZipReader$Companion;
 	public static final field DEFAULT_MAX_ENTRIES I
 	public static final field DEFAULT_MAX_ENTRY_BYTES I
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteByteSource;ZII)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteByteSource;ZIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> ([BZ)V
 	public fun <init> ([BZII)V
 	public synthetic fun <init> ([BZIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
