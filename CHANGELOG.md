@@ -554,6 +554,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `image-rendering: pixelated` (and `crisp-edges`, `optimizeSpeed`) on an EPUB `<img>` or an SVG `<image>`, and
   `imageSmoothingEnabled = false` on a book's canvas, draw an enlarged image with hard pixel edges;
   `KiteImageData.withInterpolate` is public (#936).
+- A book's CSS reads `calc()`, `min()`, `max()` and `clamp()` in lengths, percentages, numbers and line heights,
+  with `+`, `-`, `*`, `/` and nesting; `CssValues.number` reads a number that one of them gives (#930).
 
 ## [0.13.0] - 2026-10-09
 

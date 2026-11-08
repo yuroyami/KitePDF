@@ -978,7 +978,7 @@ internal class StyleResolver(
         when {
             s == "normal" -> { b.lineHeightPt = null; b.lineHeightFactor = null }
             // A number inherits as the number, and each element multiplies it by its own font size (#831).
-            s.toDoubleOrNull() != null -> s.toDouble().takeIf { it >= 0.0 && it.isFinite() }?.let { b.lineHeightFactor = it; b.lineHeightPt = it * b.fontSizePt }
+            CssValues.number(s) != null -> CssValues.number(s)!!.takeIf { it >= 0.0 && it.isFinite() }?.let { b.lineHeightFactor = it; b.lineHeightPt = it * b.fontSizePt }
             else -> CssValues.length(s, b.fontSizePt, remPt, b.fontSizePt, viewportW, viewportH)?.let { b.lineHeightPt = it; b.lineHeightFactor = null }
         }
     }

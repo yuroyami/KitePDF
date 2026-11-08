@@ -39,6 +39,10 @@ public object CssValues {
     ): Double? {
         val s = raw.trim().lowercase()
         if (s.isEmpty()) return null
+        if (CssMath.isMath(s)) {
+            // calc(), min(), max() and clamp(), each length in them read as a length is here (#930).
+            return CssMath.evaluate(s) { length(it, fontSizePt, rootPt, refPt, viewportWidthPt, viewportHeightPt) }
+        }
         fun numOf(suffix: String) = s.removeSuffix(suffix).trim().toDoubleOrNull()
         return when {
             // Before "in", which "vmin" ends with.
@@ -60,6 +64,15 @@ public object CssValues {
             s == "0" -> 0.0
             else -> null // unitless non-zero is not a valid length here
         }
+    }
+
+    /**
+     * A CSS `<number>`: a plain number, or a math function whose result is one, such as
+     * `calc(1.2 * 1.25)` (CSS Values and Units 4, 10; #930). Null for anything else.
+     */
+    public fun number(raw: String): Double? {
+        val s = raw.trim().lowercase()
+        return if (CssMath.isMath(s)) CssMath.evaluateNumber(s) else s.toDoubleOrNull()
     }
 
     /** Absolute/relative `font-size` keywords → points. [mediumPt] is the base size. */
