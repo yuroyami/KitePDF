@@ -644,6 +644,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   placeholders only in the revision it wrote (#922).
 - PdfSigner.Options.certificationLevel makes a certification signature at level 1, 2 or 3, with its DocMDP
   reference and the catalog's /Perms /DocMDP (#923).
+- PdfSigner writes PAdES pieces: Options.subFilter takes ETSI.CAdES.detached, prepareDocumentTimestamp stages a
+  document timestamp, and PdfEditor.addSecurityStore adds certificates, CRLs and OCSP responses with /VRI entries
+  to the document security store (#924).
 
 ## [0.13.0] - 2026-10-09
 

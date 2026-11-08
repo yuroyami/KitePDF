@@ -104,6 +104,9 @@ public class PdfSignature internal constructor(
         revocationData = documentStreams(document, "CRLs") + documentStreams(document, "OCSPs") + revocationData,
     ).validate()
 
+    /** The `/Contents` string of the signature dictionary, as a document security store keys it (ISO 32000-2, 12.8.4.4). */
+    internal val contents: ByteArray? get() = (dictionary["Contents"] as? PdfString)?.bytes
+
     override fun toString(): String = "PdfSignature(${field.fullyQualifiedName}, $subFilter)"
 
     internal companion object {

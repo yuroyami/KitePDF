@@ -137,6 +137,54 @@ public class PdfEditor internal constructor(
     /** Number of objects staged for writing. */
     public val pendingObjectCount: Int get() = staged.size
 
+    /**
+     * Adds validation data to the document security store, `/DSS` in the catalog (ISO 32000-2,
+     * 12.8.4.3), for long-term validation (PAdES B-LT): [certificates], [crls] and [ocsps], each a
+     * DER encoding that the app fetched. Each joins the store's `/Certs`, `/CRLs` or `/OCSPs` as
+     * a stream, after what the store holds already. Each of [signatures] gets a `/VRI` entry, keyed
+     * by the upper-case hexadecimal SHA-1 of its `/Contents` (12.8.4.4), that names the new data.
+     * Save with [saveIncremental], so the signatures before stay valid: a signature's change report
+     * permits a store that grows (#924).
+     */
+    public fun addSecurityStore(
+        certificates: List<ByteArray> = emptyList(),
+        crls: List<ByteArray> = emptyList(),
+        ocsps: List<ByteArray> = emptyList(),
+        signatures: List<io.github.yuroyami.kitepdf.PdfSignature> = emptyList(),
+    ) {
+        val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference
+            ?: throw IllegalStateException("Trailer /Root is not an indirect reference")
+        val catalog = LinkedHashMap((effectiveObject(rootRef.objectNumber) as? PdfDictionary)?.map ?: base.catalog.map)
+        val dssRef = catalog["DSS"] as? PdfReference
+        val dss = LinkedHashMap((catalog["DSS"]?.resolve(effective) as? PdfDictionary)?.map ?: emptyMap())
+        fun streams(items: List<ByteArray>) = items.map { addObject(PdfStreams.flate(it)) }
+        val added = mapOf("Certs" to streams(certificates), "CRLs" to streams(crls), "OCSPs" to streams(ocsps))
+        for ((key, refs) in added) {
+            if (refs.isEmpty()) continue
+            val old = (dss[key]?.resolve(effective) as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.items.orEmpty()
+            dss[key] = io.github.yuroyami.kitepdf.core.parser.PdfArray(old + refs)
+        }
+        if (signatures.isNotEmpty()) {
+            val vri = LinkedHashMap((dss["VRI"]?.resolve(effective) as? PdfDictionary)?.map ?: emptyMap())
+            for (signature in signatures) {
+                val contents = signature.contents ?: continue
+                val key = io.github.yuroyami.kitepdf.crypto.sig.Sha1.hash(contents).joinToString("") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }.uppercase()
+                val entry = LinkedHashMap<String, PdfObject>()
+                if (added.getValue("Certs").isNotEmpty()) entry["Cert"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(added.getValue("Certs"))
+                if (added.getValue("CRLs").isNotEmpty()) entry["CRL"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(added.getValue("CRLs"))
+                if (added.getValue("OCSPs").isNotEmpty()) entry["OCSP"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(added.getValue("OCSPs"))
+                vri[key] = PdfDictionary(entry)
+            }
+            dss["VRI"] = PdfDictionary(vri)
+        }
+        if (dssRef != null) {
+            updateObject(dssRef, PdfDictionary(dss))
+        } else {
+            catalog["DSS"] = addObject(PdfDictionary(dss))
+            updateObject(rootRef, PdfDictionary(catalog))
+        }
+    }
+
     /** A change of the document's security that [saveRewritten] applies, or null to keep it (#927). */
     private var securityChange: Encryption? = null
     private var removesEncryption = false

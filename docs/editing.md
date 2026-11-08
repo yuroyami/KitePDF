@@ -363,6 +363,17 @@ signer.prepareSignature("Signature1", KiteRectangle(20.0, 20.0, 220.0, 80.0), pa
 - The CMS must fit in 16 KiB. For a bigger one, pass `placeholderSize` to `PdfSigner`.
 - `prepareSignature` throws for an encrypted document.
 
+### PAdES signatures
+
+KitePDF writes the PDF side of the PAdES baseline levels; fetching from a timestamp authority, an OCSP responder or a CRL distribution point stays your app's job.
+
+- B-B: pass `subFilter = "ETSI.CAdES.detached"` in `PdfSigner.Options`, and make a CAdES signature, with the ESS signing-certificate-v2 attribute.
+- B-T: put the signature time-stamp token from your timestamp authority into the CMS as an unsigned attribute. `validate` reports it as `timestamp`.
+- B-LT: `editor.addSecurityStore(certificates, crls, ocsps, signatures)` adds the validation data to the document security store, with a `/VRI` entry for each signature you pass, then save with `saveIncremental()`.
+- B-LTA: `prepareDocumentTimestamp()` stages a document timestamp. `saveForSigning()` gives the bytes, your authority stamps their digest, and `embedSignature` takes its time-stamp token.
+
+Each of these revisions leaves the signatures before it valid, and `validate` reports the store and the timestamp as permitted changes.
+
 !!! warning
     Do not change the bytes between `saveForSigning()` and `embedSignature`. One changed byte makes the signature invalid.
 

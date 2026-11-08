@@ -369,6 +369,7 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
         final fun <get-pendingObjectCount>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfEditor.pendingObjectCount.<get-pendingObjectCount>|<get-pendingObjectCount>(){}[0]
 
     final fun addFlateStream(kotlin/ByteArray, kotlin.collections/Map<kotlin/String, io.github.yuroyami.kitepdf.core.parser/PdfObject> = ...): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.addFlateStream|addFlateStream(kotlin.ByteArray;kotlin.collections.Map<kotlin.String,io.github.yuroyami.kitepdf.core.parser.PdfObject>){}[0]
+    final fun addSecurityStore(kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<io.github.yuroyami.kitepdf/PdfSignature> = ...) // io.github.yuroyami.kitepdf.writer/PdfEditor.addSecurityStore|addSecurityStore(kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<io.github.yuroyami.kitepdf.PdfSignature>){}[0]
     final fun addObject(io.github.yuroyami.kitepdf.core.parser/PdfObject): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.addObject|addObject(io.github.yuroyami.kitepdf.core.parser.PdfObject){}[0]
     final fun allocateReference(): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.allocateReference|allocateReference(){}[0]
     final fun appendPage(io.github.yuroyami.kitepdf/PdfDocument, kotlin/Int): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.appendPage|appendPage(io.github.yuroyami.kitepdf.PdfDocument;kotlin.Int){}[0]
@@ -414,12 +415,13 @@ final class io.github.yuroyami.kitepdf.writer/PdfImage { // io.github.yuroyami.k
 final class io.github.yuroyami.kitepdf.writer/PdfSigner { // io.github.yuroyami.kitepdf.writer/PdfSigner|null[0]
     constructor <init>(io.github.yuroyami.kitepdf/PdfDocument, io.github.yuroyami.kitepdf.writer/PdfEditor, kotlin/Int = ...) // io.github.yuroyami.kitepdf.writer/PdfSigner.<init>|<init>(io.github.yuroyami.kitepdf.PdfDocument;io.github.yuroyami.kitepdf.writer.PdfEditor;kotlin.Int){}[0]
 
+    final fun prepareDocumentTimestamp(kotlin/String = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.writer/PdfSigner.prepareDocumentTimestamp|prepareDocumentTimestamp(kotlin.String;kotlin.Int){}[0]
     final fun prepareSignature(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle? = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.writer/PdfSigner.prepareSignature|prepareSignature(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle?;kotlin.Int){}[0]
     final fun prepareSignature(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle?, kotlin/Int, io.github.yuroyami.kitepdf.writer/PdfSigner.Options) // io.github.yuroyami.kitepdf.writer/PdfSigner.prepareSignature|prepareSignature(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle?;kotlin.Int;io.github.yuroyami.kitepdf.writer.PdfSigner.Options){}[0]
     final fun saveForSigning(): io.github.yuroyami.kitepdf.writer/PdfSigner.SigningTarget // io.github.yuroyami.kitepdf.writer/PdfSigner.saveForSigning|saveForSigning(){}[0]
 
     final class Options { // io.github.yuroyami.kitepdf.writer/PdfSigner.Options|null[0]
-        constructor <init>(kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., io.github.yuroyami.kitepdf/PdfDate? = ..., kotlin/Function3<io.github.yuroyami.kitepdf.writer/ContentStreamBuilder, kotlin/Double, kotlin/Double, kotlin/Unit>? = ..., kotlin/Int? = ...) // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.<init>|<init>(kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;io.github.yuroyami.kitepdf.PdfDate?;kotlin.Function3<io.github.yuroyami.kitepdf.writer.ContentStreamBuilder,kotlin.Double,kotlin.Double,kotlin.Unit>?;kotlin.Int?){}[0]
+        constructor <init>(kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., io.github.yuroyami.kitepdf/PdfDate? = ..., kotlin/Function3<io.github.yuroyami.kitepdf.writer/ContentStreamBuilder, kotlin/Double, kotlin/Double, kotlin/Unit>? = ..., kotlin/Int? = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.<init>|<init>(kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;io.github.yuroyami.kitepdf.PdfDate?;kotlin.Function3<io.github.yuroyami.kitepdf.writer.ContentStreamBuilder,kotlin.Double,kotlin.Double,kotlin.Unit>?;kotlin.Int?;kotlin.String){}[0]
 
         final val appearance // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.appearance|{}appearance[0]
             final fun <get-appearance>(): kotlin/Function3<io.github.yuroyami.kitepdf.writer/ContentStreamBuilder, kotlin/Double, kotlin/Double, kotlin/Unit>? // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.appearance.<get-appearance>|<get-appearance>(){}[0]
@@ -435,6 +437,8 @@ final class io.github.yuroyami.kitepdf.writer/PdfSigner { // io.github.yuroyami.
             final fun <get-reason>(): kotlin/String? // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.reason.<get-reason>|<get-reason>(){}[0]
         final val signingTime // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.signingTime|{}signingTime[0]
             final fun <get-signingTime>(): io.github.yuroyami.kitepdf/PdfDate? // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.signingTime.<get-signingTime>|<get-signingTime>(){}[0]
+        final val subFilter // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.subFilter|{}subFilter[0]
+            final fun <get-subFilter>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfSigner.Options.subFilter.<get-subFilter>|<get-subFilter>(){}[0]
     }
 
     final class SigningTarget { // io.github.yuroyami.kitepdf.writer/PdfSigner.SigningTarget|null[0]

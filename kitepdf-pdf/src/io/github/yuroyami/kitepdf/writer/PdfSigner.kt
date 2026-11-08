@@ -49,6 +49,11 @@ public class PdfSigner(
      * annotations. Null makes an approval signature. A certification signature must be the first
      * one, so [prepareSignature] refuses one for a document that is already signed or certified
      * (#923).
+     *
+     * [subFilter] is the encoding of the CMS: `adbe.pkcs7.detached`, or `ETSI.CAdES.detached` for a
+     * PAdES baseline signature (ISO 32000-2, 12.8.3.4; ETSI EN 319 142-1). The app makes the CMS
+     * either way; for PAdES B-T it puts the signature time-stamp token in it as an unsigned
+     * attribute (#924).
      */
     public class Options(
         public val name: String? = null,
@@ -58,8 +63,12 @@ public class PdfSigner(
         public val signingTime: io.github.yuroyami.kitepdf.PdfDate? = null,
         public val appearance: (ContentStreamBuilder.(width: Double, height: Double) -> Unit)? = null,
         public val certificationLevel: Int? = null,
+        public val subFilter: String = "adbe.pkcs7.detached",
     ) {
         init {
+            require(subFilter == "adbe.pkcs7.detached" || subFilter == "ETSI.CAdES.detached") {
+                "The subfilter is adbe.pkcs7.detached or ETSI.CAdES.detached, not $subFilter"
+            }
             require(certificationLevel == null || certificationLevel in 1..3) { "A certification level is 1, 2 or 3, not $certificationLevel" }
         }
     }
@@ -79,7 +88,19 @@ public class PdfSigner(
         prepareSignature(fieldName, rect, pageIndex, Options())
 
     /** [prepareSignature] with the entries and the appearance of [options] (#922). */
-    public fun prepareSignature(fieldName: String, rect: KiteRectangle?, pageIndex: Int, options: Options) {
+    public fun prepareSignature(fieldName: String, rect: KiteRectangle?, pageIndex: Int, options: Options): Unit =
+        prepare(fieldName, rect, pageIndex, options, timestamp = false)
+
+    /**
+     * Stage a document timestamp: an invisible signature field whose value has `/Type
+     * /DocTimeStamp` and `/SubFilter /ETSI.RFC3161` (ISO 32000-2, 12.8.5). Then [saveForSigning]
+     * gives the bytes, the app has a timestamp authority stamp their digest, and [embedSignature]
+     * takes the authority's time-stamp token as the CMS (#924).
+     */
+    public fun prepareDocumentTimestamp(fieldName: String = "DocTimeStamp", pageIndex: Int = 0): Unit =
+        prepare(fieldName, null, pageIndex, Options(), timestamp = true)
+
+    private fun prepare(fieldName: String, rect: KiteRectangle?, pageIndex: Int, options: Options, timestamp: Boolean) {
         check(!prepared) { "prepareSignature was already called" }
         require(!doc.isEncrypted) { "Signing encrypted documents is not supported." }
         val level = options.certificationLevel
@@ -93,9 +114,9 @@ public class PdfSigner(
             ?: throw IllegalArgumentException("Page $pageIndex has no indirect reference")
 
         val sigDict = linkedMapOf<String, PdfObject>(
-            "Type" to PdfName("Sig"),
+            "Type" to PdfName(if (timestamp) "DocTimeStamp" else "Sig"),
             "Filter" to PdfName("Adobe.PPKLite"),
-            "SubFilter" to PdfName("adbe.pkcs7.detached"),
+            "SubFilter" to PdfName(if (timestamp) "ETSI.RFC3161" else options.subFilter),
             // Serialized as a hex string of 2*placeholderSize zeros.
             "Contents" to PdfString(ByteArray(placeholderSize)),
             // Fixed-width placeholder, patched in place by saveForSigning.
