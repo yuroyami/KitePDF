@@ -517,6 +517,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/Decode [1 0 1 0 1 0 1 0]` for an Adobe CMYK file) and refuses a size that differs; the new `jpeg(bytes)`
   needs no size. `PdfImage.jpx` names no `/ColorSpace`, so the JPEG 2000 data's own applies, unless the new
   `colorSpace` overload asks for one (#745).
+- An image in a DeviceN, calibrated or other general colour space converts each distinct sample tuple once
+  instead of each pixel; a 2000 by 2000 duotone of noise went from about 1.5 s to 135 ms on the JVM (#798).
 
 ## [0.13.0] - 2026-10-09
 

@@ -511,22 +511,86 @@ private fun KiteImageData.unpackGeneral(
     val compBuf = DoubleArray(comps)
     val range = sampleRanges(cs, comps)
     val opaque = 0xFF.toByte()
+    // A tint transform or a calibrated curve costs far more than a lookup, and photographs repeat
+    // their colours, so each distinct sample tuple converts once, as MuPDF's colour cache does (#798).
+    val cache = if (comps * bpc <= 62 && w.toLong() * h > 64) ColourCache(w.toLong() * h, comps * bpc) else null
     var o = 0
     for (y in 0 until h) {
         var bit = y.toLong() * rowBytes * 8
         for (x in 0 until w) {
+            var key = 0L
             for (c in 0 until comps) {
                 val sample = readBits(src, bit, bpc); bit += bpc
+                key = (key shl bpc) or sample.toLong()
                 compBuf[c] = range[2 * c] + sample * (range[2 * c + 1] - range[2 * c]) / maxval
             }
-            val rgb = cs.toRgb(compBuf)
-            out[o++] = (rgb.r * 255.0).roundToInt().toByte()
-            out[o++] = (rgb.g * 255.0).roundToInt().toByte()
-            out[o++] = (rgb.b * 255.0).roundToInt().toByte()
+            var packed = cache?.get(key) ?: -1
+            if (packed < 0) {
+                val rgb = cs.toRgb(compBuf)
+                packed = ((rgb.r * 255.0).roundToInt().coerceIn(0, 255) shl 16) or
+                    ((rgb.g * 255.0).roundToInt().coerceIn(0, 255) shl 8) or (rgb.b * 255.0).roundToInt().coerceIn(0, 255)
+                cache?.put(key, packed)
+            }
+            out[o++] = (packed shr 16).toByte()
+            out[o++] = (packed shr 8).toByte()
+            out[o++] = packed.toByte()
             out[o++] = opaque
         }
     }
     return true
+}
+
+/**
+ * A bounded map from a packed sample tuple to its RGB colour, open addressing over primitive
+ * arrays so a lookup allocates nothing. It empties itself when three quarters full, so an image of
+ * more distinct colours than it holds still converts each pixel at most once per fill.
+ */
+private class ColourCache(pixels: Long, keyBits: Int) {
+    /**
+     * A key of 16 bits or fewer, such as a duotone at 8 bits, indexes a table that holds every tuple,
+     * so even an image of noise converts each tuple once.
+     */
+    private val direct = keyBits <= 16 && pixels >= (1L shl keyBits) / 4
+
+    /** Twice the pixels, so a small image does not pay for the largest table, up to 65,536 slots. */
+    private val bits = if (direct) keyBits else (64 - (pixels * 2 - 1).countLeadingZeroBits()).coerceIn(7, 16)
+    private val capacity = 1 shl bits
+    private val keys = LongArray(if (direct) 0 else capacity)
+    private val colours = IntArray(capacity) { -1 }
+    private var count = 0
+
+    /** The colour of [key], or -1. */
+    fun get(key: Long): Int {
+        if (direct) return colours[key.toInt()]
+        var i = slot(key)
+        while (true) {
+            val colour = colours[i]
+            if (colour < 0) return -1
+            if (keys[i] == key) return colour
+            i = (i + 1) and (capacity - 1)
+        }
+    }
+
+    fun put(key: Long, colour: Int) {
+        if (direct) {
+            colours[key.toInt()] = colour
+            return
+        }
+        if (count >= capacity / 4 * 3) {
+            colours.fill(-1)
+            count = 0
+        }
+        var i = slot(key)
+        while (colours[i] >= 0 && keys[i] != key) i = (i + 1) and (capacity - 1)
+        if (colours[i] < 0) count++
+        keys[i] = key
+        colours[i] = colour
+    }
+
+    private fun slot(key: Long): Int {
+        val mixed = key * -7046029254386353131L
+        return (mixed ushr (64 - bits)).toInt()
+    }
 }
 
 /**
