@@ -83,6 +83,18 @@ PdfBuilder()
     )
 ```
 
+The builder also takes the parts that the editor writes into any document (see [Attachments, outline and page labels](editing.md#attachments-outline-and-page-labels)):
+
+```kotlin
+PdfBuilder()
+    .page { text(StandardFont.Helvetica, 12.0, 72.0, 720.0, "Invoice") }
+    .attach("factur-x.xml", xmlBytes, mimeType = "text/xml", relationship = "Data")
+    .outline(listOf(PdfOutlineItem("Invoice", pageIndex = 0)))
+    .pageLabels(listOf(PdfPageLabel(0)))
+    .xmpMetadata(packet)
+    .build()
+```
+
 ## Text
 
 `text` draws one line of text with its baseline at (x, y):

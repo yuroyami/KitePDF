@@ -215,6 +215,29 @@ editor.setInfo(
 )
 ```
 
+`setInfo` keeps the XMP packet in step. `setXmpMetadata(xml)` replaces the packet with your own.
+
+## Attachments, outline and page labels
+
+```kotlin
+// An attachment, associated with the document as Factur-X asks
+editor.setAttachment("factur-x.xml", xmlBytes, mimeType = "text/xml", relationship = "Data")
+editor.removeAttachment("old.txt")
+
+// The outline: titles and targets; the editor builds the links
+editor.setOutline(listOf(
+    PdfOutlineItem("Introduction", pageIndex = 0),
+    PdfOutlineItem("Chapter 1", pageIndex = 2, top = 700.0, children = listOf(PdfOutlineItem("1.1", pageIndex = 3))),
+))
+
+// Page labels: i, ii, then 1, 2, 3
+editor.setPageLabels(listOf(PdfPageLabel(0, PdfPageLabel.Style.LowercaseRoman), PdfPageLabel(2)))
+```
+
+- `setAttachment` replaces an attachment of the same name. The file gets its size, an MD5 checksum and an optional `modified` date. `relationship` also names it in the catalog's `/AF`.
+- `setOutline` replaces the whole outline. A page index counts the pages in the order the editor has them, so after `mergeDocument` an outline can point to each merged document. `open = false` folds an item.
+- `setPageLabels` replaces the labels. The first range starts at page 0.
+
 ## Redaction
 
 Redaction removes content from the file. It does not only paint a black box over it. The text, images and paths in a region go out of the content stream, so no tool can extract them:

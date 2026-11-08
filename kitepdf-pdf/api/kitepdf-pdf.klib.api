@@ -357,11 +357,15 @@ final class io.github.yuroyami.kitepdf.writer/PdfBuilder { // io.github.yuroyami
     constructor <init>() // io.github.yuroyami.kitepdf.writer/PdfBuilder.<init>|<init>(){}[0]
 
     final fun addPage(kotlin/Double = ..., kotlin/Double = ..., io.github.yuroyami.kitepdf.writer/ContentStreamBuilder): io.github.yuroyami.kitepdf.writer/PdfBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.addPage|addPage(kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.writer.ContentStreamBuilder){}[0]
+    final fun attach(kotlin/String, kotlin/ByteArray, kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ...): io.github.yuroyami.kitepdf.writer/PdfBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.attach|attach(kotlin.String;kotlin.ByteArray;kotlin.String?;kotlin.String?;kotlin.String?){}[0]
     final fun build(kotlin/Boolean = ...): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfBuilder.build|build(kotlin.Boolean){}[0]
     final fun encrypt(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf/PdfPermissions = ..., kotlin/Boolean = ..., kotlin.random/Random): io.github.yuroyami.kitepdf.writer/PdfBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.encrypt|encrypt(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.PdfPermissions;kotlin.Boolean;kotlin.random.Random){}[0]
     final fun newPageContent(): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.newPageContent|newPageContent(){}[0]
+    final fun outline(kotlin.collections/List<io.github.yuroyami.kitepdf.writer/PdfOutlineItem>): io.github.yuroyami.kitepdf.writer/PdfBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.outline|outline(kotlin.collections.List<io.github.yuroyami.kitepdf.writer.PdfOutlineItem>){}[0]
     final fun page(kotlin/Double = ..., kotlin/Double = ..., kotlin/Function1<io.github.yuroyami.kitepdf.writer/ContentStreamBuilder, kotlin/Unit>): io.github.yuroyami.kitepdf.writer/PdfBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.page|page(kotlin.Double;kotlin.Double;kotlin.Function1<io.github.yuroyami.kitepdf.writer.ContentStreamBuilder,kotlin.Unit>){}[0]
+    final fun pageLabels(kotlin.collections/List<io.github.yuroyami.kitepdf.writer/PdfPageLabel>): io.github.yuroyami.kitepdf.writer/PdfBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.pageLabels|pageLabels(kotlin.collections.List<io.github.yuroyami.kitepdf.writer.PdfPageLabel>){}[0]
     final fun setInfo(kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ...): io.github.yuroyami.kitepdf.writer/PdfBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.setInfo|setInfo(kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?){}[0]
+    final fun xmpMetadata(kotlin/String): io.github.yuroyami.kitepdf.writer/PdfBuilder // io.github.yuroyami.kitepdf.writer/PdfBuilder.xmpMetadata|xmpMetadata(kotlin.String){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.kitepdf.writer/PdfEditor|null[0]
@@ -383,19 +387,24 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
     final fun redactRegions(io.github.yuroyami.kitepdf/PdfPage, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle>) // io.github.yuroyami.kitepdf.writer/PdfEditor.redactRegions|redactRegions(io.github.yuroyami.kitepdf.PdfPage;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteRectangle>){}[0]
     final fun redactRegions(io.github.yuroyami.kitepdf/PdfPage, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle>, io.github.yuroyami.kitepdf.writer/RedactImages) // io.github.yuroyami.kitepdf.writer/PdfEditor.redactRegions|redactRegions(io.github.yuroyami.kitepdf.PdfPage;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteRectangle>;io.github.yuroyami.kitepdf.writer.RedactImages){}[0]
     final fun removeAllText(io.github.yuroyami.kitepdf/PdfPage) // io.github.yuroyami.kitepdf.writer/PdfEditor.removeAllText|removeAllText(io.github.yuroyami.kitepdf.PdfPage){}[0]
+    final fun removeAttachment(kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfEditor.removeAttachment|removeAttachment(kotlin.String){}[0]
     final fun removeEncryption() // io.github.yuroyami.kitepdf.writer/PdfEditor.removeEncryption|removeEncryption(){}[0]
     final fun removePage(io.github.yuroyami.kitepdf/PdfPage) // io.github.yuroyami.kitepdf.writer/PdfEditor.removePage|removePage(io.github.yuroyami.kitepdf.PdfPage){}[0]
     final fun rotatePage(io.github.yuroyami.kitepdf/PdfPage, kotlin/Int) // io.github.yuroyami.kitepdf.writer/PdfEditor.rotatePage|rotatePage(io.github.yuroyami.kitepdf.PdfPage;kotlin.Int){}[0]
     final fun saveIncremental(): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveIncremental|saveIncremental(){}[0]
     final fun saveRewritten(kotlin/Boolean = ...): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveRewritten|saveRewritten(kotlin.Boolean){}[0]
     final fun saveRewritten(kotlin/Boolean, kotlin/Boolean): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveRewritten|saveRewritten(kotlin.Boolean;kotlin.Boolean){}[0]
+    final fun setAttachment(kotlin/String, kotlin/ByteArray, kotlin/String? = ..., kotlin/String? = ..., io.github.yuroyami.kitepdf/PdfDate? = ..., kotlin/String? = ...) // io.github.yuroyami.kitepdf.writer/PdfEditor.setAttachment|setAttachment(kotlin.String;kotlin.ByteArray;kotlin.String?;kotlin.String?;io.github.yuroyami.kitepdf.PdfDate?;kotlin.String?){}[0]
     final fun setButtonValue(io.github.yuroyami.kitepdf/PdfFormField, kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfEditor.setButtonValue|setButtonValue(io.github.yuroyami.kitepdf.PdfFormField;kotlin.String){}[0]
     final fun setCheckbox(io.github.yuroyami.kitepdf/PdfFormField, kotlin/Boolean) // io.github.yuroyami.kitepdf.writer/PdfEditor.setCheckbox|setCheckbox(io.github.yuroyami.kitepdf.PdfFormField;kotlin.Boolean){}[0]
     final fun setChoiceValue(io.github.yuroyami.kitepdf/PdfFormField, kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfEditor.setChoiceValue|setChoiceValue(io.github.yuroyami.kitepdf.PdfFormField;kotlin.String){}[0]
     final fun setInfo(kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin/String? = ...): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.setInfo|setInfo(kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?;kotlin.String?){}[0]
+    final fun setOutline(kotlin.collections/List<io.github.yuroyami.kitepdf.writer/PdfOutlineItem>) // io.github.yuroyami.kitepdf.writer/PdfEditor.setOutline|setOutline(kotlin.collections.List<io.github.yuroyami.kitepdf.writer.PdfOutlineItem>){}[0]
+    final fun setPageLabels(kotlin.collections/List<io.github.yuroyami.kitepdf.writer/PdfPageLabel>) // io.github.yuroyami.kitepdf.writer/PdfEditor.setPageLabels|setPageLabels(kotlin.collections.List<io.github.yuroyami.kitepdf.writer.PdfPageLabel>){}[0]
     final fun setPageOrder(kotlin.collections/List<io.github.yuroyami.kitepdf.core.parser/PdfReference>) // io.github.yuroyami.kitepdf.writer/PdfEditor.setPageOrder|setPageOrder(kotlin.collections.List<io.github.yuroyami.kitepdf.core.parser.PdfReference>){}[0]
     final fun setTextFieldValue(io.github.yuroyami.kitepdf/PdfFormField, kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfEditor.setTextFieldValue|setTextFieldValue(io.github.yuroyami.kitepdf.PdfFormField;kotlin.String){}[0]
     final fun setTrailerEntry(kotlin/String, io.github.yuroyami.kitepdf.core.parser/PdfObject) // io.github.yuroyami.kitepdf.writer/PdfEditor.setTrailerEntry|setTrailerEntry(kotlin.String;io.github.yuroyami.kitepdf.core.parser.PdfObject){}[0]
+    final fun setXmpMetadata(kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfEditor.setXmpMetadata|setXmpMetadata(kotlin.String){}[0]
     final fun stampPage(io.github.yuroyami.kitepdf/PdfPage, kotlin/Function1<io.github.yuroyami.kitepdf.writer/ContentStreamBuilder, kotlin/Unit>) // io.github.yuroyami.kitepdf.writer/PdfEditor.stampPage|stampPage(io.github.yuroyami.kitepdf.PdfPage;kotlin.Function1<io.github.yuroyami.kitepdf.writer.ContentStreamBuilder,kotlin.Unit>){}[0]
     final fun updateObject(io.github.yuroyami.kitepdf.core.parser/PdfReference, io.github.yuroyami.kitepdf.core.parser/PdfObject) // io.github.yuroyami.kitepdf.writer/PdfEditor.updateObject|updateObject(io.github.yuroyami.kitepdf.core.parser.PdfReference;io.github.yuroyami.kitepdf.core.parser.PdfObject){}[0]
 }
@@ -410,6 +419,50 @@ final class io.github.yuroyami.kitepdf.writer/PdfImage { // io.github.yuroyami.k
         final fun raw(kotlin/ByteArray, kotlin/Int, kotlin/Int, io.github.yuroyami.kitepdf.writer/PdfImageColorSpace, kotlin/Int = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Boolean = ..., kotlin/ByteArray? = ...): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.raw|raw(kotlin.ByteArray;kotlin.Int;kotlin.Int;io.github.yuroyami.kitepdf.writer.PdfImageColorSpace;kotlin.Int;kotlin.collections.List<kotlin.Double>?;kotlin.Boolean;kotlin.ByteArray?){}[0]
         final fun rgb(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.rgb|rgb(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
         final fun rgba(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.rgba|rgba(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    }
+}
+
+final class io.github.yuroyami.kitepdf.writer/PdfOutlineItem { // io.github.yuroyami.kitepdf.writer/PdfOutlineItem|null[0]
+    constructor <init>(kotlin/String, kotlin/Int? = ..., kotlin/Double? = ..., kotlin/String? = ..., kotlin.collections/List<io.github.yuroyami.kitepdf.writer/PdfOutlineItem> = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.<init>|<init>(kotlin.String;kotlin.Int?;kotlin.Double?;kotlin.String?;kotlin.collections.List<io.github.yuroyami.kitepdf.writer.PdfOutlineItem>;kotlin.Boolean){}[0]
+
+    final val children // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.children|{}children[0]
+        final fun <get-children>(): kotlin.collections/List<io.github.yuroyami.kitepdf.writer/PdfOutlineItem> // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.children.<get-children>|<get-children>(){}[0]
+    final val namedDestination // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.namedDestination|{}namedDestination[0]
+        final fun <get-namedDestination>(): kotlin/String? // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.namedDestination.<get-namedDestination>|<get-namedDestination>(){}[0]
+    final val open // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.open|{}open[0]
+        final fun <get-open>(): kotlin/Boolean // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.open.<get-open>|<get-open>(){}[0]
+    final val pageIndex // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.pageIndex|{}pageIndex[0]
+        final fun <get-pageIndex>(): kotlin/Int? // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.pageIndex.<get-pageIndex>|<get-pageIndex>(){}[0]
+    final val title // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.title|{}title[0]
+        final fun <get-title>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.title.<get-title>|<get-title>(){}[0]
+    final val top // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.top|{}top[0]
+        final fun <get-top>(): kotlin/Double? // io.github.yuroyami.kitepdf.writer/PdfOutlineItem.top.<get-top>|<get-top>(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.writer/PdfPageLabel { // io.github.yuroyami.kitepdf.writer/PdfPageLabel|null[0]
+    constructor <init>(kotlin/Int, io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style? = ..., kotlin/String = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.writer/PdfPageLabel.<init>|<init>(kotlin.Int;io.github.yuroyami.kitepdf.writer.PdfPageLabel.Style?;kotlin.String;kotlin.Int){}[0]
+
+    final val firstPage // io.github.yuroyami.kitepdf.writer/PdfPageLabel.firstPage|{}firstPage[0]
+        final fun <get-firstPage>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfPageLabel.firstPage.<get-firstPage>|<get-firstPage>(){}[0]
+    final val prefix // io.github.yuroyami.kitepdf.writer/PdfPageLabel.prefix|{}prefix[0]
+        final fun <get-prefix>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfPageLabel.prefix.<get-prefix>|<get-prefix>(){}[0]
+    final val start // io.github.yuroyami.kitepdf.writer/PdfPageLabel.start|{}start[0]
+        final fun <get-start>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfPageLabel.start.<get-start>|<get-start>(){}[0]
+    final val style // io.github.yuroyami.kitepdf.writer/PdfPageLabel.style|{}style[0]
+        final fun <get-style>(): io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style? // io.github.yuroyami.kitepdf.writer/PdfPageLabel.style.<get-style>|<get-style>(){}[0]
+
+    final enum class Style : kotlin/Enum<io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style> { // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style|null[0]
+        enum entry Decimal // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.Decimal|null[0]
+        enum entry LowercaseLetters // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.LowercaseLetters|null[0]
+        enum entry LowercaseRoman // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.LowercaseRoman|null[0]
+        enum entry UppercaseLetters // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.UppercaseLetters|null[0]
+        enum entry UppercaseRoman // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.UppercaseRoman|null[0]
+
+        final val entries // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.entries|#static{}entries[0]
+            final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style> // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.entries.<get-entries>|<get-entries>#static(){}[0]
+
+        final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.valueOf|valueOf#static(kotlin.String){}[0]
+        final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style> // io.github.yuroyami.kitepdf.writer/PdfPageLabel.Style.values|values#static(){}[0]
     }
 }
 

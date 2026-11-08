@@ -649,6 +649,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the document security store (#924).
 - PdfImage.raw embeds samples in DeviceGray, DeviceRGB, DeviceCMYK, an Indexed palette or an ICC profile, at 1,
   2, 4, 8 or 16 bits, with /Decode, /Interpolate and an alpha plane (#920).
+- PdfEditor and PdfBuilder write attachments (with /AF associations), an outline, page labels and the XMP packet:
+  setAttachment, removeAttachment, setOutline, setPageLabels and setXmpMetadata (#921).
 
 ## [0.13.0] - 2026-10-09
 

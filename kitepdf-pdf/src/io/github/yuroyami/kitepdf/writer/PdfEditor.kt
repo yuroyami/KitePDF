@@ -137,6 +137,186 @@ public class PdfEditor internal constructor(
     /** Number of objects staged for writing. */
     public val pendingObjectCount: Int get() = staged.size
 
+    /* ─── Attachments, outline, page labels and XMP (#921) ──────────────── */
+
+    private fun catalogRef(): PdfReference = ((trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference)
+        ?: throw IllegalStateException("Trailer /Root is not an indirect reference")
+
+    private fun currentCatalog(): LinkedHashMap<String, PdfObject> =
+        LinkedHashMap((effectiveObject(catalogRef().objectNumber) as? PdfDictionary)?.map ?: base.catalog.map)
+
+    private fun pageRefAt(index: Int): PdfReference {
+        val order = pageOrderState ?: base.pages.mapNotNull { it.reference }
+        return order.getOrNull(index) ?: throw IllegalArgumentException("No page $index")
+    }
+
+    private fun text(s: String) = PdfString(PdfText.encodeTextString(s))
+
+    /**
+     * Embeds [bytes] as the attachment [name] in the catalog's `/Names /EmbeddedFiles` tree (ISO
+     * 32000-1, 7.11.4), replacing one of the same name. The embedded file stream has [mimeType] as
+     * its `/Subtype`, and `/Params` with its size, its MD5 checksum and [modified] (Table 46); the
+     * file specification has [description] as `/Desc`. A [relationship], such as `Data`, `Source`
+     * or `Alternative`, also names the file in the catalog's `/AF` with that `/AFRelationship`
+     * (ISO 32000-2, 14.13), as PDF/A-3 and Factur-X ask.
+     */
+    public fun setAttachment(
+        name: String,
+        bytes: ByteArray,
+        mimeType: String? = null,
+        description: String? = null,
+        modified: io.github.yuroyami.kitepdf.PdfDate? = null,
+        relationship: String? = null,
+    ) {
+        val params = linkedMapOf<String, PdfObject>(
+            "Size" to PdfInt(bytes.size.toLong()),
+            "CheckSum" to PdfString(io.github.yuroyami.kitepdf.crypto.Md5.hash(bytes)),
+        )
+        modified?.let { params["ModDate"] = PdfString(it.toString().encodeToByteArray()) }
+        val streamDict = linkedMapOf<String, PdfObject>("Type" to PdfName("EmbeddedFile"), "Params" to PdfDictionary(params))
+        mimeType?.let { streamDict["Subtype"] = PdfName(it) }
+        val file = addObject(PdfStreams.flate(bytes, streamDict))
+        val spec = linkedMapOf<String, PdfObject>(
+            "Type" to PdfName("Filespec"),
+            "F" to text(name),
+            "UF" to text(name),
+            "EF" to PdfDictionary(linkedMapOf("F" to file, "UF" to file)),
+        )
+        description?.let { spec["Desc"] = text(it) }
+        relationship?.let { spec["AFRelationship"] = PdfName(it) }
+        val specRef = addObject(PdfDictionary(spec))
+        rewriteAttachments(name, specRef, relationship != null)
+    }
+
+    /** Removes the attachment [name] from the `/EmbeddedFiles` tree and from the catalog's `/AF`, if it is there. */
+    public fun removeAttachment(name: String) {
+        rewriteAttachments(name, null, false)
+    }
+
+    /** The `/EmbeddedFiles` tree with [name] set to [spec], or removed when [spec] is null, written flat and sorted (7.9.6). */
+    private fun rewriteAttachments(name: String, spec: PdfReference?, associate: Boolean) {
+        val catalog = currentCatalog()
+        val names = LinkedHashMap((catalog["Names"]?.resolve(effective) as? PdfDictionary)?.map ?: emptyMap())
+        val tree = names["EmbeddedFiles"]?.resolve(effective) as? PdfDictionary
+        val entries = tree?.let { io.github.yuroyami.kitepdf.parser.NameTreeWalker.collect(it, effective) } ?: LinkedHashMap()
+        val old = entries.remove(name)
+        if (spec != null) entries[name] = spec
+        val flat = entries.entries.sortedWith { a, b -> compareBytes(PdfText.encodeTextString(a.key), PdfText.encodeTextString(b.key)) }
+            .flatMap { listOf(text(it.key), it.value) }
+        if (flat.isEmpty()) names.remove("EmbeddedFiles")
+        else names["EmbeddedFiles"] = addObject(PdfDictionary(linkedMapOf("Names" to io.github.yuroyami.kitepdf.core.parser.PdfArray(flat))))
+        val namesRef = catalog["Names"] as? PdfReference
+        if (namesRef != null) updateObject(namesRef, PdfDictionary(names))
+        else if (names.isEmpty()) catalog.remove("Names") else catalog["Names"] = PdfDictionary(names)
+        // The catalog's /AF names the files associated with the document (ISO 32000-2, 14.13.2).
+        val af = (catalog["AF"]?.resolve(effective) as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.items.orEmpty()
+            .filter { it != old }
+            .let { if (associate && spec != null) it + spec else it }
+        if (af.isEmpty()) catalog.remove("AF") else catalog["AF"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(af)
+        updateObject(catalogRef(), PdfDictionary(catalog))
+    }
+
+    private fun compareBytes(a: ByteArray, b: ByteArray): Int {
+        for (i in 0 until minOf(a.size, b.size)) {
+            val d = (a[i].toInt() and 0xFF) - (b[i].toInt() and 0xFF)
+            if (d != 0) return d
+        }
+        return a.size - b.size
+    }
+
+    /**
+     * Replaces the document outline with [items] (ISO 32000-1, 12.3.3): the editor builds the
+     * `/First`, `/Last`, `/Next`, `/Prev`, `/Parent` and `/Count` links, and each item's
+     * destination (12.3.2.2: `/XYZ` at its top, or `/Fit`). An empty list removes the outline.
+     */
+    public fun setOutline(items: List<PdfOutlineItem>) {
+        val catalog = currentCatalog()
+        if (items.isEmpty()) {
+            catalog.remove("Outlines")
+            updateObject(catalogRef(), PdfDictionary(catalog))
+            return
+        }
+        // The descendants that show when the item is open (Table 153).
+        fun shown(item: PdfOutlineItem): Int = item.children.size + item.children.filter { it.open }.sumOf { shown(it) }
+        val root = allocateReference()
+        fun write(level: List<PdfOutlineItem>, parent: PdfReference): Pair<PdfReference, PdfReference> {
+            val refs = level.map { allocateReference() }
+            for ((i, item) in level.withIndex()) {
+                val dict = linkedMapOf<String, PdfObject>("Title" to text(item.title), "Parent" to parent)
+                if (i > 0) dict["Prev"] = refs[i - 1]
+                if (i < level.lastIndex) dict["Next"] = refs[i + 1]
+                if (item.children.isNotEmpty()) {
+                    val (first, last) = write(item.children, refs[i])
+                    dict["First"] = first
+                    dict["Last"] = last
+                    dict["Count"] = PdfInt(if (item.open) shown(item).toLong() else -shown(item).toLong())
+                }
+                when {
+                    item.namedDestination != null -> dict["Dest"] = text(item.namedDestination)
+                    item.pageIndex != null -> {
+                        val page = pageRefAt(item.pageIndex)
+                        val nul = io.github.yuroyami.kitepdf.core.parser.PdfNull
+                        dict["Dest"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(
+                            if (item.top != null) listOf(page, PdfName("XYZ"), nul, io.github.yuroyami.kitepdf.core.parser.PdfReal(item.top), nul)
+                            else listOf(page, PdfName("Fit")),
+                        )
+                    }
+                }
+                updateObject(refs[i], PdfDictionary(dict))
+            }
+            return refs.first() to refs.last()
+        }
+        val (first, last) = write(items, root)
+        val count = items.size + items.filter { it.open }.sumOf { shown(it) }
+        updateObject(root, PdfDictionary(linkedMapOf("Type" to PdfName("Outlines"), "First" to first, "Last" to last, "Count" to PdfInt(count.toLong()))))
+        catalog["Outlines"] = root
+        updateObject(catalogRef(), PdfDictionary(catalog))
+    }
+
+    /**
+     * Replaces the page labels with [labels] (ISO 32000-1, 12.4.2): the catalog's `/PageLabels`
+     * number tree, one entry a range. The ranges are sorted by their first page, which must differ,
+     * and the first must start at page 0, as the tree needs a value for it. An empty list removes
+     * the labels, so the pages are numbered 1, 2, 3.
+     */
+    public fun setPageLabels(labels: List<PdfPageLabel>) {
+        val catalog = currentCatalog()
+        if (labels.isEmpty()) {
+            catalog.remove("PageLabels")
+        } else {
+            val sorted = labels.sortedBy { it.firstPage }
+            require(sorted.first().firstPage == 0) { "the page labels must start at page 0" }
+            require(sorted.zipWithNext().all { (a, b) -> a.firstPage < b.firstPage }) { "two page label ranges start at the same page" }
+            val nums = sorted.flatMap { label ->
+                val dict = linkedMapOf<String, PdfObject>()
+                label.style?.let { dict["S"] = PdfName(it.code) }
+                if (label.prefix.isNotEmpty()) dict["P"] = text(label.prefix)
+                if (label.start != 1) dict["St"] = PdfInt(label.start.toLong())
+                listOf(PdfInt(label.firstPage.toLong()), PdfDictionary(dict))
+            }
+            catalog["PageLabels"] = addObject(PdfDictionary(linkedMapOf("Nums" to io.github.yuroyami.kitepdf.core.parser.PdfArray(nums))))
+        }
+        updateObject(catalogRef(), PdfDictionary(catalog))
+    }
+
+    /**
+     * Sets the document's XMP metadata to [xml], a whole XMP packet, as the catalog's `/Metadata`
+     * stream, uncompressed so a reader that does not decode filters reads it (ISO 32000-1,
+     * 14.3.2). A later [setInfo] keeps its title, authors, dates and the rest in step.
+     */
+    public fun setXmpMetadata(xml: String) {
+        val body = xml.encodeToByteArray()
+        val stream = PdfStreams.raw(body, linkedMapOf("Type" to PdfName("Metadata"), "Subtype" to PdfName("XML")))
+        val catalog = currentCatalog()
+        val existing = catalog["Metadata"] as? PdfReference
+        if (existing != null) {
+            updateObject(existing, stream)
+        } else {
+            catalog["Metadata"] = addObject(stream)
+            updateObject(catalogRef(), PdfDictionary(catalog))
+        }
+    }
+
     /**
      * Adds validation data to the document security store, `/DSS` in the catalog (ISO 32000-2,
      * 12.8.4.3), for long-term validation (PAdES B-LT): [certificates], [crls] and [ocsps], each a

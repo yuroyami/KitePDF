@@ -156,11 +156,43 @@ public class PdfBuilder {
         return this
     }
 
+    /** Document parts the editor writes once the pages are built (#921). */
+    private val parts = ArrayList<PdfEditor.() -> Unit>()
+
+    /** Embeds an attachment, as [PdfEditor.setAttachment] does. */
+    public fun attach(
+        name: String,
+        bytes: ByteArray,
+        mimeType: String? = null,
+        description: String? = null,
+        relationship: String? = null,
+    ): PdfBuilder = apply { parts += { setAttachment(name, bytes, mimeType, description, relationship = relationship) } }
+
+    /** Gives the document an outline, as [PdfEditor.setOutline] does; page indexes count the pages built. */
+    public fun outline(items: List<PdfOutlineItem>): PdfBuilder = apply { parts += { setOutline(items) } }
+
+    /** Labels the pages, as [PdfEditor.setPageLabels] does. */
+    public fun pageLabels(labels: List<PdfPageLabel>): PdfBuilder = apply { parts += { setPageLabels(labels) } }
+
+    /** Sets the XMP metadata packet, as [PdfEditor.setXmpMetadata] does. */
+    public fun xmpMetadata(xml: String): PdfBuilder = apply { parts += { setXmpMetadata(xml) } }
+
     /**
      * Serialize the document. When [compress] is true (default), each page's
      * content stream is FlateDecode-compressed.
      */
     public fun build(compress: Boolean = true): ByteArray {
+        val built = buildPages(compress)
+        if (parts.isEmpty()) return built
+        // The parts go in through the editor, which writes them as it writes them into any document.
+        val spec = encryptSpec
+        val doc = io.github.yuroyami.kitepdf.PdfDocument.open(built, password = spec?.userPassword ?: ByteArray(0))
+        val editor = doc.edit(spec?.random)
+        for (part in parts) editor.part()
+        return editor.saveRewritten()
+    }
+
+    private fun buildPages(compress: Boolean): ByteArray {
         require(pages.isNotEmpty()) { "A PDF must have at least one page." }
 
         val objects = ArrayList<Pair<Long, PdfObject>>()

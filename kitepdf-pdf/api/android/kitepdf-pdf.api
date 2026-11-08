@@ -1666,15 +1666,20 @@ public final class io/github/yuroyami/kitepdf/writer/PdfBuilder {
 	public fun <init> ()V
 	public final fun addPage (DDLio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 	public static synthetic fun addPage$default (Lio/github/yuroyami/kitepdf/writer/PdfBuilder;DDLio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
+	public final fun attach (Ljava/lang/String;[BLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
+	public static synthetic fun attach$default (Lio/github/yuroyami/kitepdf/writer/PdfBuilder;Ljava/lang/String;[BLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 	public final fun build (Z)[B
 	public static synthetic fun build$default (Lio/github/yuroyami/kitepdf/writer/PdfBuilder;ZILjava/lang/Object;)[B
 	public final fun encrypt (Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfPermissions;ZLkotlin/random/Random;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 	public static synthetic fun encrypt$default (Lio/github/yuroyami/kitepdf/writer/PdfBuilder;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfPermissions;ZLkotlin/random/Random;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 	public final fun newPageContent ()Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
+	public final fun outline (Ljava/util/List;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 	public final fun page (DDLkotlin/jvm/functions/Function1;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 	public static synthetic fun page$default (Lio/github/yuroyami/kitepdf/writer/PdfBuilder;DDLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
+	public final fun pageLabels (Ljava/util/List;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 	public final fun setInfo (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 	public static synthetic fun setInfo$default (Lio/github/yuroyami/kitepdf/writer/PdfBuilder;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
+	public final fun xmpMetadata (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
 }
 
 public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
@@ -1697,6 +1702,7 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun redactRegions (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/util/List;)V
 	public final fun redactRegions (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/util/List;Lio/github/yuroyami/kitepdf/writer/RedactImages;)V
 	public final fun removeAllText (Lio/github/yuroyami/kitepdf/PdfPage;)V
+	public final fun removeAttachment (Ljava/lang/String;)V
 	public final fun removeEncryption ()V
 	public final fun removePage (Lio/github/yuroyami/kitepdf/PdfPage;)V
 	public final fun rotatePage (Lio/github/yuroyami/kitepdf/PdfPage;I)V
@@ -1704,14 +1710,19 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun saveRewritten (Z)[B
 	public final fun saveRewritten (ZZ)[B
 	public static synthetic fun saveRewritten$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;ZILjava/lang/Object;)[B
+	public final fun setAttachment (Ljava/lang/String;[BLjava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfDate;Ljava/lang/String;)V
+	public static synthetic fun setAttachment$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;Ljava/lang/String;[BLjava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfDate;Ljava/lang/String;ILjava/lang/Object;)V
 	public final fun setButtonValue (Lio/github/yuroyami/kitepdf/PdfFormField;Ljava/lang/String;)V
 	public final fun setCheckbox (Lio/github/yuroyami/kitepdf/PdfFormField;Z)V
 	public final fun setChoiceValue (Lio/github/yuroyami/kitepdf/PdfFormField;Ljava/lang/String;)V
 	public final fun setInfo (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public static synthetic fun setInfo$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
+	public final fun setOutline (Ljava/util/List;)V
+	public final fun setPageLabels (Ljava/util/List;)V
 	public final fun setPageOrder (Ljava/util/List;)V
 	public final fun setTextFieldValue (Lio/github/yuroyami/kitepdf/PdfFormField;Ljava/lang/String;)V
 	public final fun setTrailerEntry (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)V
+	public final fun setXmpMetadata (Ljava/lang/String;)V
 	public final fun stampPage (Lio/github/yuroyami/kitepdf/PdfPage;Lkotlin/jvm/functions/Function1;)V
 	public final fun updateObject (Lio/github/yuroyami/kitepdf/core/parser/PdfReference;Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)V
 }
@@ -1769,6 +1780,37 @@ public final class io/github/yuroyami/kitepdf/writer/PdfObjectWriter {
 	public final fun formatReal (D)Ljava/lang/String;
 	public final fun toBytes (Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)[B
 	public final fun writeObject (Lio/github/yuroyami/kitepdf/core/parser/PdfObject;Lio/github/yuroyami/kitepdf/core/ByteArrayBuilder;)V
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfOutlineItem {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Double;Ljava/lang/String;Ljava/util/List;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/Double;Ljava/lang/String;Ljava/util/List;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getChildren ()Ljava/util/List;
+	public final fun getNamedDestination ()Ljava/lang/String;
+	public final fun getOpen ()Z
+	public final fun getPageIndex ()Ljava/lang/Integer;
+	public final fun getTitle ()Ljava/lang/String;
+	public final fun getTop ()Ljava/lang/Double;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfPageLabel {
+	public fun <init> (ILio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;Ljava/lang/String;I)V
+	public synthetic fun <init> (ILio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getFirstPage ()I
+	public final fun getPrefix ()Ljava/lang/String;
+	public final fun getStart ()I
+	public final fun getStyle ()Lio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfPageLabel$Style : java/lang/Enum {
+	public static final field Decimal Lio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;
+	public static final field LowercaseLetters Lio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;
+	public static final field LowercaseRoman Lio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;
+	public static final field UppercaseLetters Lio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;
+	public static final field UppercaseRoman Lio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/writer/PdfPageLabel$Style;
 }
 
 public final class io/github/yuroyami/kitepdf/writer/PdfSigner {
