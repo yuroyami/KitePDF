@@ -121,4 +121,26 @@ class AwtCanvasStateTest {
         assertEquals(listOf(0xFFFF0000.toInt(), 0x8000FF00.toInt(), 0x000000FF, -1), listOf(image.getRGB(0, 0), image.getRGB(1, 0), image.getRGB(0, 1), image.getRGB(1, 1)))
         assertSame(argb, (image.raster.dataBuffer as java.awt.image.DataBufferInt).data, "no copy")
     }
+
+    @Test
+    fun an_unclipped_shading_fills_past_ten_thousand_pixels_and_at_negative_coordinates() {
+        // ISO 32000-1, 8.7.4.2: sh fills what the clip and the surface allow; the fallback stopped at 10,000 (#861).
+        val img = BufferedImage(10_100, 4, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        val shading = io.github.yuroyami.kitepdf.core.render.KiteShading.Axial(
+            colorSpace = io.github.yuroyami.kitepdf.core.render.KiteColorSpace.DeviceRGB, background = null, bbox = null,
+            coords = doubleArrayOf(0.0, 0.0, 10_100.0, 0.0), domain = doubleArrayOf(0.0, 1.0),
+            function = io.github.yuroyami.kitepdf.core.render.KiteFunction.Type2(doubleArrayOf(0.0, 1.0), null, doubleArrayOf(1.0, 0.0, 0.0), doubleArrayOf(0.0, 0.0, 1.0), 1.0),
+            extendStart = true, extendEnd = true,
+        )
+        AwtCanvas(g).fillShading(shading, KiteMatrix.IDENTITY, null, 1.0, KiteBlendMode.Normal)
+        assertEquals(255, img.getRGB(10_090, 2) ushr 24, "the far end is painted")
+        assertTrue((img.getRGB(10_090, 2) and 0xFF) > 0xF0, "blue at the far end")
+        // Drawn at a negative offset, the visible part is painted too.
+        val shifted = BufferedImage(100, 4, BufferedImage.TYPE_INT_ARGB)
+        val h = shifted.createGraphics().apply { translate(-5_000, 0) }
+        AwtCanvas(h).fillShading(shading, KiteMatrix.IDENTITY, null, 1.0, KiteBlendMode.Normal)
+        assertEquals(255, shifted.getRGB(50, 2) ushr 24)
+        g.dispose(); h.dispose()
+    }
 }

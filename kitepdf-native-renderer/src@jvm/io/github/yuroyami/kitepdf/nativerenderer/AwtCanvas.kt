@@ -459,11 +459,15 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         if (det == 0.0 || !det.isFinite()) return
         val toShading = toDevice.createInverse()
 
-        // Base fill region: the caller's shading clip path, else the device clip.
+        // Base fill region: the caller's shading clip path, else the device clip. ISO 32000-1, 8.7.4.2:
+        // an unclipped sh fills the whole area the clip and the surface allow. Without a clip the
+        // region is large enough for any surface, as the default fillShading of KiteCanvas makes it,
+        // and the surface's edge trims it; a 10,000 pixel square cut wide pages and negative
+        // coordinates (#861).
         val region: java.awt.Shape = if (clipPath != null) {
             toAwtPath(clipPath, ctm).apply { windingRule = Path2D.WIND_NON_ZERO }
         } else {
-            g.clipBounds ?: java.awt.Rectangle(0, 0, 10_000, 10_000)
+            g.clipBounds ?: java.awt.geom.Rectangle2D.Double(-UNCLIPPED_REACH, -UNCLIPPED_REACH, 2 * UNCLIPPED_REACH, 2 * UNCLIPPED_REACH)
         }
         val box = region.bounds2D
 
@@ -1670,3 +1674,6 @@ internal fun packedArgbImage(argb: IntArray, width: Int, height: Int): BufferedI
     Raster.createPackedRaster(DataBufferInt(argb, argb.size), width, height, width, intArrayOf(0xFF0000, 0xFF00, 0xFF, -0x1000000), null),
     false, null,
 )
+
+/** Half the side of the square an unclipped shading fills, in the host's user space (#861). */
+private const val UNCLIPPED_REACH = 1_000_000.0

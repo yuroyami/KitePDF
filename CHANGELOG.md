@@ -549,6 +549,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and rendering hints are the same after a page as before it (#866).
 - `AwtCanvas` wraps an image's packed pixels in its bitmap instead of copying them one at a time through
   `setRGB`, which took 280 to 590 ms for 20 megapixels (#870).
+- On a `Graphics2D` without a clip, `AwtCanvas` paints an unclipped `sh` across the whole surface, past 10,000
+  pixels and at negative coordinates (#861).
 
 ## [0.13.0] - 2026-10-09
 
