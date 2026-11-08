@@ -532,10 +532,12 @@ public class PageRenderer(
         val state = formState ?: return null
         if (annot.subtype != Subtype.Widget) return null
         val name = io.github.yuroyami.kitepdf.PdfFormField.qualifiedNameOf(annot.raw, resolver) ?: return null
-        if (!state.isChanged(name)) return null
-        choiceAppearance(annot, state.choiceSelection(name))?.let { return it }
+        val color = state.textColor(name)
+        if (!state.isChanged(name) && color == null) return null
+        if (state.isChanged(name)) choiceAppearance(annot, state.choiceSelection(name))?.let { return it }
         return io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
             annot.raw, annot.rect.width, annot.rect.height, resolver, valueOverride = state.value(name) ?: "",
+            textColor = color,
         )
     }
 

@@ -98,7 +98,8 @@ internal object AformApi {
     if (money !== '') text = prepend === false ? text + money : money + text;
     if (negative) {
       switch (Number(negStyle)) {
-        case 0: case 1: text = '-' + text; break;
+        // Style 1 shows the amount in red with no sign, as PDFium, MuPDF and pdf.js do (#766).
+        case 1: break;
         case 2: case 3: text = '(' + text + ')'; break;
         default: text = '-' + text;
       }

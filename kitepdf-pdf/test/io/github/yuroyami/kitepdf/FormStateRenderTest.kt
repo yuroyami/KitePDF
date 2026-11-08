@@ -181,4 +181,20 @@ class FormStateRenderTest {
         state.resetAll()
         assertFalse(state.isReadOnly("name"))
     }
+
+    @Test
+    fun a_text_colour_in_the_live_state_draws_the_value_in_it() {
+        // Acrobat JavaScript, Field.textColor, which AFNumber_Format sets to red for a negative amount (#766).
+        val doc = PdfDocument.open(formPdf())
+        val state = PdfFormState(doc)
+        state.setTextColor("name", listOf(1.0, 0.0, 0.0))
+        val canvas = RecordingCanvas()
+        doc.pages[0].renderTo(canvas, KiteMatrix.IDENTITY, state)
+        val run = canvas.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().first { "Ada" in it.text }
+        assertEquals(Triple(1.0, 0.0, 0.0), Triple(run.color.r, run.color.g, run.color.b), "${run.color}")
+        state.setTextColor("name", null)
+        val plain = RecordingCanvas().also { doc.pages[0].renderTo(it, KiteMatrix.IDENTITY, state) }
+        val black = plain.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().first { "Ada" in it.text }
+        assertEquals(0.0, black.color.r)
+    }
 }

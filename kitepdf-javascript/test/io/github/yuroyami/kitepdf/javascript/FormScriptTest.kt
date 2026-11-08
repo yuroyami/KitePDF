@@ -21,6 +21,7 @@ class FormScriptTest {
      */
     private fun invoicePdf(
         calculate: String = "AFSimple_Calculate\\('SUM', new Array\\('a', 'b'\\)\\)",
+        format: String = "AFNumber_Format\\(2, 0, 0, 0, '\\$', true\\)",
     ): ByteArray {
         val buf = ByteArrayBuilder()
         val offsets = LinkedHashMap<Int, Int>()
@@ -38,7 +39,7 @@ class FormScriptTest {
             6,
             "<< /Type /Annot /Subtype /Widget /FT /Tx /T (total) /V () /Rect [20 120 120 140] " +
                 "/AA << /C << /S /JavaScript /JS ($calculate) >> " +
-                "/F << /S /JavaScript /JS (AFNumber_Format\\(2, 0, 0, 0, '\\$', true\\)) >> >> >>",
+                "/F << /S /JavaScript /JS ($format) >> >> >>",
         )
         obj(
             7,
@@ -73,6 +74,24 @@ class FormScriptTest {
                 runner.setFieldValue("a", a)
                 runner.setFieldValue("b", b)
                 assertEquals(expected, runner.formState.value("total"), "$function of '$a' and '$b'")
+            }
+        }
+    }
+
+    @Test
+    fun the_negative_styles_write_a_sign_or_parentheses_and_two_of_them_turn_the_text_red(): TestResult = scriptTest {
+        // PDFium, AFNumber_Format: the sign for style 0 only, and red text for styles 1 and 3 (#766).
+        for ((style, text, red) in listOf(
+            Triple(0, "-$1,234.50", false), Triple(1, "$1,234.50", true),
+            Triple(2, "($1,234.50)", false), Triple(3, "($1,234.50)", true),
+        )) {
+            val doc = PdfDocument.open(
+                invoicePdf(calculate = "event.value = -1234.5", format = "AFNumber_Format\\(2, 0, $style, 0, '\\$', true\\)"),
+            )
+            PdfScriptRunner(doc).use { runner ->
+                runner.setFieldValue("a", "1")
+                assertEquals(text, runner.formattedValue("total"), "style $style")
+                assertEquals(if (red) listOf(1.0, 0.0, 0.0) else null, runner.formState.textColor("total"), "style $style")
             }
         }
     }

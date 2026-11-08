@@ -141,6 +141,9 @@ internal class PdfScriptHost(
             "textSize" -> textSizeOf(field)
             "borderStyle" -> field.widgets.firstOrNull()?.borderStyle ?: "solid"
             "lineWidth" -> 1.0
+            "textColor" -> state.textColor(name)?.let { c ->
+                listOf(when (c.size) { 1 -> "G"; 3 -> "RGB"; else -> "CMYK" }) + c
+            }
             "print" -> true
             else -> null
         }
@@ -164,10 +167,24 @@ internal class PdfScriptHost(
                 }
                 state.setChoiceSelection(name, PdfChoiceSelection(if (indices == listOf(-1)) emptyList() else indices))
             }
+            // Acrobat JavaScript, Field.textColor: a colour array, drawn in the field's text (#766).
+            "textColor" -> textColorOf(value)?.let { state.setTextColor(name, it.ifEmpty { null }) }
             // The rest are appearance details the renderer does not read yet. A script that sets
             // them must not fail, so they are accepted and ignored.
             else -> Unit
         }
+    }
+
+    /**
+     * The components of a script colour array: `["G", g]`, `["RGB", r, g, b]` or `["CMYK", c, m, y, k]`.
+     * `["T"]`, transparent, is the empty list, which gives the text its `/DA` colour back. Anything
+     * else is null and is ignored, as a reader ignores a colour it cannot read.
+     */
+    private fun textColorOf(value: Any?): List<Double>? {
+        val array = value as? List<*> ?: return null
+        val size = when (array.firstOrNull()) { "T" -> 0; "G" -> 1; "RGB" -> 3; "CMYK" -> 4; else -> return null }
+        if (array.size < size + 1) return null
+        return (1..size).map { (array[it] as? Number)?.toDouble() ?: return null }
     }
 
     /** Acrobat Field.value exposes export strings, with an array only for multiple values. */

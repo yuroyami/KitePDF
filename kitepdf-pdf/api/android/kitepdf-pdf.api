@@ -815,8 +815,10 @@ public final class io/github/yuroyami/kitepdf/PdfFormState {
 	public final fun setChoiceSelection (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;I)Z
 	public final fun setHidden (Ljava/lang/String;Z)V
 	public final fun setReadOnly (Ljava/lang/String;Z)V
+	public final fun setTextColor (Ljava/lang/String;Ljava/util/List;)V
 	public final fun setValue (Ljava/lang/String;Ljava/lang/String;)V
 	public final fun snapshot ()Lio/github/yuroyami/kitepdf/PdfFormState;
+	public final fun textColor (Ljava/lang/String;)Ljava/util/List;
 	public final fun value (Ljava/lang/String;)Ljava/lang/String;
 }
 

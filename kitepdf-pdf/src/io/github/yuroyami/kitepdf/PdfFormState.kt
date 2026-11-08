@@ -36,6 +36,7 @@ public class PdfFormState(private val document: PdfDocument) {
     private val fieldChanges = HashMap<String, Int>()
     private val hidden = HashMap<String, Boolean>()
     private val readOnly = HashMap<String, Boolean>()
+    private val textColors = HashMap<String, List<Double>>()
     private val listeners = ArrayList<(Change) -> Unit>()
 
     /**
@@ -66,6 +67,7 @@ public class PdfFormState(private val document: PdfDocument) {
             copy.fieldChanges.putAll(fieldChanges)
             copy.hidden.putAll(hidden)
             copy.readOnly.putAll(readOnly)
+            copy.textColors.putAll(textColors)
             copy.changes = changes
         }
     }
@@ -221,12 +223,13 @@ public class PdfFormState(private val document: PdfDocument) {
         val allNames = document.formFields.map { it.fullyQualifiedName }
         val touched = lock.withLock {
             for (name in allNames) invalidate(name)
-            if (values.isEmpty() && hidden.isEmpty() && readOnly.isEmpty()) return
-            val names = values.keys + hidden.keys + readOnly.keys
+            if (values.isEmpty() && hidden.isEmpty() && readOnly.isEmpty() && textColors.isEmpty()) return
+            val names = values.keys + hidden.keys + readOnly.keys + textColors.keys
             values.clear()
             choices.clear()
             hidden.clear()
             readOnly.clear()
+            textColors.clear()
             changes++
             names
         }
@@ -313,6 +316,31 @@ public class PdfFormState(private val document: PdfDocument) {
         if (document.formField(fieldName) == null) return
         val changed = lock.withLock {
             if (readOnly[fieldName] == value) false else { readOnly[fieldName] = value; changed(fieldName); true }
+        }
+        if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true).also { it.typedChoice = choiceSelection(fieldName) })
+    }
+
+    /**
+     * The colour a script gave the field's text, or null for the colour of the field's own `/DA`.
+     * One component is grey, three are RGB and four are CMYK, each from 0 to 1, as a script's
+     * `field.textColor` holds them (Acrobat JavaScript, Field.textColor; #766).
+     */
+    public fun textColor(fieldName: String): List<Double>? = lock.withLock { textColors[fieldName] }
+
+    /**
+     * Draws the field's text in [components] (one grey, three RGB or four CMYK values from 0 to 1),
+     * or in the colour of its `/DA` again when [components] is null. Any other count is ignored.
+     */
+    public fun setTextColor(fieldName: String, components: List<Double>?) {
+        if (document.formField(fieldName) == null) return
+        if (components != null && components.size !in setOf(1, 3, 4)) return
+        val color = components?.map { if (it.isNaN()) 0.0 else it.coerceIn(0.0, 1.0) }
+        val changed = lock.withLock {
+            if (textColors[fieldName] == color) false else {
+                if (color == null) textColors.remove(fieldName) else textColors[fieldName] = color
+                changed(fieldName)
+                true
+            }
         }
         if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true).also { it.typedChoice = choiceSelection(fieldName) })
     }

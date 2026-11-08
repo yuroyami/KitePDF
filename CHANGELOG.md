@@ -501,6 +501,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   #722, #719).
 - `PdfEditor.setChoiceValue` draws the option's text in a combo box instead of its export value, and draws a list
   box's rows with the selected one highlighted (#700).
+- `AFNumber_Format` negative style 1 writes no minus sign and turns the text red, as PDFium, MuPDF and pdf.js do.
+  A script's `field.textColor` now lives in `PdfFormState.textColor` / `setTextColor`, and the live widget
+  appearance draws the text in it (#766).
 
 ## [0.13.0] - 2026-10-09
 

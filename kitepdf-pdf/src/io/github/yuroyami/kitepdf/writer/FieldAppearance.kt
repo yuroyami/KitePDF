@@ -291,6 +291,8 @@ internal object FieldAppearance {
         refs: IndirectResolver,
         /** What the field shows now, when a reader or a script has changed it. */
         valueOverride: String? = null,
+        /** The colour a script gave the text (grey, RGB or CMYK components), in place of the `/DA` colour. */
+        textColor: List<Double>? = null,
     ): PdfStream? {
         if (width <= 0.0 || height <= 0.0) return null
         val fieldType = inherited(widget, "FT", refs)?.let { (it as? PdfName)?.value } ?: return null
@@ -300,7 +302,10 @@ internal object FieldAppearance {
         val background = colorOps(missingAsNull { mk?.getArray("BG", refs) }, stroking = false)
         val border = colorOps(missingAsNull { mk?.getArray("BC", refs) }, stroking = true)
         val borderWidth = borderWidthOf(widget, refs, hasBorderColor = border != null)
-        val da = parseDA((inherited(widget, "DA", refs) as? PdfString)?.asText())
+        val da = parseDA((inherited(widget, "DA", refs) as? PdfString)?.asText()).let { da ->
+            val ops = textColor?.let { c -> colorOps(PdfArray(c.map { PdfReal(it) }), stroking = false) }
+            if (ops == null) da else da.copy(colorOps = ops)
+        }
         val quadding = (inherited(widget, "Q", refs) as? PdfInt)?.value?.toInt() ?: 0
 
         val isPushButton = fieldType == "Btn" && (flags and PUSH_BUTTON) != 0
