@@ -650,8 +650,11 @@ public class EpubDocument internal constructor(
     /** Guards the tables below. Never held while a chapter is being laid out. */
     private val tableLock = KiteLock()
 
-    /** The pixels that scripts wrote into canvases, which the pages paint (#610). */
-    internal val canvasImages = CanvasImages()
+    /**
+     * The pixels that scripts wrote into canvases, which the pages paint (#610). They live with the
+     * parse the chapter trees belong to, so a document made by [withSettings] paints them too (#854).
+     */
+    internal val canvasImages: CanvasImages get() = parsed.canvasImages
 
     /** One per chapter, held for that chapter's layout so it happens once. */
     private val chapterLocks: Array<KiteLock> = Array(parsed.spineCount) { KiteLock() }

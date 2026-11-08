@@ -151,4 +151,20 @@ class CanvasDrawingTest {
         assertEquals(listOf(false), images(false))
         assertEquals(listOf(true), images(true))
     }
+
+    @Test
+    fun a_drawn_canvas_paints_in_a_document_with_other_settings(): TestResult = scriptTest {
+        // The pixels lived in the first document's store, which a withSettings document did not share (#854).
+        val book = canvasBook(
+            "var p = x.createImageData(4, 4); for (var i = 0; i < 64; i++) p.data[i] = 200; x.putImageData(p, 0, 0);",
+        )
+        runner(book).chapterOpened(0)
+        fun images(doc: EpubDocument): Int {
+            val canvas = io.github.yuroyami.kitepdf.core.render.RecordingCanvas()
+            doc.page(KiteLocation(0, 0)).renderTo(canvas)
+            return canvas.calls.count { it is io.github.yuroyami.kitepdf.core.render.RecordingCanvas.Call.Image }
+        }
+        assertEquals(1, images(book))
+        assertEquals(1, images(book.withFontSize(16.0)), "the larger type paints the canvas too")
+    }
 }

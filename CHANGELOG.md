@@ -573,6 +573,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EPUB, SVG and CBZ images draw upright by their EXIF orientation, and a CBZ page takes the upright size of its
   photo; `KiteImageData.fromEncodedImage(bytes, applyOrientation)` keeps the stored order when asked, as XPS
   image brushes do (#826).
+- A canvas that a book's script drew paints in a document made by `withSettings` too, as its pixels now live with
+  the shared chapter trees (#854).
 
 ## [0.13.0] - 2026-10-09
 

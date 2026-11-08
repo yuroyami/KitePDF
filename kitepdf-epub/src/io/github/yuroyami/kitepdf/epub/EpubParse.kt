@@ -112,6 +112,12 @@ internal class ParsedEpub(
     /** The blobs that the book's scripts named with blob URLs, which the reader loads as files of the book (#533). */
     val blobs = BlobUrlStore()
 
+    /**
+     * The pixels that scripts wrote into canvases, which the chapter trees here name: with the
+     * trees, so every document over the book, whatever its settings, paints them (#610, #854).
+     */
+    val canvasImages = io.github.yuroyami.kitepdf.epub.script.CanvasImages()
+
     /** Whether [chapter] keeps the fixed pages its author set, rather than reflowing. */
     fun isFixed(chapter: Int): Boolean = renditions.getOrNull(chapter)?.let(::keepsSize) == true
 
