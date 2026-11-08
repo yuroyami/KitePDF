@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** A document script reads the annotations, links, layers and word positions the document has (#937). */
 class DocQueryScriptTest {
@@ -66,7 +67,7 @@ class DocQueryScriptTest {
         assertEquals("world", word)
         val q = numbers.split(',').map { it.toDouble() }
         // "world" starts after "Hello " at x 20 in 12 point Helvetica, on the baseline at 100.
-        assert(q[0] > 40.0 && q[2] > q[0] && q[2] < 100.0) { "x: $q" }
-        assert(q[1] > 100.0 && q[5] <= 100.0) { "y: $q" }
+        assertTrue(q[0] > 40.0 && q[2] > q[0] && q[2] < 100.0, "x: $q")
+        assertTrue(q[1] > 100.0 && q[5] <= 100.0, "y: $q")
     }
 }
