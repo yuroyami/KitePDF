@@ -579,6 +579,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new layout's cache, so `textContent` cannot keep returning the old text (#890).
 - The EPUB outline's page numbers follow a chapter that a script edit or a `:target` change lays out again
   (#888).
+- A book's script that measures after each change lays the chapter out for the measurement without telling the
+  viewers, and the call announces once when it ends, so a measuring loop no longer makes every viewer count its
+  pages each time (#874).
 
 ## [0.13.0] - 2026-10-09
 

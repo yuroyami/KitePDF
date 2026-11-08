@@ -333,10 +333,15 @@ public class EpubDocument internal constructor(
      * here: the caller makes a new one for the next change. This document lays the chapter out
      * on the caller's thread; another document over the book does it when it next needs it.
      */
-    internal fun replaceChapterTree(chapter: Int, tree: KiteXmlNode.Element) {
+    internal fun replaceChapterTree(chapter: Int, tree: KiteXmlNode.Element, announce: Boolean = true) {
         require(chapter in parsed.spineIndices) { "no chapter $chapter" }
         parsed.replaceTree(chapter, tree)
         prepareChapter(chapter)
+        if (announce) parsed.announceTreeChange()
+    }
+
+    /** Tells the documents over the book that a chapter changed, as [replaceChapterTree] does (#874). */
+    internal fun announceTreeChange() {
         parsed.announceTreeChange()
     }
 
@@ -471,9 +476,9 @@ public class EpubDocument internal constructor(
         parsed.frameLayoutSpine(chapter, path)?.rules?.any { rule -> rule.selectors.any { it.usesTarget } } == true
 
     /** Lays the frame of [chapter] showing [path] out from [tree] from now on, and tells every viewer (#528). */
-    internal fun replaceFrameTree(chapter: Int, path: String, tree: KiteXmlNode.Element) {
+    internal fun replaceFrameTree(chapter: Int, path: String, tree: KiteXmlNode.Element, announce: Boolean = true) {
         parsed.replaceFrameTree(chapter, path, tree)
-        parsed.announceTreeChange()
+        if (announce) parsed.announceTreeChange()
     }
 
     /**

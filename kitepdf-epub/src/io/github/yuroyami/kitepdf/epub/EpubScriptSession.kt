@@ -600,8 +600,28 @@ public class EpubScriptSession(
             val tree = if (dom.dirty) dom.snapshot() else null
             if (tree != null) {
                 if (frame == null) document.replaceChapterTree(chapter, tree) else document.replaceFrameTree(chapter, frame, tree)
+            } else if (measured != null) {
+                document.announceTreeChange()
             }
-            document.blobUrls.settle(blobKey, tree)
+            // The blob URLs a measured tree names stay with it, as a committed one's do.
+            document.blobUrls.settle(blobKey, tree ?: measured)
+            measured = null
+        }
+
+        /** The tree a measurement laid out that no announcement has told the viewers of yet (#874). */
+        private var measured: KiteXmlNode.Element? = null
+
+        /**
+         * Lays the tree out for a measurement when the scripts changed it, without telling the
+         * viewers: the call that measures announces once when it ends, as a browser paints once
+         * per frame, so a loop that measures does not make every viewer count its pages (#874).
+         */
+        fun layoutForMeasure() {
+            if (!dom.dirty) return
+            val tree = dom.snapshot()
+            if (frame == null) document.replaceChapterTree(chapter, tree, announce = false)
+            else document.replaceFrameTree(chapter, frame, tree, announce = false)
+            measured = tree
         }
 
         fun frameCount(): Int = frameElements().size
@@ -815,7 +835,7 @@ public class EpubScriptSession(
             def("rect") { args ->
                 val live = element(args, 0) ?: return@def null
                 // A browser lays the page out again when a script measures after a change (#499).
-                commit()
+                layoutForMeasure()
                 val laid = dom.toLayout[live] ?: return@def null
                 val r = boundsOf(laid) ?: return@def null
                 listOf(r.left / PT_PER_PX, r.bottom / PT_PER_PX, r.width / PT_PER_PX, r.height / PT_PER_PX)

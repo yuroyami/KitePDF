@@ -87,6 +87,21 @@ class EpubScriptTest {
     }
 
     @Test
+    fun a_loop_that_measures_after_each_change_announces_once(): TestResult = scriptTest {
+        // Each measurement laid the chapter out and told every viewer, 50 times for 50 measurements (#874).
+        val book = ScriptBooks.chapter(
+            "<p id=\"m\">Measured.</p><p>After.</p>" +
+                "<script>var p = document.getElementById('m'); var tops = [];" +
+                "for (var i = 0; i < 20; i++) { p.style.marginTop = (i * 2) + 'px'; tops.push(p.getBoundingClientRect().top); }" +
+                "document.title = String(tops[19] - tops[0]);</script>",
+        )
+        val changes = book.chapterChanges.value
+        runner(book).chapterOpened(0)
+        assertEquals(1, book.chapterChanges.value - changes, "one announcement for the whole call")
+        assertTrue("Measured." in book.page(KiteLocation(0, 0)).textContent().plainText)
+    }
+
+    @Test
     fun a_reflowable_chapter_gains_pages_when_a_script_shows_a_hidden_section(): TestResult = scriptTest {
         val extra = (0 until 40).joinToString("") { "<p>Extra paragraph $it, which the button shows.</p>" }
         val book = ScriptBooks.chapter(
