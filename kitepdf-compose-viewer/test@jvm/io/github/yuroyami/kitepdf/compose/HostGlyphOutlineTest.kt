@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.unit.Density
@@ -100,5 +101,33 @@ class HostGlyphOutlineTest {
         val (l, t, r, b) = assertNotNull(bounds(pixels, blue), "the stroke draws")
         assertTrue(blue(pixels[l + 2, (t + b) / 2]), "the stroke runs down the side of the O")
         assertTrue(!blue(pixels[l + 4, t + 4]) && !blue(pixels[r - 4, b - 4]), "the corners of the O's bounds stay unpainted")
+    }
+
+    /**
+     * The fill of host text and the outline it strokes and clips by come from one face. They came
+     * from two lists, so on a host with DejaVu Sans and Liberation Sans the fill was DejaVu and
+     * the outline Liberation, a narrower face, and a stroke lay off its fill (#891).
+     */
+    @Test
+    fun the_outline_of_host_text_is_in_the_face_its_fill_draws_in() {
+        val spec = FontSpec(KiteFontFamily.SansSerif, false, false)
+        val outline = assertNotNull(hostTextPath("M", spec)).getBounds()
+        val line = assertNotNull(hostTextLine("M", spec, 1000f, Color.Red, androidx.compose.ui.graphics.BlendMode.SrcOver))
+        val bitmap = ImageBitmap(1200, 1200)
+        CanvasDrawScope().drawOnTestUiThread(density, LayoutDirection.Ltr, Canvas(bitmap), Size(1200f, 1200f)) {
+            drawRect(Color.White, size = size)
+            // The line's baseline is at y = 0 of its scope.
+            translate(100f, 1000f) { line.draw(this) }
+        }
+        val pixels = bitmap.toPixelMap()
+        var left = Int.MAX_VALUE; var right = -1
+        for (x in 0 until 1200) for (y in 0 until 1200 step 4) if (pixels[x, y].green < 0.5f) { left = minOf(left, x); right = maxOf(right, x) }
+        assertTrue(right > 0, "the fill draws")
+        // The outline is at 1000 units to the em with its origin at the pen, as the fill is at 1000 px.
+        val fillLeft = left - 100; val fillRight = right - 100
+        assertTrue(
+            kotlin.math.abs(fillLeft - outline.left) <= 3 && kotlin.math.abs(fillRight - outline.right) <= 3,
+            "the fill spans $fillLeft..$fillRight and the outline ${outline.left}..${outline.right}",
+        )
     }
 }

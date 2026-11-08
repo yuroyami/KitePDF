@@ -35,8 +35,12 @@ import org.jetbrains.skia.Typeface as SkTypeface
 import org.jetbrains.skia.FontHinting as SkFontHinting
 import kotlin.math.ceil
 
+/**
+ * The outline of [text] in the face [hostTextLine] fills it in, so that a stroke or a clip lies on
+ * the fill (ISO 32000-1, 9.3.6; #891).
+ */
 internal actual fun hostTextPath(text: String, fontSpec: FontSpec): Path? {
-    val typeface = hostTypeface(fontSpec) ?: return null
+    val typeface = shapings.get().typeface(fontSpec) ?: return null
     val font = Font(typeface, 1000f)
     val ids = font.getStringGlyphs(text)
     val advances = font.getWidths(ids)
@@ -135,6 +139,21 @@ private class HostShaping {
         if (cjk != null) arrayOf("kitepdf-host-${families.size}".also { faces.registerTypeface(cjk, it) })
         else composeFamilyNames(spec.family)
     }
+
+    private val typefaces = HashMap<FontSpec, SkTypeface?>()
+
+    /**
+     * The face a paragraph of [spec] draws its text in: the first of its [families] that the
+     * collection finds, else the collection's default face, as the paragraph falls back to.
+     * The outline of host text comes from it, so that it lies on the fill (#891).
+     */
+    fun typeface(spec: FontSpec): SkTypeface? = typefaces.getOrPut(spec) {
+        try {
+            fonts.findTypefaces(families(spec), styleOf(spec)).firstOrNull() ?: fonts.defaultFallback()
+        } catch (failure: Throwable) {
+            null
+        }
+    }
 }
 
 /**
@@ -214,26 +233,5 @@ private fun cjkTypeface(spec: FontSpec, style: FontStyle): SkTypeface? {
     }
 }
 
-/**
- * The first family of the list that the host has, else any family it has. Skia matches a
- * family by its real name, and one name is never on every host. A CJK spec takes a face of its
- * language first, since the Latin faces of the list have no Han, kana or Hangul glyphs (#472).
- */
-private fun hostTypeface(spec: FontSpec): SkTypeface? {
-    val style = styleOf(spec)
-    cjkTypeface(spec, style)?.let { return it }
-    val names = when (spec.family) {
-        KiteFontFamily.Serif -> listOf("Times New Roman", "Times", "Liberation Serif", "Nimbus Roman", "Tinos", "DejaVu Serif", "Noto Serif")
-        KiteFontFamily.SansSerif -> listOf("Helvetica", "Arial", "Liberation Sans", "Nimbus Sans", "Arimo", "DejaVu Sans", "Noto Sans")
-        KiteFontFamily.Monospace -> listOf("Courier New", "Courier", "Liberation Mono", "Nimbus Mono PS", "Cousine", "DejaVu Sans Mono", "Noto Sans Mono")
-    }
-    return try {
-        val mgr = FontMgr.default
-        names.firstNotNullOfOrNull { mgr.matchFamilyStyle(it, style) }
-            ?: (0 until mgr.familiesCount).firstNotNullOfOrNull { mgr.matchFamilyStyle(mgr.getFamilyName(it), style) }
-    } catch (failure: Throwable) {
-        null
-    }
-}
 
 internal actual fun hostHasFace(fontSpec: FontSpec): Boolean = true

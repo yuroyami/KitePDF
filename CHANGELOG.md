@@ -773,6 +773,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Canvas2dCanvas` gives back the pixels of each layer canvas once it has composited, and of each image canvas
   its cache drops. A null 2D context, which WebKit returns past its canvas memory limit, no longer throws out of
   the draw: a group or soft mask paints without its layer, and an image draws its placeholder (#889).
+- On the desktop and Apple Compose viewers, the outline that host text strokes and clips by now comes from the
+  face its fill draws in, so a fill-and-stroke run or SVG text with a stroke lines up with its fill (#891).
 
 ## [0.13.0] - 2026-10-09
 
