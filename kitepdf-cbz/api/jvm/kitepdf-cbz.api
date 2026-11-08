@@ -1,6 +1,7 @@
 public final class io/github/yuroyami/kitepdf/cbz/CbzDocument : io/github/yuroyami/kitepdf/core/KiteDocument {
 	public static final field Companion Lio/github/yuroyami/kitepdf/cbz/CbzDocument$Companion;
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public fun close ()V
 	public fun getChapterCount ()I
 	public final fun getComicMetadata ()Lio/github/yuroyami/kitepdf/cbz/CbzMetadata;
 	public fun getKnownPageCount ()I

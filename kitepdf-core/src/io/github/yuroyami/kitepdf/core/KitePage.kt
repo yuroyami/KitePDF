@@ -153,7 +153,14 @@ public class KiteOutlineItem(
  * A viewer that wants to show a page before the whole document is laid out must
  * work in locations. [pageCount] and [pages] lay out everything.
  */
-public interface KiteDocument {
+public interface KiteDocument : AutoCloseable {
+
+    /**
+     * Ends the document's background work and drops what it keeps, as the app that opened the
+     * document does once it lets it go (#887). An EPUB cancels the remote fetches it started. Safe
+     * to call twice. The default does nothing, for a document with no such work.
+     */
+    override fun close() {}
 
     /**
      * Number of pages in the whole document.

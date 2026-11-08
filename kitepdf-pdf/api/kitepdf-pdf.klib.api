@@ -1057,6 +1057,7 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
         final fun <get-warnings>(): io.github.yuroyami.kitepdf.core/KiteWarningListener? // io.github.yuroyami.kitepdf/PdfDocument.warnings.<get-warnings>|<get-warnings>(){}[0]
         final fun <set-warnings>(io.github.yuroyami.kitepdf.core/KiteWarningListener?) // io.github.yuroyami.kitepdf/PdfDocument.warnings.<set-warnings>|<set-warnings>(io.github.yuroyami.kitepdf.core.KiteWarningListener?){}[0]
 
+    final fun close() // io.github.yuroyami.kitepdf/PdfDocument.close|close(){}[0]
     final fun dropDecodedImageCache() // io.github.yuroyami.kitepdf/PdfDocument.dropDecodedImageCache|dropDecodedImageCache(){}[0]
     final fun dropFontCache() // io.github.yuroyami.kitepdf/PdfDocument.dropFontCache|dropFontCache(){}[0]
     final fun dropOperationCache() // io.github.yuroyami.kitepdf/PdfDocument.dropOperationCache|dropOperationCache(){}[0]

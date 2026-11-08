@@ -1,6 +1,7 @@
 public final class io/github/yuroyami/kitepdf/svg/SvgDocument : io/github/yuroyami/kitepdf/core/KiteDocument {
 	public static final field Companion Lio/github/yuroyami/kitepdf/svg/SvgDocument$Companion;
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public fun close ()V
 	public fun getChapterCount ()I
 	public fun getKnownPageCount ()I
 	public fun getMetadata ()Lio/github/yuroyami/kitepdf/core/KiteMetadata;

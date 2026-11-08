@@ -205,6 +205,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun bookmarkOf(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     final fun bookmarkOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow? // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(kotlin.String){}[0]
     final fun chapterPath(kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterPath|chapterPath(kotlin.Int){}[0]
+    final fun close() // io.github.yuroyami.kitepdf.epub/EpubDocument.close|close(){}[0]
     final fun fragmentOf(kotlin/Int): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubDocument.fragmentOf|fragmentOf(kotlin.Int){}[0]
     final fun hasRemoteResources(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.hasRemoteResources|hasRemoteResources(kotlin.Int){}[0]
     final fun isChapterReady(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isChapterReady|isChapterReady(kotlin.Int){}[0]

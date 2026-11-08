@@ -349,6 +349,16 @@ public class PdfDocument private constructor(
     }
 
     /**
+     * Drops the decoded images, page operations and fonts this document keeps, as the app that
+     * opened it does once it lets it go (#887). A page read after it decodes again. Safe to call twice.
+     */
+    override fun close() {
+        dropDecodedImageCache()
+        dropOperationCache()
+        dropFontCache()
+    }
+
+    /**
      * Frees every decoded image that this document keeps, for example when the app
      * runs low on memory. An image decodes again when it is next drawn.
      */

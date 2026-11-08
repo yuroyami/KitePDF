@@ -99,8 +99,9 @@ public final class io/github/yuroyami/kitepdf/core/KiteDataUrl$Companion {
 	public final fun isDataUrl (Ljava/lang/String;)Z
 }
 
-public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument {
+public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument : java/lang/AutoCloseable {
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public fun close ()V
 	public fun getChapterCount ()I
 	public fun getKnownPageCount ()I
 	public fun getMetadata ()Lio/github/yuroyami/kitepdf/core/KiteMetadata;
@@ -125,6 +126,7 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument {
 
 public final class io/github/yuroyami/kitepdf/core/KiteDocument$DefaultImpls {
 	public static fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public static fun close (Lio/github/yuroyami/kitepdf/core/KiteDocument;)V
 	public static fun getChapterCount (Lio/github/yuroyami/kitepdf/core/KiteDocument;)I
 	public static fun getKnownPageCount (Lio/github/yuroyami/kitepdf/core/KiteDocument;)I
 	public static fun getMetadata (Lio/github/yuroyami/kitepdf/core/KiteDocument;)Lio/github/yuroyami/kitepdf/core/KiteMetadata;

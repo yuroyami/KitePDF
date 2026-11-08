@@ -11,6 +11,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,6 +91,27 @@ internal class RemoteResources(chapters: Int) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val landed = MutableStateFlow(0)
 
+    /** How many open documents share this store; the last to close cancels its fetches (#887). */
+    private var users = 0
+    private var closed = false
+
+    /** Counts one more open document over the book. */
+    fun retain() {
+        lock.withLock { users++ }
+    }
+
+    /**
+     * Counts one document fewer. When none is left open, the fetches in flight are cancelled, and
+     * no fetch starts again: the bytes that landed stay for a document that still reads them.
+     */
+    fun release() {
+        val last = lock.withLock {
+            users--
+            if (users > 0 || closed) false else { closed = true; true }
+        }
+        if (last) scope.cancel()
+    }
+
     /** How many resources have landed. */
     val arrivals: StateFlow<Int> = landed.asStateFlow()
 
@@ -106,6 +128,8 @@ internal class RemoteResources(chapters: Int) {
     fun request(url: String, fetcher: EpubResourceFetcher): Deferred<ByteArray?>? {
         if (!isHttpsUrl(url)) return null
         val fetch = lock.withLock {
+            // Every document over the book has closed, so nothing fetches for it again (#887).
+            if (closed) return null
             inFlight[url]?.let { return it }
             landedBytes[url]?.let { return CompletableDeferred(it) }
             if (url in failed) return null

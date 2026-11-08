@@ -589,6 +589,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public static final field DEFAULT_IMAGE_CACHE_BUDGET_BYTES J
 	public static final field DEFAULT_OPERATION_CACHE_BUDGET_BYTES J
 	public fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
+	public fun close ()V
 	public final fun dropDecodedImageCache ()V
 	public final fun dropFontCache ()V
 	public final fun dropOperationCache ()V

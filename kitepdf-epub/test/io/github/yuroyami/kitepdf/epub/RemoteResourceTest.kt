@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.core.withLock
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -338,6 +339,37 @@ class RemoteResourceTest {
         for (body in listOf(sized("https://images.example.com/pic.jxl"), """<p><img src="https://images.example.com/pic.jxl" alt=""/></p>""")) {
             val doc = book(listOf(body), manifest = manifest, files = listOf("pic.bmp" to EpubFixtures.bmp2x1()))
             assertEquals(1, render(doc).images().size, "the fallback is drawn: $body")
+        }
+    }
+
+    @Test
+    fun closing_the_last_document_over_a_book_cancels_its_fetches() = runTest {
+        // A fetch that never answers, as a client with no timeout gives, ends with the book (#887).
+        val started = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        val stuck = EpubResourceFetcher { _ ->
+            started.complete(Unit)
+            try {
+                kotlinx.coroutines.awaitCancellation()
+            } finally {
+                cancelled.complete(Unit)
+            }
+        }
+        val first = book(listOf(sized(pictureUrl)), fetcher = stuck, properties = listOf("remote-resources"))
+        val second = first.withSettings(first.settings.copy(fontSize = first.settings.fontSize + 2))
+        withContext(Dispatchers.Default) {
+            val asking = launch { first.fetchRemoteResources(0) }
+            kotlinx.coroutines.withTimeout(5_000) { started.await() }
+            // The other document over the book still reads it, so its fetch goes on.
+            first.close()
+            first.close()
+            kotlinx.coroutines.delay(100)
+            assertFalse(cancelled.isCompleted, "the first close cancelled a fetch that the second document shares")
+            second.close()
+            kotlinx.coroutines.withTimeout(5_000) { cancelled.await() }
+            kotlinx.coroutines.withTimeout(5_000) { asking.join() }
+            // Nothing fetches for the book again.
+            second.fetchRemoteResources(0)
         }
     }
 }

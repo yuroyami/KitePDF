@@ -815,6 +815,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A book's script can read and rewrite a tree it nested tens of thousands of levels deep: the DOM's own walks
   behind `textContent`, `innerHTML`, `XMLSerializer` and node moves use a stack of their own. A chapter tree that
   fails to lay out leaves the tree before it in place and is recorded in `failures` (#955).
+- `KiteDocument` is `AutoCloseable`. `EpubDocument.close()` drops its chapters and, once the last document over
+  the book has closed, cancels the remote fetches the book started; `PdfDocument.close()` drops its caches. The
+  default `close` does nothing (#887).
 
 ## [0.13.0] - 2026-10-09
 

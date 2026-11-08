@@ -5,6 +5,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public synthetic fun bookmarkOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public final fun bookmarkOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;
 	public final fun chapterPath (I)Ljava/lang/String;
+	public fun close ()V
 	public final fun fetchRemoteResources (IZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun fetchRemoteResources$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument;IZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun fragmentOf (I)Ljava/lang/String;

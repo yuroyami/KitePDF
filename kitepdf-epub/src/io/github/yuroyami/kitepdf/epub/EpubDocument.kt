@@ -79,6 +79,27 @@ public class EpubDocument internal constructor(
 
     internal val zip: ZipReader get() = parsed.zip
 
+    init {
+        parsed.remote.retain()
+    }
+
+    private var closed = false
+
+    /**
+     * Ends this document's share of the book (#887). The documents that [withSettings] makes share
+     * one parse and one store of remote resources, so the fetches it started are cancelled when the
+     * last document over the book closes, not when the first does. Drops the chapters this
+     * document laid out. Safe to call twice; a fetch asked for after it starts nothing.
+     */
+    override fun close() {
+        if (!tableLock.withLock { if (closed) false else { closed = true; true } }) return
+        tableLock.withLock {
+            for (c in parsed.spineIndices) live[c] = null
+            liveBytes = 0L
+        }
+        parsed.remote.release()
+    }
+
     /** EPUB-specific metadata (title, authors, cover path, reading direction). */
     public val epubMetadata: EpubMetadata get() = parsed.metadata
 
