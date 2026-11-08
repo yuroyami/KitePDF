@@ -500,6 +500,72 @@ internal fun PdfEditor.withoutDetached(
  * Only objects redaction actually removed are scrubbed. A parent field that kept
  * a widget outside every region is still live and keeps everything it has.
  */
+/**
+ * Takes the files that the file attachment annotations [droppedAnnots] carry out of the catalog's
+ * `/Names /EmbeddedFiles` name tree (ISO 32000-1, 7.7.4, Table 31, and 7.9.6), matched by their
+ * file specification or by its embedded file stream, so the redacted file is not still reachable
+ * from the catalog (#632).
+ */
+internal fun PdfEditor.removeEmbeddedFilesOf(droppedAnnots: Collection<PdfReference>) {
+    val specs = HashSet<PdfReference>()
+    val streams = HashSet<PdfReference>()
+    fun streamOf(spec: PdfObject?): PdfReference? {
+        val dict = runCatching { spec?.resolve(effective) }.getOrNull() as? PdfDictionary ?: return null
+        val ef = runCatching { dict.getDict("EF", effective) }.getOrNull() ?: return null
+        return (ef["F"] ?: ef["UF"]) as? PdfReference
+    }
+    for (ref in droppedAnnots) {
+        val annot = effectiveObject(ref.objectNumber) as? PdfDictionary ?: continue
+        val fs = annot["FS"] ?: continue
+        (fs as? PdfReference)?.let(specs::add)
+        streamOf(fs)?.let(streams::add)
+    }
+    if (specs.isEmpty() && streams.isEmpty()) return
+    fun names(value: PdfObject): Boolean = (value is PdfReference && value in specs) || streamOf(value)?.let { it in streams } == true
+    val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return
+    val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return
+    val namesEntry = catalog["Names"] ?: return
+    val namesDict = runCatching { namesEntry.resolve(effective) }.getOrNull() as? PdfDictionary ?: return
+    val treeEntry = namesDict["EmbeddedFiles"] ?: return
+
+    /** [node] without the pairs that name a dropped file, or null when nothing in it changed. */
+    fun prune(node: PdfDictionary, depth: Int): PdfDictionary? {
+        if (depth > 64) return null
+        var out: LinkedHashMap<String, PdfObject>? = null
+        val pairs = runCatching { node.getArray("Names", effective) }.getOrNull()
+        if (pairs != null) {
+            val kept = ArrayList<PdfObject>(pairs.size)
+            var i = 0
+            while (i + 1 < pairs.size) {
+                if (!names(pairs[i + 1])) { kept += pairs[i]; kept += pairs[i + 1] }
+                i += 2
+            }
+            if (kept.size != pairs.size - pairs.size % 2) out = LinkedHashMap(node.map).apply { this["Names"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(kept) }
+        }
+        val kids = runCatching { node.getArray("Kids", effective) }.getOrNull()
+        if (kids != null) for (kid in kids) {
+            val kidDict = runCatching { kid.resolve(effective) }.getOrNull() as? PdfDictionary ?: continue
+            val pruned = prune(kidDict, depth + 1) ?: continue
+            // A kid is an indirect object (7.9.6); one written in place is rewritten in place.
+            if (kid is PdfReference) updateObject(kid, pruned)
+            else {
+                val rebuilt = out ?: LinkedHashMap(node.map)
+                rebuilt["Kids"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(kids.map { if (it === kid) pruned else it })
+                out = rebuilt
+            }
+        }
+        return out?.let { PdfDictionary(it) }
+    }
+
+    val tree = runCatching { treeEntry.resolve(effective) }.getOrNull() as? PdfDictionary ?: return
+    val pruned = prune(tree, 0) ?: return
+    when {
+        treeEntry is PdfReference -> updateObject(treeEntry, pruned)
+        namesEntry is PdfReference -> updateObject(namesEntry, withEntry(namesDict, "EmbeddedFiles", pruned))
+        else -> updateObject(rootRef, withEntry(catalog, "Names", withEntry(namesDict, "EmbeddedFiles", pruned)))
+    }
+}
+
 internal fun PdfEditor.scrub(objects: Collection<PdfReference>, keys: List<String>) {
     for (ref in objects) {
         val dict = effectiveObject(ref.objectNumber) as? PdfDictionary ?: continue

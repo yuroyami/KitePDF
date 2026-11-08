@@ -925,9 +925,10 @@ public class PdfEditor internal constructor(
      * rest (`/A`, `/AA`, `/MK`) all go, and a detached field loses its value, its
      * appearance state and its names on top of that. A structure this editor does
      * not rewrite (an `/XFA` payload, a tagged document's `/StructTreeRoot`) then
-     * cannot ship the content by keeping the object alive. One thing this does not reach: an embedded
-     * file the catalog's `/Names /EmbeddedFiles` tree names as well stays in the
-     * document, since that copy of it is not on the page.
+     * cannot ship the content by keeping the object alive. A file attachment's file also
+     * goes from the catalog's `/Names /EmbeddedFiles` tree when the tree names it, so the
+     * document loses that attachment, as the engine removes too much rather than too
+     * little (#632).
      *
      * **The page may come out with more XObjects than it went in with.** One form
      * XObject can be drawn in several places (ISO 32000-1, 8.10), and each place
@@ -1024,6 +1025,9 @@ public class PdfEditor internal constructor(
         // Content first, fields second: anything taken off the page loses its content
         // whatever else still names it, and that must not depend on the field walk
         // below, which can raise.
+        // A removed attachment's file goes from the catalog's /EmbeddedFiles tree too, before
+        // the scrub takes /FS: the document loses that attachment (ISO 32000-1, 7.7.4; #632).
+        removeEmbeddedFilesOf(droppedAnnots)
         scrub(droppedAnnots, SCRUBBED_ANNOT_KEYS)
         detachRedactedFields(droppedAnnots)
     }

@@ -586,6 +586,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removes one whose `/Rect` cannot be read instead of keeping it over the black box (#630).
 - Redaction reads the `/LW` and `/ML` that an ExtGState sets at `gs`, so a wide line whose ink reaches a region
   is removed as one widened by `w` is (#633).
+- A redacted file attachment takes its file out of the catalog's `/Names /EmbeddedFiles` tree too, so the file no
+  longer survives in the saved bytes (#632).
 
 ## [0.13.0] - 2026-10-09
 
