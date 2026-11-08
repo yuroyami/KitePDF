@@ -9,9 +9,11 @@ import io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler
  * Bit numbering in the spec is 1-based; the mask names below use the same
  * 1-based bit number (so [BIT_PRINT] = `1 shl (3 - 1)`).
  *
- * For unencrypted documents, or encrypted documents we have authenticated,
- * the spec says "all operations are permitted". We model that as
- * [allowAll].
+ * An unencrypted document permits everything, as does an encrypted one
+ * opened with its owner password, which gives full access (ISO 32000-1,
+ * 7.6.3.1): both are [allowAll], the owner's with [rawFlags] still the
+ * document's `/P`. One opened with its user password, or with none, permits
+ * what `/P` permits (7.6.3.2).
  *
  * **Important**: PDF permissions are advisory and rely on cooperating
  * readers. KitePDF surfaces them so applications built on top can honour
@@ -57,6 +59,8 @@ public data class PdfPermissions(
         internal fun from(security: StandardSecurityHandler?): PdfPermissions {
             if (security == null) return allowAll
             val p = security.p
+            // The owner password opens everything, as MuPDF's pdf_has_permission grants it (#998).
+            if (security.ownerAuthenticated) return allowAll.copy(rawFlags = p)
             val r = security.r
             // Revision 2: only bits 3 (print), 4 (modify), 5 (copy), 6 (annot) are defined.
             // Revisions 3+ add bits 9-12 and split print into low/high res.

@@ -68,6 +68,13 @@ public class StandardSecurityHandler(
     private val stmAlgorithm: V4Algo = detectV4Algorithm(encryptDict, "StmF")
     private val strAlgorithm: V4Algo = detectV4Algorithm(encryptDict, "StrF")
 
+    /**
+     * Whether the owner password authenticated, which gives full access (ISO 32000-1, 7.6.3.1),
+     * rather than the user password, which gives what /P permits (#998).
+     */
+    internal var ownerAuthenticated: Boolean = false
+        private set
+
     /** File encryption key, null if authentication failed. */
     private val fileKey: ByteArray? = run {
         // V5/V6 first because their /U has a distinct structure.
@@ -76,7 +83,7 @@ public class StandardSecurityHandler(
         } else {
             // Try user password, then owner password, then empty (in that order).
             tryUserPassword(userPassword, fileIdFirst)
-                ?: tryOwnerPassword(ownerPassword, fileIdFirst)
+                ?: tryOwnerPassword(ownerPassword, fileIdFirst)?.also { ownerAuthenticated = true }
                 ?: tryUserPassword(byteArrayOf(), fileIdFirst)
         }
     }
@@ -288,6 +295,7 @@ public class StandardSecurityHandler(
             if (ownerValidate.contentEquals(o.copyOfRange(0, 32))) {
                 if (oe.size >= 32) {
                     val intermediate = hash2B(pw, ownerKeySalt, udata = u48)
+                    ownerAuthenticated = true
                     return Aes.decryptCbc(intermediate, byteArrayOf(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0) + oe, removePadding = false)
                 }
             }

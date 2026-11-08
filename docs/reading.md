@@ -36,7 +36,7 @@ if (!permissions.canCopyContents) println("The author asks you not to copy the t
 if (!permissions.canPrintHighResolution) println("Print at low resolution only")
 ```
 
-`PdfPermissions` has `canPrint`, `canPrintHighResolution`, `canModifyContents`, `canCopyContents`, `canModifyAnnotations`, `canFillForms`, `canExtractForAccessibility` and `canAssembleDocument` (which covers inserting, deleting and rotating pages). An unencrypted document allows everything.
+`PdfPermissions` has `canPrint`, `canPrintHighResolution`, `canModifyContents`, `canCopyContents`, `canModifyAnnotations`, `canFillForms`, `canExtractForAccessibility` and `canAssembleDocument` (which covers inserting, deleting and rotating pages). An unencrypted document allows everything, and so does a document opened with its owner password, which gives full access (ISO 32000-1, 7.6.3.1). The user password, or none, gives what the document permits.
 
 ## Pages
 

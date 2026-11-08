@@ -138,13 +138,37 @@ class EncryptedWriteTest {
         assertContains(e.message ?: "", "RC4")
     }
 
+    @Test
+    fun the_owner_password_opens_everything_and_the_user_password_what_p_permits() {
+        // ISO 32000-1, 7.6.3.1: the owner has full access whatever /P says (#998).
+        val restricted = PdfPermissions(
+            canPrint = true, canModifyContents = false, canCopyContents = false, canModifyAnnotations = false,
+            canFillForms = false, canExtractForAccessibility = true, canAssembleDocument = false,
+            canPrintHighResolution = true, rawFlags = -1,
+        )
+        val aes = PdfBuilder().encrypt("user", "owner", restricted, random = Random(7))
+            .page { text(StandardFont.Helvetica, 12.0, 72.0, 700.0, "Text") }
+            .build()
+        val asUser = PdfDocument.open(aes, password = "user".encodeToByteArray()).permissions
+        assertFalse(asUser.canModifyContents)
+        assertFalse(asUser.canAssembleDocument)
+        val asOwner = PdfDocument.open(aes, password = "owner".encodeToByteArray()).permissions
+        assertEquals(PdfPermissions.allowAll.copy(rawFlags = asUser.rawFlags), asOwner)
+        // The same for the RC4 handler of revision 2, whose user password is empty here.
+        val rc4 = buildRc4Pdf(ownerPassword = "own", p = -64)
+        assertFalse(PdfDocument.open(rc4).permissions.canModifyContents, "no password opens as the user")
+        assertTrue(PdfDocument.open(rc4, password = "own".encodeToByteArray()).permissions.canModifyContents)
+    }
+
     /* ─── Minimal V1/R2 RC4 fixture (empty password) ─────────────────────── */
 
-    private fun buildRc4Pdf(): ByteArray {
+    /** [ownerPassword] of ASCII; the user password is empty. [p] is the /P value. */
+    private fun buildRc4Pdf(ownerPassword: String = "", p: Int = -1): ByteArray {
         val padded = ByteArray(32).also { PAD.copyInto(it, 0) }
-        val oEntry = Rc4.process(Md5.hash(padded).copyOf(5), padded)
+        val owner = ownerPassword.encodeToByteArray().let { pw -> ByteArray(32) { if (it < pw.size) pw[it] else PAD[it - pw.size] } }
+        val oEntry = Rc4.process(Md5.hash(owner).copyOf(5), padded)
         val fileId = ByteArray(16) { it.toByte() }
-        val pBytes = byteArrayOf(-1, -1, -1, -1)
+        val pBytes = byteArrayOf(p.toByte(), (p shr 8).toByte(), (p shr 16).toByte(), (p shr 24).toByte())
         val fileKey = Md5.hash(padded + oEntry + pBytes + fileId).copyOf(5)
         val uEntry = Rc4.process(fileKey, PAD)
 
@@ -165,7 +189,7 @@ class EncryptedWriteTest {
         buf.append(ciphertext)
         write("\nendstream\nendobj\n")
         offsets.add(buf.size())
-        write("5 0 obj\n<< /Filter /Standard /V 1 /R 2 /Length 40 /O <${hex(oEntry)}> /U <${hex(uEntry)}> /P -1 >>\nendobj\n")
+        write("5 0 obj\n<< /Filter /Standard /V 1 /R 2 /Length 40 /O <${hex(oEntry)}> /U <${hex(uEntry)}> /P $p >>\nendobj\n")
         val xref = buf.size()
         write("xref\n0 6\n0000000000 65535 f \n")
         for (off in offsets) write("${off.toString().padStart(10, '0')} 00000 n \n")
