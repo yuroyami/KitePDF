@@ -189,6 +189,9 @@ public class SvgImage private constructor(
         val strokeRef: String? = null,
         val fillOpacity: Double = 1.0,
         val strokeOpacity: Double = 1.0,
+        /** The alpha of the fill and stroke colours themselves, as `rgba()` or `#rrggbbaa` give it (#723). */
+        val fillAlpha: Double = 1.0,
+        val strokeAlpha: Double = 1.0,
         val fontSize: Double = 16.0,
         val fontSpec: FontSpec = FontSpec.SansSerif,
         val textAnchor: String? = null,
@@ -594,7 +597,7 @@ public class SvgImage private constructor(
                 run.glyphs, p.fontSize, unitsPerEm = 1000, hasOutlines = false,
                 fontSpec = p.fontSpec, textToDevice = compose(ctm, toUser), color = color, alpha = alpha,
             )
-            if (plainFill) glyphs(p.fill!!, p.opacity * p.fillOpacity)
+            if (plainFill) glyphs(p.fill!!, p.opacity * p.fillOpacity * p.fillAlpha)
             if (p.fillRef != null || stroked) {
                 // A paint server fill and a stroke need the outline of the text, which the host face gives.
                 val outline = runOutline(run, canvas)
@@ -604,7 +607,7 @@ public class SvgImage private constructor(
                         if (plainFill) p.copy(fill = null, fillRef = null) else p, canvas,
                     )
                     // With no outline, the text paints filled, as a stroked PDF run does.
-                    stroked -> glyphs(p.stroke ?: p.current, p.opacity * p.strokeOpacity)
+                    stroked -> glyphs(p.stroke ?: p.current, p.opacity * p.strokeOpacity * p.strokeAlpha)
                     else -> glyphs(RgbColor.BLACK, p.opacity * p.fillOpacity)
                 }
             }
@@ -788,12 +791,12 @@ public class SvgImage private constructor(
             val gradient = paint.fillRef?.let { gradientFor(it, path) }
             val pattern = if (gradient == null) paint.fillRef?.let { patternFor(it, path, paint) } else null
             if (gradient != null) {
-                paintGradient(gradient.first, gradient.second, path, ctm, paint.opacity * paint.fillOpacity, canvas)
+                paintGradient(gradient.first, gradient.second, path, ctm, paint.opacity * paint.fillOpacity * paint.fillAlpha, canvas)
             } else if (pattern != null) {
-                paintPattern(pattern, path, paint.evenOdd, ctm, paint.opacity * paint.fillOpacity, paint, canvas, load, depth, stop)
+                paintPattern(pattern, path, paint.evenOdd, ctm, paint.opacity * paint.fillOpacity * paint.fillAlpha, paint, canvas, load, depth, stop)
             } else {
                 paint.fill?.let {
-                    canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity * paint.fillOpacity, KiteBlendMode.Normal)
+                    canvas.fillPath(path, ctm, it, paint.evenOdd, paint.opacity * paint.fillOpacity * paint.fillAlpha, KiteBlendMode.Normal)
                 }
             }
         }
@@ -813,16 +816,16 @@ public class SvgImage private constructor(
             )
             if (outline.isEmpty()) return
             if (strokeGradient != null) {
-                paintGradient(strokeGradient.first, strokeGradient.second, outline, ctm, paint.opacity * paint.strokeOpacity, canvas)
+                paintGradient(strokeGradient.first, strokeGradient.second, outline, ctm, paint.opacity * paint.strokeOpacity * paint.strokeAlpha, canvas)
             } else if (strokePattern != null) {
-                paintPattern(strokePattern, outline, false, ctm, paint.opacity * paint.strokeOpacity, paint, canvas, load, depth, stop)
+                paintPattern(strokePattern, outline, false, ctm, paint.opacity * paint.strokeOpacity * paint.strokeAlpha, paint, canvas, load, depth, stop)
             }
             return
         }
         val sc = paint.strokeRef?.let { strokeColorOf(it) } ?: paint.stroke ?: if (forceStroke) RgbColor.BLACK else null
         sc?.let {
             canvas.strokePath(
-                path, ctm, it, paint.strokeW, paint.opacity * paint.strokeOpacity, KiteBlendMode.Normal,
+                path, ctm, it, paint.strokeW, paint.opacity * paint.strokeOpacity * paint.strokeAlpha, KiteBlendMode.Normal,
                 dashArray = paint.dash, dashPhase = paint.dashOffset,
                 lineCap = paint.lineCap, lineJoin = paint.lineJoin, miterLimit = paint.miterLimit,
             )
@@ -1177,7 +1180,7 @@ public class SvgImage private constructor(
         fun attr(name: String): String? = (e.attrs[name] ?: e.attrs[name.lowercase()])?.trim()
         fun number(name: String, fallback: Double): Double = attr(name)?.toDoubleOrNull()?.takeIf { it.isFinite() } ?: fallback
         fun pair(name: String, fallback: Double): DoubleArray {
-            val v = attr(name)?.let { numbers(it) } ?: DoubleArray(0)
+            val v = attr(name)?.let { finiteNumbers(it) } ?: DoubleArray(0)
             val first = v.getOrNull(0) ?: fallback
             return doubleArrayOf(first, v.getOrNull(1) ?: first)
         }
@@ -1204,7 +1207,7 @@ public class SvgImage private constructor(
                 doubleArrayOf(number("k1", 0.0), number("k2", 0.0), number("k3", 0.0), number("k4", 0.0)),
             )
             "fecolormatrix" -> {
-                val values = attr("values")?.let { numbers(it) }
+                val values = attr("values")?.let { finiteNumbers(it) }
                 FilterPrimitive.ColorMatrix(
                     when (attr("type")?.lowercase() ?: "matrix") {
                         "saturate" -> FilterContext.saturate(values?.getOrNull(0) ?: 1.0)
@@ -1222,7 +1225,7 @@ public class SvgImage private constructor(
                     fun cattr(name: String) = (child.attrs[name] ?: child.attrs[name.lowercase()])?.trim()
                     fun cnum(name: String, fallback: Double) = cattr(name)?.toDoubleOrNull()?.takeIf { it.isFinite() } ?: fallback
                     functions[channel] = FilterContext.transfer(
-                        cattr("type")?.lowercase() ?: "identity", cattr("tableValues")?.let { numbers(it) } ?: DoubleArray(0),
+                        cattr("type")?.lowercase() ?: "identity", cattr("tableValues")?.let { finiteNumbers(it) } ?: DoubleArray(0),
                         cnum("slope", 1.0), cnum("intercept", 0.0), cnum("amplitude", 1.0), cnum("exponent", 1.0), cnum("offset", 0.0),
                     )
                 }
@@ -1254,7 +1257,7 @@ public class SvgImage private constructor(
                 val ox = order[0]
                 val oy = order[1]
                 // A kernel of the wrong length is an error, and so is one past MAX_KERNEL: either passes its input through.
-                val kernel = attr("kernelMatrix")?.let { numbers(it) }?.takeIf { ox > 0 && oy > 0 && it.size == ox * oy && it.size <= MAX_KERNEL }
+                val kernel = attr("kernelMatrix")?.let { finiteNumbers(it) }?.takeIf { ox > 0 && oy > 0 && it.size == ox * oy && it.size <= MAX_KERNEL }
                 val sum = kernel?.sum() ?: 0.0
                 val divisor = number("divisor", if (sum == 0.0) 1.0 else sum).takeIf { it != 0.0 } ?: 1.0
                 val tx = attr("targetX")?.toIntOrNull()?.takeIf { it in 0 until ox } ?: (ox / 2)
@@ -1453,8 +1456,8 @@ public class SvgImage private constructor(
         }
         fun flat(color: RgbColor?, opacity: Double): FloatArray? =
             color?.let { floatArrayOf(it.r.toFloat(), it.g.toFloat(), it.b.toFloat(), (content.opacity * opacity).toFloat().coerceIn(0f, 1f)) }
-        val fill = if (content.fillRef == null) flat(content.fill, content.fillOpacity) else null
-        val stroke = if (content.strokeRef == null) flat(content.stroke, content.strokeOpacity) else null
+        val fill = if (content.fillRef == null) flat(content.fill, content.fillOpacity * content.fillAlpha) else null
+        val stroke = if (content.strokeRef == null) flat(content.stroke, content.strokeOpacity * content.strokeAlpha) else null
         val images = { p: FilterPrimitive.Image, box: DoubleArray ->
             feImage(scope, p, box, ctm, content, canvas, load, depth, stop)?.let { if (shrink > 1.0) FilterImage.of(it, w, h) else FilterImage.of(it) }
         }
@@ -1622,6 +1625,8 @@ public class SvgImage private constructor(
             strokeRef = if (strokeRaw != null) urlRef(strokeRaw) else p.strokeRef,
             fillOpacity = declaration("fill-opacity")?.toDoubleOrNull() ?: p.fillOpacity,
             strokeOpacity = declaration("stroke-opacity")?.toDoubleOrNull() ?: p.strokeOpacity,
+            fillAlpha = paintAlpha(fillRaw, p.fillAlpha),
+            strokeAlpha = paintAlpha(strokeRaw, p.strokeAlpha),
             fontSize = fontSize,
             fontSpec = fontSpecOf(
                 declaration("font-family"), declaration("font-weight"),
@@ -1674,9 +1679,21 @@ public class SvgImage private constructor(
     private fun paintValue(raw: String?, inherited: RgbColor?, current: RgbColor): RgbColor? = when {
         raw == null -> inherited
         raw == "none" -> null
+        // CSS Color 4, 6.3: transparent black, which paints nothing, not the inherited paint (#723).
+        raw.trim().equals("transparent", ignoreCase = true) -> null
         raw == "currentColor" -> current
         raw.startsWith("url(") -> inherited // gradient/pattern refs: fall back to the inherited solid
         else -> CssValues.color(raw) ?: inherited
+    }
+
+    /**
+     * The alpha of the colour [raw] names, which multiplies with `fill-opacity` or `stroke-opacity`
+     * (SVG 2, 13.2; CSS Color 4, 4.2 and 5.2; #723). 1 for a paint server or `currentColor`.
+     */
+    private fun paintAlpha(raw: String?, inherited: Double): Double = when {
+        raw == null -> inherited
+        raw == "none" || raw == "currentColor" || raw.startsWith("url(") -> 1.0
+        else -> CssValues.color(raw)?.let { CssValues.alpha(raw)?.coerceIn(0.0, 1.0) ?: 1.0 } ?: inherited
     }
 
     // ---- shape builders (user coordinates) ----------------------------------
@@ -1937,16 +1954,44 @@ public class SvgImage private constructor(
             var i = 0
             val n = s.length
             while (i < n) {
-                val c = s[i]
-                if (c.isDigit() || c == '-' || c == '+' || c == '.') {
-                    val start = i
-                    if (s[i] == '-' || s[i] == '+') i++
-                    while (i < n && (s[i].isDigit() || s[i] == '.')) i++
-                    if (i < n && (s[i] == 'e' || s[i] == 'E')) { i++; if (i < n && (s[i] == '-' || s[i] == '+')) i++; while (i < n && s[i].isDigit()) i++ }
-                    s.substring(start, i).toDoubleOrNull()?.let { out.add(it) }
+                val end = numberEnd(s, i)
+                if (end > i) {
+                    s.substring(i, end).toDoubleOrNull()?.let { out.add(it) }
+                    i = end
                 } else i++
             }
             return out.toDoubleArray()
+        }
+
+        /** [numbers] when every one is finite, else null: a list attribute with `1e400` in it is in error (#737). */
+        private fun finiteNumbers(s: String): DoubleArray? = numbers(s).takeIf { a -> a.all { it.isFinite() } }
+
+        /**
+         * The end of the number that starts at [from] in [s], or [from] when none does. SVG 2, 9.3.9:
+         * a number has one dot at most, so `.5.5` is two numbers, and an exponent needs a digit (#696).
+         */
+        internal fun numberEnd(s: String, from: Int): Int {
+            var i = from
+            val n = s.length
+            if (i < n && (s[i] == '-' || s[i] == '+')) i++
+            val intStart = i
+            while (i < n && s[i].isDigit()) i++
+            var digits = i > intStart
+            if (i < n && s[i] == '.') {
+                val fracStart = i + 1
+                var j = fracStart
+                while (j < n && s[j].isDigit()) j++
+                if (j > fracStart || digits) { i = j; digits = digits || j > fracStart }
+            }
+            if (!digits) return from
+            if (i < n && (s[i] == 'e' || s[i] == 'E')) {
+                var j = i + 1
+                if (j < n && (s[j] == '-' || s[j] == '+')) j++
+                val expStart = j
+                while (j < n && s[j].isDigit()) j++
+                if (j > expStart) i = j
+            }
+            return i
         }
 
         // Compose A ∘ B (apply B first, then A) in PDF affine convention.
@@ -2024,6 +2069,7 @@ public class SvgImage private constructor(
             var pqx = 0.0; var pqy = 0.0   // last quad control (for T)
             var prev = ' '
             var open = false
+            try {
             while (t.hasCmd()) {
                 val cmd = t.cmd()
                 val rel = cmd.isLowerCase()
@@ -2065,14 +2111,19 @@ public class SvgImage private constructor(
                         b.quadTo(x1, y1, x, y); pqx = x1; pqy = y1; cx = x; cy = y; prev = cmd
                     }
                     'A' -> while (t.hasNum()) {
-                        val rx = t.num(); val ry = t.num(); val rot = t.num(); val large = t.num() != 0.0; val sweep = t.num() != 0.0
+                        val rx = t.num(); val ry = t.num(); val rot = t.num(); val large = t.flag(); val sweep = t.flag()
                         var x = t.num(); var y = t.num()
                         if (rel) { x += cx; y += cy }
                         arcTo(b, cx, cy, rx, ry, rot, large, sweep, x, y); cx = x; cy = y
                     }
                     'Z' -> { if (open) { b.close(); cx = sx; cy = sy; open = false } }
+                    // An unknown command is in error, and ends the path (SVG 2, 9.5.4).
+                    else -> throw PathEnd
                 }
                 prev = cmd
+            }
+            } catch (_: PathEnd) {
+                // The path draws up to the last command read without error.
             }
             return b.build()
         }
@@ -2082,6 +2133,8 @@ public class SvgImage private constructor(
             b: KitePath.Builder, x0: Double, y0: Double, rxIn: Double, ryIn: Double,
             rotDeg: Double, large: Boolean, sweep: Boolean, x: Double, y: Double,
         ) {
+            // SVG 1.1, F.6.2: an arc that ends where it starts is omitted (#701).
+            if (x0 == x && y0 == y) return
             var rx = abs(rxIn); var ry = abs(ryIn)
             if (rx == 0.0 || ry == 0.0) { b.lineTo(x, y); return }
             val phi = rotDeg * PI / 180.0
@@ -2145,14 +2198,27 @@ public class SvgImage private constructor(
             val c = s[i]
             return c.isDigit() || c == '-' || c == '+' || c == '.'
         }
+        /** The next number, or [PathEnd] when none can be read: the path ends there (SVG 2, 9.5.4; #696). */
         fun num(): Double {
             skipSep()
-            val start = i
-            if (i < s.length && (s[i] == '-' || s[i] == '+')) i++
-            while (i < s.length && (s[i].isDigit() || s[i] == '.')) i++
-            if (i < s.length && (s[i] == 'e' || s[i] == 'E')) { i++; if (i < s.length && (s[i] == '-' || s[i] == '+')) i++; while (i < s.length && s[i].isDigit()) i++ }
-            return s.substring(start, i).toDoubleOrNull() ?: 0.0
+            val end = numberEnd(s, i)
+            val v = if (end > i) s.substring(i, end).toDoubleOrNull() else null
+            if (v == null || !v.isFinite()) throw PathEnd
+            i = end
+            return v
         }
+
+        /** An arc flag: exactly one character, `0` or `1`, so `0110` is two flags and a number (SVG 2, 9.3.9). */
+        fun flag(): Boolean {
+            skipSep()
+            if (i >= s.length || (s[i] != '0' && s[i] != '1')) throw PathEnd
+            return s[i++] == '1'
+        }
+    }
+
+    /** Ends a path at the first command in error, which keeps what was read before it (SVG 2, 9.5.4). */
+    private object PathEnd : RuntimeException() {
+        private fun readResolve(): Any = PathEnd
     }
 
 }

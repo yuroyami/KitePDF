@@ -334,6 +334,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where both stayed as they were (#738).
 - A page that is removed around, reordered, inserted, copied or grafted keeps the `/CropBox` it inherited from
   the page tree, where it showed its whole media box (#685).
+- SVG path data reads arc flags without a separator and a number that starts with a dot after another, as SVGO
+  writes them, and a command in error ends the path there, as SVG 2 asks (#696).
+- An SVG arc that ends where it starts is left out, where it added a curve of NaN points that made Skia drop the
+  whole shape (#701).
+- An SVG `fill` or `stroke` colour with alpha, such as `rgba(255,0,0,0.5)` or `#ff000080`, paints with that
+  alpha, and `fill="transparent"` paints nothing instead of the inherited fill (#723).
+- An SVG filter list attribute with a number that is not finite, such as `1e400`, is in error and passes the
+  input through, where it made NaN pixels that failed the page (#737).
 
 ## [0.13.0] - 2026-10-09
 

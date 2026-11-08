@@ -137,9 +137,10 @@ internal class FilterImage(
         for (p in 0 until width * height) {
             val i = p * 4
             val a = d[i + 3].coerceIn(0f, 1f)
-            if (a <= 0f) continue
-            fun channel(c: Int) = (d[i + c] / a).coerceIn(0f, 1f).times(255f).roundToInt()
-            out.pixels[p] = ((a * 255f).roundToInt() shl 24) or (channel(0) shl 16) or (channel(1) shl 8) or channel(2)
+            // A NaN pixel, which a broken filter can make, is transparent and never throws (#737).
+            if (!(a > 0f)) continue
+            fun channel(c: Int) = (d[i + c] / a).let { if (it.isNaN()) 0f else it }.coerceIn(0f, 1f).times(255f).roundToInt()
+            out.pixels[p] = ((a.coerceAtMost(1f) * 255f).roundToInt() shl 24) or (channel(0) shl 16) or (channel(1) shl 8) or channel(2)
         }
         return out
     }
