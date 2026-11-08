@@ -38,13 +38,38 @@ public class KiteRasterCanvas(
         }
     }
 
-    /** Pixels being drawn, premultiplied ARGB, with the clip depth they started at. */
-    private class Layer(val pixels: IntArray, val clipBase: Int)
+    /**
+     * Pixels being drawn, premultiplied ARGB, with the clip depth they started at. A layer covers
+     * its own device box, [w] by [h] pixels from ([left], [top]), not the whole canvas, so a small
+     * group costs its own area (#842).
+     */
+    private class Layer(val pixels: IntArray, val clipBase: Int, val left: Int, val top: Int, val w: Int, val h: Int) {
+        val right: Int get() = left + w
+        val bottom: Int get() = top + h
+        fun index(x: Int, y: Int): Int = (y - top) * w + (x - left)
+        fun at(x: Int, y: Int): Int = if (x < left || x >= right || y < top || y >= bottom) 0 else pixels[index(x, y)]
+    }
 
-    /** One clip: the coverage of each pixel, combined with the clips under it in the same layer. */
-    private class Clip(val mask: FloatArray, val left: Int, val top: Int, val right: Int, val bottom: Int)
+    /**
+     * One clip: the coverage of each pixel, combined with the clips under it in the same layer,
+     * kept over the box of the clip path only, [stride] pixels wide from ([originLeft], [originTop]).
+     * [left], [top], [right] and [bottom] bound the pixels it lets through.
+     */
+    private class Clip(
+        val mask: FloatArray, val originLeft: Int, val originTop: Int, val stride: Int,
+        val left: Int, val top: Int, val right: Int, val bottom: Int,
+    ) {
+        fun at(x: Int, y: Int): Float =
+            if (x < left || x >= right || y < top || y >= bottom) 0f else mask[(y - originTop) * stride + (x - originLeft)]
+    }
 
-    private val layers = ArrayList<Layer>().apply { add(Layer(IntArray(width * height), 0)) }
+    /** Mask values over a box, as [Clip] keeps them. */
+    private class Mask(val values: FloatArray, val left: Int, val top: Int, val w: Int, val h: Int) {
+        fun at(x: Int, y: Int): Float =
+            if (x < left || x >= left + w || y < top || y >= top + h) 0f else values[(y - top) * w + (x - left)]
+    }
+
+    private val layers = ArrayList<Layer>().apply { add(Layer(IntArray(width * height), 0, 0, 0, width, height)) }
     private val clips = ArrayList<Clip?>()
     private val scan = RasterScan(width, height)
     private val images = KiteBitmapCache<IntArray>()
@@ -147,19 +172,67 @@ public class KiteRasterCanvas(
 
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         val under = clip
-        val mask = FloatArray(width * height)
+        // The mask covers the clip path's device box, cut to the clip under it, not the canvas (#842).
+        val box = intersect(deviceBox(path, ctm), under?.let { intArrayOf(it.left, it.top, it.right, it.bottom) } ?: intArrayOf(0, 0, width, height))
+        val stride = box[2] - box[0]
+        val mask = FloatArray(stride * (box[3] - box[1]))
         var left = width; var top = height; var right = 0; var bottom = 0
         scan.add(path, ctm)
-        scan.fill(evenOdd, under?.left ?: 0, under?.top ?: 0, under?.right ?: width, under?.bottom ?: height) { y, from, to, coverage ->
-            val row = y * width
+        scan.fill(evenOdd, box[0], box[1], box[2], box[3]) { y, from, to, coverage ->
             for (x in from..to) {
-                val c = coverage[x] * (under?.mask?.get(row + x) ?: 1f)
+                val c = coverage[x] * (under?.at(x, y) ?: 1f)
                 if (c <= 0f) continue
-                mask[row + x] = c
+                mask[(y - box[1]) * stride + (x - box[0])] = c
                 left = min(left, x); right = max(right, x + 1); top = min(top, y); bottom = max(bottom, y + 1)
             }
         }
-        clips.add(if (left < right) Clip(mask, left, top, right, bottom) else Clip(mask, 0, 0, 0, 0))
+        clips.add(if (left < right) Clip(mask, box[0], box[1], stride, left, top, right, bottom) else Clip(FloatArray(0), 0, 0, 0, 0, 0, 0, 0))
+    }
+
+    /** The device pixels that the control points of [path] under [ctm] cover, as left, top, right and bottom, inside the canvas. */
+    private fun deviceBox(path: KitePath, ctm: KiteMatrix): IntArray {
+        var l = Double.POSITIVE_INFINITY; var t = Double.POSITIVE_INFINITY; var r = Double.NEGATIVE_INFINITY; var b = Double.NEGATIVE_INFINITY
+        fun add(x: Double, y: Double) {
+            val dx = ctm.transformX(x, y); val dy = ctm.transformY(x, y)
+            if (dx < l) l = dx; if (dx > r) r = dx; if (dy < t) t = dy; if (dy > b) b = dy
+        }
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> add(seg.x, seg.y)
+            is KitePath.Segment.LineTo -> add(seg.x, seg.y)
+            is KitePath.Segment.CurveTo -> { add(seg.x1, seg.y1); add(seg.x2, seg.y2); add(seg.x3, seg.y3) }
+            is KitePath.Segment.QuadTo -> { add(seg.x1, seg.y1); add(seg.x2, seg.y2) }
+            KitePath.Segment.Close -> {}
+        }
+        return boxOf(l, t, r, b)
+    }
+
+    /** [l], [t], [r] and [b] rounded out to whole pixels inside the canvas; empty when not finite. */
+    private fun boxOf(l: Double, t: Double, r: Double, b: Double): IntArray {
+        if (!(l.isFinite() && t.isFinite() && r.isFinite() && b.isFinite()) || r < l || b < t) return intArrayOf(0, 0, 0, 0)
+        return intArrayOf(
+            floor(l).coerceIn(0.0, width.toDouble()).toInt(), floor(t).coerceIn(0.0, height.toDouble()).toInt(),
+            ceil(r).coerceIn(0.0, width.toDouble()).toInt(), ceil(b).coerceIn(0.0, height.toDouble()).toInt(),
+        )
+    }
+
+    /** The intersection of two boxes of left, top, right and bottom, empty as 0, 0, 0, 0. */
+    private fun intersect(a: IntArray, b: IntArray): IntArray {
+        val l = max(a[0], b[0]); val t = max(a[1], b[1]); val r = min(a[2], b[2]); val bt = min(a[3], b[3])
+        return if (l >= r || t >= bt) intArrayOf(0, 0, 0, 0) else intArrayOf(l, t, r, bt)
+    }
+
+    /** Where paints into the current layer can land: the layer's box, cut to its clip. */
+    private fun paintBox(): IntArray {
+        val layer = target
+        val c = clip
+        val box = intArrayOf(layer.left, layer.top, layer.right, layer.bottom)
+        return if (c == null) box else intersect(box, intArrayOf(c.left, c.top, c.right, c.bottom))
+    }
+
+    /** A new transparent layer over [box], with the clip depth now. */
+    private fun layerOver(box: IntArray, fill: Int = 0): Layer {
+        val w = box[2] - box[0]; val h = box[3] - box[1]
+        return Layer(IntArray(w * h).also { if (fill != 0) it.fill(fill) }, clips.size, box[0], box[1], w, h)
     }
 
     override fun popClip() {
@@ -190,7 +263,10 @@ public class KiteRasterCanvas(
 
     override fun beginTransparencyGroup(bbox: KiteRectangle, ctm: KiteMatrix, isolated: Boolean, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode) {
         groups.add(GroupState(alpha.toFloat(), blendMode))
-        layers.add(Layer(IntArray(width * height), clips.size))
+        // The group's layer covers its box under the CTM, cut to where it can composite (#842).
+        val b = bbox.normalized()
+        val box = intersect(deviceBox(KitePath.Builder().apply { rectangle(b.left, b.bottom, b.right - b.left, b.top - b.bottom) }.build(), ctm), paintBox())
+        layers.add(layerOver(box))
     }
 
     private class GroupState(val alpha: Float, val blendMode: KiteBlendMode)
@@ -199,7 +275,7 @@ public class KiteRasterCanvas(
     override fun endTransparencyGroup() {
         val group = groups.removeLastOrNull() ?: return
         val layer = popLayer() ?: return
-        composite(layer.pixels, null, group.alpha, group.blendMode)
+        composite(layer, null, group.alpha, group.blendMode)
     }
 
     override fun applySoftMask(kind: SoftMask.Kind, maskBBox: KiteRectangle, maskCtm: KiteMatrix, render: () -> Unit, renderMask: (KiteCanvas) -> Unit): Unit =
@@ -209,7 +285,10 @@ public class KiteRasterCanvas(
         kind: SoftMask.Kind, maskBBox: KiteRectangle, maskCtm: KiteMatrix, transfer: KiteMaskTransfer?,
         render: () -> Unit, renderMask: (KiteCanvas) -> Unit,
     ) {
-        layers.add(Layer(IntArray(width * height), clips.size))
+        // The content and the mask cover where the content can composite, not the canvas (#842). A
+        // luminosity mask's backdrop can show outside its box, so the mask's box does not bound them.
+        val box = paintBox()
+        layers.add(layerOver(box))
         failSafe(layers.size - 1) { render() }
         val content = popLayer() ?: return
         // The renderer hands the same callback while the same mask applies, so a mask rendered under
@@ -218,19 +297,18 @@ public class KiteRasterCanvas(
         val mask = lastMask?.takeIf { it.first == key }?.second ?: run {
             val luminosity = kind.readsColor
             // A luminosity mask composites its group over opaque black (ISO 32000-1, 11.6.5.2).
-            layers.add(Layer(IntArray(width * height) { if (luminosity) BLACK else 0 }, clips.size))
+            layers.add(layerOver(box, if (luminosity) BLACK else 0))
             failSafe(layers.size - 1) { renderMask(this) }
             val maskLayer = popLayer() ?: return
-            val values = FloatArray(width * height)
+            val values = FloatArray(maskLayer.pixels.size)
             for (i in values.indices) {
                 val p = maskLayer.pixels[i]
                 val level = if (luminosity) kind.levelOf(p ushr 16 and 0xFF, p ushr 8 and 0xFF, p and 0xFF) else p ushr 24
                 values[i] = (transfer?.get(level) ?: level) / 255f
             }
-            lastMask = key to values
-            values
+            Mask(values, maskLayer.left, maskLayer.top, maskLayer.w, maskLayer.h).also { lastMask = key to it }
         }
-        composite(content.pixels, mask, 1f, KiteBlendMode.Normal)
+        composite(content, mask, 1f, KiteBlendMode.Normal)
     }
 
     /**
@@ -248,7 +326,7 @@ public class KiteRasterCanvas(
     }
 
     /** The last mask this canvas rendered, with what it depends on. */
-    private var lastMask: Pair<MaskKey, FloatArray>? = null
+    private var lastMask: Pair<MaskKey, Mask>? = null
 
     override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
         val corners = listOf(region.left to region.bottom, region.right to region.bottom, region.left to region.top, region.right to region.top)
@@ -262,33 +340,26 @@ public class KiteRasterCanvas(
         if (left >= right || top >= bottom) return true
         val w = right - left
         val h = bottom - top
-        val canvas = this
         return step.run(object : KiteRasterScope {
             override val width: Int = w
             override val height: Int = h
             override val toPixels: KiteMatrix = KiteMatrix.translation(-left.toDouble(), -top.toDouble()).concat(ctm)
 
-            override fun backdrop(): KiteRaster = crop(target.pixels, left, top, w, h)
+            override fun backdrop(): KiteRaster = crop(target, left, top, w, h)
 
+            // The step's layers cover its own box, not the canvas (#842).
             override fun render(initial: KiteRaster?, content: () -> Unit): KiteRaster {
-                val pixels = IntArray(canvas.width * canvas.height)
-                if (initial != null) {
-                    for (y in 0 until h) for (x in 0 until w) {
-                        pixels[(top + y) * canvas.width + left + x] = RasterBlend.premultiply(initial.pixels[y * w + x])
-                    }
-                }
-                layers.add(Layer(pixels, clips.size))
+                val pixels = IntArray(w * h)
+                if (initial != null) for (i in pixels.indices) pixels[i] = RasterBlend.premultiply(initial.pixels[i])
+                layers.add(Layer(pixels, clips.size, left, top, w, h))
                 failSafe(layers.size - 1) { content() }
                 val layer = popLayer() ?: return KiteRaster(w, h)
-                return crop(layer.pixels, left, top, w, h)
+                return crop(layer, left, top, w, h)
             }
 
             override fun draw(raster: KiteRaster, alpha: Double, blendMode: KiteBlendMode) {
-                val pixels = IntArray(canvas.width * canvas.height)
-                for (y in 0 until h) for (x in 0 until w) {
-                    pixels[(top + y) * canvas.width + left + x] = RasterBlend.premultiply(raster.pixels[y * w + x])
-                }
-                composite(pixels, null, alpha.toFloat(), blendMode)
+                val pixels = IntArray(w * h) { RasterBlend.premultiply(raster.pixels[it]) }
+                composite(Layer(pixels, clips.size, left, top, w, h), null, alpha.toFloat(), blendMode)
             }
         })
     }
@@ -317,22 +388,19 @@ public class KiteRasterCanvas(
         return layer
     }
 
-    /** Draws premultiplied [pixels], gated by [mask], onto the current layer through its clip. */
-    private fun composite(pixels: IntArray, mask: FloatArray?, alpha: Float, mode: KiteBlendMode) {
+    /** Draws the premultiplied pixels of [src], gated by [mask], onto the current layer through its clip, over [src]'s box only. */
+    private fun composite(src: Layer, mask: Mask?, alpha: Float, mode: KiteBlendMode) {
         val c = clip
-        val dst = target.pixels
-        val x0 = c?.left ?: 0
-        val x1 = c?.right ?: width
-        val y0 = c?.top ?: 0
-        val y1 = c?.bottom ?: height
-        for (y in y0 until y1) {
-            val row = y * width
-            for (x in x0 until x1) {
-                val i = row + x
-                val p = pixels[i]
+        val layer = target
+        val dst = layer.pixels
+        val box = intersect(paintBox(), intArrayOf(src.left, src.top, src.right, src.bottom))
+        for (y in box[1] until box[3]) {
+            for (x in box[0] until box[2]) {
+                val p = src.pixels[src.index(x, y)]
                 if (p == 0) continue
-                val k = alpha * (mask?.get(i) ?: 1f) * (c?.mask?.get(i) ?: 1f)
+                val k = alpha * (mask?.at(x, y) ?: 1f) * (c?.at(x, y) ?: 1f)
                 if (k <= 0f) continue
+                val i = layer.index(x, y)
                 dst[i] = RasterBlend.over(
                     dst[i], (p ushr 16 and 255) / 255f * k, (p ushr 8 and 255) / 255f * k, (p and 255) / 255f * k,
                     (p ushr 24) / 255f * k, mode,
@@ -341,24 +409,26 @@ public class KiteRasterCanvas(
         }
     }
 
-    private fun crop(pixels: IntArray, left: Int, top: Int, w: Int, h: Int): KiteRaster {
+    /** The pixels of [layer] in a box, as straight ARGB; transparent outside the layer's own box. */
+    private fun crop(layer: Layer, left: Int, top: Int, w: Int, h: Int): KiteRaster {
         val out = IntArray(w * h)
-        for (y in 0 until h) for (x in 0 until w) out[y * w + x] = RasterBlend.unpremultiply(pixels[(top + y) * width + left + x])
+        for (y in 0 until h) for (x in 0 until w) out[y * w + x] = RasterBlend.unpremultiply(layer.at(left + x, top + y))
         return KiteRaster(w, h, out)
     }
 
     /** Fills the edges added to the scan with [source], through the clip. */
     private fun paint(evenOdd: Boolean, source: Source, mode: KiteBlendMode) {
         val c = clip
-        val dst = target.pixels
+        val layer = target
+        val dst = layer.pixels
         val color = FloatArray(4)
-        scan.fill(evenOdd, c?.left ?: 0, c?.top ?: 0, c?.right ?: width, c?.bottom ?: height) { y, from, to, coverage ->
-            val row = y * width
+        val box = paintBox()
+        scan.fill(evenOdd, box[0], box[1], box[2], box[3]) { y, from, to, coverage ->
             for (x in from..to) {
-                val k = coverage[x] * (c?.mask?.get(row + x) ?: 1f)
+                val k = coverage[x] * (c?.at(x, y) ?: 1f)
                 if (k <= 0f) continue
                 if (!source.at(x + 0.5, y + 0.5, color)) continue
-                val i = row + x
+                val i = layer.index(x, y)
                 dst[i] = RasterBlend.over(dst[i], color[0] * k, color[1] * k, color[2] * k, color[3] * k, mode)
             }
         }
