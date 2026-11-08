@@ -14,7 +14,7 @@ public actual object ImageDecoder {
         null
     }
 
-    public actual fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap? = try {
+    public actual fun decodeRaw(rgba: ByteArray, width: Int, height: Int): ImageBitmap? = if (!rawPixelsFit(rgba, width, height)) null else try {
         // A band of rows at a time, so the bitmap is the only other copy of the image's size (#381).
         // setPixels takes straight ARGB and premultiplies it, as createBitmap from colours does.
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)

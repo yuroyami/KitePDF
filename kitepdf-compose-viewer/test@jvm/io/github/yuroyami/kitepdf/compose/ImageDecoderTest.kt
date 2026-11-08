@@ -36,4 +36,14 @@ class ImageDecoderTest {
         assertTrue(bitmap.isImmutable, "the bitmap cannot change under a cache that keeps it")
         assertEquals(rgba.toList(), bitmap.readPixels()?.toList(), "the pixels, byte for byte")
     }
+
+    @Test
+    fun a_short_or_empty_pixel_array_gives_no_bitmap() {
+        // A short array read past its end in Skia: other memory of the process, or a crash (#892).
+        kotlin.test.assertNull(ImageDecoder.decodeRaw(ByteArray(4), 1024, 1024))
+        kotlin.test.assertNull(ImageDecoder.decodeRaw(ByteArray(1023), 16, 16))
+        kotlin.test.assertNull(ImageDecoder.decodeRaw(ByteArray(0), 0, 16))
+        kotlin.test.assertNull(ImageDecoder.decodeRaw(ByteArray(64), -4, -4))
+        kotlin.test.assertNotNull(ImageDecoder.decodeRaw(ByteArray(1024), 16, 16))
+    }
 }
