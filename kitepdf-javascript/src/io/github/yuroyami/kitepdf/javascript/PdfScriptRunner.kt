@@ -251,13 +251,26 @@ public class PdfScriptRunner(
             recordFailure(KiteScriptException("the engine did not open: ${failure.message}", failure))
             return false
         }
+        // The setup of the Acrobat API is the library's own work, not the document's, so it runs
+        // outside the budgets. It ran under the clock of an event that had not started, and five
+        // seconds after the runner was made it was stopped, leaving an engine without the API (#869).
+        settingUp = true
+        try {
+            host.calculateNow = { runCalculations() }
+            host.bind(engine)
+            engine.evaluate(AcrobatApi.SOURCE, "acrobat-api")
+            engine.evaluate(AformApi.SOURCE, "af-helpers")
+        } catch (failure: KiteScriptException) {
+            // A setup that fails leaves no engine, so the next call tries again.
+            recordFailure(failure)
+            if (engineSource == null) runCatching { engine.close() }
+            return false
+        } finally {
+            settingUp = false
+        }
         val again = started
         started = true
         openEngine = engine
-        host.calculateNow = { runCalculations() }
-        host.bind(engine)
-        engine.evaluate(AcrobatApi.SOURCE, "acrobat-api")
-        engine.evaluate(AformApi.SOURCE, "af-helpers")
         // An engine that closed to make room for another runner's opens again here. The
         // document's own scripts define what its fields' scripts call, so they run again first.
         if (again && documentScriptsRan) runDocumentScripts()
@@ -788,9 +801,13 @@ public class PdfScriptRunner(
      * test that fixes the clock so its run is repeatable would otherwise see it move faster the
      * more instructions the engine ran.
      */
+    /** True while [ensureEngine] loads the Acrobat API, which no budget counts (#869). */
+    private var settingUp = false
+
     private fun deadlinePassed(): Boolean {
         // A runner that is closing stops the script it runs at the next check (#365).
         if (closed) return true
+        if (settingUp) return false
         if (policy.budgetMillis <= 0 && policy.documentBudgetMillis <= 0) return false
         val now = now()
         if (policy.budgetMillis > 0 && now - eventStartedAt > policy.budgetMillis) {

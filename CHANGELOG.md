@@ -423,6 +423,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `PdfScriptRunner` whose policy runs no script never opens a script engine, so a DENY runner stores form
   values where QuickJS cannot load or the event budget has passed, and an engine that fails to load with an
   `Error` is recorded as a failure instead of escaping (#894).
+- A PDF runner whose first script comes long after it was made runs it, as the setup of the Acrobat API no longer
+  counts against an event's budget; a setup that fails is recorded and leaves no half-made engine, so the next
+  call tries again (#869).
 
 ## [0.13.0] - 2026-10-09
 

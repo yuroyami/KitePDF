@@ -300,6 +300,20 @@ class FormScriptTest {
         }
     }
 
+    @Test
+    fun the_first_script_long_after_the_runner_was_made_runs(): TestResult = scriptTest {
+        // The API's setup ran under the clock of an event that had not started (#869).
+        var now = 0L
+        val doc = PdfDocument.open(invoicePdf())
+        PdfScriptRunner(doc, clock = { now }).use { runner ->
+            now = 60_000
+            runner.setFieldValue("a", "2")
+            runner.setFieldValue("b", "3")
+            assertEquals("5", runner.formState.value("total"))
+            assertEquals(emptyList(), runner.failures)
+        }
+    }
+
     /** What a script asks for outside the document reaches the host, and nothing else happens. */
     @Test
     fun a_request_to_leave_the_document_reaches_the_host(): TestResult = scriptTest {
