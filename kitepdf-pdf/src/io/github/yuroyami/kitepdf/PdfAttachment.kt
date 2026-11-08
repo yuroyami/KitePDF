@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.parser.NameTreeWalker
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -87,8 +88,15 @@ public data class PdfAttachment(
                 description = description,
                 mimeType = mimeType,
                 size = size,
+                // Empty on failure, as the KDoc promises: an embedded file that does not decode threw
+                // from every read, and stopped an app that read the attachments in turn (#802).
                 bytesProvider = {
-                    if (stream == null) ByteArray(0) else FilterChain.decode(stream)
+                    if (stream == null) ByteArray(0) else try {
+                        FilterChain.decode(stream)
+                    } catch (e: Exception) {
+                        kiteWarn { "attachment: $filename cannot be decoded: ${e.message}" }
+                        ByteArray(0)
+                    }
                 },
             )
         }

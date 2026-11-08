@@ -215,6 +215,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer split into an operator and the wrong operands (#809). The cross-reference `/Prev` chain is followed
   to its end, past the 32 sections at which a long-lived signed form lost its oldest objects silently (#810).
 
+- An `/Encrypt /Length` below 40 reads as bytes, as MuPDF reads it, and one still outside 40 to 128 bits is
+  a `PdfFormatException`; `/V 1` is always 40 bits. `/Length 5` threw `ArithmeticException` out of `open`,
+  and a length given in bytes broke the empty password (#800). A `/Metadata` stream that does not decode
+  reads as no XMP, so `metadata` falls back to `/Info`, where every read threw (#801). An attachment whose
+  stream does not decode is an empty array, as its KDoc says, where `bytes` threw (#802). Repair keeps only a
+  copy of an object that parses, so a later copy cut off by a partial download no longer replaces the
+  complete one (#811), and between a direct copy and a copy in an object stream it keeps the one later in
+  the file, the newer revision (#812).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

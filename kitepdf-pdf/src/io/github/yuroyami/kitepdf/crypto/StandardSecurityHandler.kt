@@ -27,8 +27,21 @@ public class StandardSecurityHandler(
     private val v: Int = encryptDict.getInt("V")?.toInt() ?: 1
     /** Revision number, exposed so the public permissions API can pick the right bit semantics. */
     public val r: Int = encryptDict.getInt("R")?.toInt() ?: 2
-    private val keyLengthBits: Int = encryptDict.getInt("Length")?.toInt()
-        ?: when (v) { 1 -> 40; 4 -> 128; 5 -> 256; else -> 40 }
+    private val keyLengthBits: Int = keyLength(v, encryptDict.getInt("Length"))
+
+    /**
+     * The key length in bits: 40 for /V 1, and for /V 2 and 3 the /Length, a multiple of 8 from 40 to
+     * 128 (ISO 32000-1, 7.6.1, Table 20). A /Length below 40 is read as bytes, the work-around MuPDF
+     * has for writers that give bytes, and one still out of range is a format error: /Length 5 made an
+     * empty key and threw ArithmeticException out of open, and 16 broke the empty password (#800).
+     */
+    private fun keyLength(v: Int, raw: Long?): Int {
+        val default = when (v) { 1 -> 40; 4 -> 128; 5 -> 256; else -> 40 }
+        if (v == 1 || v >= 5 || raw == null) return default
+        val bits = if (raw in 1..39) raw * 8 else raw
+        if (bits !in 40..128 || bits % 8 != 0L) throw PdfFormatException("/Encrypt /Length $raw is not a key length")
+        return bits.toInt()
+    }
     private val o: ByteArray = (encryptDict["O"] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes
         ?: throw PdfFormatException("/Encrypt missing /O")
     private val u: ByteArray = (encryptDict["U"] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes

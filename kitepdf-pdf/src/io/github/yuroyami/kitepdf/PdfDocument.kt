@@ -152,7 +152,14 @@ public class PdfDocument private constructor(
             is PdfStream -> raw
             else -> null
         } ?: return@lazy null
-        val bytes = io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
+        // The metadata stream is optional (ISO 32000-1, 14.3.2), so one that does not decode reads as
+        // no XMP, and metadata falls back to /Info; it threw from every read of metadata (#801).
+        val bytes = try {
+            io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream)
+        } catch (e: Exception) {
+            kiteWarn { "metadata: the /Metadata stream cannot be decoded: ${e.message}" }
+            return@lazy null
+        }
         // XMP packets are UTF-8. Skip a leading BOM if present.
         val start = if (bytes.size >= 3 &&
             bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()

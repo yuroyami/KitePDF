@@ -84,14 +84,16 @@ internal object PdfRepair {
             search = kw + OBJ.size
             val header = parseHeaderBackwards(bytes, kw) ?: continue
             val (num, gen, headerStart) = header
-            entries[num] = XrefEntry.InUse(num, gen, headerStart)
 
-            // Peek the object body to recover trailer fields and note object streams.
+            // Parse the object body to recover trailer fields and note object streams. Only a copy
+            // that parses is kept, as MuPDF's pdf_repair_xref keeps it: a later copy cut off by a
+            // partial download replaced the complete one before it, and the page went blank (#811).
             val r = ByteReader(bytes)
             val obj = runCatching {
                 r.seek(headerStart)
                 Parser(Lexer(r), endstreamAfter = endstreamAfter).readIndirectObject().value
             }.getOrNull() ?: continue
+            entries[num] = XrefEntry.InUse(num, gen, headerStart)
             // The scan resumes after a stream it parsed, as MuPDF's pdf_repair_xref does, so the
             // bytes of one stream are read once, however many objects follow it.
             if (obj is PdfStream) search = maxOf(search, r.pos())
@@ -137,8 +139,12 @@ internal object PdfRepair {
             val entry = entries[osNum] as? XrefEntry.InUse ?: continue
             val members = runCatching { objStreamMembers(bytes, entry.byteOffset) }.getOrNull() ?: continue
             for ((index, memberNum) in members) {
-                // Direct in-file objects are more trustworthy than compressed copies.
-                if (entries[memberNum] is XrefEntry.InUse) continue
+                // The copy later in the file is the newer revision, direct or compressed (ISO 32000-1,
+                // 7.5.6 and 7.5.7), as MuPDF's pdf_repair_obj_stm decides. The direct copy always won,
+                // so an update that moved a changed object into an object stream repaired to the old
+                // version (#812).
+                val direct = entries[memberNum] as? XrefEntry.InUse
+                if (direct != null && direct.byteOffset > entry.byteOffset) continue
                 entries[memberNum] = XrefEntry.Compressed(memberNum, osNum, index)
             }
         }
