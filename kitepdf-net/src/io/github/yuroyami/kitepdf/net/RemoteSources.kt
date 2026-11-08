@@ -100,7 +100,7 @@ public suspend fun KiteDoc.openUrl(
     password: String = "",
     epubSettings: EpubSettings = EpubSettings(),
     configure: HttpRequestBuilder.() -> Unit = {},
-): KiteDocument = open(fetch(url, client, configure), password, epubSettings)
+): KiteDocument = parseOffMain(fetch(url, client, configure), password, epubSettings)
 
 /**
  * [openUrl] with an explicit [maxBytes] ceiling. Raise the default only when
@@ -114,7 +114,15 @@ public suspend fun KiteDoc.openUrl(
     password: String = "",
     epubSettings: EpubSettings = EpubSettings(),
     configure: HttpRequestBuilder.() -> Unit = {},
-): KiteDocument = open(fetch(url, client, configure, maxBytes), password, epubSettings)
+): KiteDocument = parseOffMain(fetch(url, client, configure, maxBytes), password, epubSettings)
+
+/**
+ * [KiteDoc.open] of the downloaded [bytes] on [Dispatchers.Default][kotlinx.coroutines.Dispatchers.Default],
+ * so a call from the main thread, as a composable's `LaunchedEffect` makes, does not parse there:
+ * a damaged PDF's repair or a large book's package can take seconds (#827).
+ */
+private suspend fun KiteDoc.parseOffMain(bytes: ByteArray, password: String, epubSettings: EpubSettings): KiteDocument =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { open(bytes, password, epubSettings) }
 
 /** [openUrl], but null instead of an exception on any failure, network included. */
 public suspend fun KiteDoc.openUrlOrNull(

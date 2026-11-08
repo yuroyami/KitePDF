@@ -753,6 +753,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A CBR or CB7 comic says what it is (#952): `CbzDocument.open` and `KiteDoc.open` throw "RAR archives are not
   supported" or "7z archives are not supported" for the RAR 4, RAR 5 and 7z signatures, in place of a ZIP without
   images or an unknown format. `CbzDocument.archiveKindOf` tells them.
+- `KiteDoc.openUrl` and `openUrlOrNull` parse the download on `Dispatchers.Default`, so a call from the main
+  thread no longer parses there (#827). A damaged PDF repaired for seconds on the UI thread before.
 
 ## [0.13.0] - 2026-10-09
 

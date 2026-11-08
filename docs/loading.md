@@ -123,6 +123,8 @@ val client = HttpClient()
 val doc = KiteDoc.openUrl("https://example.com/book.epub", client)
 ```
 
+`openUrl` downloads on the client's engine and parses on `Dispatchers.Default`, so you can call it from the main thread.
+
 KitePDF keeps the whole download in memory, so it stops a download at 128 MiB. You can set a lower or a higher limit with `maxBytes`, which KitePDF checks against both the `Content-Length` header and the bytes it receives:
 
 ```kotlin
