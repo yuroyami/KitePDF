@@ -368,11 +368,16 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             paint(blendMode) { ctx.drawImage(off, 0.0, 0.0) }
         } finally {
             ctx.restore()
+            // An image too large to keep is this draw's alone.
+            if (!offscreens.holds(off)) releaseCanvas(off)
         }
     }
 
-    /** Offscreen canvases that hold images, so that an image drawn many times converts once (#117). */
-    private val offscreens = KiteBitmapCache<HTMLCanvasElement>()
+    /**
+     * Offscreen canvases that hold images, so that an image drawn many times converts once (#117).
+     * A canvas the cache drops gives its pixels back at once (#889).
+     */
+    private val offscreens = KiteBitmapCache<HTMLCanvasElement>(KiteBitmapCache.DEFAULT_BUDGET_BYTES) { releaseCanvas(it) }
 
     /**
      * The image on an offscreen canvas, averaged down when [sampling] shrinks it, so fine
@@ -388,7 +393,8 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         val off = document.createElement("canvas") as HTMLCanvasElement
         off.width = width
         off.height = height
-        val offCtx = off.getContext("2d") as CanvasRenderingContext2D
+        // Past the browser's canvas memory a context is null, and the image draws its placeholder (#184, #889).
+        val offCtx = context2d(off) ?: run { releaseCanvas(off); return null }
         val i8 = rgba.unsafeCast<Int8Array>()
         val clamped = Uint8ClampedArray(i8.buffer, i8.byteOffset, i8.length)
         offCtx.putImageData(ImageData(clamped, width, height), 0.0, 0.0)
@@ -454,7 +460,11 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             return
         }
         val saved = Saved(ctx, originX, originY, openLayers)
-        val layer = openLayer(area)
+        // A layer the browser cannot give paints straight onto the page, without its alpha and blend (#889).
+        val layer = openLayer(area) ?: run {
+            groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
+            return
+        }
         if (!isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal && area[2] > 0 && area[3] > 0) {
             // The layer starts as the page under it, read from the canvas of the context outside.
             ctx.save()
@@ -502,6 +512,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         val layer = group.layer ?: return
         closeLayer(group.saved ?: return)
         composite(layer, group.alpha, group.blendMode.toCanvas())
+        releaseCanvas(layer.canvas)
     }
 
     override fun applySoftMask(
@@ -536,10 +547,15 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         if (area[2] == 0 || area[3] == 0) return
         // The content and the mask composite as usual, also inside a knockout group.
         groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
-        val content: Layer
-        val mask: Layer
+        val content: Layer?
+        val mask: Layer?
         try {
             content = paintInLayer(area, render)
+            // Without a layer for the content it paints straight onto the page, without its mask (#889).
+            if (content == null) {
+                render()
+                return
+            }
             mask = paintInLayer(area) {
                 if (kind.readsColor) {
                     // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
@@ -554,13 +570,20 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         } finally {
             groups.removeLastOrNull()
         }
-        val luminosity = kind.readsColor
-        if (luminosity || transfer != null) maskToAlpha(mask.canvas, kind, transfer)
-        val contentCtx = content.canvas.getContext("2d") as CanvasRenderingContext2D
-        contentCtx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
-        contentCtx.globalCompositeOperation = "destination-in"
-        contentCtx.drawImage(mask.canvas, 0.0, 0.0)
-        composite(content, 1.0, "source-over")
+        try {
+            val contentCtx = context2d(content.canvas)
+            if (mask != null && contentCtx != null) {
+                val luminosity = kind.readsColor
+                if (luminosity || transfer != null) maskToAlpha(mask.canvas, kind, transfer)
+                contentCtx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+                contentCtx.globalCompositeOperation = "destination-in"
+                contentCtx.drawImage(mask.canvas, 0.0, 0.0)
+            }
+            composite(content, 1.0, "source-over")
+        } finally {
+            releaseCanvas(content.canvas)
+            mask?.let { releaseCanvas(it.canvas) }
+        }
     }
 
     /**
@@ -602,8 +625,15 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             } finally {
                 groups.removeLastOrNull()
             }
-            val layerCtx = layer.canvas.getContext("2d") as CanvasRenderingContext2D
-            return KiteRaster(width, height, argbOf(layerCtx.getImageData(0.0, 0.0, width.toDouble(), height.toDouble())))
+            // Without a layer the step paints nothing, from its start (#889).
+            val blank = initial ?: KiteRaster(width, height, IntArray(width * height))
+            if (layer == null) return blank
+            val layerCtx = context2d(layer.canvas) ?: run { releaseCanvas(layer.canvas); return blank }
+            try {
+                return KiteRaster(width, height, argbOf(layerCtx.getImageData(0.0, 0.0, width.toDouble(), height.toDouble())))
+            } finally {
+                releaseCanvas(layer.canvas)
+            }
         }
 
         override fun draw(raster: KiteRaster, alpha: Double, blendMode: KiteBlendMode) {
@@ -611,8 +641,13 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             val canvas = document.createElement("canvas") as HTMLCanvasElement
             canvas.width = width
             canvas.height = height
-            (canvas.getContext("2d") as CanvasRenderingContext2D).putImageData(imageDataOf(raster), 0.0, 0.0)
-            composite(Layer(canvas, area[0].toDouble(), area[1].toDouble()), alpha.coerceIn(0.0, 1.0), blendMode.toCanvas())
+            try {
+                val canvasCtx = context2d(canvas) ?: return
+                canvasCtx.putImageData(imageDataOf(raster), 0.0, 0.0)
+                composite(Layer(canvas, area[0].toDouble(), area[1].toDouble()), alpha.coerceIn(0.0, 1.0), blendMode.toCanvas())
+            } finally {
+                releaseCanvas(canvas)
+            }
         }
 
         /** The straight RGBA of an ImageData as straight 0xAARRGGBB pixels. */
@@ -637,11 +672,11 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         }
     }
 
-    /** A layer over [area] that [paint] draws into, through this canvas. */
-    private fun paintInLayer(area: IntArray, paint: () -> Unit): Layer {
+    /** A layer over [area] that [paint] draws into, through this canvas, or null, painting nothing, when the browser gives no layer. */
+    private fun paintInLayer(area: IntArray, paint: () -> Unit): Layer? {
         val saved = Saved(ctx, originX, originY, openLayers)
         val openGroups = groups.size
-        val layer = openLayer(area)
+        val layer = openLayer(area) ?: return null
         try {
             paint()
         } finally {
@@ -674,13 +709,17 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         return intArrayOf(left, top, maxOf(0, right - left), maxOf(0, bottom - top))
     }
 
-    /** Opens an offscreen canvas over [area] and sends the paints that follow to it. */
-    private fun openLayer(area: IntArray): Layer {
+    /**
+     * Opens an offscreen canvas over [area] and sends the paints that follow to it. Null, and the
+     * paints stay where they go, when the browser gives the canvas no context: WebKit returns
+     * null once the canvases alive pass its memory limit (#889).
+     */
+    private fun openLayer(area: IntArray): Layer? {
         val canvas = document.createElement("canvas") as HTMLCanvasElement
         canvas.width = area[2]
         canvas.height = area[3]
         val layer = Layer(canvas, area[0].toDouble(), area[1].toDouble())
-        ctx = canvas.getContext("2d") as CanvasRenderingContext2D
+        ctx = context2d(canvas) ?: run { releaseCanvas(canvas); return null }
         originX = layer.x
         originY = layer.y
         openLayers = 0
@@ -721,7 +760,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     private fun maskToAlpha(canvas: HTMLCanvasElement, kind: SoftMask.Kind, transfer: KiteMaskTransfer?) {
         val luminosity = kind.readsColor
         if (canvas.width == 0 || canvas.height == 0) return
-        val maskCtx = canvas.getContext("2d") as CanvasRenderingContext2D
+        val maskCtx = context2d(canvas) ?: return
         val image = maskCtx.getImageData(0.0, 0.0, canvas.width.toDouble(), canvas.height.toDouble())
         val data = image.data.asDynamic()
         val length = canvas.width * canvas.height * 4
@@ -736,6 +775,20 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             i += 4
         }
         maskCtx.putImageData(image, 0.0, 0.0)
+    }
+
+    /** The 2D context of [canvas], or null where the browser gives none. */
+    private fun context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D? =
+        canvas.getContext("2d").unsafeCast<CanvasRenderingContext2D?>()
+
+    /**
+     * Gives the pixels of an offscreen canvas this canvas is done with back to the browser: a
+     * dropped canvas keeps its backing store until it is collected, and WebKit counts every live
+     * one against a single budget (#889). pdf.js does the same.
+     */
+    private fun releaseCanvas(canvas: HTMLCanvasElement) {
+        canvas.width = 0
+        canvas.height = 0
     }
 
     /** Sets [m], a transform to device pixels, on [ctx], whose canvas starts at the layer origin. */

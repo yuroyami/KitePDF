@@ -770,6 +770,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CoreGraphicsCanvas` keeps the `CGImage` of a cached image, so an image drawn many times copies its pixels and
   builds its `CGImage` once, and the cache releases it when it drops it. The canvas also keeps one `CTFont` per
   host face for a page, instead of creating one for every run of host text (#886).
+- `Canvas2dCanvas` gives back the pixels of each layer canvas once it has composited, and of each image canvas
+  its cache drops. A null 2D context, which WebKit returns past its canvas memory limit, no longer throws out of
+  the draw: a group or soft mask paints without its layer, and an image draws its placeholder (#889).
 
 ## [0.13.0] - 2026-10-09
 
