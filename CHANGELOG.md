@@ -575,6 +575,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   image brushes do (#826).
 - A canvas that a book's script drew paints in a document made by `withSettings` too, as its pixels now live with
   the shared chapter trees (#854).
+- An EPUB page's text or links built while a script edit lays the chapter out again are no longer stored in the
+  new layout's cache, so `textContent` cannot keep returning the old text (#890).
 
 ## [0.13.0] - 2026-10-09
 

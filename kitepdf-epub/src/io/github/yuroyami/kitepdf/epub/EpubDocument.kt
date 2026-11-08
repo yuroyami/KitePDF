@@ -1270,9 +1270,13 @@ public class EpubDocument internal constructor(
         build: (PageRender) -> T,
     ): T {
         tableLock.withLock { live[chapter]?.let { slot(it).getOrNull(index) } }?.let { return it }
-        val built = build(render(chapter, index))
+        val page = render(chapter, index)
+        val built = build(page)
         return tableLock.withLock {
             val entry = live[chapter] ?: return@withLock built
+            // A value is kept only in the layout it was built from: a script edit or a :target
+            // change that laid the chapter out again meanwhile has pages of its own (#890).
+            if (entry.pages.getOrNull(index) !== page) return@withLock built
             val cells = slot(entry)
             // A page past the end of a chapter that a script shortened keeps nothing (#41).
             if (index !in cells.indices) return@withLock built
