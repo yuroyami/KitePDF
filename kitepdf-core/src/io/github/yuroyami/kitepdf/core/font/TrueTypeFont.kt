@@ -59,6 +59,9 @@ public class TrueTypeFont private constructor(
     /** Convert a unicode codepoint to a glyph index, or 0 (.notdef) if unmapped. */
     public fun glyphIdForCodePoint(codePoint: Int): Int = cmap.glyphIdFor(codePoint)
 
+    /** The glyph of [codePoint] followed by the variation selector [selector], or 0 when the font has none (#914). */
+    public fun glyphIdForVariation(codePoint: Int, selector: Int): Int = cmap.variationGlyphIdFor(codePoint, selector)
+
     /** Glyph advance width in font design units. */
     public fun advanceWidth(glyphId: Int): Int = hmtx.advanceWidth(glyphId)
 

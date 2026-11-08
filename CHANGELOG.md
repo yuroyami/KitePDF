@@ -475,6 +475,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PdfPage.extractText()` leaves out the text of an optional content group that the default configuration turns
   off, in marked content and in a form XObject whose `/OC` is off, by the renderer's own rules. It read that
   text, while the page, structured text and search left it out (#822).
+- In a book, a character followed by a variation selector draws the glyph the font's cmap format 14 subtable maps
+  the pair to, so ideographic variation sequences keep their variant forms. `TrueTypeFont.glyphIdForVariation`
+  and `TtfCMap.variationGlyphIdFor` look a pair up (#914).
 
 ## [0.13.0] - 2026-10-09
 

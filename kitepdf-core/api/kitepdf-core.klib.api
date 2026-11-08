@@ -760,6 +760,7 @@ final class io.github.yuroyami.kitepdf.core.font/TrueTypeFont { // io.github.yur
     final fun advanceHeight(kotlin/Int): kotlin/Int? // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.advanceHeight|advanceHeight(kotlin.Int){}[0]
     final fun advanceWidth(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.advanceWidth|advanceWidth(kotlin.Int){}[0]
     final fun glyphIdForCodePoint(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.glyphIdForCodePoint|glyphIdForCodePoint(kotlin.Int){}[0]
+    final fun glyphIdForVariation(kotlin/Int, kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.glyphIdForVariation|glyphIdForVariation(kotlin.Int;kotlin.Int){}[0]
     final fun outline(kotlin/Int): io.github.yuroyami.kitepdf.core.font/GlyphOutline? // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.outline|outline(kotlin.Int){}[0]
     final fun outlinePath(kotlin/Int): io.github.yuroyami.kitepdf.core.render/KitePath? // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.outlinePath|outlinePath(kotlin.Int){}[0]
     final fun rawTable(kotlin/String): kotlin/ByteArray? // io.github.yuroyami.kitepdf.core.font/TrueTypeFont.rawTable|rawTable(kotlin.String){}[0]
@@ -774,6 +775,7 @@ final class io.github.yuroyami.kitepdf.core.font/TrueTypeFont { // io.github.yur
 
 final class io.github.yuroyami.kitepdf.core.font/TtfCMap { // io.github.yuroyami.kitepdf.core.font/TtfCMap|null[0]
     final fun glyphIdFor(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.font/TtfCMap.glyphIdFor|glyphIdFor(kotlin.Int){}[0]
+    final fun variationGlyphIdFor(kotlin/Int, kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.font/TtfCMap.variationGlyphIdFor|variationGlyphIdFor(kotlin.Int;kotlin.Int){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.font/TtfCMap.Companion|null[0]
         final fun empty(): io.github.yuroyami.kitepdf.core.font/TtfCMap // io.github.yuroyami.kitepdf.core.font/TtfCMap.Companion.empty|empty(){}[0]

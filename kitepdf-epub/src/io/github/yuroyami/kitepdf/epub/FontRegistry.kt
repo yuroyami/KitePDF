@@ -98,6 +98,9 @@ internal class EmbeddedFace(
 
     fun gidFor(codePoint: Int): Int = ttf.glyphIdForCodePoint(codePoint)
 
+    /** The glyph of [codePoint] followed by the variation selector [selector], or 0 when the font lists none. */
+    fun variationGidFor(codePoint: Int, selector: Int): Int = ttf.glyphIdForVariation(codePoint, selector)
+
     /** GSUB single substitution for [feature] applied to [gid], or [gid] unchanged. */
     fun substSingle(feature: String, gid: Int): Int = gsub?.single(feature, gid) ?: gid
 

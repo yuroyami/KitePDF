@@ -884,6 +884,7 @@ public final class io/github/yuroyami/kitepdf/core/font/TrueTypeFont {
 	public final fun getNumGlyphs ()I
 	public final fun getUnitsPerEm ()I
 	public final fun glyphIdForCodePoint (I)I
+	public final fun glyphIdForVariation (II)I
 	public final fun outline (I)Lio/github/yuroyami/kitepdf/core/font/GlyphOutline;
 	public final fun outlinePath (I)Lio/github/yuroyami/kitepdf/core/render/KitePath;
 	public final fun rawTable (Ljava/lang/String;)[B
@@ -910,6 +911,7 @@ public final class io/github/yuroyami/kitepdf/core/font/TrueTypeSubsetter$Subset
 public final class io/github/yuroyami/kitepdf/core/font/TtfCMap {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/font/TtfCMap$Companion;
 	public final fun glyphIdFor (I)I
+	public final fun variationGlyphIdFor (II)I
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/TtfCMap$Companion {

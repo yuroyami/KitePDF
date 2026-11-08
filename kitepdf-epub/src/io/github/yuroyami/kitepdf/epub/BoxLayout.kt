@@ -2400,6 +2400,9 @@ internal class BoxLayout(
                     face == null -> null
                     smcpGid >= 0 -> face
                     face.gidFor(c) != 0 -> face
+                    // A variation selector stays with its base's face, so the word shapes as one and
+                    // the selector picks the base's variant glyph there (#914).
+                    TextShaper.isVariationSelector(c) -> face
                     else -> fonts.fallbackFor(c, run.bold, run.italic)
                 }
                 val cell = if (f != null) {

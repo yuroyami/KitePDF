@@ -81,6 +81,16 @@ internal object TextShaper {
             cps[i] = mirror
             gs[i] = gid
         }
+        // A character followed by a variation selector takes the glyph the font maps the pair to,
+        // before any substitution, as HarfBuzz's hb_font_get_variation_glyph runs (cmap format 14;
+        // #914). A pair the font does not list keeps the base glyph, and the selector stays invisible.
+        for (i in 0 until cps.size - 1) {
+            if (!isVariationSelector(cps[i + 1])) continue
+            val variant = face.variationGidFor(cps[i], cps[i + 1])
+            if (variant == 0 || variant == gs[i]) continue
+            if (gs === gids) gs = gids.copyOf()
+            gs[i] = variant
+        }
         fun add(glyph: GsubGlyph, cp: Int) {
             mirrored[glyph.cluster]?.let { glyph.features += it }
             glyphs += glyph
@@ -196,6 +206,9 @@ internal object TextShaper {
      * True for a character HarfBuzz treats as default ignorable, which draws nothing. HarfBuzz
      * leaves out the Hangul fillers, which fonts draw as spacing glyphs.
      */
+    /** The variation selectors, U+FE00 to U+FE0F and U+E0100 to U+E01EF, and the Mongolian ones. */
+    fun isVariationSelector(cp: Int): Boolean = cp in 0xFE00..0xFE0F || cp in 0xE0100..0xE01EF || cp in 0x180B..0x180D || cp == 0x180F
+
     fun isDefaultIgnorable(cp: Int): Boolean =
         cp == 0x00AD || cp == 0x034F || cp == 0x061C || cp in 0x17B4..0x17B5 || cp in 0x180B..0x180E ||
             cp in 0x200B..0x200F || cp in 0x202A..0x202E || cp in 0x2060..0x206F ||

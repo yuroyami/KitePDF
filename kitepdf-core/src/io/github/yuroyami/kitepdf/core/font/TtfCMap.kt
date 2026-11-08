@@ -14,7 +14,26 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * Glyph index 0 is the special `.notdef` glyph. We return it for any
  * unmapped codepoint so callers always get something drawable.
  */
-public class TtfCMap private constructor(private val subtable: Subtable, private val macRoman: Boolean = false) {
+public class TtfCMap private constructor(
+    private val subtable: Subtable,
+    private val macRoman: Boolean = false,
+    private val variations: VariationSequences? = null,
+) {
+
+    /**
+     * The glyph that [codePoint] followed by the variation selector [selector] draws, by the
+     * font's format 14 subtable (OpenType 1.9, cmap format 14; UTS #37), or 0 when the font does
+     * not list the pair, in which case the base character keeps its ordinary glyph (#914). A
+     * pair of the default table draws the ordinary glyph.
+     */
+    public fun variationGlyphIdFor(codePoint: Int, selector: Int): Int {
+        val v = variations ?: return 0
+        return when (val gid = v.lookup(codePoint, selector)) {
+            VariationSequences.DEFAULT -> subtable.glyphId(codePoint)
+            VariationSequences.NONE -> 0
+            else -> gid
+        }
+    }
 
     public fun glyphIdFor(codePoint: Int): Int = subtable.glyphId(codePoint)
 
@@ -51,6 +70,17 @@ public class TtfCMap private constructor(private val subtable: Subtable, private
             // best-ranked subtable is in a format we can't parse (yields EmptySubtable),
             // so a font whose top choice is format 2/13/14 still resolves via a lesser
             // subtable instead of mapping everything to .notdef.
+            // A format 14 subtable maps variation sequences beside the ordinary cmap; it is never
+            // the cmap itself. The first one that reads counts.
+            val variations = records.firstNotNullOfOrNull { rec ->
+                try {
+                    val base = table.offset + rec.offset
+                    reader.seek(base)
+                    if (reader.u16() == 14) VariationSequences.parse(reader, base) else null
+                } catch (_: RuntimeException) {
+                    null
+                }
+            }
             val ranked = records.sortedBy { rank(it.platform, it.encoding) }
             for (rec in ranked) {
                 val base = table.offset + rec.offset
@@ -70,6 +100,7 @@ public class TtfCMap private constructor(private val subtable: Subtable, private
                     return TtfCMap(
                         if (rec.platform == 3 && rec.encoding == 0) SymbolSubtable(sub) else sub,
                         macRoman = rec.platform == 1 && rec.encoding == 0,
+                        variations = variations,
                     )
                 }
             }
@@ -98,9 +129,8 @@ public class TtfCMap private constructor(private val subtable: Subtable, private
             6 -> parseFormat6(reader)
             12 -> parseFormat12(reader, base)
             13 -> parseFormat13(reader, base)
-            // Format 14 (Unicode variation sequences) is deferred: it maps
-            // (base, variation-selector) pairs, not a bare code point, so it needs
-            // a different lookup signature. Falls back to the next subtable.
+            // Format 14 maps (base, selector) pairs, not a bare code point, so it is read apart
+            // as [VariationSequences] and never stands for the cmap itself.
             else -> EmptySubtable
         }
 
@@ -425,6 +455,80 @@ public class TtfCMap private constructor(private val subtable: Subtable, private
             if (direct != 0) return direct
             if (codePoint in 0x00..0xFF) return inner.glyphId(0xF000 or codePoint)
             return 0
+        }
+    }
+}
+
+/**
+ * A cmap format 14 subtable (OpenType 1.9): for each variation selector, the bases whose
+ * sequence draws the ordinary glyph (the default table) and those that map to a glyph of their own.
+ */
+internal class VariationSequences private constructor(
+    private val defaults: Map<Int, IntArray>,
+    private val glyphs: Map<Int, Map<Int, Int>>,
+) {
+    /** The glyph of the pair, [DEFAULT] for the ordinary one, or [NONE] when the font does not list it. */
+    fun lookup(codePoint: Int, selector: Int): Int {
+        glyphs[selector]?.get(codePoint)?.let { return it }
+        val ranges = defaults[selector] ?: return NONE
+        // Pairs of start and last code point, in order.
+        var lo = 0
+        var hi = ranges.size / 2 - 1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            when {
+                codePoint < ranges[2 * mid] -> hi = mid - 1
+                codePoint > ranges[2 * mid + 1] -> lo = mid + 1
+                else -> return DEFAULT
+            }
+        }
+        return NONE
+    }
+
+    companion object {
+        const val DEFAULT = -1
+        const val NONE = -2
+
+        /** The records of each selector are bounded by the subtable's length, so a damaged count cannot run away. */
+        fun parse(reader: TtfReader, base: Int): VariationSequences {
+            reader.seek(base + 2)
+            val length = reader.u32()
+            val count = reader.u32()
+            require(count >= 0 && count * 11 <= length) { "format 14: $count selector records in $length bytes" }
+            fun u24(): Int = (reader.u8() shl 16) or (reader.u8() shl 8) or reader.u8()
+            val defaults = HashMap<Int, IntArray>()
+            val glyphs = HashMap<Int, Map<Int, Int>>()
+            for (i in 0 until count.toInt()) {
+                reader.seek(base + 10 + i * 11)
+                val selector = u24()
+                val defaultOffset = reader.u32()
+                val nonDefaultOffset = reader.u32()
+                if (defaultOffset in 1 until length) {
+                    reader.seek(base + defaultOffset.toInt())
+                    val n = reader.u32()
+                    require(n * 4 <= length) { "format 14: $n default ranges" }
+                    val ranges = IntArray(n.toInt() * 2)
+                    for (r in 0 until n.toInt()) {
+                        val start = u24()
+                        val additional = reader.u8()
+                        ranges[2 * r] = start
+                        ranges[2 * r + 1] = start + additional
+                    }
+                    defaults[selector] = ranges
+                }
+                if (nonDefaultOffset in 1 until length) {
+                    reader.seek(base + nonDefaultOffset.toInt())
+                    val n = reader.u32()
+                    require(n * 5 <= length) { "format 14: $n mappings" }
+                    val map = HashMap<Int, Int>(n.toInt())
+                    for (m in 0 until n.toInt()) {
+                        val cp = u24()
+                        map[cp] = reader.u16()
+                    }
+                    glyphs[selector] = map
+                }
+            }
+            return VariationSequences(defaults, glyphs)
         }
     }
 }
