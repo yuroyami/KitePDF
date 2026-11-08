@@ -90,6 +90,10 @@ internal class PdfScriptHost(
         engine.defineFunction("__kite.docProp") { args -> docProp(args.str(0)) }
         engine.defineFunction("__kite.pageWords") { args -> pageWords(args.int(0)) }
         engine.defineFunction("__kite.pageBox") { args -> pageBox(args.str(0), args.int(1)) }
+        engine.defineFunction("__kite.annots") { args -> annots(args.int(0)) }
+        engine.defineFunction("__kite.links") { args -> links(args.int(0)) }
+        engine.defineFunction("__kite.ocgs") { ocgs() }
+        engine.defineFunction("__kite.wordQuads") { args -> wordQuads(args.int(0), args.int(1)) }
         engine.defineFunction("__kite.console") { args -> hooks.onConsole(args.str(0)); null }
         engine.defineFunction("__kite.alert") { args -> alert(args.map(0)).toDouble() }
         engine.defineFunction("__kite.response") { args -> response(args.map(0)) }
@@ -306,6 +310,76 @@ internal class PdfScriptHost(
     private fun pageWords(pageIndex: Int): List<String> {
         val page = document.pages.getOrNull(pageIndex) ?: return emptyList()
         return pageWordsOf(page.extractText())
+    }
+
+    /** The pages [pageIndex] names, or every page for -1. */
+    private fun pagesOf(pageIndex: Int): List<Pair<Int, io.github.yuroyami.kitepdf.PdfPage>> =
+        if (pageIndex < 0) document.pages.mapIndexed { i, p -> i to p } else listOfNotNull(document.pages.getOrNull(pageIndex)?.let { pageIndex to it })
+
+    /**
+     * `getAnnots` and `getAnnot`: each annotation of the page, or of every page for -1, but links,
+     * popups and widgets, as `[type, rect, page, name, contents, author, modDate, hidden]` (#937).
+     * The rectangle is `[x1, y1, x2, y2]` in default user space, as the Acrobat API gives it.
+     */
+    private fun annots(pageIndex: Int): List<List<Any?>> = pagesOf(pageIndex).flatMap { (index, page) ->
+        page.annotations.filter {
+            it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Link &&
+                it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Popup &&
+                it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget
+        }.map { a ->
+            fun text(key: String) = (a.raw[key] as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.asText() ?: ""
+            listOf(
+                a.raw.getName("Subtype") ?: a.subtype.name,
+                listOf(a.rect.left, a.rect.bottom, a.rect.right, a.rect.top),
+                index.toDouble(), text("NM"), a.contents, text("T"), text("M"), a.isHidden,
+            )
+        }
+    }
+
+    /** `getLinks`: each link annotation of the page as `[rect, borderColor]`, the colour as `[r, g, b]` or null (#937). */
+    private fun links(pageIndex: Int): List<List<Any?>> = pagesOf(pageIndex).flatMap { (_, page) ->
+        page.annotations.filter { it.subtype == io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Link }.map { a ->
+            listOf(listOf(a.rect.left, a.rect.bottom, a.rect.right, a.rect.top), a.color?.let { listOf(it.r, it.g, it.b) })
+        }
+    }
+
+    /** `getOCGs`: each layer as `[name, on]`, `on` its state in the default configuration (#937). */
+    private fun ocgs(): List<List<Any?>> {
+        val oc = document.optionalContent ?: return emptyList()
+        return oc.groups.map { g -> listOf(g.name, g.id !in oc.offByDefault) }
+    }
+
+    /**
+     * `getPageNthWordQuads(nPage, nWord)`: the quad of the word that `getPageNthWord` gives, as
+     * `[x1, y1, x2, y2, x3, y3, x4, y4]`, top left, top right, bottom left and bottom right in
+     * default user space (#937). The word is found among the page's placed words as the same
+     * occurrence of the same text. Empty when it cannot be placed.
+     */
+    private fun wordQuads(pageIndex: Int, wordIndex: Int): List<Double> {
+        val page = document.pages.getOrNull(pageIndex) ?: return emptyList()
+        val words = pageWordsOf(page.extractText())
+        val word = words.getOrNull(wordIndex) ?: return emptyList()
+        val occurrence = words.subList(0, wordIndex).count { it == word }
+        var seen = 0
+        for (block in page.structuredText.blocks) for (line in block.lines) for (span in line.spans) {
+            val edges = span.charEdgePoints
+            var i = 0
+            val text = span.text
+            while (i < text.length) {
+                if (text[i].isWhitespace() || text[i] == '\u00A0') { i++; continue }
+                var j = i
+                while (j < text.length && !(text[j].isWhitespace() || text[j] == '\u00A0')) j++
+                if (text.substring(i, j) == word && seen++ == occurrence) {
+                    val x0 = edges?.getOrNull(i)?.first ?: span.bounds.left
+                    val x1 = edges?.getOrNull(j)?.first ?: span.bounds.right
+                    val left = minOf(x0, x1)
+                    val right = maxOf(x0, x1)
+                    return listOf(left, span.bounds.top, right, span.bounds.top, left, span.bounds.bottom, right, span.bounds.bottom)
+                }
+                i = j
+            }
+        }
+        return emptyList()
     }
 
     /**

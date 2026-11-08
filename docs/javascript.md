@@ -59,13 +59,15 @@ this.getField("total").value = 42;   // a file written for Acrobat
 
 | Object | What it has |
 | --- | --- |
-| The document | `getField`, `getNthFieldName`, `numPages`, `numFields`, `pageNum`, `info`, `calculateNow`, `resetForm`, `submitForm`, `print`, `gotoNamedDest` and the rest of the document API |
+| The document | `getField`, `getNthFieldName`, `numPages`, `numFields`, `pageNum`, `info`, `calculateNow`, `resetForm`, `submitForm`, `print`, `gotoNamedDest`, `getPageBox`, `getPageNumWords`, `getPageNthWord`, `getPageNthWordQuads`, and the read-only `getAnnots`, `getAnnot`, `getLinks` and `getOCGs` |
 | `Field` | `value`, `valueAsString`, `type`, `page`, `rect`, `hidden`, `display`, `readonly`, `required`, `checkThisBox`, `isBoxChecked`, `getItemAt`, `setFocus` and more |
 | `event` | `value`, `change`, `rc`, `willCommit`, `selStart`, `selEnd`, `target`, `targetName`, `name`, `type` |
 | `app` | `alert`, `response`, `beep`, `setInterval`, `setTimeOut`, `clearInterval`, `clearTimeOut`, `launchURL`, `viewerType` |
 | `util` | `printf`, `printd`, `printx`, `scand`, `byteToChar` |
 | `color`, `console`, `display`, `border`, `font`, `global` | The constants and helpers that a form script expects |
 | The `AF` library | `AFNumber_Format`, `AFNumber_Keystroke`, `AFPercent_*`, `AFDate_*`, `AFTime_*`, `AFSpecial_*`, `AFSimple`, `AFSimple_Calculate`, `AFRange_Validate`, `AFMergeChange`, `AFMakeNumber`, `AFExtractNums` |
+
+The document calls that change the document do nothing and return `null` or nothing: `addAnnot`, `addField`, `addLink`, `removeField`, `importAnFDF` and `exportAsFDF`. Setting `state` on an object of `getOCGs` changes nothing either, since a layer's state is set when the page renders. `getAnnots` leaves out links, popups and form widgets, as Acrobat does.
 
 Most forms do not have formatting code of their own. They call the `AF` helpers, so the runner has them.
 

@@ -553,12 +553,34 @@ internal object AcrobatApi {
       var i = Number(index === undefined ? 0 : index);
       return i >= 0 && i < words.length ? words[i] : '';
     },
-    getPageNthWordQuads: function () { return []; },
+    getPageNthWordQuads: function (page, index) {
+      var q = host.wordQuads(Number(page === undefined ? 0 : page), Number(index === undefined ? 0 : index));
+      return q.length ? [q] : [];
+    },
     getPageBox: function (which, page) { return host.pageBox(String(which || 'Crop'), Number(page || 0)); },
-    getAnnots: function () { return []; },
-    getAnnot: function () { return null; },
-    getOCGs: function () { return []; },
-    getLinks: function () { return []; },
+    getAnnots: function (o) {
+      var page = (o !== null && typeof o === 'object') ? o.nPage : o;
+      return host.annots(page === undefined || page === null ? -1 : Number(page)).map(function (a) {
+        return Object.freeze({ type: a[0], rect: a[1], page: a[2], name: a[3], contents: a[4], author: a[5], modDate: a[6], hidden: a[7] });
+      });
+    },
+    getAnnot: function (page, name) {
+      var all = this.getAnnots({ nPage: Number(page === undefined ? 0 : page) });
+      for (var i = 0; i < all.length; i++) if (all[i].name === String(name)) return all[i];
+      return null;
+    },
+    getOCGs: function () {
+      return host.ocgs().map(function (g) { return Object.freeze({ name: g[0], state: g[1], initState: g[1] }); });
+    },
+    getLinks: function (page, coords) {
+      var links = host.links(Number(page === undefined ? 0 : page)).map(function (l) {
+        return Object.freeze({ rect: l[0], borderColor: l[1] == null ? ['T'] : ['RGB'].concat(l[1]) });
+      });
+      if (!coords || coords.length < 4) return links;
+      var x1 = Math.min(coords[0], coords[2]), x2 = Math.max(coords[0], coords[2]);
+      var y1 = Math.min(coords[1], coords[3]), y2 = Math.max(coords[1], coords[3]);
+      return links.filter(function (l) { return l.rect[0] < x2 && l.rect[2] > x1 && l.rect[1] < y2 && l.rect[3] > y1; });
+    },
     addField: function () { return null; },
     removeField: function () {},
     addAnnot: function () { return null; },

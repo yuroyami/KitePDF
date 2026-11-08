@@ -674,6 +674,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   takes them off, for what prints or what shows, as a final copy of a filled form (#949).
 - PdfDocument.exportXfdf and exportFdf write a form's values as XFDF or FDF, and PdfEditor.importFormData applies
   such a file through the field setters, reporting the names it could not apply (#950).
+- A document script's getAnnots, getAnnot, getLinks, getOCGs and getPageNthWordQuads answer from the document
+  instead of returning nothing, and the docs list the calls that are still stubs (#937).
 
 ## [0.13.0] - 2026-10-09
 
