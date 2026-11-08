@@ -1031,6 +1031,7 @@ public class PdfEditor internal constructor(
         engine.formMatrices = loadFormMatrices(pageResources)
         engine.formBBoxes = loadFormBBoxes(pageResources)
         engine.extGStates = loadExtGStates(pageResources)
+        engine.tilingPatternNames = loadTilingPatternNames(pageResources)
         val filtered = engine.run(ops)
         // Recurse into every intersecting form XObject first: it decides which `Do`
         // operands point at a redacted clone and which leave the stream altogether,
@@ -1081,7 +1082,8 @@ public class PdfEditor internal constructor(
         newPage = prunePageResourceXObjects(newPage, formRedaction.droppedNames, namesStillDrawn(finalOps))
         // A font that only the redacted text used goes, Type 3 glyph pictures and all (#1013).
         newPage.getDict("Resources", effective)?.let { res ->
-            withoutUnshownFonts(res, finalOps, keepAll = lendsFonts(res))?.let { if (it !== res) newPage = withEntry(newPage, "Resources", it) }
+            val pruned = withoutUnpaintedPatterns(withoutUnshownFonts(res, finalOps, keepAll = lendsFonts(res)), finalOps, engine.tilingPatternNames)
+            if (pruned != null && pruned !== res) newPage = withEntry(newPage, "Resources", pruned)
         }
         // The images whose Do went, and the forms whose Do now names a redacted copy, which a shared
         // or inherited resource dictionary still names (#1010, #1007).

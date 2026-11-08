@@ -371,6 +371,7 @@ internal fun PdfEditor.redactFormXObject(
         engine.formMatrices = loadFormMatrices(formResources)
         engine.formBBoxes = loadFormBBoxes(formResources)
         engine.extGStates = loadExtGStates(formResources)
+        engine.tilingPatternNames = loadTilingPatternNames(formResources)
         val filtered = engine.run(ops)
 
         val nested = recurseIntoForms(formResources, engine.formXObjectHits)
@@ -393,6 +394,7 @@ internal fun PdfEditor.redactFormXObject(
         }
         val newResources = withSoftMaskAdditions(withFormAdditions(formOwnResources, nested), masks, finalOps)
             ?.let { withoutUnshownFonts(it, finalOps, keepAll = lendsFonts(it)) }
+            ?.let { withoutUnpaintedPatterns(it, finalOps, engine.tilingPatternNames) }
         if (newResources != null) newDict = withEntry(newDict, "Resources", newResources)
         updateObject(target, PdfStreams.flate(body, extraFrom(newDict)))
     } catch (e: Throwable) {
@@ -965,4 +967,50 @@ internal fun PdfEditor.lendsFonts(resources: PdfDictionary?): Boolean {
     if (xobjects?.map?.values?.any { (runCatching { it.resolve(effective) }.getOrNull() as? PdfStream)?.dict?.let { d -> d.getName("Subtype") == "Form" && d["Resources"] == null } == true } == true) return true
     val fonts = runCatching { resources.getDict("Font", effective) }.getOrNull()
     return fonts?.map?.values?.any { (runCatching { it.resolve(effective) }.getOrNull() as? PdfDictionary)?.let { d -> d.getName("Subtype") == "Type3" && d["Resources"] == null } == true } == true
+}
+
+/** The names of the tiling patterns (`/PatternType 1`) of [resources] (ISO 32000-1, 8.7.3; #1012). */
+internal fun PdfEditor.loadTilingPatternNames(resources: PdfDictionary?): Set<String> {
+    val patterns = runCatching { resources?.getDict("Pattern", effective) }.getOrNull() ?: return emptySet()
+    return patterns.map.filter { (_, v) ->
+        val dict = when (val p = runCatching { v.resolve(effective) }.getOrNull()) {
+            is PdfStream -> p.dict
+            is PdfDictionary -> p
+            else -> null
+        }
+        (dict?.get("PatternType") as? PdfInt)?.value == 1L
+    }.keys
+}
+
+/**
+ * The pattern names that a remaining paint of [ops] still uses: the fill or stroke pattern current
+ * at a path paint or a text show, with `q` and `Q` saving and restoring them (#1012).
+ */
+internal fun patternsStillPainted(ops: List<Operation>): Set<String> {
+    val used = HashSet<String>()
+    var fill: String? = null
+    var stroke: String? = null
+    val stack = ArrayDeque<Pair<String?, String?>>()
+    for (op in ops) when (op.operator) {
+        "q" -> stack.addLast(fill to stroke)
+        "Q" -> stack.removeLastOrNull()?.let { (f, s) -> fill = f; stroke = s }
+        "scn" -> fill = (op.operands.lastOrNull() as? PdfName)?.value
+        "SCN" -> stroke = (op.operands.lastOrNull() as? PdfName)?.value
+        "cs", "sc", "g", "rg", "k" -> fill = null
+        "CS", "SC", "G", "RG", "K" -> stroke = null
+        "f", "F", "f*", "Tj", "TJ", "'", "\"" -> fill?.let(used::add)
+        "S", "s" -> stroke?.let(used::add)
+        "B", "B*", "b", "b*" -> { fill?.let(used::add); stroke?.let(used::add) }
+    }
+    return used
+}
+
+/** [resources] without the tiling patterns [tiling] that no remaining paint of [ops] uses, so their cells go with the rewrite (#1012). */
+internal fun PdfEditor.withoutUnpaintedPatterns(resources: PdfDictionary?, ops: List<Operation>, tiling: Set<String>): PdfDictionary? {
+    if (resources == null || tiling.isEmpty()) return resources
+    val patterns = runCatching { resources.getDict("Pattern", effective) }.getOrNull() ?: return resources
+    val painted = patternsStillPainted(ops)
+    val kept = patterns.map.filterKeys { it !in tiling || it in painted }
+    if (kept.size == patterns.map.size) return resources
+    return withEntry(resources, "Pattern", PdfDictionary(LinkedHashMap(kept)))
 }

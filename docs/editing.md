@@ -260,10 +260,13 @@ Redaction removes too much rather than too little:
 
 Some large shapes stay under the black box, because they hide nothing that the box does not cover:
 
-- A path is tested by its segments. So a background rectangle or a page border whose edges are outside every region stays.
+- A path is tested by its segments. So a background rectangle or a page border whose edges are outside every region stays. A fill or stroke in a tiling pattern colour is the exception: its cell paints everywhere inside the path, so it goes when its painted area meets a region, as an image does, and the pattern goes from the resources when nothing else paints with it.
 - A shading (`sh`) paints its whole clip. It goes out when the edge of its clip meets a region or the clip is inside a region. A shading that covers the whole page stays.
 
 A soft mask group (`/SMask` in an ExtGState) that paints into a region is redacted too, in a copy of its own that the page's `gs` then names, so the text a mask draws goes with the region.
+
+!!! warning
+    A tiling pattern that remaining content still paints with, such as text in that pattern colour elsewhere on the page, keeps its whole cell, the part under a region included. Check for it before you share a redacted file.
 
 Redaction removes more than the region in some cases, as it removes too much rather than too little:
 

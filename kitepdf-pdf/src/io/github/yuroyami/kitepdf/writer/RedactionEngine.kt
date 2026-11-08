@@ -172,6 +172,9 @@ internal class RedactionEngine(
         val text: TextState = TextState(),
         val lineWidth: Double = 1.0,
         val miterLimit: Double = 10.0,
+        /** The pattern a fill or a stroke paints with, from an `scn` or `SCN` that names one, or null (#1012). */
+        val fillPattern: String? = null,
+        val strokePattern: String? = null,
         /** Clips installed so far, page space; `Q` restores by restoring the state. */
         val clips: List<ClipRecord> = emptyList(),
     )
@@ -269,6 +272,11 @@ internal class RedactionEngine(
                 // under-cover: [pathIntersectsRedaction] floors the miter factor at
                 // 1, so the pad never drops below the plain lineWidth/2 body pad.
                 "M" -> { gs = gs.copy(miterLimit = num(op, 0)); out.add(op) }
+                // A colour that names a pattern paints its content stream (ISO 32000-1, 8.7.3.1).
+                "scn" -> { gs = gs.copy(fillPattern = (op.operands.lastOrNull() as? PdfName)?.value); out.add(op) }
+                "SCN" -> { gs = gs.copy(strokePattern = (op.operands.lastOrNull() as? PdfName)?.value); out.add(op) }
+                "cs", "sc", "g", "rg", "k" -> { gs = gs.copy(fillPattern = null); out.add(op) }
+                "CS", "SC", "G", "RG", "K" -> { gs = gs.copy(strokePattern = null); out.add(op) }
                 "gs" -> {
                     val name = (op.operands.firstOrNull() as? PdfName)?.value
                     name?.let(extGStates::get)?.let { e ->
@@ -472,7 +480,8 @@ internal class RedactionEngine(
      * exactly those three operators and no others, so this mirrors it.
      */
     private fun paintPath(op: Operation, out: MutableList<Operation>) {
-        val hit = pathSegments.isNotEmpty() && pathIntersectsRedaction(strokes = op.operator in STROKING_PAINT_OPERATORS)
+        val hit = pathSegments.isNotEmpty() &&
+            (pathIntersectsRedaction(strokes = op.operator in STROKING_PAINT_OPERATORS) || patternPaintMeetsRedaction(op.operator))
         when {
             !hit -> { out.addAll(pathOps); out.add(op) }
             pathClips -> {
@@ -591,6 +600,28 @@ internal class RedactionEngine(
             boxIntersects(gs.ctm, seg.minX - pad, seg.minY - pad, seg.maxX + pad, seg.maxY + pad)
         }
     }
+
+    /**
+     * Whether [paint] fills or strokes with a tiling pattern over an area that meets a region. A
+     * tiling pattern's cell is a content stream (ISO 32000-1, 8.7.3.1) that paints everywhere inside
+     * the path, the region included, so the path's whole box counts, not its segments, and the
+     * paint goes as an image does: a box over the cell would not take its text and images out (#1012).
+     */
+    private fun patternPaintMeetsRedaction(paint: String): Boolean {
+        if (rectangles.isEmpty() || pathSegments.isEmpty()) return false
+        val fills = paint in FILLING_PAINT_OPERATORS && gs.fillPattern?.let { it in tilingPatternNames } == true
+        val strokes = paint in STROKING_PAINT_OPERATORS && gs.strokePattern?.let { it in tilingPatternNames } == true
+        if (!fills && !strokes) return false
+        val pad = if (strokes) gs.lineWidth * maxOf(1.0, gs.miterLimit) / 2.0 else 0.0
+        return boxIntersects(
+            gs.ctm,
+            pathSegments.minOf { it.minX } - pad, pathSegments.minOf { it.minY } - pad,
+            pathSegments.maxOf { it.maxX } + pad, pathSegments.maxOf { it.maxY } + pad,
+        )
+    }
+
+    /** The tiling patterns of the stream's resources by name (#1012). */
+    var tilingPatternNames: Set<String> = emptySet()
 
     /* ─── Text showing ───────────────────────────────────────────────────── */
 
@@ -883,6 +914,9 @@ internal class RedactionEngine(
 
 /** Painting operators that lay ink down with the pen, so their bounds need padding. */
 private val STROKING_PAINT_OPERATORS = setOf("S", "s", "B", "B*", "b", "b*")
+
+/** The painting operators that fill their path (ISO 32000-1, 8.5.3.1, Table 60). */
+private val FILLING_PAINT_OPERATORS = setOf("f", "F", "f*", "B", "B*", "b", "b*")
 
 /** Painting operators that close the current subpath before painting (ISO 32000-1, 8.5.3). */
 private val CLOSING_PAINT_OPERATORS = setOf("s", "b", "b*")

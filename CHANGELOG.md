@@ -602,6 +602,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pages that do not draw it; an image another page still draws stays (#1010).
 - Redacting a form XObject on one page no longer changes what other pages or forms draw: the redacted place gets
   a copy, and the original loses its name only where nothing still draws it (#1007).
+- A fill or stroke in a tiling pattern colour whose painted area meets a redaction region goes, as an image does,
+  and the pattern leaves the resources when nothing else paints with it, so the cell's text and images no longer
+  stay under the black box (#1012).
 
 ## [0.13.0] - 2026-10-09
 
