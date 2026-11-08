@@ -62,7 +62,8 @@ internal object XmpSync {
 
     /** [xml] with property [name] set to the element content [content], or to the attribute [attribute] where it is one. */
     private fun set(xml: String, name: String, content: String, attribute: String?): String {
-        val element = Regex("<$name(\\s[^>]*)?>.*?</$name>", RegexOption.DOT_MATCHES_ALL)
+        // [\s\S] spans lines on every platform; DOT_MATCHES_ALL is the JVM's alone.
+        val element = Regex("<$name(\\s[^>]*)?>[\\s\\S]*?</$name>")
         element.find(xml)?.let { m ->
             val open = "<$name${m.groupValues[1]}>"
             return xml.replaceRange(m.range, "$open$content</$name>")
