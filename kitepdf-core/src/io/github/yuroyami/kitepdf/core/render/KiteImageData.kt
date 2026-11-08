@@ -546,13 +546,17 @@ public class KiteImageData internal constructor(
         private fun readDecode(obj: PdfObject?): DoubleArray? {
             val arr = obj as? PdfArray ?: return null
             if (arr.isEmpty()) return null
-            return DoubleArray(arr.size) { i ->
+            val out = DoubleArray(arr.size) { i ->
                 when (val v = arr[i]) {
                     is PdfReal -> v.value
                     is PdfInt -> v.value.toDouble()
                     else -> 0.0
                 }
             }
+            // Table 89: /Decode holds pairs of numbers. One that is not finite makes it unusable, and
+            // the image reads with its default range, as with an array of the wrong length: a real of
+            // 310 digits was Infinity, the sample map gave NaN, and roundToInt failed the page (#805).
+            return out.takeIf { d -> d.all { it.isFinite() } }
         }
 
         /** Convert an untrusted PDF integer without wrapping a Long into Int. */

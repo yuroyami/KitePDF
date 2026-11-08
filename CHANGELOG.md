@@ -231,6 +231,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Acrobat's "encrypt only file attachments" writes it, reads those streams or strings in clear, where they
   were decrypted into noise (#796).
 
+- A `/BM` array takes the first blend mode that KitePDF recognizes, as ISO 32000-1, Table 58 says, where the
+  first name alone made `[/Foo /Multiply]` blend as Normal (#782). A `CalCMYK` colour space renders as
+  DeviceCMYK, as the PDF Reference and MuPDF say, where it read as DeviceGray and painted its four operands
+  as one grey (#786). An image `/Decode` with a number that is not finite reads with its default range, where
+  a NaN reached `roundToInt` and failed the page on several canvases (#805).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

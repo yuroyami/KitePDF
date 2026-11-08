@@ -19,7 +19,10 @@ public enum class KiteBlendMode {
 
     public companion object {
         /** Parse a PDF `/BM` name. Arrays of names: take the first one we recognise. */
-        public fun parse(name: String?): KiteBlendMode = when (name) {
+        public fun parse(name: String?): KiteBlendMode = parseOrNull(name) ?: Normal
+
+        /** The mode [name] names, or null for a name this reader does not recognize (Table 58, #782). */
+        internal fun parseOrNull(name: String?): KiteBlendMode? = when (name) {
             "Normal", "Compatible" -> Normal
             "Multiply" -> Multiply
             "Screen" -> Screen
@@ -36,7 +39,7 @@ public enum class KiteBlendMode {
             "Saturation" -> Saturation
             "Color" -> Color
             "Luminosity" -> Luminosity
-            else -> Normal
+            else -> null
         }
     }
 }

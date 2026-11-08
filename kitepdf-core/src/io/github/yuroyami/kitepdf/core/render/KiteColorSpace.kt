@@ -336,7 +336,9 @@ public sealed class KiteColorSpace {
         private fun resolveByName(name: String): KiteColorSpace = when (name) {
             "DeviceGray", "G" -> DeviceGray
             "DeviceRGB", "RGB" -> DeviceRGB
-            "DeviceCMYK", "CMYK" -> DeviceCMYK
+            // PDF Reference 1.7, 4.5.4: a reader renders CalCMYK as DeviceCMYK, as MuPDF does; it read as
+            // DeviceGray, so its four operands painted one grey (#786).
+            "DeviceCMYK", "CMYK", "CalCMYK" -> DeviceCMYK
             // Pattern / CalGray / CalRGB / Lab without alternates collapse to grey.
             else -> DeviceGray
         }
@@ -346,7 +348,7 @@ public sealed class KiteColorSpace {
             return when (tag) {
                 "DeviceGray", "G" -> DeviceGray
                 "DeviceRGB", "RGB" -> DeviceRGB
-                "DeviceCMYK", "CMYK" -> DeviceCMYK
+                "DeviceCMYK", "CMYK", "CalCMYK" -> DeviceCMYK
                 "CalGray" -> {
                     val params = arr.getOrNull(1)?.resolve(refs) as? PdfDictionary
                     CalGray(

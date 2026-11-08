@@ -70,4 +70,21 @@ class DamagedPartsTest {
         assertEquals(1, doc.pageCount)
         assertTrue("Original text" in doc.pages[0].extractText(), doc.pages[0].extractText())
     }
+
+    @Test
+    fun anImageDecodeThatIsNotFiniteReadsWithItsDefaultRange() {
+        // A real of 310 digits is Infinity, and the sample map rounded a NaN, failing the page (#805).
+        val huge = "1" + "0".repeat(310) + ".0"
+        val image = "<< /Type /XObject /Subtype /Image /Width 2 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Decode [0 $huge] /Length 2 >>\nstream\nAB\nendstream"
+        val bytes = pdf(extra = listOf(image)).decodeToString()
+            .replace("/Contents 4 0 R /Resources << ", "/Contents 6 0 R /Resources << /XObject << /Im1 5 0 R >> ")
+            .let { text ->
+                // Append the content stream as object 6 by hand, after the image.
+                val content = "q 100 0 0 100 50 50 cm /Im1 Do Q 0 0 1 rg 0 0 20 20 re f"
+                text.replace("xref\n0 6", "6 0 obj\n<< /Length ${content.length} >>\nstream\n$content\nendstream\nendobj\nxref\n0 6")
+            }.encodeToByteArray()
+        val doc = PdfDocument.open(bytes)
+        val canvas = io.github.yuroyami.kitepdf.core.render.KiteRasterCanvas(200, 200)
+        doc.pages[0].renderTo(canvas, io.github.yuroyami.kitepdf.core.render.KiteMatrix.IDENTITY)
+    }
 }

@@ -65,7 +65,9 @@ public data class ExtGState(
             val strokeAlpha = dict.getReal("CA")
             val blendMode = when (val bm = dict["BM"]) {
                 is PdfName -> KiteBlendMode.parse(bm.value)
-                is PdfArray -> KiteBlendMode.parse((bm.firstOrNull() as? PdfName)?.value)
+                // Table 58: the first mode in the array that the reader recognizes, or Normal when
+                // none is; the first name alone made /BM [/Foo /Multiply] blend as Normal (#782).
+                is PdfArray -> bm.firstNotNullOfOrNull { (it as? PdfName)?.value?.let(KiteBlendMode::parseOrNull) } ?: KiteBlendMode.Normal
                 else -> null
             }
             val smask = parseSoftMask(dict["SMask"], refs)
