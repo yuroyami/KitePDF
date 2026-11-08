@@ -65,4 +65,30 @@ class FieldLookTest {
         val out = doc.edit().apply { setTextFieldValue(doc.formField("F")!!, "123456") }.saveIncremental()
         assertEquals("12345", KitePDF.open(out).formField("F")?.value, "/V keeps to /MaxLen too")
     }
+
+    @Test
+    fun aTurnedCheckBoxTurnsItsMarkWithIt() {
+        // ISO 32000-1, 12.5.6.19, Table 189: /R turns the whole appearance, the mark of a check box too (#722).
+        val box = TestPdf.build(
+            listOf(
+                "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] /DA (/Helv 12 Tf 0 g) >> >>",
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 400] /Annots [4 0 R] >>",
+                "<< /Type /Annot /Subtype /Widget /FT /Btn /T (C) /P 3 0 R /Rect [100 100 120 140] /MK << /R 90 >> >>",
+            ),
+        )
+        val doc = KitePDF.open(box)
+        val out = doc.edit().apply { setCheckbox(doc.formField("C")!!, true) }.saveIncremental()
+        val ap = KitePDF.open(out).pages[0].annotations.first().appearanceStream!!
+        assertEquals(listOf(0.0, 0.0, 40.0, 20.0), numbers(ap.dict["BBox"]), "the box turned")
+        assertEquals(listOf(0.0, 1.0, -1.0, 0.0, 20.0, 0.0), numbers(ap.dict["Matrix"]))
+        // The viewer's own appearance turns the same way.
+        val widget = PdfDictionary(linkedMapOf(
+            "FT" to io.github.yuroyami.kitepdf.core.parser.PdfName("Btn"),
+            "V" to io.github.yuroyami.kitepdf.core.parser.PdfName("Yes"),
+            "MK" to PdfDictionary(linkedMapOf("R" to io.github.yuroyami.kitepdf.core.parser.PdfInt(270))),
+        ))
+        val synthesized = FieldAppearance.synthesize(widget, 20.0, 40.0, { null })!!
+        assertEquals(listOf(0.0, -1.0, 1.0, 0.0, 0.0, 40.0), numbers(synthesized.dict["Matrix"]))
+    }
 }

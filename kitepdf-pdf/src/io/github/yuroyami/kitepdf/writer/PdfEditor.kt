@@ -547,6 +547,7 @@ public class PdfEditor internal constructor(
         fun state(on: Boolean) = addObject(
             FieldAppearance.buildToggle(
                 w, h, on, radio, mark, background, border, borderWidth, da.colorOps, zapf,
+                rotation = FieldAppearance.rotationOf(mk, base),
             ),
         ) as PdfObject
         return PdfDictionary(

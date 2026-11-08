@@ -536,6 +536,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the commit go to one handler (#739).
 - `KiteDocViewState.commitFocusedField` waits for the commit, the blur and every script call queued before them
   even when a call suspends, as a paused script on the web does (#741).
+- A check box or radio button with `/MK /R` turns its box and mark with the widget, in the saved appearance and
+  the viewer's own (#722).
 
 ## [0.13.0] - 2026-10-09
 

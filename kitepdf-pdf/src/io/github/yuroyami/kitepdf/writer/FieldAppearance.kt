@@ -128,7 +128,7 @@ internal object FieldAppearance {
         )
     }
 
-    private fun rotationOf(mk: PdfDictionary?, refs: IndirectResolver): Int {
+    internal fun rotationOf(mk: PdfDictionary?, refs: IndirectResolver): Int {
         val r = numberOf(missingAsNull { mk?.get("R")?.resolve(refs) })?.toInt() ?: return 0
         return ((r % 360 + 360) % 360).let { if (it % 90 == 0) it else 0 }
     }
@@ -189,7 +189,13 @@ internal object FieldAppearance {
         borderWidth: Double,
         markColor: String,
         zapfFont: PdfObject,
+        /** `/MK /R`: the widget's turn, 0, 90, 180 or 270, which turns the mark with it (#722). */
+        rotation: Int = 0,
     ): PdfStream {
+        // The box and mark are laid out upright in the turned box and /Matrix turns them onto /Rect.
+        val turn = turnOf(rotation, width, height)
+        @Suppress("NAME_SHADOWING") val width = turn.width
+        @Suppress("NAME_SHADOWING") val height = turn.height
         val content = ByteArrayBuilder(64)
         content.ascii("q\n")
         val bw = borderWidth.coerceAtLeast(0.0)
@@ -238,7 +244,7 @@ internal object FieldAppearance {
                 "FormType" to PdfInt(1),
                 "BBox" to PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(width), PdfReal(height))),
                 "Resources" to resources,
-            ),
+            ).also { extra -> turn.matrix?.let { extra["Matrix"] = it } },
         )
     }
 
@@ -332,6 +338,7 @@ internal object FieldAppearance {
                 border = border,
                 borderWidth = borderWidth,
                 markColor = da.colorOps,
+                rotation = rotationOf(mk, refs),
                 zapfFont = PdfDictionary(
                     linkedMapOf(
                         "Type" to PdfName("Font"),
