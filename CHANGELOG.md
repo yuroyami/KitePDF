@@ -249,6 +249,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A document that declares ISO-8859-15 decodes as ISO-8859-15, where it read as windows-1252 and `œ` came out
   as `½` and `€` as `¤` (#878).
+- The pure-Kotlin inflater reads a stored block that follows a dynamic block with a short end-of-block code. It
+  dropped the whole bytes its symbol peek had buffered, so LEN and NLEN were read late and the stream failed on
+  JS, Wasm and the native targets (#794).
 
 ## [0.13.0] - 2026-10-09
 

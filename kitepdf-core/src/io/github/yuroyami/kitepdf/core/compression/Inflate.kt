@@ -128,7 +128,13 @@ internal class Inflater(
         bitCount -= n
     }
 
+    /**
+     * Skips the bits left in the current partial byte (RFC 1951, 3.2.4). A symbol peek can
+     * buffer whole bytes past the longest code, so those go back to the cursor first, or a
+     * stored block after a short end-of-block code reads LEN one or two bytes late (#794).
+     */
     private fun alignToByte() {
+        bytePos -= bitCount ushr 3
         bitBuf = 0
         bitCount = 0
     }
