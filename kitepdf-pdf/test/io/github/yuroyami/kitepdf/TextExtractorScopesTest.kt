@@ -32,6 +32,26 @@ class TextExtractorScopesTest {
         fold(page(content, resources, extra).textContent().plainText)
 
     @Test
+    fun q_and_Q_save_and_restore_the_font_that_decodes_the_text() {
+        // ISO 32000-1, 8.4.2 and 9.3.1: the font is graphics state (#825).
+        val diffs = RawPdf.obj(7, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /BaseEncoding /WinAnsiEncoding /Differences [65 /Z] >> >>")
+        val content = "BT /F1 20 Tf 72 200 Td (A) Tj ET q BT /F2 20 Tf 72 150 Td (A) Tj ET Q BT 72 100 Td (A) Tj ET"
+        val resources = "<< /Font << /F1 4 0 R /F2 7 0 R >> >>"
+        assertEquals("A Z A", text(content, resources, diffs))
+        assertEquals("A Z A", structured(content, resources, diffs))
+    }
+
+    @Test
+    fun a_form_starts_with_the_font_of_its_caller() {
+        // 8.10.1: a form starts from the graphics state in force at its Do (#825).
+        val diffs = RawPdf.obj(7, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /BaseEncoding /WinAnsiEncoding /Differences [65 /Z] >> >>")
+        val fm = form(6, "BT 72 100 Td (A) Tj ET", resources = null)
+        val content = "BT /F2 20 Tf 72 200 Td (A) Tj ET /F2 20 Tf /Fm Do"
+        val resources = "<< /Font << /F2 7 0 R >> /XObject << /Fm 6 0 R >> >>"
+        assertEquals("Z Z", text(content, resources, diffs, fm))
+    }
+
+    @Test
     fun text_inside_a_form_is_page_text() {
         assertEquals(sentence, text("BT /F1 18 Tf 36 180 Td ($sentence) Tj ET", "<< /Font << /F1 4 0 R >> >>"))
         assertEquals(

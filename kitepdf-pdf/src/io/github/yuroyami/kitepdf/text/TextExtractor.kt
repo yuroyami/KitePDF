@@ -132,8 +132,8 @@ public object TextExtractor {
             // Each entry says whether that marked-content sequence opened an ActualText replacement.
             val marked = ArrayList<Boolean>()
             var inText = false
-            var font: PdfFont? = null
-            var fontSize = 0.0
+            // The font and its size are graphics state, which q and Q save and restore and a form
+            // starts from (ISO 32000-1, 8.4.2, 9.3.1 and 8.10.1), so they live in the pen (#825).
 
             // Text-line baseline Y in text space (origin of the current line, per the
             // text-line matrix Tlm). A pure-horizontal Td/Tm keeps the same Y, so no
@@ -180,12 +180,9 @@ public object TextExtractor {
                     }
                     "Tf" -> {
                         val named = (op.operands.firstOrNull() as? PdfName)?.let { fonts[it.value] }
-                        font = named
-                        fontSize = (op.operands.getOrNull(1) as? PdfReal)?.value
-                            ?: (op.operands.getOrNull(1) as? PdfInt)?.value?.toDouble()
-                            ?: fontSize
                         pen.placement.font = named
-                        pen.placement.size = number(op.operands.getOrNull(1))
+                        val size = op.operands.getOrNull(1)
+                        if (size is PdfReal || size is PdfInt) pen.placement.size = number(size)
                     }
                     "Tc" -> pen.placement.charSpacing = number(op.operands.firstOrNull())
                     "Tw" -> pen.placement.wordSpacing = number(op.operands.firstOrNull())
@@ -198,7 +195,7 @@ public object TextExtractor {
                         // a vertical shift beyond the threshold counts as a new line.
                         val ty = number(op.operands.getOrNull(1))
                         val newY = (if (haveLine) lineY else 0.0) + ty * tmScaleY
-                        maybeBreakLine(inText, newY, lineY, haveLine, fontSize * tmScaleY)
+                        maybeBreakLine(inText, newY, lineY, haveLine, pen.placement.size * tmScaleY)
                         lineY = newY
                         haveLine = true
                         pen.move(number(op.operands.firstOrNull()), ty, setLeading = op.operator == "TD")
@@ -212,7 +209,7 @@ public object TextExtractor {
                         val scale = sqrt(c * c + d * d)
                         tmScaleY = if (scale.isFinite() && scale > 0.0) scale else 1.0
                         val newY = number(op.operands.getOrNull(5))
-                        maybeBreakLine(inText, newY, lineY, haveLine, fontSize * tmScaleY)
+                        maybeBreakLine(inText, newY, lineY, haveLine, pen.placement.size * tmScaleY)
                         lineY = newY
                         haveLine = true
                         pen.setMatrix(matrix(op.operands))
@@ -228,7 +225,7 @@ public object TextExtractor {
                     "Tj" -> {
                         val s = op.operands.firstOrNull() as? PdfString ?: continue
                         val at = pen.show(s, chain)
-                        if (replacing == 0) show(decode(s, font), at) else enclosed(at)
+                        if (replacing == 0) show(decode(s, pen.placement.font), at) else enclosed(at)
                     }
                     "'" -> {
                         lineBreak()
@@ -236,7 +233,7 @@ public object TextExtractor {
                         chain++
                         val s = op.operands.firstOrNull() as? PdfString ?: continue
                         val at = pen.show(s, chain)
-                        if (replacing == 0) show(decode(s, font), at) else enclosed(at)
+                        if (replacing == 0) show(decode(s, pen.placement.font), at) else enclosed(at)
                     }
                     "\"" -> {
                         lineBreak()
@@ -247,7 +244,7 @@ public object TextExtractor {
                         // operands: aw ac string. The string is last.
                         val s = op.operands.lastOrNull() as? PdfString ?: continue
                         val at = pen.show(s, chain)
-                        if (replacing == 0) show(decode(s, font), at) else enclosed(at)
+                        if (replacing == 0) show(decode(s, pen.placement.font), at) else enclosed(at)
                     }
                     "TJ" -> {
                         val arr = op.operands.firstOrNull() as? PdfArray ?: continue
@@ -261,11 +258,11 @@ public object TextExtractor {
                         // moves the pen forward (a gap). Scale the word-break threshold
                         // with the effective font size so a large font needs a
                         // proportionally larger gap to read as a space.
-                        val emThreshold = wordGapThreshold(fontSize * tmScaleY)
+                        val emThreshold = wordGapThreshold(pen.placement.size * tmScaleY)
                         arrayText.setLength(0)
                         for (item in arr) {
                             when (item) {
-                                is PdfString -> arrayText.append(decode(item, font))
+                                is PdfString -> arrayText.append(decode(item, pen.placement.font))
                                 is PdfReal -> {
                                     if (item.value <= emThreshold) arrayText.append(' ')
                                 }
@@ -462,8 +459,8 @@ public object TextExtractor {
     /**
      * The part of the graphics state that places text: the CTM and the text state parameters,
      * which `q` and `Q` save and restore (ISO 32000-1, 8.4.1 and 9.3.1). [scale] is `Tz` over 100.
-     * The font that decodes the text does not come back at `Q`, as it never has here, so the text
-     * stays as it was, and only the pen reads this one.
+     * The font here is also the one that decodes the text, so text after a `Q` or inside a form
+     * reads through the font the renderer draws it with (#825).
      */
     private class Placement(
         var ctm: KiteMatrix = KiteMatrix.IDENTITY,
