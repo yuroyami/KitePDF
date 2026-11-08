@@ -6,9 +6,10 @@ import java.util.zip.Deflater
 import java.util.zip.Inflater
 
 /**
- * JVM fast path: `java.util.zip` (native zlib underneath). Measured ~9x
- * faster than the pure-Kotlin inflate on large streams. Any decode problem
- * returns null so the pure path can produce its lenient result.
+ * JVM fast path: `java.util.zip` (native zlib underneath). On JDK 21, inflating
+ * 16 MiB of content-stream-like text deflated at level 6, it was 1.1 to 1.6 times
+ * faster than the pure-Kotlin inflate, best of five runs in one JVM (#835). Any
+ * decode problem returns null so the pure path can produce its lenient result.
  */
 internal actual object PlatformFlate {
 
