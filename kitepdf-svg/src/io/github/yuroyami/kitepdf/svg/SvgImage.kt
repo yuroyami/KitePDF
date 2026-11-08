@@ -658,7 +658,7 @@ public class SvgImage private constructor(
      * piece (10.9.1). A nested tspan is laid out as a run of its own.
      */
     private fun layoutText(el: KiteXmlNode.Element, paint: Paint, depth: Int): List<TextRun> {
-        class Ch(val char: Char, val paint: Paint, val ids: List<String>) {
+        class Ch(val char: Char, val paint: Paint, val ids: List<String>, val onPath: TextPathPlace? = null) {
             var x: Double? = null
             var y: Double? = null
             var dx: Double? = null
@@ -667,23 +667,28 @@ public class SvgImage private constructor(
             var penX = 0.0
             var penY = 0.0
             var advance = 0.0
+            var pathHidden = false
         }
         val chars = ArrayList<Ch>()
         var afterSpace = true
-        fun collect(node: KiteXmlNode.Element, p: Paint, d: Int, ids: List<String>) {
+        fun collect(node: KiteXmlNode.Element, p: Paint, d: Int, ids: List<String>, onPath: TextPathPlace?) {
             if (d > MAX_DEPTH) return
             val first = chars.size
             for (child in node.children) when (child) {
                 is KiteXmlNode.Comment -> Unit
                 is KiteXmlNode.Text -> for (raw in child.text) {
                     val ch = if (raw == '\n' || raw == '\r' || raw == '\t') ' ' else raw
-                    if (ch != ' ') { chars.add(Ch(ch, p, ids)); afterSpace = false }
-                    else if (!afterSpace) { chars.add(Ch(' ', p, ids)); afterSpace = true }
+                    if (ch != ' ') { chars.add(Ch(ch, p, ids, onPath)); afterSpace = false }
+                    else if (!afterSpace) { chars.add(Ch(' ', p, ids, onPath)); afterSpace = true }
                 }
                 is KiteXmlNode.Element -> {
-                    if (child.tag.lowercase() != "tspan" || isDisplayNone(child)) continue
+                    val tag = child.tag.lowercase()
+                    if (tag != "tspan" && tag != "textpath" || isDisplayNone(child)) continue
                     val id = child.attrs["id"]?.takeIf { it.isNotEmpty() }
-                    collect(child, resolvePaint(child, p), d + 1, if (id == null) ids else ids + id)
+                    val childPaint = resolvePaint(child, p)
+                    // A textPath sets its characters along a path (SVG 1.1, 10.13; #940); one inside another does not nest.
+                    val place = if (tag == "textpath" && onPath == null) textPathPlace(child, childPaint) ?: onPath else onPath
+                    collect(child, childPaint, d + 1, if (id == null) ids else ids + id, place)
                 }
             }
             // The children ran first and hold the nearer values, so only gaps are filled.
@@ -699,26 +704,64 @@ public class SvgImage private constructor(
                 fill(List(own.size) { angles[minOf(it, angles.lastIndex)] }, { it.rotate }) { c, v -> c.rotate = v }
             }
         }
-        collect(el, paint, depth, emptyList())
+        collect(el, paint, depth, emptyList(), null)
         if (chars.lastOrNull()?.char == ' ') chars.removeAt(chars.lastIndex)
 
         var penX = 0.0
         var penY = 0.0
-        for (c in chars) {
-            c.x?.let { penX = it }
-            c.y?.let { penY = it }
-            penX += c.dx ?: 0.0
-            penY += c.dy ?: 0.0
-            c.penX = penX
-            c.penY = penY
-            c.advance = SvgText.advance(c.char, c.paint.fontSpec, c.paint.fontSize)
-            penX += c.advance
+        var k0 = 0
+        while (k0 < chars.size) {
+            val c = chars[k0]
+            val place = c.onPath
+            if (place == null) {
+                c.x?.let { penX = it }
+                c.y?.let { penY = it }
+                penX += c.dx ?: 0.0
+                penY += c.dy ?: 0.0
+                c.penX = penX
+                c.penY = penY
+                c.advance = SvgText.advance(c.char, c.paint.fontSpec, c.paint.fontSize)
+                penX += c.advance
+                k0++
+                continue
+            }
+            // The characters of one textPath: each one's midpoint at its distance along the path from
+            // startOffset, text-anchor working on that distance, and turned to the tangent there. One
+            // whose midpoint lies off the path is not drawn (SVG 1.1, 10.13.3).
+            var k1 = k0
+            while (k1 < chars.size && chars[k1].onPath === place) k1++
+            var along = 0.0
+            for (k in k0 until k1) {
+                val ch = chars[k]
+                along += ch.dx ?: 0.0
+                ch.advance = SvgText.advance(ch.char, ch.paint.fontSpec, ch.paint.fontSize)
+                ch.penX = along
+                along += ch.advance
+            }
+            val shift = place.start + SvgText.anchorShift(c.paint.textAnchor, along)
+            for (k in k0 until k1) {
+                val ch = chars[k]
+                val mid = shift + ch.penX + ch.advance / 2
+                val at = place.path.at(mid)
+                if (at == null) { ch.pathHidden = true; continue }
+                val (px, py, angle) = at
+                val r = angle * PI / 180.0
+                ch.penX = px - cos(r) * ch.advance / 2
+                ch.penY = py - sin(r) * ch.advance / 2
+                ch.rotate = angle
+                ch.x = ch.penX
+                ch.y = ch.penY
+            }
+            // The text after it goes on where the path's text ends.
+            place.path.at(shift + along)?.let { (ex, ey, _) -> penX = ex; penY = ey } ?: run { val e = place.path.end(); penX = e.first; penY = e.second }
+            k0 = k1
         }
         // text-anchor moves each chunk by its own advance, as the chunk's first character asks.
         var chunk = 0
         while (chunk < chars.size) {
+            if (chars[chunk].onPath != null) { chunk++; continue }
             var end = chunk + 1
-            while (end < chars.size && chars[end].x == null && chars[end].y == null) end++
+            while (end < chars.size && chars[end].onPath == null && chars[end].x == null && chars[end].y == null) end++
             val last = chars[end - 1]
             val shift = SvgText.anchorShift(chars[chunk].paint.textAnchor, last.penX + last.advance - chars[chunk].penX)
             for (k in chunk until end) chars[k].penX += shift
@@ -737,13 +780,82 @@ public class SvgImage private constructor(
                 (chars[j].dy ?: 0.0) == 0.0 && (chars[j].rotate ?: 0.0) == 0.0
             ) j++
             val text = buildString { for (k in i until j) append(chars[k].char) }
-            if (text.isNotBlank()) {
+            if (text.isNotBlank() && !c.pathHidden) {
                 val glyphs = SvgText.glyphs(text, c.paint.fontSpec)
                 runs.add(TextRun(c.paint, c.penX, c.penY, glyphs, SvgText.width(glyphs, c.paint.fontSize), rotate, c.ids))
             }
             i = j
         }
         return runs
+    }
+
+    /**
+     * A path flattened to a polyline, measured along its length, for `textPath` (#940): [at] gives
+     * the point at a distance and the direction there in degrees, or null off the path.
+     */
+    private class MeasuredPath(private val xs: DoubleArray, private val ys: DoubleArray) {
+        private val lengths = DoubleArray(xs.size).also { l -> for (i in 1 until xs.size) l[i] = l[i - 1] + kotlin.math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]) }
+        val length: Double get() = lengths.lastOrNull() ?: 0.0
+
+        fun at(distance: Double): Triple<Double, Double, Double>? {
+            if (xs.size < 2 || distance < 0.0 || distance > length) return null
+            var i = 1
+            while (i < lengths.lastIndex && lengths[i] < distance) i++
+            val seg = lengths[i] - lengths[i - 1]
+            val t = if (seg > 0.0) (distance - lengths[i - 1]) / seg else 0.0
+            val angle = kotlin.math.atan2(ys[i] - ys[i - 1], xs[i] - xs[i - 1]) * 180.0 / PI
+            return Triple(xs[i - 1] + (xs[i] - xs[i - 1]) * t, ys[i - 1] + (ys[i] - ys[i - 1]) * t, angle)
+        }
+
+        fun end(): Pair<Double, Double> = (xs.lastOrNull() ?: 0.0) to (ys.lastOrNull() ?: 0.0)
+
+        companion object {
+            /** [path]'s first subpath and those after it as one line, each curve in 32 steps. */
+            fun of(path: KitePath): MeasuredPath {
+                val xs = ArrayList<Double>(); val ys = ArrayList<Double>()
+                var cx = 0.0; var cy = 0.0; var sx = 0.0; var sy = 0.0
+                fun add(x: Double, y: Double) { xs += x; ys += y; cx = x; cy = y }
+                for (seg in path.segments) when (seg) {
+                    is KitePath.Segment.MoveTo -> { if (xs.isEmpty()) add(seg.x, seg.y) else { cx = seg.x; cy = seg.y }; sx = seg.x; sy = seg.y }
+                    is KitePath.Segment.LineTo -> add(seg.x, seg.y)
+                    is KitePath.Segment.CurveTo -> {
+                        val x0 = cx; val y0 = cy
+                        for (k in 1..32) {
+                            val t = k / 32.0; val u = 1 - t
+                            add(u * u * u * x0 + 3 * u * u * t * seg.x1 + 3 * u * t * t * seg.x2 + t * t * t * seg.x3,
+                                u * u * u * y0 + 3 * u * u * t * seg.y1 + 3 * u * t * t * seg.y2 + t * t * t * seg.y3)
+                        }
+                    }
+                    is KitePath.Segment.QuadTo -> {
+                        val x0 = cx; val y0 = cy
+                        for (k in 1..32) {
+                            val t = k / 32.0; val u = 1 - t
+                            add(u * u * x0 + 2 * u * t * seg.x1 + t * t * seg.x2, u * u * y0 + 2 * u * t * seg.y1 + t * t * seg.y2)
+                        }
+                    }
+                    KitePath.Segment.Close -> add(sx, sy)
+                }
+                return MeasuredPath(xs.toDoubleArray(), ys.toDoubleArray())
+            }
+        }
+    }
+
+    /** Where a textPath sets its characters: its measured path and the startOffset along it. */
+    private class TextPathPlace(val path: MeasuredPath, val start: Double)
+
+    /** The place that the textPath [el] names, by `href`, `xlink:href` or SVG 2's `path`, or null when it names none. */
+    private fun textPathPlace(el: KiteXmlNode.Element, paint: Paint): TextPathPlace? {
+        val shape = el.attrs["path"]?.let { parsePath(it) }
+            ?: (el.attrs["href"] ?: el.attrs["xlink:href"])?.trim()?.removePrefix("#")?.let { byId[it] }?.let { target ->
+                // The referenced element's own transform applies to the path (SVG 1.1, 10.13.1).
+                val d = shapeOf(target, paint) ?: return null
+                styleOrAttr(target, "transform")?.let { transformPath(d, parseTransform(it)) } ?: d
+            }
+            ?: return null
+        val measured = MeasuredPath.of(shape)
+        val offset = el.attrs["startOffset"] ?: el.attrs["startoffset"]
+        val start = offset?.trim()?.let { if (it.endsWith('%')) (it.removeSuffix("%").toDoubleOrNull() ?: 0.0) / 100.0 * measured.length else parseLen(it, paint.fontSize, measured.length) } ?: 0.0
+        return TextPathPlace(measured, start)
     }
 
     /** Turns a run by its own rotation about its start, or the identity. */

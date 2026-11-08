@@ -681,6 +681,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pages (#938).
 - SVG markers draw: marker-start, marker-mid, marker-end and marker on paths, lines, polylines and polygons,
   sized by markerUnits and the viewBox, placed by refX and refY, turned by orient (#941).
+- SVG text inside a textPath draws along its path, each glyph's middle at its distance from startOffset and
+  turned to the tangent, and the page text and search find it (#940).
 
 ## [0.13.0] - 2026-10-09
 
