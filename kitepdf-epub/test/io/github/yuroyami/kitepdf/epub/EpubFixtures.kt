@@ -212,7 +212,7 @@ internal object EpubFixtures {
      * `A` to it. Enough for an embedded face to resolve, measure and draw one
      * character without a font file from outside the repo.
      */
-    fun squareTtf(): ByteArray {
+    fun squareTtf(advance: Int = 600): ByteArray {
         fun u16(v: Int) = byteArrayOf((v shr 8).toByte(), v.toByte())
         fun s16(v: Int) = u16(v and 0xFFFF)
         fun u32(v: Long) = byteArrayOf((v shr 24).toByte(), (v shr 16).toByte(), (v shr 8).toByte(), v.toByte())
@@ -228,7 +228,7 @@ internal object EpubFixtures {
         val head = ByteArray(54).also { it[18] = 0x03; it[19] = 0xE8.toByte() } // unitsPerEm 1000, short loca
         val maxp = u32(0x00010000) + u16(2) + ByteArray(26)
         val hhea = ByteArray(36).also { it[35] = 2 }                             // numberOfHMetrics 2
-        val hmtx = u16(500) + u16(0) + u16(600) + u16(0)
+        val hmtx = u16(500) + u16(0) + u16(advance) + u16(0)
         val loca = u16(0) + u16(0) + u16(glyf.size / 2)
         val tables = listOf("cmap" to cmap, "glyf" to glyf, "head" to head, "hhea" to hhea, "hmtx" to hmtx, "loca" to loca, "maxp" to maxp)
         var offset = 12 + tables.size * 16

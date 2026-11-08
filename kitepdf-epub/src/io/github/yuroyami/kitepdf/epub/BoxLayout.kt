@@ -2347,7 +2347,10 @@ internal class BoxLayout(
                 else -> 0.0
             }
             val spec = fontSpec(run.family, run.bold, run.italic)
-            val face = run.fontFamilyNames.firstNotNullOfOrNull { fonts.match(it, run.bold, run.italic) }
+            val firstChar = run.text.firstOrNull()?.code ?: -1
+            // CSS Fonts 4, 5.2 by weight, and the face whose unicode-range holds the run's first character (#929).
+            val face = run.fontFamilyNames.firstNotNullOfOrNull { fonts.match(it, run.fontWeight, run.italic, firstChar) }
+                ?: run.fontFamilyNames.firstNotNullOfOrNull { fonts.match(it, run.fontWeight, run.italic) }
             // Tate-chu-yoko: the text of one element, which may come as several runs, is one cell an
             // em long down the column, set as an ideograph is between its neighbours. A space or a
             // line break at either end of it is dropped (#508).
@@ -2400,6 +2403,10 @@ internal class BoxLayout(
                 val f = when {
                     face == null -> null
                     smcpGid >= 0 -> face
+                    // A character outside the face's unicode-range goes to the face of the family
+                    // list that has it in range, before any other fallback (CSS Fonts 4, 4.5; #929).
+                    !face.inRange(c) -> run.fontFamilyNames.firstNotNullOfOrNull { fonts.match(it, run.fontWeight, run.italic, c) }
+                        ?.takeIf { it.gidFor(c) != 0 } ?: fonts.fallbackFor(c, run.bold, run.italic)
                     face.gidFor(c) != 0 -> face
                     // A variation selector stays with its base's face, so the word shapes as one and
                     // the selector picks the base's variant glyph there (#914).

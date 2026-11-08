@@ -24,6 +24,8 @@ internal data class InlineRun(
     val text: String,
     val fontSizePt: Double,
     val bold: Boolean = false,
+    /** The numeric `font-weight`, which picks among `@font-face` weights (#929). */
+    val fontWeight: Int = if (bold) 700 else 400,
     val italic: Boolean = false,
     val family: GenericFont = GenericFont.SERIF,
     val color: RgbColor = BLACK,

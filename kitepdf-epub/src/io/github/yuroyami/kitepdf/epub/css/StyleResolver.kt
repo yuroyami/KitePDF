@@ -692,7 +692,7 @@ internal class StyleResolver(
         fun len(ref: Double) = CssValues.length(v, b.fontSizePt, remPt, ref, viewportW, viewportH)
         when (prop) {
             "display" -> parseDisplay(v)?.let { b.display = it }
-            "font-weight" -> parseBold(v)?.let { b.bold = it }
+            "font-weight" -> fontWeightOf(v, b.parent.fontWeight)?.let { b.fontWeight = it; b.bold = it >= 600 }
             "font-style" -> b.italic = when (v.trim().lowercase()) {
                 "italic", "oblique" -> true
                 "normal" -> false
@@ -910,7 +910,7 @@ internal class StyleResolver(
     private fun takeValue(dst: Builder, name: String, src: Builder) {
         when (name) {
             "display" -> dst.display = src.display
-            "font-weight" -> dst.bold = src.bold
+            "font-weight" -> { dst.bold = src.bold; dst.fontWeight = src.fontWeight }
             "font-style" -> dst.italic = src.italic
             "font-family" -> { dst.fontFamily = src.fontFamily; dst.fontFamilyNames = src.fontFamilyNames }
             "font-variant", "font-variant-caps" -> dst.smallCaps = src.smallCaps
@@ -1183,10 +1183,16 @@ internal class StyleResolver(
         else -> null
     }
 
-    private fun parseBold(v: String): Boolean? = when (v.trim().lowercase()) {
-        "bold", "bolder" -> true
-        "normal", "lighter" -> false
-        else -> v.trim().toIntOrNull()?.let { it >= 600 }
+    /**
+     * A `font-weight` value as a number (CSS Fonts 4, 2.2): the keywords, a number from 1 to 1000,
+     * or `bolder` and `lighter` relative to the [parent] weight by the table of 2.2.1.
+     */
+    private fun fontWeightOf(v: String, parent: Int): Int? = when (v.trim().lowercase()) {
+        "normal" -> 400
+        "bold" -> 700
+        "bolder" -> when { parent < 350 -> 400; parent < 550 -> 700; else -> 900 }
+        "lighter" -> when { parent < 100 -> parent; parent < 550 -> 100; parent < 750 -> 400; else -> 700 }
+        else -> v.trim().toDoubleOrNull()?.takeIf { it in 1.0..1000.0 }?.toInt()
     }
 
     private val GENERIC_FAMILIES = setOf(
@@ -1380,6 +1386,7 @@ internal class StyleResolver(
     private inner class Builder(val parent: ComputedStyle) {
         var fontSizePt = parent.fontSizePt
         var bold = parent.bold
+        var fontWeight = parent.fontWeight // inherited
         var italic = parent.italic
         var fontFamily = parent.fontFamily
         var color = parent.color
@@ -1571,6 +1578,7 @@ internal class StyleResolver(
                 textCombineUpright = textCombineUpright,
                 tabSpaces = tabSpaces,
                 smoothImages = smoothImages,
+                fontWeight = fontWeight,
                 tabLengthPt = tabLengthPt,
                 lineHeightFactor = lineHeightFactor,
                 language = language,

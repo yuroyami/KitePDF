@@ -561,6 +561,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The EPUB cascade maps the HTML presentational attributes of older books: `align` on blocks, table parts, images
   and `hr`, `bgcolor`, `font` colour, face and size, `width` and `height` on table parts and `hr`, and `center`
   is a centred block (#843).
+- `@font-face` matches by numeric weight as CSS Fonts 4, 5.2 does, takes weight ranges such as `300 700`, and
+  honours `unicode-range`, so a Thin face declared before the Regular one no longer draws normal text (#929).
 
 ## [0.13.0] - 2026-10-09
 

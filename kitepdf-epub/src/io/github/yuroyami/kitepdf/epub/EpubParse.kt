@@ -583,7 +583,7 @@ internal class ParsedEpub(
     fun loadFace(rule: FontFaceRule, dir: String, remoteBytes: (String) -> ByteArray?): EmbeddedFace? {
         for (url in sourceOrder(rule)) {
             val program = (if (isRemoteUrl(url)) remoteProgram(url, remoteBytes(url)) else programAt(fontPath(dir, url))) ?: continue
-            return EmbeddedFace(rule.family, rule.bold, rule.italic, program)
+            return EmbeddedFace(rule.family, rule.bold, rule.italic, program, rule.weights, rule.unicodeRanges)
         }
         return null
     }

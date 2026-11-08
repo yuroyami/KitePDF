@@ -273,6 +273,8 @@ internal data class ComputedStyle(
      * draw an enlarged image with hard pixel edges (CSS Images 3; #936). Inherited.
      */
     val smoothImages: Boolean = true,
+    /** `font-weight` as a number from 1 to 1000, which an `@font-face` weight matches (CSS Fonts 4, 2.2; #929). Inherited. */
+    val fontWeight: Int = 400,
     val tabLengthPt: Double? = null,
     /**
      * A unitless `line-height`: the number is what computes and inherits, and each element's

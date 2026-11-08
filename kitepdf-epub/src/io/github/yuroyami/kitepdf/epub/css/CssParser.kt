@@ -120,15 +120,67 @@ internal object CssParser {
     private fun parseFontFace(body: String): FontFaceRule? {
         var family = ""
         val urls = ArrayList<String>()
-        var bold = false
+        var weights = 400..400
         var italic = false
+        var ranges: List<IntRange>? = null
         for (d in parseDeclarations(body)) when (d.property) {
             "font-family" -> family = d.value.trim().trim('"', '\'').lowercase()
             "src" -> urls.addAll(parseSrcUrls(d.value))
-            "font-weight" -> bold = d.value.trim().lowercase().let { it == "bold" || it == "bolder" || (it.toIntOrNull()?.let { n -> n >= 600 } == true) }
-            "font-style" -> italic = d.value.trim().lowercase().let { it == "italic" || it == "oblique" }
+            "font-weight" -> fontFaceWeights(d.value)?.let { weights = it }
+            "font-style" -> italic = d.value.trim().lowercase().let { it.startsWith("italic") || it.startsWith("oblique") }
+            "unicode-range" -> ranges = unicodeRanges(d.value)
         }
-        return if (family.isEmpty() || urls.isEmpty()) null else FontFaceRule(family, urls, bold, italic)
+        if (family.isEmpty() || urls.isEmpty()) return null
+        return FontFaceRule(family, urls, bold = weights.last >= 600, italic = italic, weights = weights, unicodeRanges = ranges)
+    }
+
+    /**
+     * A `font-weight` descriptor: a keyword, a number from 1 to 1000, or two of them as a range
+     * (CSS Fonts 4, 4.4); null for anything else, which keeps the initial 400.
+     */
+    private fun fontFaceWeights(v: String): IntRange? {
+        fun one(w: String): Int? = when (w.lowercase()) {
+            "normal" -> 400
+            "bold", "bolder" -> 700
+            "lighter" -> 100
+            else -> w.toDoubleOrNull()?.takeIf { it in 1.0..1000.0 }?.toInt()
+        }
+        val words = v.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        return when (words.size) {
+            1 -> one(words[0])?.let { it..it }
+            2 -> {
+                val a = one(words[0]) ?: return null
+                val b = one(words[1]) ?: return null
+                minOf(a, b)..maxOf(a, b)
+            }
+            else -> null
+        }
+    }
+
+    /** A `unicode-range` descriptor: `U+0-7F`, `U+4??`, `U+20AC`, comma-separated (CSS Fonts 4, 4.5). */
+    private fun unicodeRanges(v: String): List<IntRange>? {
+        val out = ArrayList<IntRange>()
+        for (part in v.split(',')) {
+            val t = part.trim().uppercase()
+            if (!t.startsWith("U+")) return null
+            val body = t.substring(2)
+            val range = when {
+                '?' in body -> {
+                    val lo = body.replace('?', '0').toIntOrNull(16) ?: return null
+                    val hi = body.replace('?', 'F').toIntOrNull(16) ?: return null
+                    lo..hi
+                }
+                '-' in body -> {
+                    val lo = body.substringBefore('-').toIntOrNull(16) ?: return null
+                    val hi = body.substringAfter('-').toIntOrNull(16) ?: return null
+                    lo..hi
+                }
+                else -> (body.toIntOrNull(16) ?: return null).let { it..it }
+            }
+            if (range.first > range.last || range.last > 0x10FFFF) return null
+            out += range
+        }
+        return out.ifEmpty { null }
     }
 
     /** Extract the `url(...)` targets from a `src:` value, in order. */

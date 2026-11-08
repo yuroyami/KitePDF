@@ -530,7 +530,7 @@ internal class BoxBuilder(
     private fun pseudoBlock(pc: PseudoContent): BlockBox {
         val run = InlineRun(
             text = pc.text, fontSizePt = pc.style.fontSizePt,
-            bold = pc.style.bold, italic = pc.style.italic, family = pc.style.fontFamily,
+            bold = pc.style.bold, fontWeight = pc.style.fontWeight, italic = pc.style.italic, family = pc.style.fontFamily,
             color = pc.style.color, valign = pc.style.verticalAlign, underline = pc.style.underline,
             fontFamilyNames = pc.style.fontFamilyNames,
             lineThrough = pc.style.lineThrough,
@@ -1252,7 +1252,7 @@ internal class BoxBuilder(
 
         private fun makeRun(text: String, style: ComputedStyle) = InlineRun(
             text = text, fontSizePt = style.fontSizePt,
-            bold = style.bold, italic = style.italic, family = style.fontFamily,
+            bold = style.bold, fontWeight = style.fontWeight, italic = style.italic, family = style.fontFamily,
             color = style.color, valign = style.verticalAlign, underline = style.underline,
             fontFamilyNames = style.fontFamilyNames,
             rubyGroup = rubyGroup, rubyText = rubyText,

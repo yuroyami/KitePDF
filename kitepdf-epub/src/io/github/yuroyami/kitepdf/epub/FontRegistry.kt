@@ -70,7 +70,14 @@ internal class EmbeddedFace(
     val bold: Boolean,
     val italic: Boolean,
     private val program: FontProgram,
+    /** The weights its `@font-face` serves (CSS Fonts 4, 4.4; #929). */
+    val weights: IntRange = if (bold) 700..700 else 400..400,
+    /** The characters its `unicode-range` gives it, or null for every one (CSS Fonts 4, 4.5; #929). */
+    val unicodeRanges: List<IntRange>? = null,
 ) {
+    /** Whether `unicode-range` lets this face draw [codePoint]. */
+    fun inRange(codePoint: Int): Boolean = unicodeRanges?.any { codePoint in it } != false
+
     private val ttf: TrueTypeFont get() = program.ttf
     private val cff: CffFont? get() = program.cff
     private val kern: OpenTypeKern? get() = program.kern
@@ -134,12 +141,32 @@ internal class EmbeddedFace(
  */
 internal class FontRegistry(private val faces: List<EmbeddedFace>) {
 
-    fun match(family: String?, bold: Boolean, italic: Boolean): EmbeddedFace? {
+    fun match(family: String?, bold: Boolean, italic: Boolean): EmbeddedFace? = match(family, if (bold) 700 else 400, italic)
+
+    /**
+     * The face of [family] for [weight] and [italic], by CSS Fonts 4, 5.2: the style first, then the
+     * weight; with [codePoint] at least 0, only a face whose `unicode-range` holds it (4.5; #929).
+     */
+    fun match(family: String?, weight: Int, italic: Boolean, codePoint: Int = -1): EmbeddedFace? {
         if (family == null || faces.isEmpty()) return null
         val fam = family.lowercase()
-        return faces.firstOrNull { it.family == fam && it.bold == bold && it.italic == italic }
-            ?: faces.firstOrNull { it.family == fam && it.italic == italic }
-            ?: faces.firstOrNull { it.family == fam }
+        val ofFamily = faces.filter { it.family == fam && (codePoint < 0 || it.inRange(codePoint)) }
+        if (ofFamily.isEmpty()) return null
+        val styled = ofFamily.filter { it.italic == italic }.ifEmpty { ofFamily }
+        return nearestWeight(styled, weight)
+    }
+
+    /** CSS Fonts 4, 5.2, step 4.d: the face whose weights hold [w], else the nearest in the order the spec gives. */
+    private fun nearestWeight(candidates: List<EmbeddedFace>, w: Int): EmbeddedFace {
+        candidates.firstOrNull { w in it.weights }?.let { return it }
+        val below = candidates.filter { it.weights.last < w }.sortedByDescending { it.weights.last }
+        val above = candidates.filter { it.weights.first > w }.sortedBy { it.weights.first }
+        return when {
+            // From 400 to 500: up to 500 first, then down, then past 500.
+            w in 400..500 -> above.firstOrNull { it.weights.first <= 500 } ?: below.firstOrNull() ?: above.first()
+            w < 400 -> below.firstOrNull() ?: above.first()
+            else -> above.firstOrNull() ?: below.first()
+        }
     }
 
     /**
@@ -150,8 +177,8 @@ internal class FontRegistry(private val faces: List<EmbeddedFace>) {
      * generic system-font path instead of painting tofu.
      */
     fun fallbackFor(codePoint: Int, bold: Boolean, italic: Boolean): EmbeddedFace? =
-        faces.firstOrNull { it.bold == bold && it.italic == italic && it.gidFor(codePoint) != 0 }
-            ?: faces.firstOrNull { it.gidFor(codePoint) != 0 }
+        faces.firstOrNull { it.bold == bold && it.italic == italic && it.inRange(codePoint) && it.gidFor(codePoint) != 0 }
+            ?: faces.firstOrNull { it.inRange(codePoint) && it.gidFor(codePoint) != 0 }
 
     /** A face whose cmap covers every code point of [cps], or null (ruby readings). */
     fun coveringAll(cps: IntArray): EmbeddedFace? =

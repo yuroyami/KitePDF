@@ -30,6 +30,10 @@ internal class FontFaceRule(
     val srcUrls: List<String>, // in declared (preference) order
     val bold: Boolean,
     val italic: Boolean,
+    /** The `font-weight` descriptor as a range, one weight for a single value (CSS Fonts 4, 4.4; #929). */
+    val weights: IntRange = if (bold) 700..700 else 400..400,
+    /** The `unicode-range` descriptor, or null for every character (CSS Fonts 4, 4.5; #929). */
+    val unicodeRanges: List<IntRange>? = null,
 )
 
 /** Everything the parser pulls from a stylesheet: style rules + `@font-face`s. */
