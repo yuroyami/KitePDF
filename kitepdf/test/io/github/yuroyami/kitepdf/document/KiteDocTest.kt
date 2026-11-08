@@ -86,6 +86,18 @@ class KiteDocTest {
     }
 
     @Test
+    fun a_wrong_password_behind_a_late_header_is_a_wrong_password() {
+        // The fallback for a header past the first kilobyte swallowed it as unreadable (#823).
+        val pdf = io.github.yuroyami.kitepdf.writer.PdfBuilder().page(width = 100.0, height = 100.0) {}
+            .encrypt(userPassword = "hunter2", ownerPassword = "owner-pw", random = kotlin.random.Random(42))
+            .build()
+        val late = " ".repeat(2048).encodeToByteArray() + pdf
+        assertNull(KiteDoc.formatOf(late))
+        assertFailsWith<io.github.yuroyami.kitepdf.core.KiteWrongPasswordException> { KiteDoc.open(late, "wrong") }
+        assertEquals(1, (KiteDoc.open(late, "hunter2") as PdfDocument).pageCount)
+    }
+
+    @Test
     fun open_or_null_swallows_everything() {
         assertNull(KiteDoc.openOrNull(ByteArray(64) { 0x7F }))
         assertNull(KiteDoc.openOrNull(ByteArray(0)))

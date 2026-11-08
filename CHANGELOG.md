@@ -374,6 +374,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UTF-8 (#762).
 - A shading, pattern, function or graphics state entry stored as an indirect object, such as `/Coords`, `/BBox`,
   `/C0` or `/ca`, is read, where it read as absent and a gradient or pattern fill painted nothing (#777).
+- `KiteDoc.open` with a wrong password throws `KiteWrongPasswordException` for an encrypted PDF whose header is
+  past the first kilobyte, and retries a non-ASCII password as Latin-1 there too, where it said the file was not
+  readable (#823).
 
 ## [0.13.0] - 2026-10-09
 

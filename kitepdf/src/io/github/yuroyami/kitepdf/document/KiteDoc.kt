@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.cbz.CbzDocument
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
+import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
 import io.github.yuroyami.kitepdf.epub.EpubDocument
 import io.github.yuroyami.kitepdf.epub.EpubSettings
 import io.github.yuroyami.kitepdf.svg.SvgDocument
@@ -95,10 +96,17 @@ public object KiteDoc {
         KiteDocFormat.Cbz -> CbzDocument.open(bytes)
         KiteDocFormat.Svg -> SvgDocument.open(bytes)
         KiteDocFormat.Xps -> XpsDocument.open(bytes)
-        null -> PdfDocument.openOrNull(bytes, password.encodeToByteArray())
-            ?: throw KiteFormatException(
+        // One last try as a damaged PDF, by the String overload, which retries a non-ASCII password
+        // as Latin-1. A wrong password stays a KiteWrongPasswordException, as the KDoc promises (#823).
+        null -> try {
+            PdfDocument.open(bytes, password)
+        } catch (e: KiteWrongPasswordException) {
+            throw e
+        } catch (e: Exception) {
+            throw KiteFormatException(
                 "not a readable PDF, EPUB, CBZ, SVG or XPS (${bytes.size} bytes, starting ${headerPreview(bytes)})"
             )
+        }
     }
 
     /** [open], but null instead of an exception on anything unreadable. */
