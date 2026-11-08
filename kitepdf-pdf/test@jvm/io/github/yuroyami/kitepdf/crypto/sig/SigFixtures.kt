@@ -92,16 +92,29 @@ internal object SigFixtures {
     }
 
     /** A v3 certificate for [keys], named [cn], signed by [issuer] or by itself when [issuer] is null. */
-    fun certificate(cn: String, keys: KeyPair, issuer: Identity?, ca: Boolean, serial: Long, notAfter: String = "360101000000Z", ocspSigning: Boolean = false): Identity {
+    /**
+     * [keyUsage] is the key usage BIT STRING's first content byte, bit 7 being digitalSignature,
+     * or null for no extension; [pathLength] the basicConstraints path length of a CA; [extra]
+     * more extensions, each an encoded Extension.
+     */
+    fun certificate(
+        cn: String, keys: KeyPair, issuer: Identity?, ca: Boolean, serial: Long, notAfter: String = "360101000000Z", ocspSigning: Boolean = false,
+        keyUsage: Int? = null, pathLength: Int? = null, extra: List<ByteArray> = emptyList(),
+    ): Identity {
         val subjectName = name(cn)
         val ski = sha("SHA-1", keys.public.encoded)
         val signerKeys = issuer?.keys ?: keys
         val signerIsEc = signerKeys.private.algorithm == "EC"
         val sigAlg = if (signerIsEc) algorithm(ECDSA_SHA256) else algorithm(SHA256_RSA, NULL)
         val extensions = mutableListOf(
-            seq(oid("2.5.29.19"), Asn1.encode(0x01, byteArrayOf(-1)), octets(if (ca) seq(Asn1.encode(0x01, byteArrayOf(-1))) else seq())),
+            seq(
+                oid("2.5.29.19"), Asn1.encode(0x01, byteArrayOf(-1)),
+                octets(if (ca) seq(Asn1.encode(0x01, byteArrayOf(-1)), *listOfNotNull(pathLength?.let { int(it.toLong()) }).toTypedArray()) else seq()),
+            ),
             seq(oid("2.5.29.14"), octets(octets(ski))),
         )
+        if (keyUsage != null) extensions += seq(oid("2.5.29.15"), Asn1.encode(0x01, byteArrayOf(-1)), octets(Asn1.encode(0x03, byteArrayOf(0, keyUsage.toByte()))))
+        extensions += extra
         if (ocspSigning) extensions += seq(oid("2.5.29.37"), octets(seq(oid("1.3.6.1.5.5.7.3.9"))))
         val tbs = seq(
             tagged(0xA0, int(2)),

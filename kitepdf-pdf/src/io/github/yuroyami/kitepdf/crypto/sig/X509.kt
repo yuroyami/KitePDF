@@ -30,6 +30,14 @@ internal class X509(
     val signature: ByteArray,
     val subjectKeyId: ByteArray?,
     val isCa: Boolean,
+    /** The basicConstraints path length constraint (RFC 5280, 4.2.1.9), or null when it sets none. */
+    val pathLength: Int?,
+    /** Whether a key usage extension (RFC 5280, 4.2.1.3) is present. */
+    val hasKeyUsage: Boolean,
+    /** Whether that extension sets keyCertSign, bit 5. */
+    val keyCertSign: Boolean,
+    /** The OIDs of critical extensions this validator does not process (RFC 5280, 4.2). */
+    val unknownCritical: List<String>,
     /** The extended key usages (RFC 5280, 4.2.1.12), such as OCSP signing. */
     val extendedKeyUsages: List<String>,
 ) {
@@ -58,14 +66,32 @@ internal class X509(
             val extensions = fields.drop(i).firstOrNull { it.tag == 0xA3 }?.children?.firstOrNull()?.children.orEmpty()
             var subjectKeyId: ByteArray? = null
             var isCa = false
+            var pathLength: Int? = null
+            var hasKeyUsage = false
+            var keyCertSign = false
+            val unknownCritical = ArrayList<String>()
             var usages = emptyList<String>()
             for (ext in extensions) {
                 val id = ext.children.firstOrNull()?.oid()
+                val critical = ext.children.getOrNull(1)?.let { it.tag == 0x01 && it.content().firstOrNull()?.toInt() != 0 } ?: false
                 val value = ext.children.lastOrNull()?.takeIf { it.tag == Asn1.OCTET_STRING }?.content() ?: continue
                 when (id) {
                     "2.5.29.14" -> subjectKeyId = Asn1.read(value, 0)?.content()
-                    "2.5.29.19" -> isCa = Asn1.read(value, 0)?.children?.firstOrNull()?.let { it.tag == 0x01 && it.content().firstOrNull()?.toInt() != 0 } ?: false
+                    "2.5.29.19" -> {
+                        val fieldsOf = Asn1.read(value, 0)?.children.orEmpty()
+                        isCa = fieldsOf.firstOrNull()?.let { it.tag == 0x01 && it.content().firstOrNull()?.toInt() != 0 } ?: false
+                        pathLength = fieldsOf.firstOrNull { it.tag == 0x02 }?.content()?.let { bytes ->
+                            if (bytes.size > 4) Int.MAX_VALUE else bytes.fold(0) { acc, b -> (acc shl 8) or (b.toInt() and 0xFF) }
+                        }
+                    }
+                    "2.5.29.15" -> {
+                        hasKeyUsage = true
+                        // A BIT STRING: its first byte counts the unused bits, then bit 0 is the top bit.
+                        val bits = Asn1.read(value, 0)?.content()
+                        keyCertSign = bits != null && bits.size >= 2 && (bits[1].toInt() and 0x04) != 0
+                    }
                     "2.5.29.37" -> usages = Asn1.read(value, 0)?.children.orEmpty().mapNotNull { it.oid() }
+                    else -> if (critical && id !in PROCESSED) unknownCritical += id ?: "?"
                 }
             }
             val algorithm = cert.children[1]
@@ -88,6 +114,10 @@ internal class X509(
                 signature = cert.children[2].bitString() ?: return null,
                 subjectKeyId = subjectKeyId,
                 isCa = isCa,
+                pathLength = pathLength,
+                hasKeyUsage = hasKeyUsage,
+                keyCertSign = keyCertSign,
+                unknownCritical = unknownCritical,
                 extendedKeyUsages = usages,
             )
         }.getOrNull()
@@ -117,6 +147,23 @@ internal class X509(
             val value = attribute.children.getOrNull(1)?.string() ?: return@mapNotNull null
             "${NAMES[type] ?: type}=$value"
         }.joinToString(", ")
+
+        /**
+         * Extensions that a critical flag does not make fail the path: those read above, and those
+         * that only describe the certificate or point at data, which a check of one signature does
+         * not depend on. Name constraints and policy constraints are left out, so a critical one
+         * fails the path, as RFC 5280, 6.1.4 (o) asks of an extension a validator does not process.
+         */
+        private val PROCESSED = setOf(
+            "2.5.29.17", // subject alternative name
+            "2.5.29.18", // issuer alternative name
+            "2.5.29.31", // CRL distribution points
+            "2.5.29.32", // certificate policies: no policy is required, so any set is acceptable
+            "2.5.29.35", // authority key identifier
+            "2.5.29.46", // freshest CRL
+            "1.3.6.1.5.5.7.1.1", // authority information access
+            "1.3.6.1.5.5.7.48.1.5", // OCSP no check
+        )
 
         private val NAMES = mapOf(
             "2.5.4.3" to "CN", "2.5.4.10" to "O", "2.5.4.11" to "OU", "2.5.4.6" to "C", "2.5.4.7" to "L",

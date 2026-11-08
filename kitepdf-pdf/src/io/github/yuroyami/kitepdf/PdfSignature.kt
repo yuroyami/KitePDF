@@ -149,7 +149,13 @@ public class PdfSignatureValidation internal constructor(
      * signature, the document or the trust anchors.
      */
     public val chain: List<PdfCertificate>,
-    /** True when [status] is [Status.Valid] and a certificate of [chain] is one of the trust anchors. */
+    /**
+     * True when [status] is [Status.Valid], a certificate of [chain] is one of the trust anchors,
+     * and the path from the signer to it holds by RFC 5280, 6.1: each issuer below the anchor is a
+     * CA by its basicConstraints, its key usage, when it has one, allows certificate signing, its
+     * path length constraint holds, and no certificate below the anchor has a critical extension
+     * KitePDF does not process. [detail] says which rule a path that fails breaks.
+     */
     public val isTrusted: Boolean,
     /**
      * True when the file holds bytes that the signature does not cover, apart from the
@@ -163,7 +169,7 @@ public class PdfSignatureValidation internal constructor(
      * the timestamp authority states.
      */
     public val signedTime: PdfDate?,
-    /** Why [status] is not [Status.Valid], in words, or null when it is. */
+    /** Why [status] is not [Status.Valid], or else why the chain is not trusted, in words, or null. */
     public val detail: String?,
     /**
      * The changes that later revisions made after signing, each with whether the certification

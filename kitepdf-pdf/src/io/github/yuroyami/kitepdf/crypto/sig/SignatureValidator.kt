@@ -214,9 +214,48 @@ internal class SignatureValidator(
 
     private fun result(status: Status, detail: String?, chain: List<X509> = emptyList(), signedTime: PdfDate? = null): PdfSignatureValidation {
         // Trust speaks for the signer only when the signature holds: an invalid one claims nothing.
-        val trusted = status == Status.Valid && chain.any { c -> anchors.any { it.der.contentEquals(c.der) } }
-        val certificates = chain.mapIndexed { i, cert -> certificateOf(cert, revocationOf(cert, chain.getOrNull(i + 1))) }
-        return PdfSignatureValidation(status, certificates.firstOrNull(), certificates, trusted, modified, signedTime, detail)
+        val anchorAt = chain.indexOfFirst { c -> anchors.any { it.der.contentEquals(c.der) } }
+        val pathProblem = if (status == Status.Valid && anchorAt >= 0) pathProblem(chain, anchorAt) else null
+        val trusted = status == Status.Valid && anchorAt >= 0 && pathProblem == null
+        // Revocation data counts only from an issuer that may issue: a false issuer signs no CRL.
+        val certificates = chain.mapIndexed { i, cert ->
+            val issuer = chain.getOrNull(i + 1)?.takeIf { pathProblem == null || i + 1 <= anchorAt && canIssue(chain, i + 1, anchorAt) == null }
+            certificateOf(cert, revocationOf(cert, issuer))
+        }
+        return PdfSignatureValidation(status, certificates.firstOrNull(), certificates, trusted, modified, signedTime, detail ?: pathProblem)
+    }
+
+    /**
+     * Why the path from the signer to the trust anchor at [anchorAt] breaks RFC 5280, 6.1, or null
+     * when it holds (#999). The anchor itself is exempt, as the caller chose to trust it (6.1.1 (d)).
+     */
+    private fun pathProblem(chain: List<X509>, anchorAt: Int): String? {
+        for (i in 0 until anchorAt) {
+            val cert = chain[i]
+            cert.unknownCritical.firstOrNull()?.let {
+                return "the chain is not trusted: ${cert.commonName} has a critical extension $it that KitePDF does not process"
+            }
+            if (i > 0) canIssue(chain, i, anchorAt)?.let { return it }
+        }
+        return null
+    }
+
+    /** Why [chain]'s certificate at [i], below the anchor at [anchorAt], may not issue the one before it, or null. */
+    private fun canIssue(chain: List<X509>, i: Int, anchorAt: Int): String? {
+        if (i >= anchorAt) return null
+        val cert = chain[i]
+        val issued = chain[i - 1].commonName
+        // 6.1.4 (k): an issuer is a CA by its basicConstraints; a certificate without them is none.
+        if (!cert.isCa) return "the chain is not trusted: ${cert.commonName}, which issued $issued, is not a CA"
+        // 6.1.4 (n): a key usage extension must allow certificate signing.
+        if (cert.hasKeyUsage && !cert.keyCertSign) {
+            return "the chain is not trusted: the key usage of ${cert.commonName}, which issued $issued, does not allow certificate signing"
+        }
+        // 6.1.4 (l) and (m): the CAs below this one, the signer left out, may not pass its path length.
+        cert.pathLength?.let { limit ->
+            if (i - 1 > limit) return "the chain is not trusted: ${cert.commonName} allows $limit CAs below it and has ${i - 1}"
+        }
+        return null
     }
 
     /**

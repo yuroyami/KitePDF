@@ -437,6 +437,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   low byte, so `/€` came out as `/#AC` and two names could write the same bytes (#742).
 - A field appearance writes the /DA font name with its escapes, as its resources write it, so a font named
   `/F#20A` no longer becomes `/F A`, an unknown operator before a `Tf` short of operands (#728).
+- A signature is trusted only when the path from its signer to the trust anchor holds by RFC 5280, 6.1: each
+  issuer below the anchor is a CA by its basicConstraints, with keyCertSign when it has a key usage, within its
+  path length constraint, and no certificate below the anchor has a critical extension KitePDF does not process.
+  A certificate issued by an end entity read as valid and trusted. `detail` names the rule a refused path breaks,
+  and revocation data counts only from an issuer that may issue (#999).
 
 ## [0.13.0] - 2026-10-09
 
