@@ -374,6 +374,7 @@ internal fun PdfEditor.redactFormXObject(
             strippedResources?.getDict("Properties", effective)?.let { withEntry(own, "Properties", it) } ?: own
         }
         val newResources = withSoftMaskAdditions(withFormAdditions(formOwnResources, nested), masks, finalOps)
+            ?.let { withoutUnshownFonts(it, finalOps, keepAll = lendsFonts(it)) }
         if (newResources != null) newDict = withEntry(newDict, "Resources", newResources)
         updateObject(target, PdfStreams.flate(body, extraFrom(newDict)))
     } catch (e: Throwable) {
@@ -901,3 +902,48 @@ internal val UNREDACTABLE_KEYS: List<String> = listOf("Thumb", "PieceInfo")
 /** [dict] without [keys]. */
 internal fun withoutKeys(dict: PdfDictionary, keys: List<String>): PdfDictionary =
     if (keys.none { it in dict.map }) dict else PdfDictionary(LinkedHashMap(dict.map).apply { for (k in keys) remove(k) })
+
+/**
+ * The font resource names whose glyphs [ops] still show: the font of each `Tf` that a show
+ * operator with a string follows. A `TJ` the engine left only advances in shows nothing (#1013).
+ */
+internal fun fontsStillShown(ops: List<Operation>): Set<String> {
+    val used = HashSet<String>()
+    var current: String? = null
+    for (op in ops) when (op.operator) {
+        "Tf" -> current = (op.operands.firstOrNull() as? PdfName)?.value
+        "Tj", "'" -> if ((op.operands.lastOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes?.isNotEmpty() == true) current?.let(used::add)
+        "\"" -> if ((op.operands.getOrNull(2) as? io.github.yuroyami.kitepdf.core.parser.PdfString)?.bytes?.isNotEmpty() == true) current?.let(used::add)
+        "TJ" -> if ((op.operands.firstOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.any { it is io.github.yuroyami.kitepdf.core.parser.PdfString && it.bytes.isNotEmpty() } == true) current?.let(used::add)
+    }
+    return used
+}
+
+/**
+ * [resources] without the fonts that only redacted text used, so their programs, and the glyph
+ * procedures of a Type 3 font, which are content (ISO 32000-1, 9.6.5), go with the rewrite (#1013).
+ * A font named by an ExtGState's `/Font`, or reachable from a form or a Type 3 glyph without
+ * resources of its own, which would take these, is kept: [keepAll] says when the stream has one.
+ */
+internal fun PdfEditor.withoutUnshownFonts(resources: PdfDictionary?, ops: List<Operation>, keepAll: Boolean): PdfDictionary? {
+    if (resources == null || keepAll) return resources
+    val fonts = runCatching { resources.getDict("Font", effective) }.getOrNull() ?: return resources
+    val shown = fontsStillShown(ops)
+    val kept = fonts.map.filterKeys { it in shown }
+    if (kept.size == fonts.map.size) return resources
+    return withEntry(resources, "Font", PdfDictionary(LinkedHashMap(kept)))
+}
+
+/**
+ * Whether something in [resources] could draw with its fonts without naming them in the stream:
+ * an ExtGState that sets `/Font`, a form XObject or a Type 3 font with no `/Resources` of its own.
+ */
+internal fun PdfEditor.lendsFonts(resources: PdfDictionary?): Boolean {
+    if (resources == null) return false
+    val states = runCatching { resources.getDict("ExtGState", effective) }.getOrNull()
+    if (states?.map?.values?.any { (runCatching { it.resolve(effective) }.getOrNull() as? PdfDictionary)?.get("Font") != null } == true) return true
+    val xobjects = runCatching { resources.getDict("XObject", effective) }.getOrNull()
+    if (xobjects?.map?.values?.any { (runCatching { it.resolve(effective) }.getOrNull() as? PdfStream)?.dict?.let { d -> d.getName("Subtype") == "Form" && d["Resources"] == null } == true } == true) return true
+    val fonts = runCatching { resources.getDict("Font", effective) }.getOrNull()
+    return fonts?.map?.values?.any { (runCatching { it.resolve(effective) }.getOrNull() as? PdfDictionary)?.let { d -> d.getName("Subtype") == "Type3" && d["Resources"] == null } == true } == true
+}

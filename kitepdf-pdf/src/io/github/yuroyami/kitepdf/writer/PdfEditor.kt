@@ -1025,6 +1025,10 @@ public class PdfEditor internal constructor(
         if (resourcesWithClones != null) newPage = withEntry(newPage, "Resources", resourcesWithClones)
         newPage = prunePageResourceXObjects(newPage, engine.droppedImageNames, engine.survivingImageNames)
         newPage = prunePageResourceXObjects(newPage, formRedaction.droppedNames, namesStillDrawn(finalOps))
+        // A font that only the redacted text used goes, Type 3 glyph pictures and all (#1013).
+        newPage.getDict("Resources", effective)?.let { res ->
+            withoutUnshownFonts(res, finalOps, keepAll = lendsFonts(res))?.let { if (it !== res) newPage = withEntry(newPage, "Resources", it) }
+        }
         val droppedAnnots = ArrayList<PdfReference>()
         newPage = pruneIntersectingAnnots(newPage, regions, droppedAnnots)
         // Stage the page first: what follows reads effective objects, and a widget's

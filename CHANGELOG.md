@@ -596,6 +596,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   editor cannot redact a picture of the old page or an application's private copy of it (#1011).
 - A marked-content sequence whose content a redaction removes loses its `/ActualText`, `/Alt` and `/E`, inline or
   named, so `extractText` no longer reads the removed words from them (#1008).
+- Redaction drops a font that only the removed text used from the page's or form's `/Resources /Font`, so its
+  program, or the glyph pictures of a Type 3 font, no longer stay in the file (#1013).
 
 ## [0.13.0] - 2026-10-09
 
