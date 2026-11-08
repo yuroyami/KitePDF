@@ -279,6 +279,11 @@ private suspend fun askScript(
     val previous = if (editableChoice) scripts.formState.choiceSelection(fieldName) else null
     val kept = try {
         scripts.keystroke(fieldName, edit.change, edit.start, edit.end)
+    } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+        // ISO 32000-1, 12.6.3, Table 196: the K action checks a change before it is accepted, and
+        // a key the script never answered is not accepted. The field lost the caret or the view
+        // left, so the form stays as it was (#734).
+        throw cancelled
     } catch (failure: Exception) {
         io.github.yuroyami.kitepdf.core.kiteWarn { "form: the keystroke script of $fieldName failed: ${failure.message}" }
         edit.applyTo(confirmed)

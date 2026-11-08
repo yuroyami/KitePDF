@@ -526,6 +526,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   give its decoded space, and `ImageKodec.probe` its opacity channel (#744).
 - A media overlay clip value with the SMIL `npt=` metric reads, and a clip whose value cannot be read goes
   without its audio instead of playing its whole file (#708).
+- A keystroke whose call to the keystroke script is cancelled, because the field lost the caret or the view left,
+  no longer writes its key into the form (#734).
 
 ## [0.13.0] - 2026-10-09
 

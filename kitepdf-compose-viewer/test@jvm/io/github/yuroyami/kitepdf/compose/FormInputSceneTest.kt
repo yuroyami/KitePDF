@@ -82,6 +82,17 @@ class FormInputSceneTest {
         }
     }
 
+    /** A keystroke script that never answers, and a commit that refuses, as AFNumber_Keystroke refuses a letter. */
+    private class SilentScripts(document: PdfDocument) : PdfScriptHandler {
+        override val formState: PdfFormState = PdfFormState(document)
+        @Volatile var asked = 0
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+            asked++
+            kotlinx.coroutines.awaitCancellation()
+        }
+        override suspend fun commit(fieldName: String, value: String): Boolean = false
+    }
+
     private fun tap(scene: ImageComposeScene, x: Float, y: Float) {
         scene.sendPointerEvent(PointerEventType.Press, Offset(x, y), type = PointerType.Touch)
         scene.sendPointerEvent(PointerEventType.Release, Offset(x, y), type = PointerType.Touch)
@@ -111,7 +122,7 @@ class FormInputSceneTest {
     }
 
     /** A 200 x 200 viewer of [doc] on its first page, with a stand-in for the scripts. */
-    private fun viewer(doc: PdfDocument, queued: Boolean, scripts: Scripts = Scripts(doc)): Triple<ImageComposeScene, SceneTestDriver, () -> KiteDocViewState> {
+    private fun viewer(doc: PdfDocument, queued: Boolean, scripts: PdfScriptHandler = Scripts(doc)): Triple<ImageComposeScene, SceneTestDriver, () -> KiteDocViewState> {
         lateinit var state: KiteDocViewState
         val (scene, driver) = drivenScene(200, 200, queued) {
             state = rememberKiteDocViewState(doc)
@@ -247,6 +258,29 @@ class FormInputSceneTest {
                 driver.pumpUntilState { scripts.formState.value("code") == "1234" }
                 driver.pumpFrames(5)
                 assertEquals("1234", scripts.formState.value("code"), "the field takes 4 characters")
+            }
+        }
+    }
+
+    /**
+     * ISO 32000-1, 12.6.3, Table 196: a key the keystroke script never answered is not accepted. A
+     * keystroke cancelled when the field lost the caret wrote the key into the form unchecked (#734).
+     */
+    @Test
+    fun a_key_whose_keystroke_was_cancelled_stays_out_of_the_form() {
+        forBothEffectOrders { queued ->
+            val doc = formPdf()
+            val scripts = SilentScripts(doc)
+            val (scene, driver, state) = viewer(doc, queued, scripts)
+            scene.use {
+                focus(scene, driver, 100f, 35f)
+                assertEquals("name", state().focusedField)
+                type(scene, 'x')
+                driver.pumpUntilState { scripts.asked > 0 }
+                onTestUiThread { state().blurFocusedField() }
+                driver.pumpFrames(10)
+                assertEquals(null, state().focusedField)
+                assertEquals("", scripts.formState.value("name").orEmpty(), "the unanswered key is not in the form")
             }
         }
     }
