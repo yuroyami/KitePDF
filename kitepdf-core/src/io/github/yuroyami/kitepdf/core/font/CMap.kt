@@ -56,7 +56,27 @@ public class CMap private constructor(
     private val cidRanges: List<CidRange>,
     /** `/WMode` from the CMap program: 1 writes top to bottom (ISO 32000-1, 9.7.5.3). */
     internal val writingMode: Int = 0,
+    /** The CMap that the program's `usecmap` names, which this one extends (Adobe TN 5014), or null. */
+    internal val useCMap: String? = null,
+    /** Whether the program sets `/WMode` itself, so a base CMap's writing mode does not apply. */
+    internal val declaresWritingMode: Boolean = false,
 ) {
+
+    /**
+     * The CMap this one extends, through `usecmap` or the stream's `/UseCMap` (ISO 32000-1, 9.7.5.3,
+     * Table 120): a code this CMap does not map falls through to it, and without codespaces of
+     * its own the base splits the bytes. The embedded CMap lost its base, so every two-byte
+     * character drew as two wrong glyphs (#653).
+     */
+    internal var base: CodeUnitReader? = null
+
+    /** One code unit at [offset]: its CID, its code and its width, through this CMap and its [base]. */
+    private fun unitAt(bytes: ByteArray, offset: Int): Triple<Int, Int, Int> {
+        val b = base?.next(bytes, offset)
+        val (code, width) = if (codespaces.isEmpty() && b != null) readCode(bytes, offset, b.second) to b.second else segment(bytes, offset)
+        val cid = lookupCid(code) ?: b?.takeIf { it.second == width }?.first ?: code
+        return Triple(cid, code, width)
+    }
 
     /**
      * A single `begincodespacerange` entry: a per-byte low/high pattern of
@@ -161,8 +181,8 @@ public class CMap private constructor(
         val out = ArrayList<CodeUnit>(bytes.size)
         var i = 0
         while (i < bytes.size) {
-            val (code, width) = segment(bytes, i)
-            out.add(CodeUnit(cid = lookupCid(code) ?: code, code = code, byteOffset = i, byteCount = width))
+            val (cid, code, width) = unitAt(bytes, i)
+            out.add(CodeUnit(cid = cid, code = code, byteOffset = i, byteCount = width))
             i += width
         }
         return out
@@ -175,8 +195,8 @@ public class CMap private constructor(
      */
     public fun codeUnitAt(bytes: ByteArray, offset: Int): Pair<Int, Int>? {
         if (offset >= bytes.size) return null
-        val (code, width) = segment(bytes, offset)
-        return (lookupCid(code) ?: code) to width
+        val (cid, _, width) = unitAt(bytes, offset)
+        return cid to width
     }
 
     /** True iff this CMap carries CID mappings (embedded /Encoding), not just ToUnicode. */
@@ -241,17 +261,23 @@ public class CMap private constructor(
             val codespaces = mutableListOf<Codespace>()
             var codeWidth = 1
             var writingMode = 0
+            var declaresWritingMode = false
+            var lastName: String? = null
+            var useCMap: String? = null
 
             while (true) {
                 val tok = lexer.nextToken()
                 if (tok == Token.EndOfFile) break
                 if (tok is Token.Name && tok.value == "WMode") {
                     // `/WMode 1 def`: the one entry of the CMap dictionary that layout needs.
-                    (lexer.nextToken() as? Token.Integer)?.let { writingMode = it.value.toInt() }
+                    (lexer.nextToken() as? Token.Integer)?.let { writingMode = it.value.toInt(); declaresWritingMode = true }
                     continue
                 }
+                if (tok is Token.Name) { lastName = tok.value; continue }
                 if (tok !is Token.Keyword) continue
                 when (tok.value) {
+                    // `/Base usecmap` names the CMap that this one extends.
+                    "usecmap" -> useCMap = lastName
                     "begincodespacerange" -> {
                         parseCodeSpaceRange(lexer, codespaces)
                         codeWidth = codespaces.maxOfOrNull { it.width } ?: codeWidth
@@ -262,7 +288,7 @@ public class CMap private constructor(
                     "begincidrange" -> parseCidRange(lexer, cidRanges)
                 }
             }
-            return CMap(codeWidth, codespaces, bfChars, bfRanges, cidChars, cidRanges, writingMode)
+            return CMap(codeWidth, codespaces, bfChars, bfRanges, cidChars, cidRanges, writingMode, useCMap, declaresWritingMode)
         }
 
         // Each block reader returns at the end of the stream too. The lexer gives end of file

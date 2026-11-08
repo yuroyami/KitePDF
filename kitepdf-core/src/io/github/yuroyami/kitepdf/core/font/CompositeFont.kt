@@ -141,6 +141,36 @@ internal class CompositeFont(
     data class CidUnit(val cid: Int, val byteOffset: Int, val byteCount: Int)
 
     companion object {
+        /**
+         * The embedded CMap [stream] with the CMap it extends as its base: the stream's `/UseCMap`, a
+         * name of a predefined CMap or another stream, or the program's `usecmap` (ISO 32000-1, 9.7.5.3,
+         * Table 120; #653). [seen] stops a chain that comes back to itself.
+         */
+        private fun embeddedCMap(stream: PdfStream, refs: IndirectResolver, seen: HashSet<PdfStream>): CMap? {
+            if (!seen.add(stream) || seen.size > 8) return null
+            val cmap = runCatching { CMap.parse(FilterChain.decode(stream)) }.getOrNull() ?: return null
+            val use = stream.dict["UseCMap"]?.let { runCatching { it.resolve(refs) }.getOrNull() }
+            cmap.base = when {
+                use is PdfStream -> embeddedCMap(use, refs, seen)?.let { base -> CMapReader(base) }
+                use is PdfName -> PredefinedCMaps.reader(use.value)
+                cmap.useCMap != null -> PredefinedCMaps.reader(cmap.useCMap)
+                else -> null
+            }
+            return cmap
+        }
+
+        /** The writing mode of the CMap that [stream] extends, as a predefined name gives it. */
+        private fun baseWritingMode(stream: PdfStream, refs: IndirectResolver, cmap: CMap?): Int? {
+            val use = stream.dict["UseCMap"]?.let { runCatching { it.resolve(refs) }.getOrNull() }
+            val name = (use as? PdfName)?.value ?: cmap?.useCMap ?: return null
+            return if (PredefinedCMaps.isVertical(name)) 1 else null
+        }
+
+        /** An embedded CMap as the base of another. */
+        private class CMapReader(private val cmap: CMap) : CodeUnitReader {
+            override fun next(bytes: ByteArray, offset: Int): Pair<Int, Int>? = cmap.codeUnitAt(bytes, offset)
+        }
+
 
         /**
          * Build a [CompositeFont] from a parent Type 0 font dict. Returns null
@@ -158,14 +188,15 @@ internal class CompositeFont(
             // a predefined [CodeUnitReader] (Identity exact, CJK degraded).
             val encodingObj = parentDict["Encoding"]?.resolve(refs)
             val encodingName = (encodingObj as? PdfName)?.value
-            val encodingCMap = (encodingObj as? PdfStream)?.let {
-                runCatching { CMap.parse(FilterChain.decode(it)) }.getOrNull()
-            }
+            val encodingCMap = (encodingObj as? PdfStream)?.let { embeddedCMap(it, refs, HashSet()) }
             val codeReader = PredefinedCMaps.reader(encodingName)
-            // Writing mode 1 comes from an embedded CMap's stream /WMode or its program, or
-            // from a predefined name such as Identity-V (ISO 32000-1, 9.7.5.2 and 9.7.5.3).
+            // Writing mode 1 comes from an embedded CMap's stream /WMode or its program, or from
+            // the CMap it extends, or from a predefined name such as Identity-V (ISO 32000-1,
+            // 9.7.5.2 and 9.7.5.3).
             val vertical = if (encodingObj is PdfStream) {
-                (encodingObj.dict.getInt("WMode")?.toInt() ?: encodingCMap?.writingMode) == 1
+                (encodingObj.dict.getInt("WMode")?.toInt()
+                    ?: encodingCMap?.takeIf { it.declaresWritingMode }?.writingMode
+                    ?: baseWritingMode(encodingObj, refs, encodingCMap)) == 1
             } else {
                 PredefinedCMaps.isVertical(encodingName)
             }

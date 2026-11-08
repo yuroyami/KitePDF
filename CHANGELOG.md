@@ -407,6 +407,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An embedded Type 1 program whose `/Length1` is a few bytes off, or that has no `/Length2`, keeps its glyphs:
   the encrypted part starts after the `eexec` token, and a program that yields no charstrings counts as no
   program, so a host face stands in for it in every render mode (#672).
+- An embedded `/Encoding` CMap that extends another through `usecmap` or `/UseCMap` keeps its base: the base
+  splits the codes and maps the ones the override leaves out, and gives the writing mode, where every two-byte
+  character drew as two wrong glyphs (#653).
 
 ## [0.13.0] - 2026-10-09
 

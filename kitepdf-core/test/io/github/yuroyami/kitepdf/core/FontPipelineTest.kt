@@ -77,6 +77,31 @@ class FontPipelineTest {
     }
 
     @Test
+    fun an_embedded_cmap_that_extends_a_predefined_one_keeps_its_base() {
+        // ISO 32000-1, 9.7.5.3, Table 120 and the usecmap operator: the base splits the codes and
+        // maps the ones the override leaves out (#653).
+        val program = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /Identity-H usecmap " +
+            "1 begincidchar <0041> 5 endcidchar endcmap CMapName currentdict /CMap defineresource pop end end"
+        for (useCMapEntry in listOf(false, true)) {
+            val resolver = MapResolver()
+            resolver.put(99, PdfDictionary(linkedMapOf(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("CIDFontType2"), "BaseFont" to PdfName("X"),
+                "CIDToGIDMap" to PdfName("Identity"),
+            )))
+            val text = if (useCMapEntry) program.replace("/Identity-H usecmap ", "") else program
+            val dict = if (useCMapEntry) linkedMapOf<String, PdfObject>("UseCMap" to PdfName("Identity-H")) else linkedMapOf()
+            resolver.put(97, io.github.yuroyami.kitepdf.core.parser.PdfStream(PdfDictionary(dict), text.encodeToByteArray()))
+            val font = PdfFont.from(PdfDictionary(linkedMapOf(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("Type0"), "BaseFont" to PdfName("X"),
+                "Encoding" to PdfReference(97, 0), "DescendantFonts" to PdfArray(listOf(PdfReference(99, 0))),
+            )), resolver)
+            val glyphs = font.layoutBytes(byteArrayOf(0x00, 0x41, 0x00, 0x42))
+            assertEquals(listOf(2, 2), glyphs.map { it.byteCount }, "useCMap entry: $useCMapEntry")
+            assertEquals(listOf(5, 0x42), glyphs.map { it.gid }, "useCMap entry: $useCMapEntry")
+        }
+    }
+
+    @Test
     fun composite_type0_with_identity_h_pairs_bytes() {
         val resolver = MapResolver()
         // Descendant CIDFontType2 with /CIDToGIDMap /Identity and /DW 500.
