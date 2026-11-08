@@ -295,6 +295,6 @@ class RemoteSourcesTest {
             main.shutdown()
         }
         assertTrue(threads.isNotEmpty(), "the repair warned")
-        assertTrue(threads.none { it == "fake-main" }, "the parse ran on $threads")
+        assertTrue(threads.none { it.startsWith("fake-main") }, "the parse ran on $threads")
     }
 }
