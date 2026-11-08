@@ -915,7 +915,10 @@ public class PdfDocument private constructor(
         localReader.seek(entry.byteOffset)
         val parser = Parser(Lexer(localReader), resolver = this)
         val indirect = parser.readIndirectObject()
-        val stream = indirect.value as? PdfStream
+        // An object stream is encrypted as a whole, with its own object number, and its members are
+        // not encrypted again (ISO 32000-1, 7.5.7 and 7.6.2). Its ciphertext went to Flate, so an
+        // encrypted file whose page tree sits in an object stream did not open (#793).
+        val stream = maybeDecrypt(objStreamRef, entry.generation, indirect.value) as? PdfStream
             ?: throw PdfFormatException("ObjStm $objStreamRef is not a stream")
         val n = stream.dict.getInt("N")?.toInt()
             ?: throw PdfFormatException("ObjStm $objStreamRef missing /N")
@@ -1086,8 +1089,13 @@ public class PdfDocument private constructor(
             // catalog that leads to a page tree. A file with none is no document, so it fails
             // here instead of at its first use (#584).
             kiteWarn { "open: xref chain unusable, rebuilding by byte scan" }
-            val repaired = PdfRepair.rebuild(reader)
+            var repaired = PdfRepair.rebuild(reader)
             val sec = buildSecurityHandler(repaired.entries, repaired.trailer, bytes, password)
+            // Repair reads the members of each object stream, which an encrypted file stores as
+            // ciphertext, so once the handler authenticates it reads them again, decrypted (#793).
+            if (sec != null && sec.isAuthenticated) {
+                repaired = PdfRepair.rebuild(reader) { num, gen, stream -> Decryptor.decryptIndirect(num, gen, stream, sec) as PdfStream }
+            }
             val candidates = repaired.roots.asSequence().map { root ->
                 finish(PdfDocument(version, bytes, repaired.entries, repaired.trailerWith(root), sec, isRepaired = true))
             }

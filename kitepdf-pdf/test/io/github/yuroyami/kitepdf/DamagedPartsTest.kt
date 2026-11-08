@@ -63,8 +63,9 @@ class DamagedPartsTest {
     @Test
     fun repairKeepsTheCompleteCopyOverALaterOneThatWasCutOff() {
         // An update cut off inside its new copy of the page, and a damaged startxref (#811).
-        val bytes = pdf(tail = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 200] /Contents [4 0 R").toString(Charsets.ISO_8859_1)
-            .replace(Regex("startxref\n\\d+"), "startxref\n999999").toByteArray(Charsets.ISO_8859_1)
+        // Every byte of this file is ASCII, so its text and its bytes line up.
+        val bytes = pdf(tail = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 200] /Contents [4 0 R").decodeToString()
+            .replace(Regex("startxref\n\\d+"), "startxref\n999999").encodeToByteArray()
         val doc = PdfDocument.open(bytes)
         assertEquals(1, doc.pageCount)
         assertTrue("Original text" in doc.pages[0].extractText(), doc.pages[0].extractText())

@@ -96,7 +96,10 @@ public class StandardSecurityHandler(
     private fun decrypt(objNum: Long, genNum: Int, ciphertext: ByteArray, isString: Boolean): ByteArray {
         val key = fileKey ?: return ciphertext
         if (v >= 5) {
-            // V5/V6: file key is used directly to AES-256-CBC decrypt; no per-object derivation.
+            // V5/V6: file key is used directly to AES-256-CBC decrypt; no per-object derivation. The
+            // crypt filter of /StmF or /StrF may be /Identity, whose data is stored in clear (ISO
+            // 32000-2, 7.6.5, Tables 25 to 27); it was decrypted all the same, into noise (#796).
+            if ((if (isString) strAlgorithm else stmAlgorithm) == V4Algo.NONE) return ciphertext
             return Aes.decryptCbc(key, ciphertext)
         }
         // V1/V2/V4: route strings through /StrF, streams through /StmF.
@@ -132,7 +135,10 @@ public class StandardSecurityHandler(
 
     private fun encrypt(objNum: Long, genNum: Int, plaintext: ByteArray, isString: Boolean, iv: ByteArray): ByteArray {
         val key = fileKey ?: throw IllegalStateException("cannot encrypt: document not authenticated")
-        if (v >= 5) return Aes.encryptCbc(key, iv, plaintext)
+        if (v >= 5) {
+            if ((if (isString) strAlgorithm else stmAlgorithm) == V4Algo.NONE) return plaintext
+            return Aes.encryptCbc(key, iv, plaintext)
+        }
         val algorithm = if (isString) strAlgorithm else stmAlgorithm
         return when (algorithm) {
             V4Algo.NONE -> plaintext
@@ -309,6 +315,13 @@ public class StandardSecurityHandler(
      * passthrough (NONE).
      */
     private fun detectV4Algorithm(dict: PdfDictionary, filterKey: String): V4Algo {
+        if (v >= 5) {
+            // V5: the named filter is AES-256 (/CFM /AESV3) unless it is /Identity or /CFM /None (#796).
+            val name = (dict[filterKey] as? PdfName)?.value ?: return V4Algo.AESV2
+            if (name == "Identity") return V4Algo.NONE
+            val method = (dict.getDict("CF")?.map?.get(name) as? PdfDictionary)?.getName("CFM")
+            return if (method == "None") V4Algo.NONE else V4Algo.AESV2
+        }
         if (v != 4) return if (v == 1 || v == 2) V4Algo.RC4 else V4Algo.NONE
         // V4 specifies per-filter algorithms in /CF dict. The filter used is
         // named by /StmF (streams) or /StrF (strings). /CF /<name>/CFM = /V2

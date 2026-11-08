@@ -51,7 +51,8 @@ internal object PdfRepair {
     private const val MAX_OBJ_NUM = 50_000_000L
     private const val MAX_GEN = 65_535
 
-    fun rebuild(reader: ByteReader): RepairedFile {
+    /** [decryptStream], when given, decrypts an object stream before its members are read (#793). */
+    fun rebuild(reader: ByteReader, decryptStream: ((Long, Int, PdfStream) -> PdfStream)? = null): RepairedFile {
         val bytes = reader.bytes
         val entries = HashMap<Long, XrefEntry>()
         val objStreamNums = LinkedHashSet<Long>()
@@ -137,7 +138,7 @@ internal object PdfRepair {
         // ── Pass 3: decode object streams to recover compressed members. ────
         for (osNum in objStreamNums) {
             val entry = entries[osNum] as? XrefEntry.InUse ?: continue
-            val members = runCatching { objStreamMembers(bytes, entry.byteOffset) }.getOrNull() ?: continue
+            val members = runCatching { objStreamMembers(bytes, entry.byteOffset, osNum, entry.generation, decryptStream) }.getOrNull() ?: continue
             for ((index, memberNum) in members) {
                 // The copy later in the file is the newer revision, direct or compressed (ISO 32000-1,
                 // 7.5.6 and 7.5.7), as MuPDF's pdf_repair_obj_stm decides. The direct copy always won,
@@ -169,10 +170,17 @@ internal object PdfRepair {
     }
 
     /** Decode an /ObjStm at [offset]; returns (indexInStream → objectNumber). */
-    private fun objStreamMembers(bytes: ByteArray, offset: Int): List<Pair<Int, Long>> {
+    private fun objStreamMembers(
+        bytes: ByteArray,
+        offset: Int,
+        num: Long,
+        gen: Int,
+        decryptStream: ((Long, Int, PdfStream) -> PdfStream)?,
+    ): List<Pair<Int, Long>> {
         val r = ByteReader(bytes)
         r.seek(offset)
-        val stream = Parser(Lexer(r)).readIndirectObject().value as? PdfStream ?: return emptyList()
+        val raw = Parser(Lexer(r)).readIndirectObject().value as? PdfStream ?: return emptyList()
+        val stream = decryptStream?.invoke(num, gen, raw) ?: raw
         val n = stream.dict.getInt("N")?.toInt() ?: return emptyList()
         val decoded = FilterChain.decode(stream)
         // A header pair takes at least four bytes, so /N past that only sized the list (#968).

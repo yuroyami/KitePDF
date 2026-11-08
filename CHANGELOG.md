@@ -224,6 +224,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   complete one (#811), and between a direct copy and a copy in an object stream it keeps the one later in
   the file, the newer revision (#812).
 
+- An encrypted file whose catalog, page tree or pages sit in an object stream opens: the object stream is
+  decrypted as a whole before its filters run, and repair reads its members again once the password
+  authenticates. Acrobat, qpdf and pikepdf write such files by default, and they failed with "Repair found no
+  catalog that leads to a page tree" (#793). An AES-256 file whose `/StmF` or `/StrF` is `/Identity`, as
+  Acrobat's "encrypt only file attachments" writes it, reads those streams or strings in clear, where they
+  were decrypted into noise (#796).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
