@@ -413,7 +413,13 @@ internal object AcrobatApi {
   Field.prototype.defaultIsChecked = function (widget, on) {
     host.setFieldProp(this.__name, 'defaultChecked', !!on);
   };
-  Field.prototype.getArray = function () { return [this]; };
+  // The terminal fields under a field with kids, or the field alone (#753).
+  Field.prototype.getArray = function () {
+    var names = host.fieldKids(this.__name);
+    var out = [];
+    for (var i = 0; i < names.length; i++) out.push(names[i] === this.__name ? this : new Field(names[i]));
+    return out;
+  };
   Field.prototype.getItemAt = function (index, exportValue) {
     return host.itemAt(this.__name, Number(index), exportValue === undefined ? true : !!exportValue);
   };

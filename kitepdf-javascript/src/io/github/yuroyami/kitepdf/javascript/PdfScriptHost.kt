@@ -74,7 +74,10 @@ internal class PdfScriptHost(
     }
 
     fun bind(engine: KiteScriptEngine) {
-        engine.defineFunction("__kite.hasField") { args -> document.formField(args.str(0)) != null }
+        // ISO 32000-1, 12.7.3.2: a field with kids is a field in its own right, named by its own
+        // qualified name, and Field.getArray answers the terminal fields under it (#753).
+        engine.defineFunction("__kite.hasField") { args -> terminalFieldsUnder(args.str(0)).isNotEmpty() }
+        engine.defineFunction("__kite.fieldKids") { args -> terminalFieldsUnder(args.str(0)) }
         engine.defineFunction("__kite.fieldProp") { args -> fieldProp(args.str(0), args.str(1)) }
         engine.defineFunction("__kite.setFieldProp") { args -> setFieldProp(args.str(0), args.str(1), args.getOrNull(2)); null }
         engine.defineFunction("__kite.nthFieldName") { args ->
@@ -271,6 +274,13 @@ internal class PdfScriptHost(
     /** The page the reader is on, which a viewer keeps up to date from its own thread. */
     @kotlin.concurrent.Volatile
     var currentPage: Int = 0
+
+    /** The terminal fields named [name], or under the field of that name, in document order. */
+    private fun terminalFieldsUnder(name: String): List<String> {
+        if (document.formField(name) != null) return listOf(name)
+        val prefix = "$name."
+        return document.formFields.map { it.fullyQualifiedName }.filter { it.startsWith(prefix) }
+    }
 
     /** The name a host gave the file, for `this.documentFileName`. */
     @kotlin.concurrent.Volatile

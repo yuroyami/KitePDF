@@ -364,6 +364,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until a script sets it back (#781).
 - A field script that does not compile, or that the engine stops, answers its event with the event's own values,
   where it took the result of the event before it, often another field's value (#751).
+- A script reaches a field that has kids: `getField` answers it by its own name, and `getArray` answers the
+  terminal fields under it, so `AFSimple_Calculate("SUM", "amount")` sums `amount.0` and `amount.1` (#753).
 
 ## [0.13.0] - 2026-10-09
 

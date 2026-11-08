@@ -116,6 +116,42 @@ class FormScriptTest {
         }
     }
 
+    /** A parent field amount with kids amount.0 and amount.1, and a total that sums the parent. */
+    private fun parentFieldPdf(): ByteArray {
+        val buf = ByteArrayBuilder()
+        val offsets = LinkedHashMap<Int, Int>()
+        fun obj(n: Int, body: String) {
+            offsets[n] = buf.size()
+            buf.append("$n 0 obj\n$body\nendobj\n".encodeToByteArray())
+        }
+        buf.append("%PDF-1.7\n".encodeToByteArray())
+        obj(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R 7 0 R] /CO [7 0 R] >> >>")
+        obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        obj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 300] /Annots [5 0 R 6 0 R 7 0 R] >>")
+        obj(4, "<< /FT /Tx /T (amount) /Kids [5 0 R 6 0 R] >>")
+        obj(5, "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /T (0) /V (0) /Rect [20 200 120 220] >>")
+        obj(6, "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /T (1) /V (0) /Rect [20 160 120 180] >>")
+        obj(7, "<< /Type /Annot /Subtype /Widget /FT /Tx /T (total) /V () /Rect [20 120 120 140] " +
+            "/AA << /C << /S /JavaScript /JS (AFSimple_Calculate\\('SUM', 'amount'\\)) >> >> >>")
+        val xref = buf.size()
+        val maxN = offsets.keys.max()
+        buf.append("xref\n0 ${maxN + 1}\n0000000000 65535 f \n".encodeToByteArray())
+        for (n in 1..maxN) buf.append("${offsets[n]!!.toString().padStart(10, '0')} 00000 n \n".encodeToByteArray())
+        buf.append("trailer\n<< /Size ${maxN + 1} /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n".encodeToByteArray())
+        return buf.toByteArray()
+    }
+
+    @Test
+    fun a_calculation_over_a_parent_field_sums_its_kids(): TestResult = scriptTest {
+        // ISO 32000-1, 12.7.3.2: getField of a parent, and getArray of its terminal fields (#753).
+        val doc = PdfDocument.open(parentFieldPdf())
+        PdfScriptRunner(doc).use { runner ->
+            runner.setFieldValue("amount.0", "2")
+            runner.setFieldValue("amount.1", "3")
+            assertEquals("5", runner.formState.value("total"))
+        }
+    }
+
     @Test
     fun a_total_recalculates_when_a_field_changes(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
