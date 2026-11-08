@@ -741,7 +741,7 @@ internal class StyleResolver(
             "text-align" -> dst.textAlign = src.textAlign
             "text-align-last" -> dst.textAlignLast = src.textAlignLast
             "text-indent" -> dst.textIndentPt = src.textIndentPt
-            "line-height" -> dst.lineHeightPt = src.lineHeightPt
+            "line-height" -> { dst.lineHeightPt = src.lineHeightPt; dst.lineHeightFactor = src.lineHeightFactor }
             "white-space" -> dst.whiteSpace = src.whiteSpace
             "overflow-wrap", "word-wrap" -> dst.overflowWrap = src.overflowWrap
             "word-break" -> dst.wordBreak = src.wordBreak
@@ -958,9 +958,10 @@ internal class StyleResolver(
     private fun resolveLineHeight(b: Builder, v: String) {
         val s = v.trim().lowercase()
         when {
-            s == "normal" -> b.lineHeightPt = null
-            s.toDoubleOrNull() != null -> b.lineHeightPt = s.toDouble() * b.fontSizePt // unitless multiplier
-            else -> CssValues.length(s, b.fontSizePt, remPt, b.fontSizePt)?.let { b.lineHeightPt = it }
+            s == "normal" -> { b.lineHeightPt = null; b.lineHeightFactor = null }
+            // A number inherits as the number, and each element multiplies it by its own font size (#831).
+            s.toDoubleOrNull() != null -> s.toDouble().takeIf { it >= 0.0 && it.isFinite() }?.let { b.lineHeightFactor = it; b.lineHeightPt = it * b.fontSizePt }
+            else -> CssValues.length(s, b.fontSizePt, remPt, b.fontSizePt)?.let { b.lineHeightPt = it; b.lineHeightFactor = null }
         }
     }
 
@@ -1194,6 +1195,7 @@ internal class StyleResolver(
         var textAlign = parent.textAlign
         var textIndentPt = parent.textIndentPt
         var lineHeightPt = parent.lineHeightPt
+        var lineHeightFactor = parent.lineHeightFactor
         var whiteSpace = parent.whiteSpace
         var listType = parent.listType
         // Non-inherited → initial values.
@@ -1328,7 +1330,7 @@ internal class StyleResolver(
                     (position == CssPosition.ABSOLUTE || position == CssPosition.FIXED)
                 ) Display.BLOCK else display,
                 fontSizePt, bold, italic, fontFamily, color, backgroundColor,
-                textAlign, textIndentPt, lineHeightPt,
+                textAlign, textIndentPt, lineHeightFactor?.let { it * fontSizePt } ?: lineHeightPt,
                 marginTop, marginRight, marginBottom, marginLeft,
                 paddingTop, paddingRight, paddingBottom, paddingLeft,
                 whiteSpace, listType, verticalAlign, underline,
@@ -1376,6 +1378,7 @@ internal class StyleResolver(
                 textCombineUpright = textCombineUpright,
                 tabSpaces = tabSpaces,
                 tabLengthPt = tabLengthPt,
+                lineHeightFactor = lineHeightFactor,
             )
         }
     }

@@ -274,6 +274,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an EPUB page or in its text, as the HTML Standard's rendering section hides them (#931).
 - White space splits name the ASCII characters they mean, so `getPageNumWords`, `getPageNthWord`, ruby readings,
   note text and the SVG, XPS and CSS lists treat a no-break space the same on Kotlin/JS as on the JVM (#883).
+- A unitless `line-height` inherits as the number, so a heading under `body { line-height: 1.5 }` gets lines 1.5
+  times its own size, where it kept the body's points and its lines ran into each other (#831).
 
 ## [0.13.0] - 2026-10-09
 

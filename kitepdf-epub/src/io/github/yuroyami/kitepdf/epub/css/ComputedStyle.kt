@@ -269,6 +269,12 @@ internal data class ComputedStyle(
      */
     val tabSpaces: Double = 8.0,
     val tabLengthPt: Double? = null,
+    /**
+     * A unitless `line-height`: the number is what computes and inherits, and each element's
+     * [lineHeightPt] is it times its own font size (CSS 2.1, 10.8.1; #831). Null for a length,
+     * a percentage or `normal`.
+     */
+    val lineHeightFactor: Double? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 
