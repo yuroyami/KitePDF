@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   192 MB Android heap; it now holds only what its chapters read. Contributed by alvechy in #645.
   The PDF parser and `kitepdf-net` still read one array (#906).
 
+- `KiteXmlNode.Element.indexInParent()`: an element's index among its parent's children, remembered and
+  checked on the next call, so the selector matcher's sibling steps cost O(1) (#990).
+
 ### Changed
 
 - KitePDF builds with the [Kotlin Toolchain](https://github.com/JetBrains/kotlin-toolchain) instead of
@@ -138,6 +141,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `url()` and `@import` rewrites of a book's style sheets take time linear in the sheet. Two regular
   expressions backtracked on text that almost matched, so a 160 KB sheet of `url(` repeated held up the
   layout of a chapter for 45 seconds (#989).
+
+- The `~` and `+` combinators and the `:nth-` pseudo-classes find an element among its siblings in one
+  step, not a scan from the first child. `h1 ~ p` over a chapter of 4,000 paragraphs took 23 seconds to lay
+  out, and a crafted chapter of tens of thousands of siblings took hours (#990).
 
 ## [0.13.0] - 2026-10-09
 

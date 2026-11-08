@@ -2686,6 +2686,7 @@ public final class io/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element : io/
 	public final fun getChildren ()Ljava/util/List;
 	public final fun getParent ()Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;
 	public final fun getTag ()Ljava/lang/String;
+	public final fun indexInParent ()I
 	public final fun setAttrs (Ljava/util/Map;)V
 	public final fun setParent (Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;)V
 }

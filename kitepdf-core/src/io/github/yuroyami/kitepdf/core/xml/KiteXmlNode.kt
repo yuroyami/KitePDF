@@ -27,6 +27,24 @@ public sealed class KiteXmlNode {
          * sibling combinators and the child-indexed pseudo-classes.
          */
         public var parent: Element? = null
+
+        /** Where [indexInParent] last found this element: a hint that each use checks, never trusted. */
+        private var siblingHint = -1
+
+        /**
+         * This element's index in its [parent]'s children, or -1 when it has none or is not among them.
+         * The answer is remembered and checked on the next call, so a selector's sibling step costs
+         * O(1) where a scan of the parent from its first child cost the element's position, and
+         * `h1 ~ p` over n siblings cost n^3/6 (#990). A tree that changed since is scanned again.
+         */
+        public fun indexInParent(): Int {
+            val siblings = parent?.children ?: return -1
+            val hint = siblingHint
+            if (hint in siblings.indices && siblings[hint] === this) return hint
+            val found = siblings.indexOfFirst { it === this }
+            siblingHint = found
+            return found
+        }
     }
 
     /** A text leaf. A script layer changes [text] on a tree of its own, as [Element.attrs] (#41). */

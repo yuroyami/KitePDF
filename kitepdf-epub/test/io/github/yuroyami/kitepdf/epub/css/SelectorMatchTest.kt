@@ -207,4 +207,29 @@ class SelectorMatchTest {
         assertEquals(setOf("t"), resolve(html, ":placeholder-shown{color:red}").redIds())
         assertEquals(setOf("d"), resolve(html, ":indeterminate{color:red}", mapOf("d" to mapOf("indeterminate" to "1"))).redIds())
     }
+
+    @Test
+    fun sibling_steps_cost_one_step_each() {
+        // A scan from the first child for every sibling step made h1 ~ p cost n^3/6 (#990).
+        val n = 20_000
+        val html = "<body><h1>t</h1>" + "<p>x</p>\n".repeat(n) + "</body>"
+        val tree = HtmlParser.parse(html)
+        val paragraphs = ArrayList<KiteXmlNode.Element>()
+        fun collect(el: KiteXmlNode.Element) { if (el.tag == "p") paragraphs.add(el); for (c in el.children) if (c is KiteXmlNode.Element) collect(c) }
+        collect(tree)
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        for (rule in listOf("h1 ~ p", "p + p", "p:nth-child(odd)", "p:last-child")) {
+            val sel = Selector.parse(rule)!!
+            var matched = 0
+            for (p in paragraphs) if (sel.matches(p)) matched++
+            assertTrue(matched > 0, rule)
+        }
+        assertTrue(start.elapsedNow().inWholeSeconds < 20, "took ${start.elapsedNow()}")
+        // A tree that changes is scanned again, so the answer stays right.
+        val body = paragraphs[0].parent!!
+        val moved = paragraphs[5]
+        body.children.remove(moved)
+        body.children.add(0, moved)
+        assertEquals(null, previousElement(moved))
+    }
 }

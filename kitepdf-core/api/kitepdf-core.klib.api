@@ -2870,6 +2870,8 @@ sealed class io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuro
         final var parent // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.parent|{}parent[0]
             final fun <get-parent>(): io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element? // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.parent.<get-parent>|<get-parent>(){}[0]
             final fun <set-parent>(io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element?) // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.parent.<set-parent>|<set-parent>(io.github.yuroyami.kitepdf.core.xml.KiteXmlNode.Element?){}[0]
+
+        final fun indexInParent(): kotlin/Int // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Element.indexInParent|indexInParent(){}[0]
     }
 
     final class Text : io.github.yuroyami.kitepdf.core.xml/KiteXmlNode { // io.github.yuroyami.kitepdf.core.xml/KiteXmlNode.Text|null[0]

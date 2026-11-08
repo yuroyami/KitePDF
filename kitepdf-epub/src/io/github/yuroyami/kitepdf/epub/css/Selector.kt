@@ -208,7 +208,7 @@ internal class NthCondition(val a: Int, val b: Int, val last: Boolean, val ofTyp
         var position = 1L
         val siblings = el.parent?.children
         if (siblings != null) {
-            val at = siblings.indexOfFirst { it === el }
+            val at = el.indexInParent()
             val range = if (last) (at + 1 until siblings.size) else (0 until at)
             for (k in range) {
                 val s = siblings[k] as? KiteXmlNode.Element ?: continue
@@ -509,22 +509,25 @@ internal object Specificity {
 /** The parent of [el] that is an element: a document, a fragment or the parser's root is none. */
 internal fun parentElement(el: KiteXmlNode.Element): KiteXmlNode.Element? = el.parent?.takeUnless { it.tag.startsWith('#') }
 
+/** The element before [el] among its siblings. Its index comes from [KiteXmlNode.Element.indexInParent], so a step costs O(1) (#990). */
 internal fun previousElement(el: KiteXmlNode.Element): KiteXmlNode.Element? {
     val siblings = el.parent?.children ?: return null
-    var prev: KiteXmlNode.Element? = null
-    for (c in siblings) {
-        if (c === el) return prev
-        if (c is KiteXmlNode.Element) prev = c
+    var k = el.indexInParent() - 1
+    while (k >= 0) {
+        val c = siblings[k]
+        if (c is KiteXmlNode.Element) return c
+        k--
     }
     return null
 }
 
 internal fun nextElement(el: KiteXmlNode.Element): KiteXmlNode.Element? {
     val siblings = el.parent?.children ?: return null
-    var seen = false
-    for (c in siblings) {
-        if (c === el) seen = true
-        else if (seen && c is KiteXmlNode.Element) return c
+    val at = el.indexInParent()
+    if (at < 0) return null
+    for (k in at + 1 until siblings.size) {
+        val c = siblings[k]
+        if (c is KiteXmlNode.Element) return c
     }
     return null
 }
