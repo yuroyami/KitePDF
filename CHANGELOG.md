@@ -455,6 +455,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A document opened with its owner password reports every permission, as ISO 32000-1, 7.6.3.1 gives the owner
   full access, with `rawFlags` still the document's `/P`. It reported the user's restrictions, so an app that
   follows them locked the owner out (#998).
+- A page operation of the editor that throws leaves the page order as it was. A refused `removePage` of the last
+  page emptied the tracked order, so the next page operation dropped that page (#736).
 
 ## [0.13.0] - 2026-10-09
 

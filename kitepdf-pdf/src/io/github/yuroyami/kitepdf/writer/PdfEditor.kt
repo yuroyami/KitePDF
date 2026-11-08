@@ -667,7 +667,22 @@ public class PdfEditor internal constructor(
      */
     public fun setPageOrder(orderedPageRefs: List<PdfReference>) {
         require(orderedPageRefs.isNotEmpty()) { "A document must have at least one page" }
-        pageOrderState = orderedPageRefs.toMutableList()
+        changePageOrder { it.clear(); it.addAll(orderedPageRefs) }
+    }
+
+    /**
+     * Applies [change] to a copy of the tracked page order and keeps it only when it leaves a page
+     * and the catalog's /Pages can be rebuilt, so a call that throws leaves the editor as it was.
+     * The tracked order used to change first, and a refused removal of the last page lost that page
+     * at the next page operation (#736).
+     */
+    private inline fun changePageOrder(change: (MutableList<PdfReference>) -> Unit) {
+        val next = currentOrder().toMutableList()
+        change(next)
+        require(next.isNotEmpty()) { "Cannot remove the last page" }
+        base.catalog.getRef("Pages")
+            ?: throw IllegalStateException("Catalog /Pages is not an indirect reference; cannot reorganise pages")
+        pageOrderState = next
         applyPageOrder()
     }
 
@@ -675,32 +690,25 @@ public class PdfEditor internal constructor(
     public fun removePage(page: PdfPage) {
         val target = page.reference?.objectNumber
             ?: throw IllegalArgumentException("Page ${page.index} has no indirect reference")
-        val order = currentOrder()
-        order.removeAll { it.objectNumber == target }
-        require(order.isNotEmpty()) { "Cannot remove the last page" }
-        applyPageOrder()
+        changePageOrder { order -> order.removeAll { it.objectNumber == target } }
     }
 
     /** Append a page deep-copied from [source] (see [graftPage]); returns its new ref. */
     public fun appendPage(source: PdfDocument, sourceIndex: Int): PdfReference {
         val ref = graftPage(source, sourceIndex)
-        currentOrder().add(ref)
-        applyPageOrder()
+        changePageOrder { it.add(ref) }
         return ref
     }
 
     /** Insert a (grafted) page reference at zero-based [position]. */
     public fun insertPageAt(position: Int, pageRef: PdfReference) {
-        val order = currentOrder()
-        order.add(position.coerceIn(0, order.size), pageRef)
-        applyPageOrder()
+        changePageOrder { order -> order.add(position.coerceIn(0, order.size), pageRef) }
     }
 
     /** Append every page of [source] to this document (cross-document merge). */
     public fun mergeDocument(source: PdfDocument) {
         val refs = source.pages.indices.map { graftPage(source, it) }
-        currentOrder().addAll(refs)
-        applyPageOrder()
+        changePageOrder { it.addAll(refs) }
     }
 
     /** Rebuild the flat `/Pages` node + re-parent from the tracked order. */

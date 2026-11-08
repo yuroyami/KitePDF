@@ -35,6 +35,18 @@ class PageOpsTest {
         assertFalse(r.pages.any { it.extractText().contains("Two") })
     }
 
+    @Test fun a_refused_removal_of_the_last_page_leaves_the_editor_as_it_was() {
+        // The order used to change before the check, so the next operation lost the page (#736).
+        val d = KitePDF.open(doc("BASEPAGE"))
+        val editor = d.edit()
+        kotlin.test.assertFailsWith<IllegalArgumentException> { editor.removePage(d.pages[0]) }
+        editor.appendPage(KitePDF.open(doc("TARGETPAGE")), 0)
+        val r = KitePDF.open(editor.saveRewritten())
+        assertEquals(2, r.pageCount)
+        assertContains(r.pages[0].extractText(), "BASEPAGE")
+        assertContains(r.pages[1].extractText(), "TARGETPAGE")
+    }
+
     @Test fun reorder_pages_via_setPageOrder() {
         val d = KitePDF.open(doc("One", "Two", "Three"))
         val refs = d.pages.map { it.reference!! }
