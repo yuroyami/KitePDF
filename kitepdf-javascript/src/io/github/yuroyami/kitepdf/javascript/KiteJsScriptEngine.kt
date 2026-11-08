@@ -79,6 +79,24 @@ public class KiteJsScriptEngine(
      * then is parsed once for the whole process.
      */
     private fun script(source: String, name: String): JsScript {
+        // A script that this engine ran before runs from the copy it compiled then. Loading a new
+        // copy each run left one compiled function for each run in the engine's memory until a host
+        // GC, and some 6,000 runs of a 64 KB script filled the engine's limit (#837).
+        val i = compiled.indexOfFirst { it.name == name && (it.source === source || it.source.length == source.length && it.source == source) }
+        if (i >= 0) return compiled.removeAt(i).also { compiled.add(it) }.script
+        return load(source, name).also { script ->
+            compiled.add(Compiled(source, name, script))
+            if (compiled.size > MAX_ENGINE_SCRIPTS) compiled.removeAt(0)
+        }
+    }
+
+    /** A large script this engine compiled, which it runs again for the same source and name. */
+    private class Compiled(val source: String, val name: String, val script: JsScript)
+
+    /** The large scripts this engine keeps compiled, the one used last at the end (#837). */
+    private val compiled = ArrayList<Compiled>()
+
+    private fun load(source: String, name: String): JsScript {
         Bytecodes.find(source, name)?.let { bytes ->
             try {
                 return js.loadBytecode(bytes)
@@ -162,6 +180,9 @@ public class KiteJsScriptEngine(
     public companion object {
         /** Sources at least this long keep their bytecode for the other engines of the process (#555). */
         private const val MIN_CACHED_SOURCE = 32 * 1024
+
+        /** How many large scripts one engine keeps compiled to run again (#837). */
+        private const val MAX_ENGINE_SCRIPTS = 16
 
         /** How many sources keep their bytecode at most, and how much memory they and their bytecode take. */
         private const val MAX_CACHED_SCRIPTS = 16

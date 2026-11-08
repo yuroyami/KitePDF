@@ -807,6 +807,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the web, a blocking method of `PdfScriptRunner` such as `run` or `setFieldValue`, called while a script is
   paused, throws an `IllegalStateException` that says so, instead of recording a failure and storing a value past
   the field's scripts (#879).
+- A large document script that runs many times in one engine runs from one compiled copy, instead of loading a
+  new one each run until some 6,000 runs filled the engine's memory limit (#837).
 
 ## [0.13.0] - 2026-10-09
 
