@@ -72,6 +72,17 @@ class CompositeFanOutTest {
     }
 
     @Test
+    fun countsThatDisagreeWithTheTablesKeepTheFont() {
+        // OpenType hmtx: numberOfHMetrics past numGlyphs, or numGlyphs past loca, came from
+        // subsetters and dropped the whole program (#792).
+        val manyMetrics = TrueTypeFont.parse(fanOutFont(levels = 1, hMetrics = 9))
+        assertEquals(4, manyMetrics.outline(2)!!.contours.sumOf { it.points.size })
+        val manyGlyphs = TrueTypeFont.parse(fanOutFont(levels = 1, claimedGlyphs = 5))
+        assertEquals(4, manyGlyphs.outline(2)!!.contours.sumOf { it.points.size })
+        assertNull(manyGlyphs.outline(6))
+    }
+
+    @Test
     fun aScaledComponentOffsetGoesThroughTheScale() {
         // Glyph 1 is the square of glyph 2 at a scale of 0.5 and an offset of (1000, 0) (#816).
         fun minX(flags: Int): Int {
@@ -90,6 +101,8 @@ class CompositeFanOutTest {
         levels: Int,
         extra: List<Pair<String, ByteArray>> = emptyList(),
         first: ByteArray? = null,
+        hMetrics: Int = 1,
+        claimedGlyphs: Int = 0,
     ): ByteArray {
         val glyphs = ArrayList<ByteArray>()
         glyphs.add(ByteArray(0))
@@ -114,8 +127,8 @@ class CompositeFanOutTest {
         for (g in glyphs) { loca += u16(at / 2); at += g.size }
         loca += u16(at / 2)
         val head = ByteArray(54).also { it[18] = (1000 shr 8).toByte(); it[19] = 1000.toByte() }
-        val maxp = u32(0x00010000) + u16(numGlyphs) + ByteArray(26)
-        val hhea = ByteArray(36).also { it[35] = 1 }
+        val maxp = u32(0x00010000) + u16(numGlyphs + claimedGlyphs) + ByteArray(26)
+        val hhea = ByteArray(36).also { it[34] = (hMetrics shr 8).toByte(); it[35] = hMetrics.toByte() }
         val hmtx = u16(500) + u16(0) + ByteArray(2 * (numGlyphs - 1))
         return sfnt((extra + listOf("glyf" to glyf, "head" to head, "hhea" to hhea, "hmtx" to hmtx, "loca" to loca, "maxp" to maxp)).sortedBy { it.first })
     }

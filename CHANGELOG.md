@@ -377,6 +377,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteDoc.open` with a wrong password throws `KiteWrongPasswordException` for an encrypted PDF whose header is
   past the first kilobyte, and retries a non-ASCII password as Latin-1 there too, where it said the file was not
   readable (#823).
+- An embedded TrueType font whose `hhea` metric count is above `maxp.numGlyphs`, or whose `numGlyphs` is past
+  what `loca` holds, keeps its glyphs, where the whole program was dropped for a substitute face (#792).
 
 ## [0.13.0] - 2026-10-09
 

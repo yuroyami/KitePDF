@@ -100,7 +100,7 @@ public class TrueTypeFont private constructor(
      * shared reader position ([TtfReader.slice] copies by absolute offset).
      */
     internal fun glyfBytes(glyphId: Int): ByteArray {
-        if (glyphId < 0 || glyphId >= maxp.numGlyphs) return EMPTY
+        if (glyphId < 0 || glyphId >= maxp.numGlyphs || glyphId + 1 >= locaOffsets.size) return EMPTY
         val start = locaOffsets[glyphId]
         val end = locaOffsets[glyphId + 1]
         if (end <= start) return EMPTY
@@ -591,13 +591,16 @@ public class TrueTypeFont private constructor(
             reader.seek(table.offset)
             val widths = IntArray(numGlyphs)
             var lastWidth = 0
-            for (i in 0 until numHMetrics) {
+            // A subsetter can leave numberOfHMetrics above numGlyphs, or past the table: read what
+            // both counts and the table allow, and keep the font (OpenType hmtx; #792).
+            val metrics = minOf(numHMetrics, numGlyphs, (table.length / 4).coerceAtLeast(0))
+            for (i in 0 until metrics) {
                 widths[i] = reader.u16()
                 lastWidth = widths[i]
                 reader.skip(2)  // leftSideBearing (signed; ignored)
             }
             // Glyphs past numHMetrics share the last advance width.
-            for (i in numHMetrics until numGlyphs) {
+            for (i in metrics until numGlyphs) {
                 widths[i] = lastWidth
                 // skip remaining lsb entries: they exist but we don't need them
             }
@@ -606,14 +609,17 @@ public class TrueTypeFont private constructor(
 
         private fun parseLoca(reader: TtfReader, table: Table, format: Int, numGlyphs: Int): IntArray {
             reader.seek(table.offset)
-            val offsets = IntArray(numGlyphs + 1)
+            // As many entries as the table holds, so a numGlyphs past it leaves the glyphs it does
+            // not reach empty instead of reading the next table or failing the font (#792).
+            val entries = minOf(numGlyphs + 1, (table.length / (if (format == 0) 2 else 4)).coerceAtLeast(0))
+            val offsets = IntArray(entries)
             return if (format == 0) {
                 // Short format: 16-bit values × 2.
-                for (i in 0..numGlyphs) offsets[i] = reader.u16() * 2
+                for (i in 0 until entries) offsets[i] = reader.u16() * 2
                 offsets
             } else {
                 // Long format: 32-bit values.
-                for (i in 0..numGlyphs) offsets[i] = reader.s32()
+                for (i in 0 until entries) offsets[i] = reader.s32()
                 offsets
             }
         }
