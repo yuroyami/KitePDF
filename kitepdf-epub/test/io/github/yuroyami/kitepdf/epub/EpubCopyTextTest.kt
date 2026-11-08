@@ -15,7 +15,7 @@ class EpubCopyTextTest {
     @Test
     fun a_wrapped_hyphenated_paragraph_copies_as_one_line() {
         val words = List(10) { "Hyphenation makes representative typography comfortable" }.joinToString(" ")
-        val text = EpubDocument.open(EpubFixtures.epub("<p>$words</p><p>one<br/>two</p>"), narrow).pages[0].textContent()
+        val text = EpubDocument.open(EpubFixtures.epub("<p>$words</p><p>one<br/>two</p>", language = "en"), narrow).pages[0].textContent()
         val lines = text.blocks[0].lines
         assertTrue(lines.size > 3, "the paragraph wraps")
         assertTrue(lines.any { it.text.endsWith("-") }, "the layout hyphenated a word")

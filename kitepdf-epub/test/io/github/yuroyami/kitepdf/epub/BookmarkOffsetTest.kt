@@ -37,6 +37,7 @@ class BookmarkOffsetTest {
         EpubFixtures.epub(
             "<body><style>$css</style><pre>$preText</pre><p>$latinHtml</p><p>$rubyHtml</p></body>",
             listOf("OEBPS/f.ttf" to EpubFixtures.ligatureTtf()),
+            language = "en",
         ),
         EpubSettings(pageWidth = 200.0, pageHeight = 200.0, margin = 10.0),
     )

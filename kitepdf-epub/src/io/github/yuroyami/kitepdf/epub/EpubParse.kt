@@ -834,7 +834,13 @@ internal class ParsedEpub(
         private fun containerOpfPath(zip: ZipReader): String? {
             val xml = zip.readText("META-INF/container.xml") ?: return null
             for (t in KiteXml.tokenize(xml)) {
-                if (t is KiteXmlToken.Open && t.name == "rootfile") t.attrs["full-path"]?.let { return it }
+                // EPUB 3.3, the container file: full-path is a URL string relative to the root, so it
+                // is percent-decoded as the book's other URLs are, and the zip holds the decoded name.
+                // A name written as it is stored, which a URL string may not be, still opens (#868).
+                if (t is KiteXmlToken.Open && t.name == "rootfile") t.attrs["full-path"]?.let { raw ->
+                    val decoded = EpubDocument.resolvePath("", raw)
+                    return if (zip.entry(decoded) != null || zip.entry(raw) == null) decoded else raw
+                }
             }
             return null
         }

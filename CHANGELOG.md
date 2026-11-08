@@ -242,6 +242,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   blank (#769). A negative `/XStep` or `/YStep` paints the same lattice as its absolute value, where the cells
   landed on the far side of the pattern origin and the fill clip cut them away (#771).
 
+- A book that declares no language is not hyphenated automatically, as CSS Text 3, 5.4 asks: `hyphens: auto`
+  breaks at soft hyphens alone there, where English patterns broke the words of a German or French book
+  (#918). The `full-path` of `container.xml` is percent-decoded as the book's other URLs are, so a package
+  document whose name has a space opens (#868).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

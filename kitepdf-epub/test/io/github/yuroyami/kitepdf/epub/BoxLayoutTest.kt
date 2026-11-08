@@ -135,7 +135,10 @@ class BoxLayoutTest {
 
     @Test
     fun hyphens_auto_breaks_long_words() {
-        val p = layout("""<p style="hyphens:auto">hyphenation hyphenation hyphenation</p>""", width = 55.0).child(0).firstText()
+        val tree = HtmlParser.parse("""<p style="hyphens:auto">hyphenation hyphenation hyphenation</p>""")
+        val root = BoxBuilder(StyleResolver(CssParser.parse("", Origin.AUTHOR), 12.0, 55.0)) { it }.build(tree)
+        BoxLayout(maxImageHeight = 500.0, language = "en").layout(root, 55.0)
+        val p = root.child(0).firstText()
         assertTrue(p.lines.dropLast(1).any { lineText(it).endsWith("-") }, "auto hyphenation splits a long word")
     }
 

@@ -71,9 +71,9 @@ internal class BoxLayout(
      * BCP-47 language tag of the spine document being laid out (its own
      * `xml:lang`/`lang`, else the OPF `dc:language`); selects the hyphenation
      * pattern set, so each spine item can hyphenate in its own language.
-     * A null language hyphenates with the en-US set; a language with no
-     * bundled set is not hyphenated, since English breaks would be wrong
-     * breaks in it (#615).
+     * A null language, like a language with no bundled set, is not hyphenated
+     * automatically, since English breaks would be wrong breaks in it (CSS
+     * Text 3, 5.4, #615, #918).
      */
     private val language: String? = null,
     /**
@@ -93,7 +93,10 @@ internal class BoxLayout(
     /** Whether an image's path names an SVG, by its name or by the type of a blob it names (#533). */
     private val isSvg: (String) -> Boolean = ::namesSvg,
 ) {
-    private val hyphenator by lazy { if (language.isNullOrBlank()) Hyphenator.enUs() else Hyphenator.forLanguage(language) }
+    // CSS Text 3, 5.4: a UA hyphenates automatically only text whose language is known, so with none
+    // `hyphens: auto` breaks at soft hyphens alone, as browsers do; English patterns broke German and
+    // French words of a book that declared no language (#918).
+    private val hyphenator by lazy { if (language.isNullOrBlank()) null else Hyphenator.forLanguage(language) }
 
     /** Logical pen advance of [gid] in 1/1000 em, honouring vertical mode for upright glyphs. */
     private fun penAdvance1000(face: EmbeddedFace, gid: Int, cp: Int, orientation: TextOrientation = TextOrientation.MIXED): Int =

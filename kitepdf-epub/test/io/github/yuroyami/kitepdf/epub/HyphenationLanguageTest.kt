@@ -93,7 +93,8 @@ class HyphenationLanguageTest {
     @Test
     fun a_language_without_a_bundled_set_is_not_hyphenated() {
         val words = "hyphenation hyphenation hyphenation"
-        assertTrue("-" in open("""<body><p style="hyphens:auto">$words</p></body>""", pageWidth = 120.0).hyphenatedText())
+        // CSS Text 3, 5.4: with no language known, no automatic hyphenation (#918).
+        assertFalse("-" in open("""<body><p style="hyphens:auto">$words</p></body>""", pageWidth = 120.0).hyphenatedText())
         assertTrue("-" in open("""<body xml:lang="en"><p style="hyphens:auto">$words</p></body>""", pageWidth = 120.0).hyphenatedText())
         // Czech has patterns upstream, but under the GPL only, so none are bundled.
         val czech = open("""<body xml:lang="cs"><p style="hyphens:auto">$words</p></body>""", pageWidth = 120.0).hyphenatedText()
