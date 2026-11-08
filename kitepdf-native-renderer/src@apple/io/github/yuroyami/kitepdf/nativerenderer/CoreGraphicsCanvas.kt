@@ -179,6 +179,26 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         }
         layers = 0
         groups.clear()
+        releaseHostFonts()
+    }
+
+    /**
+     * The host faces this page drew text in, by name: a CTFont is immutable, so one serves every
+     * run of its spec, and [endPage] releases them (#886).
+     */
+    private val hostFonts = HashMap<String, CTFontRef>()
+
+    private fun hostFont(spec: FontSpec): CTFontRef? {
+        val key = systemFontName(spec)
+        hostFonts[key]?.let { return it }
+        val font = createCFString(key)?.let { name -> CTFontCreateWithName(name, HOST_EM, null).also { CFRelease(name) } } ?: return null
+        hostFonts[key] = font
+        return font
+    }
+
+    private fun releaseHostFonts() {
+        for (font in hostFonts.values) CFRelease(font)
+        hostFonts.clear()
     }
 
     override fun fillPath(
@@ -306,9 +326,7 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         blendMode: KiteBlendMode,
     ) {
         if (glyphs.all { it.text.isBlank() }) return
-        val font = createCFString(systemFontName(fontSpec))?.let { name ->
-            CTFontCreateWithName(name, HOST_EM, null).also { CFRelease(name) }
-        } ?: return
+        val font = hostFont(fontSpec) ?: return
         val language = fontSpec.language?.let { createCFString(it) }
         CGContextSaveGState(ctx)
         try {
@@ -337,7 +355,6 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         } finally {
             CGContextRestoreGState(ctx)
             if (language != null) CFRelease(language)
-            CFRelease(font)
         }
     }
 
@@ -596,6 +613,15 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
+        try {
+            drawCachedImage(image, ctm, alpha, blendMode)
+        } finally {
+            for (bitmap in uncached) bitmap.release()
+            uncached.clear()
+        }
+    }
+
+    private fun drawCachedImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
         // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
         val userToDevice = CGContextGetUserSpaceToDeviceSpaceTransform(ctx).useContents { KiteMatrix(a, b, c, d, tx, ty) }
         // The edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
@@ -608,11 +634,8 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
             return
         }
         val a = alpha.coerceIn(0.0, 1.0)
-        if (a <= 0.0) {
-            CGImageRelease(cgImage)
-            return
-        }
-        try {
+        if (a <= 0.0) return
+        run {
             CGContextSaveGState(ctx)
             try {
                 // PDF image space is the unit square under the CTM, with the first row
@@ -628,8 +651,6 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
             } finally {
                 CGContextRestoreGState(ctx)
             }
-        } finally {
-            CGImageRelease(cgImage)
         }
     }
 
@@ -644,39 +665,66 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
      * produces, plus plain Flate images. The CFData owns a copy of the
      * pixels, so the CGImage stays valid after the Kotlin array is gone.
      * An image drawn smaller than its pixels is averaged down first (#122).
+     * The CGImage is the cache's, which keeps it for the next draw of the image (#886).
      */
     private fun rawCgImage(image: KiteImageData, sampling: KiteImageSampling): platform.CoreGraphics.CGImageRef? {
-        val pixels = rgbaImages.getOrPut(image, sampling, { it.rgba.size.toLong() }) {
+        val bitmap = cgImages.getOrPut(image, sampling, { it.bytes }) {
             // An image drawn smaller converts and shrinks a band of rows at a time (#381).
             val rgba = image.toSampledRgbaBytes(sampling) ?: return@getOrPut null
-            RgbaImage(rgba, sampling.rasterWidth(image.width), sampling.rasterHeight(image.height))
+            val width = sampling.rasterWidth(image.width)
+            val height = sampling.rasterHeight(image.height)
+            val cfData = rgba.toCFData() ?: return@getOrPut null
+            val provider = CGDataProviderCreateWithCFData(cfData)
+            CFRelease(cfData)   // the provider holds its own reference
+            provider?.let { CgBitmap(it, width, height, rgba.size.toLong()) }
         } ?: return null
-        val width = pixels.width
-        val height = pixels.height
-        val cfData = pixels.rgba.toCFData() ?: return null
-        val provider = CGDataProviderCreateWithCFData(cfData)
-        CFRelease(cfData)   // the provider holds its own reference
-        if (provider == null) return null
-        val cs = CGColorSpaceCreateDeviceRGB()
-        val img = CGImageCreate(
-            width.toULong(), height.toULong(),
-            8u, 32u, (width * 4).toULong(), cs,
-            CGImageAlphaInfo.kCGImageAlphaLast.value,
-            provider, null, sampling.smooth, CGColorRenderingIntent.kCGRenderingIntentDefault,
-        )
-        CGColorSpaceRelease(cs)
-        CGDataProviderRelease(provider)
-        return img
+        // An image too large to keep, or one a concurrent miss built, is not the cache's: release it after this draw.
+        if (!cgImages.holds(bitmap)) uncached += bitmap
+        return bitmap.image(sampling.smooth)
     }
 
-    /** Straight RGBA pixels of [width] by [height]. */
-    private class RgbaImage(val rgba: ByteArray, val width: Int, val height: Int)
+    /**
+     * The pixels of one image as a CGDataProvider of straight RGBA, and the CGImage over them for
+     * each interpolation flag a draw asked for. [release] lets go of all of them.
+     */
+    private class CgBitmap(
+        private val provider: platform.CoreGraphics.CGDataProviderRef,
+        private val width: Int, private val height: Int, val bytes: Long,
+    ) {
+        private var smooth: platform.CoreGraphics.CGImageRef? = null
+        private var sharp: platform.CoreGraphics.CGImageRef? = null
+
+        fun image(interpolate: Boolean): platform.CoreGraphics.CGImageRef? {
+            (if (interpolate) smooth else sharp)?.let { return it }
+            val cs = CGColorSpaceCreateDeviceRGB()
+            val img = CGImageCreate(
+                width.toULong(), height.toULong(),
+                8u, 32u, (width * 4).toULong(), cs,
+                CGImageAlphaInfo.kCGImageAlphaLast.value,
+                provider, null, interpolate, CGColorRenderingIntent.kCGRenderingIntentDefault,
+            )
+            CGColorSpaceRelease(cs)
+            if (interpolate) smooth = img else sharp = img
+            return img
+        }
+
+        fun release() {
+            smooth?.let { CGImageRelease(it) }
+            sharp?.let { CGImageRelease(it) }
+            smooth = null
+            sharp = null
+            CGDataProviderRelease(provider)
+        }
+    }
 
     /**
-     * RGBA built from RAW images, so that an image drawn many times converts once (#117).
-     * It holds Kotlin arrays only: each draw makes its own CGImage and releases it.
+     * CGImages built from RAW images, so that an image drawn many times converts and copies its
+     * pixels once (#117, #886). The cache releases an image it drops.
      */
-    private val rgbaImages = KiteBitmapCache<RgbaImage>()
+    private val cgImages = KiteBitmapCache<CgBitmap>(KiteBitmapCache.DEFAULT_BUDGET_BYTES) { it.release() }
+
+    /** Images the cache did not keep, released once the draw that made them returns. */
+    private val uncached = ArrayList<CgBitmap>()
 
     private fun drawPlaceholder(ctm: KiteMatrix) {
         CGContextSaveGState(ctx)

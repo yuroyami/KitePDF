@@ -767,6 +767,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the draw returns, and the images its bitmap cache drops, instead of leaving them to Skiko's cleaner.
   `KiteBitmapCache` takes an `onDrop` callback for the bitmaps it lets go of, and `holds` tells whether it kept
   one (#881).
+- `CoreGraphicsCanvas` keeps the `CGImage` of a cached image, so an image drawn many times copies its pixels and
+  builds its `CGImage` once, and the cache releases it when it drops it. The canvas also keeps one `CTFont` per
+  host face for a page, instead of creating one for every run of host text (#886).
 
 ## [0.13.0] - 2026-10-09
 
