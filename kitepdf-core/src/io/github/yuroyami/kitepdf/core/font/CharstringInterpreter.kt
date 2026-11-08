@@ -93,7 +93,7 @@ internal class CharstringInterpreter(
         execute(charstring)
         if (overBudget) return KitePath.Builder().build()
         // A CFF2 glyph ends with its data, where a CFF glyph has endchar.
-        if (cff2 && !done && !pathBuilder.isEmpty()) pathBuilder.close()
+        if (cff2 && !done) closeContour()
         return pathBuilder.build()
     }
 
@@ -286,6 +286,23 @@ internal class CharstringInterpreter(
 
     /* ─── Path operators ─────────────────────────────────────────────────── */
 
+    /**
+     * A Type 2 charstring has no closepath: a moveto or endchar closes the open subpath
+     * (Adobe Technical Note 5177, 4.1), so every contour of a glyph, not only its last, is
+     * closed and a stroked outline keeps each closing edge (#778).
+     */
+    private var contourOpen = false
+
+    private fun moveTo(x: Double, y: Double) {
+        closeContour()
+        pathBuilder.moveTo(x, y)
+    }
+
+    private fun closeContour() {
+        if (contourOpen) pathBuilder.close()
+        contourOpen = false
+    }
+
     private fun rmoveto() {
         // rmoveto needs 2 args; an odd extra leading operand is the width.
         maybeTakeWidth(2)
@@ -293,21 +310,21 @@ internal class CharstringInterpreter(
             x += stack.removeFirst()
             y += stack.removeFirst()
         }
-        pathBuilder.moveTo(x, y)
+        moveTo(x, y)
         stack.clear()
     }
 
     private fun hmoveto() {
         maybeTakeWidth(1)
         if (stack.isNotEmpty()) x += stack.removeFirst()
-        pathBuilder.moveTo(x, y)
+        moveTo(x, y)
         stack.clear()
     }
 
     private fun vmoveto() {
         maybeTakeWidth(1)
         if (stack.isNotEmpty()) y += stack.removeFirst()
-        pathBuilder.moveTo(x, y)
+        moveTo(x, y)
         stack.clear()
     }
 
@@ -346,6 +363,7 @@ internal class CharstringInterpreter(
             x += stack.removeFirst()
             y += stack.removeFirst()
             pathBuilder.lineTo(x, y)
+            contourOpen = true
         }
         stack.clear()
     }
@@ -356,6 +374,7 @@ internal class CharstringInterpreter(
         while (stack.isNotEmpty()) {
             if (horizontal) x += stack.removeFirst() else y += stack.removeFirst()
             pathBuilder.lineTo(x, y)
+            contourOpen = true
             horizontal = !horizontal
         }
     }
@@ -365,6 +384,7 @@ internal class CharstringInterpreter(
         while (stack.isNotEmpty()) {
             if (vertical) y += stack.removeFirst() else x += stack.removeFirst()
             pathBuilder.lineTo(x, y)
+            contourOpen = true
             vertical = !vertical
         }
     }
@@ -388,6 +408,7 @@ internal class CharstringInterpreter(
         if (stack.size >= 2) {
             x += stack.removeFirst(); y += stack.removeFirst()
             pathBuilder.lineTo(x, y)
+            contourOpen = true
         }
         stack.clear()
     }
@@ -396,6 +417,7 @@ internal class CharstringInterpreter(
         while (stack.size >= 8) {
             x += stack.removeFirst(); y += stack.removeFirst()
             pathBuilder.lineTo(x, y)
+            contourOpen = true
         }
         if (stack.size >= 6) {
             val dx1 = stack.removeFirst(); val dy1 = stack.removeFirst()
@@ -463,6 +485,7 @@ internal class CharstringInterpreter(
         val x2 = x1 + dx2; val y2 = y1 + dy2
         val x3 = x2 + dx3; val y3 = y2 + dy3
         pathBuilder.curveTo(x1, y1, x2, y2, x3, y3)
+        contourOpen = true
         x = x3; y = y3
     }
 
@@ -581,8 +604,8 @@ internal class CharstringInterpreter(
             widthSet = true
             advanceWidth = if (stack.size >= 1) nominalWidthX + stack.removeFirst() else defaultWidthX
         }
-        // Close subpath if any drawing happened.
-        if (!pathBuilder.isEmpty()) pathBuilder.close()
+        // Close the subpath if any drawing happened.
+        closeContour()
         done = true
         stack.clear()
     }
