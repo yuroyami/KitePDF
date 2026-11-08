@@ -137,6 +137,58 @@ public class PdfEditor internal constructor(
     /** Number of objects staged for writing. */
     public val pendingObjectCount: Int get() = staged.size
 
+    /** A change of the document's security that [saveRewritten] applies, or null to keep it (#927). */
+    private var securityChange: Encryption? = null
+    private var removesEncryption = false
+
+    /**
+     * Encrypts the document at the next [saveRewritten] with AES-256 (ISO 32000-2, 7.6.4, revision
+     * 6), with new passwords and [permissions], as [PdfBuilder.encrypt] encrypts a new document.
+     * Every string and stream is written again under the new key, and the file gets a new `/ID`,
+     * since its key is new (ISO 32000-1, 14.4). [random] must be cryptographically secure.
+     *
+     * An encrypted document must have opened with its owner password, or with a user password
+     * whose `/P` allows changing the document; otherwise the call throws, so it cannot strip an
+     * owner's restrictions. That is all KitePDF enforces: an app that opened a document with the
+     * user password is trusted to honour the other permissions, as [PdfPermissions] says.
+     * [saveIncremental] cannot change the security of the bytes already written, so it throws
+     * after this call.
+     */
+    public fun encrypt(
+        userPassword: String,
+        ownerPassword: String = userPassword,
+        permissions: io.github.yuroyami.kitepdf.PdfPermissions = io.github.yuroyami.kitepdf.PdfPermissions.allowAll,
+        encryptMetadata: Boolean = true,
+        random: kotlin.random.Random,
+    ) {
+        requireSecurityChange()
+        val user = userPassword.encodeToByteArray()
+        val dict = io.github.yuroyami.kitepdf.crypto.Encryptor.createV5(
+            user, ownerPassword.encodeToByteArray(), with(io.github.yuroyami.kitepdf.PdfPermissions) { permissions.toP() }, encryptMetadata, random,
+        )
+        val handler = io.github.yuroyami.kitepdf.crypto.StandardSecurityHandler(dict, fileIdFirst = byteArrayOf(), userPassword = user)
+        check(handler.isAuthenticated) { "freshly created /Encrypt material failed to authenticate" }
+        securityChange = Encryption(io.github.yuroyami.kitepdf.crypto.Encryptor(handler, random), dict, newId = true)
+        removesEncryption = false
+    }
+
+    /**
+     * Writes the document without encryption at the next [saveRewritten], so it opens with no
+     * password and with every permission. The same rule as [encrypt] decides who may call it.
+     */
+    public fun removeEncryption() {
+        requireSecurityChange()
+        securityChange = null
+        removesEncryption = true
+    }
+
+    private fun requireSecurityChange() {
+        if (!base.isEncrypted) return
+        require(base.permissions.canModifyContents) {
+            "The document opened with a user password whose permissions forbid changes; open it with the owner password to change its security."
+        }
+    }
+
     /**
      * Set document metadata (`/Info`). Only non-null fields are changed; any
      * existing `/Info` entries (standard or custom) are preserved. Updates the
@@ -1264,6 +1316,10 @@ public class PdfEditor internal constructor(
      * classic table cannot point into, are written out again (#586).
      */
     public fun saveIncremental(): ByteArray {
+        check(securityChange == null && !removesEncryption) {
+            "The security of the document was changed; call saveRewritten() instead. An incremental save " +
+                "keeps the bytes already written under the old encryption."
+        }
         check(!redactionStaged) {
             "Redaction was staged; call saveRewritten() instead. An incremental save " +
                 "would leave the original, unredacted content recoverable in the file."
@@ -1402,7 +1458,9 @@ public class PdfEditor internal constructor(
         val remap = HashMap<Long, Long>(ordered.size)
         ordered.forEachIndexed { i, old -> remap[old] = (i + 1).toLong() }
 
-        val encryption = if (keepEncryption && encryptor != null) {
+        val encryption = if (securityChange != null || removesEncryption) {
+            securityChange
+        } else if (keepEncryption && encryptor != null) {
             // The encryption dictionary goes in clear (7.6.1), and never in an object stream (7.5.7).
             // As the file stores it: the document's own resolver would decrypt its strings.
             base.securityHandler?.encryptDictionary?.let { Encryption(encryptor, it) }
@@ -1417,7 +1475,11 @@ public class PdfEditor internal constructor(
     }
 
     /** What a rewrite of an encrypted document encrypts with, and the encryption dictionary it writes. */
-    private class Encryption(val encryptor: io.github.yuroyami.kitepdf.crypto.Encryptor, val dictionary: PdfDictionary)
+    private class Encryption(val encryptor: io.github.yuroyami.kitepdf.crypto.Encryptor, val dictionary: PdfDictionary, val newId: Boolean = false)
+
+    /** The `/ID` of a rewrite: a new one when the key is new, else the first string kept (ISO 32000-1, 14.4). */
+    private fun rewriteId(encryption: Encryption?, contents: ByteArray): io.github.yuroyami.kitepdf.core.parser.PdfArray =
+        if (encryption?.newId == true) DocumentId.generate(contents) else DocumentId.updated(base.trailer["ID"], base.rawBytes, contents)
 
     private fun fileHeader(out: ByteArrayBuilder, version: String) {
         out.append("%PDF-$version\n".encodeToByteArray())
@@ -1462,7 +1524,7 @@ public class PdfEditor internal constructor(
         newRootRef(remap, "Root")?.let { trailer["Root"] = it }
         newRootRef(remap, "Info")?.let { trailer["Info"] = it }
         if (encryption != null) trailer["Encrypt"] = PdfReference(encryptNum, 0)
-        trailer["ID"] = DocumentId.updated(base.trailer["ID"], base.rawBytes, out.toByteArray())
+        trailer["ID"] = rewriteId(encryption, out.toByteArray())
         out.append("trailer\n".encodeToByteArray())
         PdfObjectWriter.writeObject(PdfDictionary(trailer), out)
         out.append("\nstartxref\n$xrefOffset\n%%EOF\n".encodeToByteArray())
@@ -1533,7 +1595,7 @@ public class PdfEditor internal constructor(
             ?: throw IllegalStateException("Cannot write document with no /Root")
         val xrefStream = XRefStreamWriter.build(
             entries, size = if (encryption != null) encryptNum + 1 else xrefStmNum + 1, root = root, info = newRootRef(remap, "Info"), prev = null,
-            id = DocumentId.updated(base.trailer["ID"], base.rawBytes, out.toByteArray()),
+            id = rewriteId(encryption, out.toByteArray()),
             encrypt = if (encryption != null) PdfReference(encryptNum, 0) else null,
         )
         out.append("$xrefStmNum 0 obj\n".encodeToByteArray())

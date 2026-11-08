@@ -318,6 +318,20 @@ val out = doc.edit(secureRandom).apply { setInfo(title = "Reviewed") }.saveIncre
 
 `edit()` throws for a document with RC4 encryption, and for a document that did not open with its password. To make a new encrypted document, see [Password protection](writing.md#password-protection).
 
+### Setting, changing and removing a password
+
+`encrypt` gives a document new passwords and permissions, with AES-256, and `removeEncryption` takes the encryption off. Both apply at `saveRewritten()`, which writes every object again under the new key or in clear, and a new key gets a new `/ID`. `saveIncremental()` throws after either call, because the bytes already in the file keep their old encryption.
+
+```kotlin
+val doc = PdfDocument.open(bytes)
+val restricted = PdfPermissions.allowAll.copy(canCopyContents = false)
+val locked = doc.edit().apply { encrypt("user", "owner", restricted, random = secureRandom) }.saveRewritten()
+
+val unlocked = PdfDocument.open(locked, password = "owner").edit(secureRandom).apply { removeEncryption() }.saveRewritten()
+```
+
+An encrypted document must have opened with its owner password, or with a user password whose permissions allow changes, or both calls throw. KitePDF enforces nothing else of the permissions: an app that opened a document with the user password decides what it lets the user do.
+
 ## Digital signatures
 
 `PdfSigner` prepares a signature. KitePDF does no cryptography itself: your app makes the CMS signature (a DER `SignedData`), for example with `java.security` on the JVM:

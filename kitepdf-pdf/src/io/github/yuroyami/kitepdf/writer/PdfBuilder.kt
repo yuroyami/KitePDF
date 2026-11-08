@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.writer
 
+import io.github.yuroyami.kitepdf.PdfPermissions.Companion.toP
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -80,18 +81,7 @@ public class PdfBuilder {
      * `/P` from the typed permissions: bits 1-2 clear, bits 7-8 and 13-32 set
      * (reserved, "shall be 1"), permission bits from the flags (Table 22).
      */
-    private fun permissionsToP(p: io.github.yuroyami.kitepdf.PdfPermissions): Int {
-        var v = 0xFFFFF0C0.toInt()
-        if (p.canPrint) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_PRINT
-        if (p.canModifyContents) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_MODIFY
-        if (p.canCopyContents) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_COPY
-        if (p.canModifyAnnotations) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_ANNOTATE
-        if (p.canFillForms) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_FILL_FORMS
-        if (p.canExtractForAccessibility) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_ACCESSIBILITY
-        if (p.canAssembleDocument) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_ASSEMBLE
-        if (p.canPrintHighResolution) v = v or io.github.yuroyami.kitepdf.PdfPermissions.BIT_PRINT_HIGHRES
-        return v
-    }
+    private fun permissionsToP(p: io.github.yuroyami.kitepdf.PdfPermissions): Int = p.toP()
 
     /** Map a font to its `/Resources` name, assigning F1, F2, … on first use. */
     private fun resolveFont(font: StandardFont): String =

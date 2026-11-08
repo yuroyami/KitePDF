@@ -50,4 +50,20 @@ class EncryptedRewritePopplerTest {
             if (i == 2) assertFalse("Account" in text) else assertContains(text, "Account 12345678")
         }
     }
+
+    @Test
+    fun popplerReadsAPasswordSetAndRemovedByTheEditor() {
+        assumeTrue("Poppler's pdftotext is not installed", available("pdftotext"))
+        val plain = PdfBuilder().page(300.0, 300.0) { text(StandardFont.Helvetica, 12.0, 20.0, 250.0, "Quarterly figures") }.build(compress = true)
+        val doc = PdfDocument.open(plain)
+        val locked = doc.edit().apply { encrypt("pw", random = Random(4)) }.saveRewritten()
+        val lockedFile = File.createTempFile("locked", ".pdf").apply { writeBytes(locked); deleteOnExit() }
+        assertTrue(run("pdftotext", lockedFile.path, "-").first != 0, "opens with no password")
+        assertContains(run("pdftotext", "-upw", "pw", lockedFile.path, "-").second, "Quarterly figures")
+        val unlocked = PdfDocument.open(locked, password = "pw".encodeToByteArray()).edit(Random(5)).apply { removeEncryption() }.saveRewritten()
+        val unlockedFile = File.createTempFile("unlocked", ".pdf").apply { writeBytes(unlocked); deleteOnExit() }
+        val (code, text) = run("pdftotext", unlockedFile.path, "-")
+        assertTrue(code == 0, text)
+        assertContains(text, "Quarterly figures")
+    }
 }

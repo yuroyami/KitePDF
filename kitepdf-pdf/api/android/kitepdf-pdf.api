@@ -1674,6 +1674,8 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun allocateReference ()Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public final fun appendPage (Lio/github/yuroyami/kitepdf/PdfDocument;I)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public final fun editPageContent (Lio/github/yuroyami/kitepdf/PdfPage;Lkotlin/jvm/functions/Function1;)V
+	public final fun encrypt (Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfPermissions;ZLkotlin/random/Random;)V
+	public static synthetic fun encrypt$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfPermissions;ZLkotlin/random/Random;ILjava/lang/Object;)V
 	public final fun getPendingObjectCount ()I
 	public final fun graftPage (Lio/github/yuroyami/kitepdf/PdfDocument;I)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public final fun insertPageAt (ILio/github/yuroyami/kitepdf/core/parser/PdfReference;)V
@@ -1683,6 +1685,7 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun redactRegions (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/util/List;)V
 	public final fun redactRegions (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/util/List;Lio/github/yuroyami/kitepdf/writer/RedactImages;)V
 	public final fun removeAllText (Lio/github/yuroyami/kitepdf/PdfPage;)V
+	public final fun removeEncryption ()V
 	public final fun removePage (Lio/github/yuroyami/kitepdf/PdfPage;)V
 	public final fun rotatePage (Lio/github/yuroyami/kitepdf/PdfPage;I)V
 	public final fun saveIncremental ()[B

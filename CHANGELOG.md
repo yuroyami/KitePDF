@@ -633,6 +633,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - saveRewritten keeps the encryption of an encrypted document, its password and its permissions, also with object
   streams and after a redaction; saveRewritten(useObjectStreams, keepEncryption = false) writes a decrypted copy
   (#1006).
+- PdfEditor.encrypt sets new passwords and permissions on an existing document, and removeEncryption takes the
+  encryption off; both apply at saveRewritten, and need the owner password or a user password that allows changes
+  (#927).
 
 ## [0.13.0] - 2026-10-09
 

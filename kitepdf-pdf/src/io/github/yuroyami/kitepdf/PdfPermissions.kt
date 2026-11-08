@@ -56,6 +56,23 @@ public data class PdfPermissions(
             rawFlags = -1,
         )
 
+        /**
+         * `/P` from typed permissions: bits 1-2 clear, bits 7-8 and 13-32 set (reserved, "shall
+         * be 1"), permission bits from the flags (ISO 32000-1, Table 22).
+         */
+        internal fun PdfPermissions.toP(): Int {
+            var v = 0xFFFFF0C0.toInt()
+            if (canPrint) v = v or BIT_PRINT
+            if (canModifyContents) v = v or BIT_MODIFY
+            if (canCopyContents) v = v or BIT_COPY
+            if (canModifyAnnotations) v = v or BIT_ANNOTATE
+            if (canFillForms) v = v or BIT_FILL_FORMS
+            if (canExtractForAccessibility) v = v or BIT_ACCESSIBILITY
+            if (canAssembleDocument) v = v or BIT_ASSEMBLE
+            if (canPrintHighResolution) v = v or BIT_PRINT_HIGHRES
+            return v
+        }
+
         internal fun from(security: StandardSecurityHandler?): PdfPermissions {
             if (security == null) return allowAll
             val p = security.p
