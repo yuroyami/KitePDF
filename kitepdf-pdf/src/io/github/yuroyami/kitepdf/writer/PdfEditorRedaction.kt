@@ -374,8 +374,8 @@ internal fun PdfEditor.prunePageResourceXObjects(
  * redaction rectangle, reporting the ones dropped in [dropped] so the caller
  * can detach their form fields too. FreeText contents, widget values, and stamp
  * appearance streams inside a redacted region are otherwise left intact and
- * extractable. Annotations with no resolvable `/Rect` are kept (they draw
- * nothing spatial).
+ * extractable. An annotation whose `/Rect` cannot be read is removed, since the
+ * renderer still places it somewhere (#630).
  */
 internal fun PdfEditor.pruneIntersectingAnnots(
     dict: PdfDictionary,
@@ -390,8 +390,10 @@ internal fun PdfEditor.pruneIntersectingAnnots(
             is PdfDictionary -> resolved
             else -> null
         }
-        val rect = annotDict?.let { annotRect(it) }
-        if (rect != null && rectangles.any { rectsIntersect(it, rect) }) {
+        // The rectangle the renderer places the annotation at; one that cannot be read counts as
+        // a hit, as the engine removes too much rather than too little (ISO 32000-1, 12.5.2; #630).
+        val read = annotDict?.let { io.github.yuroyami.kitepdf.PdfAnnotation.rectOf(it, effective) }
+        if (read != null && (!read.complete || rectangles.any { rectsIntersect(it, read.rect) })) {
             changed = true // drop it
             // Only an indirect one can be named from anywhere else: a dictionary
             // written straight into /Annots lives nowhere but here, so removing it
@@ -405,21 +407,6 @@ internal fun PdfEditor.pruneIntersectingAnnots(
     return withEntry(dict, "Annots", io.github.yuroyami.kitepdf.core.parser.PdfArray(kept))
 }
 
-/** Normalised `/Rect` of an annotation, or null when absent/malformed. */
-internal fun PdfEditor.annotRect(annot: PdfDictionary): KiteRectangle? {
-    val arr = annot.getArray("Rect", effective) ?: return null
-    if (arr.size < 4) return null
-    fun n(i: Int): Double? = when (val v = arr[i].resolve(effective)) {
-        is PdfInt -> v.value.toDouble()
-        is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
-        else -> null
-    }
-    val x0 = n(0) ?: return null
-    val y0 = n(1) ?: return null
-    val x1 = n(2) ?: return null
-    val y1 = n(3) ?: return null
-    return KiteRectangle(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
-}
 
 /**
  * Detach the form fields of [droppedAnnots] from the interactive form.

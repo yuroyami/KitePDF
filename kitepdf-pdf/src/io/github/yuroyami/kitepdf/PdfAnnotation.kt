@@ -103,7 +103,7 @@ public data class PdfAnnotation(
         public fun parse(dict: PdfDictionary, refs: IndirectResolver): PdfAnnotation {
             val subtypeName = dict.getName("Subtype") ?: ""
             val subtype = parseSubtype(subtypeName)
-            val rect = (missingAsNull { dict.getArray("Rect", refs) } ?: PdfArray(emptyList())).let { rectFromArray(it) }
+            val rect = rectOf(dict, refs).rect
             val contents = when (val c = dict["Contents"]) {
                 is PdfString -> c.asText()
                 else -> ""
@@ -262,13 +262,24 @@ public data class PdfAnnotation(
          * containment test could match and no border could paint, which made every link on the
          * page silently dead.
          */
-        private fun rectFromArray(arr: PdfArray): io.github.yuroyami.kitepdf.core.KiteRectangle {
-            fun n(idx: Int) = when (val v = arr.getOrNull(idx)) {
-                is PdfReal -> v.value
+        /**
+         * An annotation's `/Rect` as the renderer places it (ISO 32000-1, 12.5.2, Table 164): each
+         * entry resolved, and one that is no number read as 0. [RectRead.complete] says whether all
+         * four were numbers, so redaction can count a damaged rectangle as a hit (#630).
+         */
+        internal fun rectOf(dict: PdfDictionary, refs: IndirectResolver): RectRead {
+            val arr = missingAsNull { dict.getArray("Rect", refs) } ?: PdfArray(emptyList())
+            var complete = arr.size >= 4
+            fun n(idx: Int): Double = when (val v = missingAsNull { arr.getOrNull(idx)?.resolve(refs) }) {
+                is PdfReal -> v.value.takeIf { it.isFinite() } ?: 0.0.also { complete = false }
                 is PdfInt -> v.value.toDouble()
-                else -> 0.0
+                else -> { complete = false; 0.0 }
             }
-            return io.github.yuroyami.kitepdf.core.KiteRectangle(n(0), n(1), n(2), n(3)).normalized()
+            val rect = io.github.yuroyami.kitepdf.core.KiteRectangle(n(0), n(1), n(2), n(3)).normalized()
+            return RectRead(rect, complete)
         }
+
+        /** An annotation's rectangle, and whether its four entries were all numbers. */
+        internal class RectRead(val rect: io.github.yuroyami.kitepdf.core.KiteRectangle, val complete: Boolean)
     }
 }

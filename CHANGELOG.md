@@ -582,6 +582,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A book's script that measures after each change lays the chapter out for the measurement without telling the
   viewers, and the call announces once when it ends, so a measuring loop no longer makes every viewer count its
   pages each time (#874).
+- Redaction judges an annotation by the rectangle the renderer draws it at, with indirect entries resolved, and
+  removes one whose `/Rect` cannot be read instead of keeping it over the black box (#630).
 
 ## [0.13.0] - 2026-10-09
 
