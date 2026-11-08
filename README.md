@@ -475,6 +475,8 @@ PdfScriptRunner(pdf).use { runner ->
 
 ## Platforms
 
+On the JVM and Android, every artifact is Java 11 bytecode, so an app needs Java 11 or newer.
+
 The format modules (`kitepdf` with `-pdf`, `-epub`, `-cbz`, `-svg`, `-xps` and `-core`) run on every platform below, plus watchOS, Android Native and WASI. `kitepdf-net` covers the same list except Android Native and WASI. The other modules support fewer targets, which is the most common reason a first build fails to resolve:
 
 | | Compose<br>Viewer | Native<br>Headless<br>Renderer | Skia<br>Headless<br>Renderer | JS<br>Scripts | Media |

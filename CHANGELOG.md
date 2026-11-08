@@ -482,6 +482,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ignoreDiacritics` folds the text and the needle by canonical decomposition without their non-spacing marks, so
   "resume" finds "résumé" in precomposed and decomposed form. `KiteStructuredText.search`, `EpubDocument.search`,
   `PdfPage.search` and `PdfDocument.search` each have an overload that takes it (#943).
+- Every JVM and Android artifact is Java 11 bytecode, as ImageKodec and KiteJS are, where it was Java 21: an app
+  on Java 17 failed with `UnsupportedClassVersionError` on the first class it loaded. The README and the platform
+  page say Java 11 or newer, and the consumer check builds on Java 11 (#683).
 
 ## [0.13.0] - 2026-10-09
 

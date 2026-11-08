@@ -7,8 +7,9 @@ settings:
   jvm:
     jdk:
       version: 21
-    # The JVM and Android bytecode target.
-    release: 21
+    # The JVM and Android bytecode target: Java 11, as ImageKodec and KiteJS target, so an app on Java 11
+    # or newer loads every class. The compiler refuses any JDK API newer than this (#683).
+    release: 11
     test:
       # The decompression-bomb tests inflate up to the 512 MiB FilterChain cap, plus the builder's
       # grow-by-doubling copy. The JVM default heap cannot hold that.

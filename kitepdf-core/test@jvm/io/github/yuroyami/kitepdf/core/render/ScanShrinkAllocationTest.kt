@@ -19,7 +19,7 @@ class ScanShrinkAllocationTest {
 
     private fun allocated(block: () -> Unit): Long {
         val bean = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
-        val id = Thread.currentThread().threadId()
+        val id = Thread.currentThread().id
         val before = bean.getThreadAllocatedBytes(id)
         block()
         return bean.getThreadAllocatedBytes(id) - before

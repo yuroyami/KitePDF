@@ -18,7 +18,8 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(21)
+    // The oldest Java the artifacts target, so a class built for a newer one fails here first (#683).
+    jvmToolchain(11)
 }
 
 tasks.test {

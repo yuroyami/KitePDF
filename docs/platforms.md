@@ -24,6 +24,8 @@ The seven format modules (`kitepdf`, `kitepdf-core`, `kitepdf-pdf`, `kitepdf-epu
 
 No artifact builds for Intel macOS, tvOS x64 or watchOS x64, because Kotlin deprecated those targets.
 
+On the JVM and Android, every artifact is Java 11 bytecode (class file version 55), as ImageKodec and KiteJS are, so an app needs Java 11 or newer. The consumer check builds against Java 11.
+
 ## Why the targets differ
 
 - `kitepdf-compose-viewer` builds for every target that Compose Multiplatform publishes.
