@@ -23,9 +23,12 @@ on:
   pull_request:
     branches: [main]
 
+# A pull request keeps only its newest push. Every push to main runs to the end, because work
+# happens on main and each commit needs a result of its own (#754). A group per commit, not
+# cancel-in-progress false alone: a group keeps one pending run and cancels the one before it.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
