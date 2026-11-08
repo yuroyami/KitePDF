@@ -68,6 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   past which it is empty. A font of 1,220 bytes, within its own `maxp` limits, named one component ten
   times on each of eight levels and ran a page render out of a 512 MB heap (#980).
 
+- A PDF function that refers to itself, through a function array or the `/Functions` of a stitching
+  function, is unusable instead of recursing until the stack runs out, and so is one nested deeper than 32
+  levels. A `/TR` cycle in a soft mask threw `StackOverflowError` out of the render and the text extraction.
+  A type 4 calculator program nests at most 100 braces, and its operand stack holds at most 100 entries, as
+  MuPDF's does, so `copy` can no longer fill the heap from a program of 250 bytes (#975, #976).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

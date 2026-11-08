@@ -180,4 +180,38 @@ class FunctionEvalTest {
         assertEquals(0.25, out[0], 0.001)
         assertEquals(0.75, out[1], 0.001)
     }
+
+    @Test fun type4_copy_cannot_grow_the_stack_past_its_bound() {
+        // Each copy doubles the stack: 30 steps would hold a billion entries (#975).
+        val program = "{ " + (0 until 30).joinToString(" ") { "${1 shl it} copy" } + " }"
+        val f = ps(program, reals(0.0, 1.0))
+        assertEquals(0.0, f.evaluate(doubleArrayOf(0.5))[0], 0.0)
+        // Within the bound copy still works.
+        assertEquals(0.5, ps("{ 1 copy 2 copy pop pop pop }", reals(0.0, 1.0)).evaluate(doubleArrayOf(0.5))[0], 0.001)
+    }
+
+    @Test fun type4_braces_nested_past_the_bound_make_the_function_unusable() {
+        // 200,000 braces recursed until the stack ran out (#976).
+        val f = ps("{".repeat(200_000) + "}".repeat(200_000), reals(0.0, 1.0))
+        assertTrue(f is KiteFunction.Unsupported)
+        assertEquals(0.0, f.evaluate(doubleArrayOf(0.5))[0], 0.0)
+        assertEquals(1.0, ps("{ " + "true { ".repeat(20) + "pop 1" + " } if".repeat(20) + " }", reals(0.0, 1.0)).evaluate(doubleArrayOf(0.5))[0], 0.001)
+    }
+
+    @Test fun a_function_that_refers_to_itself_is_null() {
+        // 6 0 obj [6 0 R], and a stitching function whose /Functions holds itself (#976).
+        val ref = io.github.yuroyami.kitepdf.core.parser.PdfReference(6, 0)
+        val array = PdfArray(listOf(ref))
+        assertEquals(null, KiteFunction.parse(ref, io.github.yuroyami.kitepdf.core.parser.IndirectResolver { array }))
+        val stitch = PdfDictionary(linkedMapOf(
+            "FunctionType" to PdfInt(3),
+            "Domain" to reals(0.0, 1.0),
+            "Functions" to PdfArray(listOf(ref)),
+            "Bounds" to PdfArray(emptyList()),
+            "Encode" to reals(0.0, 1.0),
+        ))
+        val f = KiteFunction.parse(ref, io.github.yuroyami.kitepdf.core.parser.IndirectResolver { stitch })
+        assertNotNull(f)
+        assertEquals(0.0, f.evaluate(doubleArrayOf(0.5)).getOrElse(0) { 0.0 }, 0.0)
+    }
 }

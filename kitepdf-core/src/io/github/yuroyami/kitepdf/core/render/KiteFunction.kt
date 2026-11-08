@@ -262,24 +262,48 @@ public sealed class KiteFunction {
     public companion object {
 
         /** Parse a /Function entry (dict, stream, or an array of functions). */
-        public fun parse(obj: PdfObject?, refs: IndirectResolver): KiteFunction? {
-            val resolved = when (obj) {
-                is PdfReference -> refs.resolve(obj)
-                else -> obj
-            } ?: return null
-            return when (resolved) {
-                is PdfArray -> {
-                    val parts = resolved.mapNotNull { parse(it, refs) }
-                    if (parts.isEmpty()) null
-                    else ArrayCombination(parts.first().domain, parts)
+        public fun parse(obj: PdfObject?, refs: IndirectResolver): KiteFunction? = parse(obj, refs, HashSet(), 0)
+
+        /**
+         * [active] holds the functions being parsed, and [depth] counts the arrays and stitching
+         * functions entered. ISO 32000-1, 7.10.4 and 7.10.5 describe neither a function that refers
+         * to itself nor a deep chain, so both are salvage: such a function is unusable, as MuPDF's
+         * "recursive function" is, and the rest of the page draws. Without them a `[6 0 R]` that is
+         * object 6 recursed until the stack ran out (#976).
+         */
+        private fun parse(obj: PdfObject?, refs: IndirectResolver, active: HashSet<PdfReference>, depth: Int): KiteFunction? {
+            if (depth > MAX_FUNCTION_NESTING) return null
+            if (obj is PdfReference && !active.add(obj)) return null
+            try {
+                val resolved = when (obj) {
+                    is PdfReference -> refs.resolve(obj)
+                    else -> obj
+                } ?: return null
+                return when (resolved) {
+                    is PdfArray -> {
+                        val parts = resolved.mapNotNull { parse(it, refs, active, depth + 1) }
+                        if (parts.isEmpty()) null
+                        else ArrayCombination(parts.first().domain, parts)
+                    }
+                    is PdfStream -> parseTyped(resolved.dict, resolved, refs, active, depth)
+                    is PdfDictionary -> parseTyped(resolved, null, refs, active, depth)
+                    else -> null
                 }
-                is PdfStream -> parseTyped(resolved.dict, resolved, refs)
-                is PdfDictionary -> parseTyped(resolved, null, refs)
-                else -> null
+            } finally {
+                if (obj is PdfReference) active.remove(obj)
             }
         }
 
-        private fun parseTyped(dict: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): KiteFunction? {
+        /** Arrays and stitching functions nested deeper than this make the function unusable (#976). */
+        private const val MAX_FUNCTION_NESTING = 32
+
+        private fun parseTyped(
+            dict: PdfDictionary,
+            stream: PdfStream?,
+            refs: IndirectResolver,
+            active: HashSet<PdfReference>,
+            depth: Int,
+        ): KiteFunction? {
             val type = dict.getInt("FunctionType")?.toInt() ?: return null
             val domain = dict.getArray("Domain")?.toDoubleArrayOrNull() ?: doubleArrayOf(0.0, 1.0)
             val range = dict.getArray("Range")?.toDoubleArrayOrNull()
@@ -304,7 +328,7 @@ public sealed class KiteFunction {
                     Type2(domain, range, c0, c1, n)
                 }
                 3 -> {
-                    val functions = dict.getArray("Functions", refs)?.mapNotNull { parse(it, refs) } ?: emptyList()
+                    val functions = dict.getArray("Functions", refs)?.mapNotNull { parse(it, refs, active, depth + 1) } ?: emptyList()
                     val bounds = dict.getArray("Bounds")?.toDoubleArrayOrNull() ?: doubleArrayOf()
                     val encode = dict.getArray("Encode")?.toDoubleArrayOrNull() ?: doubleArrayOf()
                     Type3(domain, range, functions, bounds, encode)
@@ -377,14 +401,30 @@ internal object PostScriptCalc {
         return out
     }
 
+    /**
+     * The deepest a program's braces may nest. A real calculator function nests a few levels; 200,000
+     * braces recursed until the stack ran out. MuPDF stops at 100 with "too much nesting in calculator
+     * function" (#976). Execution nests no deeper than the program, so this bounds [exec] as well.
+     */
+    private const val MAX_NESTING = 100
+
+    /**
+     * The largest the operand stack may grow. `copy` duplicates the top n entries, so a program of 250
+     * bytes held 16 million. A PostScript interpreter has a bounded operand stack (`stackoverflow`),
+     * and MuPDF's calculator holds 100 entries; past it the function evaluates to zeros, as a
+     * malformed one does (#975).
+     */
+    private const val MAX_STACK = 100
+
     /** Parse tokens until the matching '}' (or end); returns the block body. */
-    private fun parseBlockBody(tokens: List<String>, pos: IntArray): List<Any> {
+    private fun parseBlockBody(tokens: List<String>, pos: IntArray, depth: Int = 0): List<Any> {
+        if (depth > MAX_NESTING) throw IllegalArgumentException("too much nesting in calculator function")
         val body = ArrayList<Any>()
         while (pos[0] < tokens.size) {
             val t = tokens[pos[0]]
             when (t) {
                 "}" -> { pos[0]++; return body }
-                "{" -> { pos[0]++; body.add(parseBlockBody(tokens, pos)) }
+                "{" -> { pos[0]++; body.add(parseBlockBody(tokens, pos, depth + 1)) }
                 else -> {
                     pos[0]++
                     val num = t.toDoubleOrNull()
@@ -402,6 +442,7 @@ internal object PostScriptCalc {
                 is List<*> -> @Suppress("UNCHECKED_CAST") stack.add(tok as List<Any>)
                 is String -> applyOperator(tok, stack)
             }
+            if (stack.size > MAX_STACK) throw IllegalStateException("calculator stack overflow")
         }
     }
 
@@ -448,7 +489,14 @@ internal object PostScriptCalc {
             "dup" -> if (s.isNotEmpty()) s.add(s.last())
             "pop" -> if (s.isNotEmpty()) s.removeAt(s.size - 1)
             "exch" -> { val a = s.popAny(); val b = s.popAny(); s.add(a); s.add(b) }
-            "copy" -> { val n = s.popNum().toInt(); if (n > 0 && n <= s.size) { val base = s.size - n; for (k in 0 until n) s.add(s[base + k]) } }
+            "copy" -> {
+                val n = s.popNum().toInt()
+                if (n > 0 && n <= s.size) {
+                    if (s.size + n > MAX_STACK) throw IllegalStateException("calculator stack overflow")
+                    val base = s.size - n
+                    for (k in 0 until n) s.add(s[base + k])
+                }
+            }
             "index" -> { val n = s.popNum().toInt(); if (n >= 0 && n < s.size) s.add(s[s.size - 1 - n]) else s.add(0.0) }
             "roll" -> roll(s)
             "eq" -> { val bb = s.popNum(); val aa = s.popNum(); s.add(aa == bb) }
