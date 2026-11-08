@@ -379,6 +379,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   readable (#823).
 - An embedded TrueType font whose `hhea` metric count is above `maxp.numGlyphs`, or whose `numGlyphs` is past
   what `loca` holds, keeps its glyphs, where the whole program was dropped for a substitute face (#792).
+- Search matches across the Latin ligatures U+FB00 to U+FB06, so "find" finds a page that draws `ﬁnd`, and
+  `extractText()` writes a ligature as its letters, as PDFium and Poppler do (#807).
 
 ## [0.13.0] - 2026-10-09
 

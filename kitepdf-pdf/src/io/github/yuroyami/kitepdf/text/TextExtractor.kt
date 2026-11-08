@@ -670,8 +670,19 @@ public object TextExtractor {
         }
     }
 
-    private fun decode(s: PdfString, font: PdfFont?): String =
-        font?.decode(s.bytes) ?: s.asText()
+    /**
+     * The text of [s] in [font], with a Latin ligature presentation form written as its letters, as
+     * PDFium, Poppler and MuPDF's default give it: a glyph named `fi` reads as "fi", not U+FB01 (#807).
+     */
+    private fun decode(s: PdfString, font: PdfFont?): String {
+        val text = font?.decode(s.bytes) ?: s.asText()
+        if (text.none { it in '\uFB00'..'\uFB06' }) return text
+        val sb = StringBuilder(text.length + 4)
+        for (c in text) sb.append(if (c in '\uFB00'..'\uFB06') LIGATURE_LETTERS[c.code - 0xFB00] else c.toString())
+        return sb.toString()
+    }
+
+    private val LIGATURE_LETTERS = arrayOf("ff", "fi", "fl", "ffi", "ffl", "st", "st")
 
     /** Form nesting and operations read per page, the renderer's bounds. */
     private const val MAX_FORM_DEPTH = 15

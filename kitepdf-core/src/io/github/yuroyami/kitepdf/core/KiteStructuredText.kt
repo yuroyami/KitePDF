@@ -45,6 +45,7 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
         location: KiteLocation?,
     ): List<KiteSearchHit> {
         if (needle.isEmpty()) return emptyList()
+        val needle = expandLigatures(needle)
         val hits = ArrayList<KiteSearchHit>()
         for (block in blocks) {
             // Concatenate the block's lines; chars map back to (line, char) for quads.
@@ -70,7 +71,13 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
                     sb.append(' '); refLine.add(-1); refChar.add(-1)
                 }
                 val keep = if (!last && dropsHyphen(line)) line.text.length - 1 else line.text.length
-                for (k in 0 until keep) { sb.append(line.text[k]); refLine.add(li); refChar.add(k) }
+                for (k in 0 until keep) {
+                    // A ligature presentation form reads as its letters, each mapped back to it,
+                    // so "find" matches a page that draws U+FB01 (#807).
+                    val letters = LIGATURES[line.text[k]]
+                    if (letters == null) { sb.append(line.text[k]); refLine.add(li); refChar.add(k) }
+                    else for (c in letters) { sb.append(c); refLine.add(li); refChar.add(k) }
+                }
             }
             val text = sb.toString()
             var from = 0
@@ -351,4 +358,18 @@ public class KiteSearchHit(
     /** A located result whose global page index is unknown. */
     public constructor(location: KiteLocation, quads: List<KiteRectangle>, text: String) :
         this(-1, quads, text, location)
+}
+
+/** The Latin ligatures U+FB00 to U+FB06 and the letters of their compatibility decompositions (#807). */
+internal val LIGATURES: Map<Char, String> = mapOf(
+    '\uFB00' to "ff", '\uFB01' to "fi", '\uFB02' to "fl", '\uFB03' to "ffi", '\uFB04' to "ffl",
+    '\uFB05' to "st", '\uFB06' to "st",
+)
+
+/** [text] with each ligature of [LIGATURES] written as its letters. */
+internal fun expandLigatures(text: String): String {
+    if (text.none { it in '\uFB00'..'\uFB06' }) return text
+    val sb = StringBuilder(text.length + 4)
+    for (c in text) sb.append(LIGATURES[c] ?: c.toString())
+    return sb.toString()
 }

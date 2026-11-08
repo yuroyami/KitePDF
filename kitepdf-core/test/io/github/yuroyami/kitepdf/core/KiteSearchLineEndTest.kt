@@ -31,4 +31,16 @@ class KiteSearchLineEndTest {
         assertEquals(1, hits("compres-", KiteLineEnd.HARD, "sion", "compression"))
         assertEquals(1, hits("hello", KiteLineEnd.HARD, "world", "hello world"))
     }
+
+    @Test
+    fun aLigatureMatchesItsLetters() {
+        // #807: "find" on a page that draws U+FB01, and its hit covers the ligature.
+        val text = KiteStructuredText(listOf(KiteTextBlock(listOf(line("\uFB01nd the \uFB02ow", 0.0, KiteLineEnd.HARD)))))
+        val hits = text.search("find")
+        assertEquals(1, hits.size)
+        assertEquals(1, text.search("flow").size)
+        assertEquals(1, text.search("\uFB01nd").size, "a needle with the ligature still matches")
+        assertEquals(0.0, hits[0].quads.single().left, 1e-9)
+        assertEquals(30.0, hits[0].quads.single().right, 1e-9)
+    }
 }

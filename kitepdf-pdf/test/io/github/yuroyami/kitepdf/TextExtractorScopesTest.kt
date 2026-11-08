@@ -52,6 +52,17 @@ class TextExtractorScopesTest {
     }
 
     @Test
+    fun ligatures_are_extracted_as_their_letters_and_found(): Unit {
+        // StandardEncoding 0xAE is fi and 0xAF fl; their glyph names map to U+FB01 and U+FB02 (#807).
+        val content = "BT /F1 12 Tf 10 100 Td (\\256nd the \\256rst \\257ow) Tj ET"
+        val resources = "<< /Font << /F1 7 0 R >> >>"
+        val times = RawPdf.obj(7, "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>")
+        assertEquals("find the first flow", text(content, resources, times))
+        val page = page(content, resources, arrayOf(times))
+        for (word in listOf("find", "first", "flow")) assertEquals(1, page.textContent().search(word).size, word)
+    }
+
+    @Test
     fun text_inside_a_form_is_page_text() {
         assertEquals(sentence, text("BT /F1 18 Tf 36 180 Td ($sentence) Tj ET", "<< /Font << /F1 4 0 R >> >>"))
         assertEquals(
