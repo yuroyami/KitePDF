@@ -728,6 +728,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while the same mask applies in the same coordinate system, and `KiteRasterCanvas` keeps the mask it rendered
   for that callback under the same clips. 100 squares under one luminosity mask render in 137 ms instead of 2.7 s
   there, with the same pixels.
+- The graphics state transfer function, `/TR` and `/TR2` of an ExtGState, maps every painted colour (#909).
+  `/TR2` wins over `/TR`, `/Identity` and `/Default` reset it, and an array gives each of red, green and blue its
+  own function. The renderer paints under it through the canvas raster step and maps the result, so fills,
+  strokes, text, images and shadings are all mapped, as Poppler maps them. `ExtGState.transfer`,
+  `GraphicsState.transfer` and `KiteTransfer` hold it.
 
 ## [0.13.0] - 2026-10-09
 

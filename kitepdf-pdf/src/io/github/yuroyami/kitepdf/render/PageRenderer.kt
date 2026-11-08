@@ -15,6 +15,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KiteFunction
 import io.github.yuroyami.kitepdf.core.render.KiteMaskTransfer
+import io.github.yuroyami.kitepdf.core.render.KiteTransfer
 import io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
@@ -2023,7 +2024,10 @@ public class PageRenderer(
 
     private var lastMaskPaint: MaskPaint? = null
 
-    private fun withSoftMask(state: GraphicsState, paint: () -> Unit) {
+    private fun withSoftMask(state: GraphicsState, unmapped: () -> Unit) {
+        // The transfer function maps the paint's colours before the mask gates it (ISO 32000-1, 10.4, #909).
+        val transfer = state.transfer
+        val paint = if (transfer == null) unmapped else ({ withTransfer(transfer, unmapped) })
         val mask = state.softMask as? SoftMask.MaskGroup
         if (mask == null) {
             paint(); return
@@ -2039,6 +2043,22 @@ public class PageRenderer(
         } else {
             canvas.applySoftMask(mask.kind, memo.maskBBox, memo.maskCtm, memo.transfer, paint, memo.renderMask)
         }
+    }
+
+    /**
+     * Paints [paint] with each colour component mapped through [transfer] (#909): the paint renders
+     * alone into a raster of the page, which is mapped and then drawn. A canvas without raster steps
+     * paints it unmapped, as before.
+     */
+    private fun withTransfer(transfer: KiteTransfer, paint: () -> Unit) {
+        val drawn = canvas.rasterStep(pageBoxIn(pageBaseCtm), pageBaseCtm) { scope ->
+            val raster = scope.render(null, paint)
+            val px = raster.pixels
+            for (i in px.indices) if (px[i] ushr 24 != 0) px[i] = transfer.map(px[i])
+            scope.draw(raster, 1.0, KiteBlendMode.Normal)
+            true
+        }
+        if (!drawn) paint()
     }
 
     private fun maskPaint(mask: SoftMask.MaskGroup, baseCtm: KiteMatrix): MaskPaint {

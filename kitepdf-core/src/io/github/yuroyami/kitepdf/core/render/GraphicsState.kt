@@ -67,6 +67,8 @@ public data class GraphicsState(
     val overprintFill: Boolean = false,
     /** The overprint mode (ExtGState `/OPM`): 1 leaves the backdrop's ink wherever a DeviceCMYK paint sets 0. */
     val overprintMode: Int = 0,
+    /** The transfer function (ExtGState `/TR2` or `/TR`) that maps each painted colour, or null for the identity (#909). */
+    val transfer: KiteTransfer? = null,
 )
 
 /** Per-`BT/ET` block text state, reset at BT and mutated by text operators. */
@@ -129,6 +131,7 @@ public fun GraphicsState.applyExtGState(ext: ExtGState): GraphicsState = copy(
     overprintStroke = ext.overprintStroke ?: overprintStroke,
     overprintFill = ext.overprintFill ?: overprintFill,
     overprintMode = ext.overprintMode ?: overprintMode,
+    transfer = if (ext.setsTransfer) ext.transfer else transfer,
 ).withColorRendering(ext.renderingIntent ?: renderingIntent, ext.blackPointCompensation ?: blackPointCompensation)
 
 /**

@@ -57,6 +57,10 @@ public data class ExtGState(
     val overprintFill: Boolean? = null,
     /** `/OPM`: the overprint mode, 0 or 1, or null when the dictionary does not set it. */
     val overprintMode: Int? = null,
+    /** True when `/TR2` or `/TR` sets the transfer function, which [transfer] then holds, null for the identity (#909). */
+    val setsTransfer: Boolean = false,
+    /** The transfer function that `/TR2`, or else `/TR`, sets; null for `/Identity` and `/Default`. */
+    val transfer: KiteTransfer? = null,
 ) {
 
     public companion object {
@@ -84,6 +88,8 @@ public data class ExtGState(
             }
             val dashArray = (dash?.getOrNull(0)?.resolve(refs) as? PdfArray)?.map { number(it) }
             val overprint = (deref(dict["OP"], refs) as? PdfBoolean)?.value
+            // /TR2 wins over /TR (ISO 32000-1, Table 58). An entry that does not read sets nothing.
+            val transferSetting = (dict["TR2"]?.let { graphicsTransfer(it, refs) } ?: dict["TR"]?.let { graphicsTransfer(it, refs) })
             return ExtGState(
                 fillAlpha = fillAlpha?.coerceIn(0.0, 1.0),
                 strokeAlpha = strokeAlpha?.coerceIn(0.0, 1.0),
@@ -101,7 +107,33 @@ public data class ExtGState(
                 overprintFill = (deref(dict["op"], refs) as? PdfBoolean)?.value ?: overprint,
                 // MuPDF reads any mode other than 0 as mode 1.
                 overprintMode = (deref(dict["OPM"], refs) as? PdfInt)?.let { if (it.value == 0L) 0 else 1 },
+                setsTransfer = transferSetting != null,
+                transfer = transferSetting?.getOrNull(),
             )
+        }
+
+        /**
+         * A transfer function of the graphics state (#909): a success holding null for the names
+         * `/Identity` and `/Default`, the tables of one function or of an array of four, and null for
+         * an entry that does not read, which leaves the transfer as it was.
+         */
+        private fun graphicsTransfer(value: PdfObject, refs: IndirectResolver): Result<KiteTransfer?>? {
+            fun table(o: PdfObject?): KiteMaskTransfer? {
+                val r = deref(o, refs) ?: return null
+                if (r is PdfName) return if (r.value == "Identity" || r.value == "Default") KiteMaskTransfer.of { it } else null
+                val f = KiteFunction.parse(r, refs)?.takeIf { it.outputCount == 1 } ?: return null
+                return KiteMaskTransfer.of { f.evaluate(doubleArrayOf(it))[0] }
+            }
+            return when (val v = deref(value, refs)) {
+                is PdfName -> if (v.value == "Identity" || v.value == "Default") Result.success(null) else null
+                is PdfArray -> {
+                    if (v.size < 4) return null
+                    val tables = (0 until 3).map { table(v[it]) ?: return null }
+                    Result.success(KiteTransfer(tables[0], tables[1], tables[2]))
+                }
+                null -> null
+                else -> table(v)?.let { Result.success(KiteTransfer(it, it, it)) }
+            }
         }
 
         private fun parseSoftMask(value: PdfObject?, refs: IndirectResolver): SoftMask? {
