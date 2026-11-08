@@ -320,7 +320,8 @@ public class PdfEditor internal constructor(
     /**
      * Fill a text form field: set its value (`/V`) and regenerate the widget's
      * normal appearance (`/AP /N`) so the value is visible in any viewer. The
-     * appearance honours the field's `/DA` (font, size, colour) and is clipped
+     * appearance honours the field's `/DA` (font, size, colour): the font of the form's `/DR` that it
+     * names when the writer can encode for it, a simple font with WinAnsiEncoding, else Helvetica. It is clipped
      * to the field rectangle. Also clears the form's `/NeedAppearances` flag (if
      * set) so viewers use the appearance we just generated.
      *
@@ -340,20 +341,11 @@ public class PdfEditor internal constructor(
         val rect = field.rect
             ?: throw IllegalArgumentException("Field '${field.fullyQualifiedName}' has no widget /Rect for an appearance")
 
-        val fontRef = addObject(
-            PdfDictionary(
-                linkedMapOf(
-                    "Type" to PdfName("Font"),
-                    "Subtype" to PdfName("Type1"),
-                    "BaseFont" to PdfName("Helvetica"),
-                    "Encoding" to PdfName("WinAnsiEncoding"),
-                ),
-            ),
-        )
         val da = FieldAppearance.parseDA(field.defaultAppearance)
         // A password field draws asterisks, never its value (ISO 32000-1, 12.7.4.3, Table 228, #954).
         val shown = if ((field.flags and FieldAppearance.PASSWORD) != 0) FieldAppearance.masked(value) else value
-        val ap = FieldAppearance.build(shown, abs(rect.width), abs(rect.height), da, fontRef, field.isMultiline, field.quadding)
+        val (fontRef, metrics) = appearanceFont(da)
+        val ap = FieldAppearance.build(shown, abs(rect.width), abs(rect.height), da, fontRef, field.isMultiline, field.quadding, metrics)
         val apDict = PdfDictionary(linkedMapOf("N" to (addObject(ap) as PdfObject)))
         val vStr = PdfString(PdfText.encodeTextString(value))
         // A rich text field keeps its rich value in step with the plain one, so a reader that
@@ -482,12 +474,9 @@ public class PdfEditor internal constructor(
 
         // Build the appearance (same path as a text field shows its value).
         val apDict = field.rect?.let { rect ->
-            val fontRef = addObject(PdfDictionary(linkedMapOf(
-                "Type" to PdfName("Font"), "Subtype" to PdfName("Type1"), "BaseFont" to PdfName("Helvetica"),
-                "Encoding" to PdfName("WinAnsiEncoding"),
-            )))
             val da = FieldAppearance.parseDA(field.defaultAppearance)
-            val ap = FieldAppearance.build(value, abs(rect.width), abs(rect.height), da, fontRef)
+            val (fontRef, metrics) = appearanceFont(da)
+            val ap = FieldAppearance.build(value, abs(rect.width), abs(rect.height), da, fontRef, metrics = metrics)
             PdfDictionary(linkedMapOf("N" to (addObject(ap) as PdfObject)))
         }
 
@@ -563,6 +552,47 @@ public class PdfEditor internal constructor(
             }
         }
         return v
+    }
+
+    /**
+     * The font a field appearance draws in, and the metrics it is measured with. ISO 32000-1,
+     * 12.7.3.3: the font operand of `/DA` names a resource of the form's `/DR`, so the appearance
+     * references that font object when the writer can encode for it: a simple font with
+     * WinAnsiEncoding, measured by its standard 14 metrics when its base font is one, else by
+     * Helvetica's (#707). A font the writer cannot encode for, a Type0 or a symbolic one, or a name
+     * `/DR` lacks, gives a new Helvetica object, which draws the value rather than nothing.
+     */
+    private fun appearanceFont(da: FieldAppearance.DefaultAppearance): Pair<PdfReference, StandardFont> {
+        acroFormDict()?.let { acro ->
+            val entry = (acro["DR"]?.resolve(base) as? PdfDictionary)?.let { (it["Font"]?.resolve(base) as? PdfDictionary)?.get(da.fontName) }
+            val font = entry?.let { (if (it is PdfReference) effectiveObject(it.objectNumber) else it) as? PdfDictionary }
+            if (entry != null && font != null && font.getName("Subtype") in SIMPLE_FONTS &&
+                font["Encoding"]?.resolve(base).let { it is PdfName && it.value == "WinAnsiEncoding" }
+            ) {
+                val baseFont = font.getName("BaseFont")?.substringAfter('+')
+                val metrics = StandardFont.entries.firstOrNull { it.baseFont == baseFont && it != StandardFont.Symbol && it != StandardFont.ZapfDingbats }
+                    ?: StandardFont.Helvetica
+                return (entry as? PdfReference ?: addObject(font)) to metrics
+            }
+        }
+        val helvetica = addObject(
+            PdfDictionary(
+                linkedMapOf(
+                    "Type" to PdfName("Font"),
+                    "Subtype" to PdfName("Type1"),
+                    "BaseFont" to PdfName("Helvetica"),
+                    "Encoding" to PdfName("WinAnsiEncoding"),
+                ),
+            ),
+        )
+        return helvetica to StandardFont.Helvetica
+    }
+
+    private fun acroFormDict(): PdfDictionary? {
+        val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return null
+        val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return null
+        val acroRef = catalog["AcroForm"] as? PdfReference
+        return (if (acroRef != null) effectiveObject(acroRef.objectNumber) else catalog["AcroForm"]) as? PdfDictionary
     }
 
     /** The form-wide `/DA`, which is where a mark's colour usually comes from. */
@@ -1312,6 +1342,9 @@ public class PdfEditor internal constructor(
     }
 
     internal companion object {
+        /** The font subtypes whose single-byte codes the writer's WinAnsi text encoder writes. */
+        private val SIMPLE_FONTS = setOf("Type1", "TrueType", "MMType1")
+
         /** Text-showing operators (§9.4.3). */
         val TEXT_SHOW_OPERATORS = setOf("Tj", "TJ", "'", "\"")
 

@@ -66,6 +66,8 @@ internal object FieldAppearance {
         multiline: Boolean = false,
         /** `/Q`: 0 left, 1 centre, 2 right. */
         quadding: Int = 0,
+        /** The metrics the value is measured with: those of the font [fontRef] names (#707). */
+        metrics: StandardFont = StandardFont.Helvetica,
     ): PdfStream {
         val size = if (da.fontSize > 0.0) da.fontSize else if (multiline) 12.0 else (height - 2.0).coerceIn(6.0, 12.0)
         val clipW = (width - 2.0).coerceAtLeast(0.0)
@@ -73,7 +75,7 @@ internal object FieldAppearance {
 
         val content = ByteArrayBuilder(64)
         content.ascii("/Tx BMC\nq\n1 1 ${fmt(clipW)} ${fmt(clipH)} re W n\n")
-        val paragraphs = plainParagraphs(value, StandardFont.Helvetica, size, da.colorOps, quadding)
+        val paragraphs = plainParagraphs(value, metrics, size, da.colorOps, quadding)
         FieldText.write(FieldText.lines(paragraphs, width - 4.0, multiline), width, height, 2.0, multiline, content) { da.fontName }
         content.ascii("Q\nEMC\n")
 

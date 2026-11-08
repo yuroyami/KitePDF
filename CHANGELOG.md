@@ -490,6 +490,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In `KiteDocView`, a text field that the reader leaves without changing its value runs only its blur script. It
   was committed again, which ran its validate script, every calculation and every format script, as Acrobat,
   PDFium and pdf.js do not (#783).
+- `setTextFieldValue` and `setChoiceValue` draw the value in the `/DR` font that the field's `/DA` names, when it
+  is a simple font with WinAnsiEncoding, measured by its standard 14 metrics when it is one. They staged a
+  Helvetica under that name, so a field that asked for Times drew in Helvetica (#707).
 
 ## [0.13.0] - 2026-10-09
 

@@ -88,7 +88,7 @@ val filled = editor.saveIncremental()
 - It sets the form's `/NeedAppearances` to false, so that readers use the new appearance.
 
 !!! warning
-    The new appearance always uses Helvetica through WinAnsiEncoding, so a character outside WinAnsi shows as a question mark (see [Standard fonts](writing.md#standard-fonts)).
+    The new appearance draws in the font of the form's `/DR` that the field's `/DA` names, when that is a simple font with WinAnsiEncoding, and measures it with its standard 14 metrics when it is one of them. Any other font, such as a Type0 or a symbolic one, falls back to Helvetica through WinAnsiEncoding. Either way a character outside WinAnsi shows as a question mark (see [Standard fonts](writing.md#standard-fonts)).
 
 A check box or a radio button that has no appearance of its own gets one, from its `/MK` background and border and the mark that `/MK /CA` names. Without that appearance, a ticked box stays blank in a reader that does not draw appearances of its own. The editor draws a mark only where the file tells which button owns which value: a field with one button owns the value that you set, and the buttons of a radio group take their names from `/Opt`. A radio group that has neither keeps its appearances as they are.
 
