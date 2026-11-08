@@ -613,6 +613,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strokes, so a high Type 3 glyph or wide stroked text in a region goes (#1017).
 - `saveRewritten` leaves out a page that `removePage` or `setPageOrder` took out, even when a bookmark, a link,
   `/OpenAction` or another reference names it; those references are written as `null` (#1016).
+- `graftPage`, `appendPage` and `mergeDocument` copy a page with what it draws or shows, not the source's other
+  pages: a link to an uncopied page loses its destination, and a widget becomes a field of its own (#1015).
 
 ## [0.13.0] - 2026-10-09
 

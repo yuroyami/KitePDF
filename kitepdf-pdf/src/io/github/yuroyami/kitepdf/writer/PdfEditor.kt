@@ -809,17 +809,36 @@ public class PdfEditor internal constructor(
 
         val effective = graftablePageDict(page)
 
+        // The copy holds the page and what it draws or shows, not the rest of the source: no
+        // other page and no page tree node, which a link's destination, an annotation's /P or a
+        // bead reaches, is entered, and a reference to one is copied as null (ISO 32000-1,
+        // 12.3.2.2; #1015). A widget becomes a field of its own, so its field's other widgets,
+        // and their pages, stay behind (12.7.3.1).
+        val otherPages = source.pages.mapNotNull { it.reference?.objectNumber }.filterTo(HashSet()) { it != srcPageNum }
+        val overrides = HashMap<Long, PdfObject>()
+        runCatching { effective.getArray("Annots", source) }.getOrNull()?.forEach { item ->
+            val ref = item as? PdfReference ?: return@forEach
+            val annot = runCatching { source.resolve(ref) }.getOrNull() as? PdfDictionary ?: return@forEach
+            if (annot.getName("Subtype") == "Widget" && annot["Parent"] != null) overrides[ref.objectNumber] = standaloneWidget(annot, source)
+        }
+        fun sourceObject(num: Long): PdfObject? = overrides[num] ?: source.resolve(PdfReference(num, 0))
+        fun outside(num: Long): Boolean {
+            if (num in otherPages) return true
+            val obj = runCatching { source.resolve(PdfReference(num, 0)) }.getOrNull() as? PdfDictionary ?: return false
+            return obj.getName("Type") == "Pages" || obj.getName("Type") == "Catalog"
+        }
+
         // BFS the source graph, allocating a new number per visited source object.
         val refMap = HashMap<Long, Long>()
         val queue = ArrayDeque<Long>()
         fun enqueue(srcNum: Long) {
-            if (srcNum !in refMap) { refMap[srcNum] = allocateReference().objectNumber; queue.addLast(srcNum) }
+            if (srcNum !in refMap && !outside(srcNum)) { refMap[srcNum] = allocateReference().objectNumber; queue.addLast(srcNum) }
         }
         val newPageNum = allocateReference().objectNumber
         refMap[srcPageNum] = newPageNum
         collectReferences(effective) { enqueue(it) }
         while (queue.isNotEmpty()) {
-            val obj = source.resolve(PdfReference(queue.removeFirst(), 0)) ?: continue
+            val obj = sourceObject(queue.removeFirst()) ?: continue
             collectReferences(obj) { enqueue(it) }
         }
 
@@ -827,10 +846,31 @@ public class PdfEditor internal constructor(
         staged[newPageNum] = Staged(0, remapReferences(effective, refMap))
         for ((srcNum, newNum) in refMap) {
             if (newNum == newPageNum) continue
-            val obj = source.resolve(PdfReference(srcNum, 0)) ?: continue
+            val obj = sourceObject(srcNum) ?: continue
             staged[newNum] = Staged(0, remapReferences(obj, refMap))
         }
         return PdfReference(newPageNum, 0)
+    }
+
+    /**
+     * [widget] as a field of its own: the field entries it inherits from its `/Parent` chain
+     * (ISO 32000-1, 12.7.3.1, Table 220, and 12.7.3.3) written onto it, its partial names joined
+     * into its full name, and no `/Parent`, so a graft does not pull in the field's other widgets.
+     */
+    private fun standaloneWidget(widget: PdfDictionary, source: PdfDocument): PdfDictionary {
+        val out = LinkedHashMap(widget.map)
+        out.remove("Parent")
+        val names = ArrayList<String>()
+        (widget["T"] as? PdfString)?.asText()?.let(names::add)
+        var parent = runCatching { widget["Parent"]?.resolve(source) }.getOrNull() as? PdfDictionary
+        var depth = 0
+        while (parent != null && depth++ < 32) {
+            for (key in INHERITED_FIELD_KEYS) if (key !in out) parent[key]?.let { out[key] = it }
+            (parent["T"] as? PdfString)?.asText()?.let { names.add(0, it) }
+            parent = runCatching { parent["Parent"]?.resolve(source) }.getOrNull() as? PdfDictionary
+        }
+        if (names.isNotEmpty()) out["T"] = PdfString(PdfText.encodeTextString(names.joinToString(".")))
+        return PdfDictionary(out)
     }
 
     /** A self-contained copy of a page dict: inheritance baked in, /Parent removed. */
@@ -1460,6 +1500,8 @@ public class PdfEditor internal constructor(
     }
 
     internal companion object {
+        /** The field entries a widget takes from its field when it becomes a field of its own (ISO 32000-1, Tables 220 and 222). */
+        private val INHERITED_FIELD_KEYS = listOf("FT", "Ff", "V", "DV", "DA", "Q", "DS", "RV", "MaxLen", "Opt", "TI", "I", "TU", "TM", "AA")
         /** The font subtypes whose single-byte codes the writer's WinAnsi text encoder writes. */
         private val SIMPLE_FONTS = setOf("Type1", "TrueType", "MMType1")
 
