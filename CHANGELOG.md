@@ -499,6 +499,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   border under the value, and every field appearance, the viewer's too, turns with `/MK /R` and puts one
   character in each cell of a comb field. `setTextFieldValue` cuts a value longer than `/MaxLen` to it (#715,
   #722, #719).
+- `PdfEditor.setChoiceValue` draws the option's text in a combo box instead of its export value, and draws a list
+  box's rows with the selected one highlighted (#700).
 
 ## [0.13.0] - 2026-10-09
 

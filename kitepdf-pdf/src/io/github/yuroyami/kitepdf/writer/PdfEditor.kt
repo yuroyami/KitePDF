@@ -504,8 +504,14 @@ public class PdfEditor internal constructor(
         // Build the appearance of each widget (same path as a text field shows its value).
         val da = FieldAppearance.parseDA(field.defaultAppearance)
         val (fontRef, metrics) = appearanceFont(da)
+        // ISO 32000-1, 12.7.4.4: /V holds the export value, but the widget shows the option's text,
+        // and a list box shows its rows with the selected one highlighted (#700).
+        val selection = field.choiceSelectionForValue(value)
+            ?: io.github.yuroyami.kitepdf.PdfChoiceSelection(emptyList(), unresolvedValues = listOf(value))
+        val label = field.choiceOptions.firstOrNull { it.index in selection.indices }?.label ?: value
         writeFieldValue(field, fieldRef, buttonWidgets(field), entries) { w, h, widget ->
-            FieldAppearance.build(value, w, h, da, fontRef, metrics = metrics, look = FieldAppearance.lookOf(widget, base, field.flags, null))
+            val combo = { FieldAppearance.build(label, w, h, da, fontRef, metrics = metrics, look = FieldAppearance.lookOf(widget, base, field.flags, null)) }
+            if (field.isCombo) combo() else io.github.yuroyami.kitepdf.render.ChoiceAppearance.build(field, selection, widget, w, h, base) ?: combo()
         }
         clearNeedAppearances()
     }
