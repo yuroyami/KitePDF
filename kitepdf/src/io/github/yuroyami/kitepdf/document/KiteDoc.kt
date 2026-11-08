@@ -12,6 +12,14 @@ import io.github.yuroyami.kitepdf.svg.SvgImage
 import io.github.yuroyami.kitepdf.xps.XpsDocument
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
+/**
+ * The size past which the local openers of the JVM and Android, `openFile`, `open(file)`,
+ * `open(stream)` and `open(context, uri)`, refuse a document with a `KiteFormatException`
+ * rather than run out of memory: 128 MiB, as for a download. Pass a larger `maxBytes` to open a
+ * larger document when the heap has room for it (#829).
+ */
+public const val DEFAULT_MAX_LOCAL_DOCUMENT_BYTES: Int = 128 * 1024 * 1024
+
 /** A document format KitePDF can read. */
 public enum class KiteDocFormat {
     Pdf,

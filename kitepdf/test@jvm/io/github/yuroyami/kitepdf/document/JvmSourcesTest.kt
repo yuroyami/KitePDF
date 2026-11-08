@@ -65,4 +65,34 @@ class JvmSourcesTest {
             assertFailsWith<KiteFormatException> { KiteDoc.openFile(path.toString()) }
         }
     }
+
+    @Test
+    fun a_file_past_the_limit_is_a_format_error_before_it_is_read() {
+        // A sparse 3 GB file: File.readBytes threw OutOfMemoryError for it (#829).
+        val path = createTempFile("kitedoc", ".pdf")
+        try {
+            java.io.RandomAccessFile(path.toFile(), "rw").use { it.setLength(3L * 1024 * 1024 * 1024) }
+            val error = assertFailsWith<KiteFormatException> { KiteDoc.openFile(path.toString()) }
+            assertTrue("larger than" in error.message.orEmpty(), error.message)
+            assertFailsWith<KiteFormatException> { KiteDoc.open(path.toFile()) }
+        } finally {
+            path.deleteIfExists()
+        }
+    }
+
+    @Test
+    fun a_stream_that_never_ends_stops_at_the_limit() {
+        val endless = object : java.io.InputStream() {
+            override fun read(): Int = 0
+            override fun read(b: ByteArray, off: Int, len: Int): Int = len.also { b.fill(0, off, off + len) }
+        }
+        assertFailsWith<KiteFormatException> { KiteDoc.open(endless, "", io.github.yuroyami.kitepdf.epub.EpubSettings(), maxBytes = 1024 * 1024) }
+    }
+
+    @Test
+    fun a_larger_limit_opens_a_larger_file() = withTempFile(samplePdf(), ".pdf") { path ->
+        val size = path.toFile().length().toInt()
+        assertFailsWith<KiteFormatException> { KiteDoc.openFile(path.toString(), "", io.github.yuroyami.kitepdf.epub.EpubSettings(), maxBytes = size - 1) }
+        assertEquals(2, KiteDoc.openFile(path.toString(), "", io.github.yuroyami.kitepdf.epub.EpubSettings(), maxBytes = size).pageCount)
+    }
 }

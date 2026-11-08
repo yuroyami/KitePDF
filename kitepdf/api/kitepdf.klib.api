@@ -35,6 +35,9 @@ final object io.github.yuroyami.kitepdf.document/KiteDoc { // io.github.yuroyami
     final fun openOrNull(kotlin/ByteArray, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument? // io.github.yuroyami.kitepdf.document/KiteDoc.openOrNull|openOrNull(kotlin.ByteArray;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
 }
 
+final const val io.github.yuroyami.kitepdf.document/DEFAULT_MAX_LOCAL_DOCUMENT_BYTES // io.github.yuroyami.kitepdf.document/DEFAULT_MAX_LOCAL_DOCUMENT_BYTES|{}DEFAULT_MAX_LOCAL_DOCUMENT_BYTES[0]
+    final fun <get-DEFAULT_MAX_LOCAL_DOCUMENT_BYTES>(): kotlin/Int // io.github.yuroyami.kitepdf.document/DEFAULT_MAX_LOCAL_DOCUMENT_BYTES.<get-DEFAULT_MAX_LOCAL_DOCUMENT_BYTES>|<get-DEFAULT_MAX_LOCAL_DOCUMENT_BYTES>(){}[0]
+
 // Targets: [native]
 final fun (io.github.yuroyami.kitepdf.document/KiteDoc).io.github.yuroyami.kitepdf.document/openFile(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/openFile|openFile@io.github.yuroyami.kitepdf.document.KiteDoc(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
 

@@ -651,6 +651,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2, 4, 8 or 16 bits, with /Decode, /Interpolate and an alpha plane (#920).
 - PdfEditor and PdfBuilder write attachments (with /AF associations), an outline, page labels and the XMP packet:
   setAttachment, removeAttachment, setOutline, setPageLabels and setXmpMetadata (#921).
+- The JVM and Android local openers refuse a document past DEFAULT_MAX_LOCAL_DOCUMENT_BYTES (128 MiB) with
+  KiteFormatException instead of running out of memory, and take a maxBytes to raise it (#829).
 
 ## [0.13.0] - 2026-10-09
 
