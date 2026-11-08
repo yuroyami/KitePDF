@@ -34,6 +34,25 @@ public class PdfSigner(
     private val placeholderSize: Int = 16 * 1024,
 ) {
 
+    /**
+     * What a signature says about itself and how its widget looks (ISO 32000-1, 12.8.1, Table 252;
+     * #922). [name], [reason], [location] and [contactInfo] are written as text strings, and
+     * [signingTime] as `/M`, which stays optional: validators trust the signing time in the CMS.
+     *
+     * [appearance] draws the widget of a visible signature, in a box from (0, 0) to the width and
+     * height it is given, as a form XObject in `/AP /N` (12.7.4.5). Null draws the default, as
+     * Acrobat does: "Digitally signed by" the name, then the date, the reason and the location, in
+     * Helvetica. An invisible signature, one without a rectangle, has no appearance.
+     */
+    public class Options(
+        public val name: String? = null,
+        public val reason: String? = null,
+        public val location: String? = null,
+        public val contactInfo: String? = null,
+        public val signingTime: io.github.yuroyami.kitepdf.PdfDate? = null,
+        public val appearance: (ContentStreamBuilder.(width: Double, height: Double) -> Unit)? = null,
+    )
+
     /** The signed bytes plus the exact `/ByteRange` the CMS must cover. */
     public class SigningTarget(public val bytes: ByteArray, public val byteRange: IntArray)
 
@@ -45,7 +64,11 @@ public class PdfSigner(
      * field+widget on page [pageIndex] (invisible when [rect] is null), and
      * the AcroForm wiring (`/SigFlags 3`).
      */
-    public fun prepareSignature(fieldName: String, rect: KiteRectangle? = null, pageIndex: Int = 0) {
+    public fun prepareSignature(fieldName: String, rect: KiteRectangle? = null, pageIndex: Int = 0): Unit =
+        prepareSignature(fieldName, rect, pageIndex, Options())
+
+    /** [prepareSignature] with the entries and the appearance of [options] (#922). */
+    public fun prepareSignature(fieldName: String, rect: KiteRectangle?, pageIndex: Int, options: Options) {
         check(!prepared) { "prepareSignature was already called" }
         require(!doc.isEncrypted) { "Signing encrypted documents is not supported." }
         val page = doc.pages.getOrNull(pageIndex)
@@ -53,35 +76,35 @@ public class PdfSigner(
         val pageRef = page.reference
             ?: throw IllegalArgumentException("Page $pageIndex has no indirect reference")
 
-        val sigRef = editor.addObject(
-            PdfDictionary(
-                linkedMapOf(
-                    "Type" to PdfName("Sig"),
-                    "Filter" to PdfName("Adobe.PPKLite"),
-                    "SubFilter" to PdfName("adbe.pkcs7.detached"),
-                    // Serialized as a hex string of 2*placeholderSize zeros.
-                    "Contents" to PdfString(ByteArray(placeholderSize)),
-                    // Fixed-width placeholder, patched in place by saveForSigning.
-                    "ByteRange" to PdfArray(listOf(PdfInt(0), PdfInt(RESERVED), PdfInt(RESERVED), PdfInt(RESERVED))),
-                ),
-            ),
+        val sigDict = linkedMapOf<String, PdfObject>(
+            "Type" to PdfName("Sig"),
+            "Filter" to PdfName("Adobe.PPKLite"),
+            "SubFilter" to PdfName("adbe.pkcs7.detached"),
+            // Serialized as a hex string of 2*placeholderSize zeros.
+            "Contents" to PdfString(ByteArray(placeholderSize)),
+            // Fixed-width placeholder, patched in place by saveForSigning.
+            "ByteRange" to PdfArray(listOf(PdfInt(0), PdfInt(RESERVED), PdfInt(RESERVED), PdfInt(RESERVED))),
         )
+        options.name?.let { sigDict["Name"] = PdfString(PdfText.encodeTextString(it)) }
+        options.reason?.let { sigDict["Reason"] = PdfString(PdfText.encodeTextString(it)) }
+        options.location?.let { sigDict["Location"] = PdfString(PdfText.encodeTextString(it)) }
+        options.contactInfo?.let { sigDict["ContactInfo"] = PdfString(PdfText.encodeTextString(it)) }
+        options.signingTime?.let { sigDict["M"] = PdfString(it.toString().encodeToByteArray()) }
+        val sigRef = editor.addObject(PdfDictionary(sigDict))
 
-        val r = rect ?: KiteRectangle(0.0, 0.0, 0.0, 0.0)
-        val fieldRef = editor.addObject(
-            PdfDictionary(
-                linkedMapOf(
-                    "Type" to PdfName("Annot"),
-                    "Subtype" to PdfName("Widget"),
-                    "FT" to PdfName("Sig"),
-                    "T" to PdfString(PdfText.encodeTextString(fieldName)),
-                    "V" to sigRef,
-                    "Rect" to PdfArray(listOf(PdfReal(r.left), PdfReal(r.bottom), PdfReal(r.right), PdfReal(r.top))),
-                    "F" to PdfInt(4), // print
-                    "P" to pageRef,
-                ),
-            ),
+        val r = (rect ?: KiteRectangle(0.0, 0.0, 0.0, 0.0)).normalized()
+        val widget = linkedMapOf<String, PdfObject>(
+            "Type" to PdfName("Annot"),
+            "Subtype" to PdfName("Widget"),
+            "FT" to PdfName("Sig"),
+            "T" to PdfString(PdfText.encodeTextString(fieldName)),
+            "V" to sigRef,
+            "Rect" to PdfArray(listOf(PdfReal(r.left), PdfReal(r.bottom), PdfReal(r.right), PdfReal(r.top))),
+            "F" to PdfInt(4), // print
+            "P" to pageRef,
         )
+        if (r.width > 0 && r.height > 0) widget["AP"] = PdfDictionary(linkedMapOf("N" to appearanceOf(r.width, r.height, options)))
+        val fieldRef = editor.addObject(PdfDictionary(widget))
 
         // The page, the catalog and the form are read as the editor has them, staged edits
         // included: an incremental update holds the new version of each changed object (ISO
@@ -138,6 +161,51 @@ public class PdfSigner(
         prepared = true
     }
 
+    /** The widget's normal appearance, a form XObject of [width] by [height] (ISO 32000-1, 12.7.4.5). */
+    private fun appearanceOf(width: Double, height: Double, options: Options): PdfReference {
+        val fonts = LinkedHashMap<StandardFont, String>()
+        val content = ContentStreamBuilder({ font -> fonts.getOrPut(font) { "KF${fonts.size + 1}" } })
+        val draw = options.appearance ?: { w, h -> defaultAppearance(w, h, options) }
+        content.draw(width, height)
+        val fontDict = LinkedHashMap<String, PdfObject>()
+        for ((font, name) in fonts) {
+            fontDict[name] = editor.addObject(
+                PdfDictionary(
+                    linkedMapOf<String, PdfObject>(
+                        "Type" to PdfName("Font"),
+                        "Subtype" to PdfName("Type1"),
+                        "BaseFont" to PdfName(font.baseFont),
+                    ).withTextEncoding(font),
+                ),
+            )
+        }
+        val extra = linkedMapOf<String, PdfObject>(
+            "Type" to PdfName("XObject"),
+            "Subtype" to PdfName("Form"),
+            "BBox" to PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(width), PdfReal(height))),
+            "Resources" to PdfDictionary(linkedMapOf("Font" to PdfDictionary(fontDict))),
+        )
+        return editor.addObject(PdfStreams.flate(content.toByteArray(), extra))
+    }
+
+    /** Acrobat's default look: who signed, then when, why and where, in Helvetica, sized to fit the box. */
+    private fun ContentStreamBuilder.defaultAppearance(width: Double, height: Double, options: Options) {
+        val lines = buildList {
+            add(options.name?.let { "Digitally signed by $it" } ?: "Digitally signed")
+            options.signingTime?.let { t ->
+                fun two(v: Int) = v.toString().padStart(2, '0')
+                val zone = if (t.tzSign == 'Z') "Z" else "${t.tzSign}${two(t.tzHour)}:${two(t.tzMinute)}"
+                add("Date: ${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}:${two(t.second)} $zone")
+            }
+            options.reason?.let { add("Reason: $it") }
+            options.location?.let { add("Location: $it") }
+        }
+        val pad = 2.0
+        val size = minOf(10.0, (height - 2 * pad) / (lines.size * 1.2)).coerceAtLeast(1.0)
+        setFillGray(0.0)
+        for ((i, line) in lines.withIndex()) text(StandardFont.Helvetica, size, pad, height - pad - size * (1.2 * i + 1), line)
+    }
+
     /**
      * Serialize incrementally, locate the `/Contents` placeholder, patch the
      * `/ByteRange` in place (space-padded to the reserved width so no offset
@@ -147,13 +215,16 @@ public class PdfSigner(
     public fun saveForSigning(): SigningTarget {
         check(prepared) { "call prepareSignature first" }
         val bytes = editor.saveIncremental()
+        // The placeholders are in the revision just written, after the original bytes: a document
+        // that keeps an unfilled placeholder from an earlier saveForSigning must not match it (#922).
+        val revisionStart = doc.rawBytes.size
 
         // Find the placeholder: a hex string of exactly 2*placeholderSize
         // ASCII zeros. Verify the closing delimiter so a shorter zero run
         // elsewhere cannot false-match.
         val probe = ("<" + "0".repeat(64)).encodeToByteArray()
         var lt = -1
-        var from = 0
+        var from = revisionStart
         while (true) {
             val cand = indexOf(bytes, probe, from)
             check(cand >= 0) { "signature placeholder not found" }
@@ -167,7 +238,7 @@ public class PdfSigner(
         // Patch the fixed-width /ByteRange (the reserved literal has the same
         // character count as any real value we write, padded with spaces).
         val placeholder = "[0 $RESERVED $RESERVED $RESERVED]".encodeToByteArray()
-        val at = indexOf(bytes, placeholder)
+        val at = indexOf(bytes, placeholder, revisionStart)
         check(at >= 0) { "ByteRange placeholder not found" }
         val real = "[0 ${byteRange[1]} ${byteRange[2]} ${byteRange[3]}]"
         check(real.length <= placeholder.size) { "ByteRange overflows its placeholder" }

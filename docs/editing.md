@@ -351,6 +351,14 @@ val signed = PdfSigner.embedSignature(target.bytes, target.byteRange, cms)
 ```
 
 - `prepareSignature` takes a `rect` and a `pageIndex` for a visible field.
+- `PdfSigner.Options` sets what the signature says about itself: `name`, `reason`, `location`, `contactInfo`, and `signingTime` as `/M`. Validators trust the signing time inside the CMS, so `/M` is optional.
+- A visible signature draws "Digitally signed by" the name, then the date, the reason and the location, in Helvetica. Pass `appearance` in the options to draw your own, in a box from (0, 0) to the width and height it gets:
+
+```kotlin
+val options = PdfSigner.Options(name = "Ada Lovelace", reason = "I approve", signingTime = PdfDate(2026, 9, 28, 12, 0, 0, 'Z', 0, 0))
+signer.prepareSignature("Signature1", KiteRectangle(20.0, 20.0, 220.0, 80.0), pageIndex = 0, options = options)
+```
+
 - The CMS must fit in 16 KiB. For a bigger one, pass `placeholderSize` to `PdfSigner`.
 - `prepareSignature` throws for an encrypted document.
 

@@ -1741,12 +1741,25 @@ public final class io/github/yuroyami/kitepdf/writer/PdfSigner {
 	public fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/writer/PdfEditor;I)V
 	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/PdfDocument;Lio/github/yuroyami/kitepdf/writer/PdfEditor;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun prepareSignature (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;I)V
+	public final fun prepareSignature (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;ILio/github/yuroyami/kitepdf/writer/PdfSigner$Options;)V
 	public static synthetic fun prepareSignature$default (Lio/github/yuroyami/kitepdf/writer/PdfSigner;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;IILjava/lang/Object;)V
 	public final fun saveForSigning ()Lio/github/yuroyami/kitepdf/writer/PdfSigner$SigningTarget;
 }
 
 public final class io/github/yuroyami/kitepdf/writer/PdfSigner$Companion {
 	public final fun embedSignature ([B[I[B)[B
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfSigner$Options {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfDate;Lkotlin/jvm/functions/Function3;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfDate;Lkotlin/jvm/functions/Function3;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAppearance ()Lkotlin/jvm/functions/Function3;
+	public final fun getContactInfo ()Ljava/lang/String;
+	public final fun getLocation ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getSigningTime ()Lio/github/yuroyami/kitepdf/PdfDate;
 }
 
 public final class io/github/yuroyami/kitepdf/writer/PdfSigner$SigningTarget {

@@ -639,6 +639,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PdfSignatureValidation.timestamp reports the signature time-stamp token of a signer: its time, whether it is
   valid and trusted, and the authority's certificate; a trusted token's time is the time certificate dates and
   revocation are judged at (#925).
+- PdfSigner.prepareSignature takes PdfSigner.Options: the signer's name, reason, location, contact and signing
+  time, and the appearance of a visible signature, with a default that prints them; saveForSigning finds its
+  placeholders only in the revision it wrote (#922).
 
 ## [0.13.0] - 2026-10-09
 
