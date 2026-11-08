@@ -150,6 +150,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   times, eight levels down, was read and painted k^7 times, so a 3 KB book with 20 frames a document asked
   for 10^9 reads (#987).
 
+- An SVG `<use>` whose reference leads back to itself or to an ancestor renders nothing, as SVG 2, 5.6 says,
+  and one render walks at most 500,000 elements, its `<use>` instances included, past which it stops with a
+  warning. A 124-byte file drew millions of shapes, and its text and link passes could not be stopped (#991).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

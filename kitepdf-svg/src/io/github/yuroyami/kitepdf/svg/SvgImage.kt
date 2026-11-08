@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.svg
 
 import io.github.yuroyami.kitepdf.core.KiteDataUrl
 import io.github.yuroyami.kitepdf.core.KiteCancellation
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
@@ -124,15 +125,17 @@ public class SvgImage private constructor(
         loadResource: ((String) -> ByteArray?)?,
         stop: KiteCancellation?,
     ) {
+        // One budget of elements for the whole render, the <use> instances included (#991).
+        val budget = stop as? RenderBudget ?: RenderBudget(stop)
         val vb = viewBox
         if (vb == null || vb[2] <= 0 || vb[3] <= 0) {
-            walk(root, ctm, Paint(viewport = ctm, viewportWidth = width, viewportHeight = height), canvas, loadResource, depth = 0, stop = stop)
+            walk(root, ctm, Paint(viewport = ctm, viewportWidth = width, viewportHeight = height), canvas, loadResource, depth = 0, stop = budget)
             return
         }
         val fit = viewBoxFit(vb, width, height, root.attrs["preserveAspectRatio"] ?: root.attrs["preserveaspectratio"])
         if (fit.slice) canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, width, height) }.build(), ctm, evenOdd = false)
         try {
-            walk(root, compose(ctm, fit.matrix), Paint(viewport = ctm, viewportWidth = vb[2], viewportHeight = vb[3]), canvas, loadResource, depth = 0, stop = stop)
+            walk(root, compose(ctm, fit.matrix), Paint(viewport = ctm, viewportWidth = vb[2], viewportHeight = vb[3]), canvas, loadResource, depth = 0, stop = budget)
         } finally {
             if (fit.slice) canvas.popClip()
         }
@@ -206,6 +209,8 @@ public class SvgImage private constructor(
         val maskDepth: Int = 0,
         /** How many filters the walk is inside, which bounds a filter whose feImage draws itself (#209). */
         val filterDepth: Int = 0,
+        /** The targets of the uses the walk is inside, for the cycle check of drawUse (#991). */
+        val useTargets: List<KiteXmlNode.Element> = emptyList(),
     )
 
     // The canvas travels as a parameter, exactly like ctm and Paint: a field
@@ -221,7 +226,8 @@ public class SvgImage private constructor(
         stop: KiteCancellation? = null,
     ) {
         if (stop?.isCancelled() == true) return
-        if (depth > MAX_DEPTH) return                       // <use> cycles
+        if (depth > MAX_DEPTH) return                       // a backstop under the cycle check of drawUse
+        if (stop is RenderBudget && !stop.take()) return
         if (isDisplayNone(el)) return
         // A transform may come from a style declaration too, like any presentation property (#182).
         val ctm = styleOrAttr(el, "transform")?.let { compose(parentCtm, parseTransform(it)) } ?: parentCtm
@@ -371,13 +377,51 @@ public class SvgImage private constructor(
     ) {
         val id = el.attrs["href"]?.trim()?.removePrefix("#")?.takeIf { it.isNotEmpty() } ?: return
         val target = byId[id] ?: return
+        // SVG 2, 5.6: a use whose reference leads back to itself or to an ancestor in the instance
+        // tree is in error and renders nothing, as browsers do. Without this a group that used itself
+        // three times walked 3^15 groups before the depth limit stopped it (#991).
+        if (refersBack(el, target, paint)) return
         val moved = compose(ctm, KiteMatrix.translation(num(el, "x", paint), num(el, "y", paint)))
+        val inner = paint.copy(useTargets = paint.useTargets + target)
         // <symbol> is invisible on its own but paints through <use>, as a group.
         if (target.tag.lowercase() == "symbol") {
-            for (c in target.children) if (c is KiteXmlNode.Element) walk(c, moved, paint, canvas, load, depth + 1, stop)
+            for (c in target.children) if (c is KiteXmlNode.Element) walk(c, moved, inner, canvas, load, depth + 1, stop)
         } else {
-            walk(target, moved, paint, canvas, load, depth + 1, stop)
+            walk(target, moved, inner, canvas, load, depth + 1, stop)
         }
+    }
+
+    /** Whether [target] is [use] itself, an ancestor of it, or a target of a use that this instance is inside. */
+    private fun refersBack(use: KiteXmlNode.Element, target: KiteXmlNode.Element, paint: Paint): Boolean {
+        if (paint.useTargets.any { it === target }) return true
+        var at: KiteXmlNode.Element? = use
+        while (at != null) {
+            if (at === target) return true
+            at = at.parent
+        }
+        return false
+    }
+
+    /**
+     * The caller's cancellation and the elements one render has walked, <use> instances included. A
+     * valid chain of uses can still grow: ten uses of the previous group on each of seven levels draw
+     * 10^7 shapes, so past [MAX_RENDER_ELEMENTS] the render stops with a warning and the page draws
+     * what it has, as XPS's page budget does (#991).
+     */
+    internal class RenderBudget(private val outer: KiteCancellation?) : KiteCancellation {
+        private var elements = 0
+        private var spent = false
+
+        fun take(): Boolean {
+            if (++elements <= MAX_RENDER_ELEMENTS) return true
+            if (!spent) {
+                spent = true
+                kiteWarn { "svg: more than $MAX_RENDER_ELEMENTS elements in one render; the rest is dropped" }
+            }
+            return false
+        }
+
+        override fun isCancelled(): Boolean = spent || outer?.isCancelled() == true
     }
 
     /** `<image>`: a `data:` URI, or another file when the caller can load one. */
@@ -665,22 +709,23 @@ public class SvgImage private constructor(
     }
 
     /** [minX, minY, maxX, maxY] of [el] in its own user space: a shape's, or its children's for a group. */
-    private fun boundsOfElement(el: KiteXmlNode.Element, paint: Paint, depth: Int): DoubleArray? {
-        if (depth > MAX_DEPTH) return null
+    private fun boundsOfElement(el: KiteXmlNode.Element, paint: Paint, depth: Int, budget: IntArray = intArrayOf(MAX_RENDER_ELEMENTS)): DoubleArray? {
+        if (depth > MAX_DEPTH || --budget[0] < 0) return null
         shapeOf(el, paint)?.let { return boundsOf(it) }
         val children = when (el.tag.lowercase()) {
             "g", "svg", "a", "symbol" -> el.children.filterIsInstance<KiteXmlNode.Element>()
             "switch" -> listOfNotNull(firstPassingChild(el))
             "use" -> {
                 val target = el.attrs["href"]?.trim()?.removePrefix("#")?.let { byId[it] } ?: return null
-                val tb = boundsOfElement(target, resolvePaint(target, paint), depth + 1) ?: return null
+                if (refersBack(el, target, paint)) return null
+                val tb = boundsOfElement(target, resolvePaint(target, paint).copy(useTargets = paint.useTargets + target), depth + 1, budget) ?: return null
                 return mapBounds(tb, compose(KiteMatrix.translation(num(el, "x", paint), num(el, "y", paint)), transformOf(target)))
             }
             else -> return null
         }
         var acc: DoubleArray? = null
         for (c in children) {
-            val cb = boundsOfElement(c, resolvePaint(c, paint), depth + 1)?.let { mapBounds(it, transformOf(c)) } ?: continue
+            val cb = boundsOfElement(c, resolvePaint(c, paint), depth + 1, budget)?.let { mapBounds(it, transformOf(c)) } ?: continue
             val a = acc
             acc = if (a == null) cb else doubleArrayOf(minOf(a[0], cb[0]), minOf(a[1], cb[1]), maxOf(a[2], cb[2]), maxOf(a[3], cb[3]))
         }
@@ -1702,6 +1747,9 @@ public class SvgImage private constructor(
     public companion object {
         /** A `<use>` chain deeper than this is a cycle; stop rather than hang. */
         private const val MAX_DEPTH = 32
+
+        /** The most elements one render walks, every <use> instance counted (#991). */
+        private const val MAX_RENDER_ELEMENTS = 500_000
 
         /** The most tiles one pattern fill draws, as for a PDF tiling pattern. */
         private const val MAX_PATTERN_TILES = 20_000.0
