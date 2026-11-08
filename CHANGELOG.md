@@ -468,6 +468,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `<use>` of an SVG `<symbol>` draws it as a viewport of the use's width and height, fitting the symbol's
   `viewBox` by its `preserveAspectRatio` and clipping to it, and the symbol's presentation attributes reach its
   children. Icon sprites drew unscaled and black (#704).
+- A single SVG shape or text with both a fill and a stroke composites once at its own `opacity`, as a group, so
+  the inner half of the stroke no longer stacks on the translucent fill into a darker band (#720).
 
 ## [0.13.0] - 2026-10-09
 

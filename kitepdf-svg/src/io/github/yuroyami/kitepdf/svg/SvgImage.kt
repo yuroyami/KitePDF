@@ -235,11 +235,19 @@ public class SvgImage private constructor(
         // A transform may come from a style declaration too, like any presentation property (#182).
         val ctm = styleOrAttr(el, "transform")?.let { compose(parentCtm, parseTransform(it)) } ?: parentCtm
         val container = el.tag.lowercase() in CONTAINERS
-        val paint = resolvePaint(el, parent, container)
+        val resolved = resolvePaint(el, parent, container)
         // SVG 1.1, 14.5: a container's opacity composites its children once, as
         // one offscreen group, so where two of its shapes overlap no darker seam
-        // shows (#91). A single shape's own opacity stays a per-paint alpha.
-        val groupAlpha = if (container) (styleOrAttr(el, "opacity")?.toDoubleOrNull() ?: 1.0).coerceIn(0.0, 1.0) else 1.0
+        // shows (#91). A single shape's own opacity stays a per-paint alpha, unless
+        // it paints both a fill and a stroke: opacity applies to the element as a
+        // whole, so the inner half of the stroke must not stack on the fill (CSS
+        // Color 4, 3.2; #720). A filter applies the opacity itself, after it runs.
+        val ownOpacity = if (container) 1.0 else (styleOrAttr(el, "opacity")?.toDoubleOrNull() ?: 1.0).coerceIn(0.0, 1.0)
+        val shapeGroup = !container && ownOpacity < 1.0 && styleOrAttr(el, "filter") == null &&
+            (resolved.fill != null || resolved.fillRef != null) && (resolved.stroke != null || resolved.strokeRef != null) && resolved.strokeW > 0.0
+        val paint = if (shapeGroup) resolved.copy(opacity = parent.opacity) else resolved
+        val groupAlpha = if (container) (styleOrAttr(el, "opacity")?.toDoubleOrNull() ?: 1.0).coerceIn(0.0, 1.0)
+            else if (shapeGroup) ownOpacity else 1.0
         // Compositing and Blending 1, 3.2 and 3.3: mix-blend-mode blends what the element draws
         // with what is under it, and isolation stops the blends inside a group at its edge.
         val blend = blendModeOf(styleOrAttr(el, "mix-blend-mode"))
