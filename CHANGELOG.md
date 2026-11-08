@@ -402,6 +402,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decode reads as empty, each with a warning, where either failed the whole page (#646, #647).
 - A Type 0 font whose ToUnicode CMap declares a one-byte codespace, or none, reads each code of its encoding
   whole, where `<0041>` came out as U+FFFD and `A` (#651).
+- An accented letter that a CFF font builds with the `seac` form of `endchar` draws its base and its accent,
+  where it drew nothing, so `café` in an embedded Type1C font lost its `é` (#649).
 
 ## [0.13.0] - 2026-10-09
 

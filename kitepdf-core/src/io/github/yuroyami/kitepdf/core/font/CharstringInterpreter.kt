@@ -18,7 +18,7 @@ import kotlin.math.sqrt
  *     `hvcurveto`, `vhcurveto`, `rcurveline`, `rlinecurve`).
  *   - The full flex family (`flex`, `hflex`, `hflex1`, `flex1`) per TN5177.
  *   - `endchar`, including the deprecated 4-argument `seac` accent-composition
- *     form (via the [seacRenderer] hook the CFF font supplies).
+ *     form (via the [seacRenderer] hook, which [CffFont] supplies).
  *   - The optional leading glyph-advance width on the first stack-clearing
  *     operator (exposed as [advanceWidth]).
  *   - Subroutines (`callsubr`, `callgsubr`, `return`).

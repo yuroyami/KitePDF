@@ -108,6 +108,7 @@ public class CffFont private constructor(
             runCatching {
                 CharstringInterpreter(
                     cs, locals, globalSubrs, defaultWidthX, nominalWidthX,
+                    seacRenderer = ::seac,
                     cff2 = isCff2,
                     regionCount = { regionCounts.getOrElse(it) { 0 } },
                     vsindex = fdVsindex.getOrElse(fdIndex) { 0 },
@@ -121,6 +122,36 @@ public class CffFont private constructor(
                 outlineCache[glyphId] = path
                 path
             }
+        }
+    }
+
+    /**
+     * The `seac` form of `endchar` (Adobe Technical Note 5177, Appendix C): the base glyph at the
+     * origin and the accent moved by ([adx], [ady]), each named by its StandardEncoding code and
+     * found through the charset. The parts draw without a `seac` of their own, so a glyph that names
+     * itself ends. No CFF font supplied this, so an accented letter drew nothing (#649).
+     */
+    private fun seac(baseCode: Int, accentCode: Int, adx: Double, ady: Double, into: KitePath.Builder) {
+        fun part(code: Int): KitePath? {
+            val name = Encodings.standardEncoding.getOrNull(code and 0xFF) ?: return null
+            val gid = glyphIdForName(name).takeIf { it > 0 && it < charStrings.size } ?: return null
+            val fd = if (fdSelect.isNotEmpty()) fdSelect[gid] else 0
+            return runCatching {
+                CharstringInterpreter(charStrings[gid], localSubrsPerFd.getOrNull(fd) ?: emptyList(), globalSubrs, defaultWidthX, nominalWidthX).interpret()
+            }.getOrNull()
+        }
+        part(baseCode)?.let { appendPath(into, it, 0.0, 0.0) }
+        part(accentCode)?.let { appendPath(into, it, adx, ady) }
+    }
+
+    private fun appendPath(into: KitePath.Builder, path: KitePath, dx: Double, dy: Double) {
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> into.moveTo(seg.x + dx, seg.y + dy)
+            is KitePath.Segment.LineTo -> into.lineTo(seg.x + dx, seg.y + dy)
+            is KitePath.Segment.CurveTo -> into.curveTo(seg.x1 + dx, seg.y1 + dy, seg.x2 + dx, seg.y2 + dy, seg.x3 + dx, seg.y3 + dy)
+            is KitePath.Segment.QuadTo -> into.quadTo(seg.x1 + dx, seg.y1 + dy, seg.x2 + dx, seg.y2 + dy)
+            KitePath.Segment.Close -> into.close()
+            else -> {}
         }
     }
 

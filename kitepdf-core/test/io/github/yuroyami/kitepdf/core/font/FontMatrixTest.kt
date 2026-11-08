@@ -119,6 +119,17 @@ class FontMatrixTest {
     }
 
     @Test
+    fun a_seac_glyph_draws_its_base_and_its_accent() {
+        // Technical Note 5177, Appendix C: endchar with adx ady bchar achar (#649). In the
+        // ISOAdobe charset glyph 1 is space (StandardEncoding 32) and glyph 2 exclam (33).
+        // Glyph 3: 0 0 rmoveto ... endchar as 600 0 32 33 endchar, the accent moved by 600.
+        val seac = TestCff.bytes(248, 236, 139, 171, 172, 14) // 600 0 32 33 endchar
+        val cff = CffFont.parse(TestCff.simple(glyphs = listOf(TestCff.WIDE_BOX, TestCff.WIDE_BOX, seac)))
+        val bounds = TestCff.bounds(cff.outline(3))
+        assertEquals(listOf(0.0, 0.0, 1100.0, 700.0), bounds)
+    }
+
+    @Test
     fun the_expert_charsets_name_glyphs_in_their_own_order() {
         // Technical Note 5176, Appendix C; a Top DICT `charset` operand of 1 or 2, op 15 (#818).
         val expert = CffFont.parse(TestCff.simple(TestCff.bytes(140, 15), copies = 4))
@@ -228,10 +239,10 @@ internal object TestCff {
     fun matrix(vararg numbers: String): ByteArray = numbers.fold(ByteArray(0)) { acc, s -> acc + real(s) } + bytes(12, 7)
 
     /** A non-CID program: glyph 0 is `.notdef` and glyph 1 is the box. [topMatrix] goes in the Top DICT. */
-    fun simple(topMatrix: ByteArray = ByteArray(0), glyph: ByteArray = BOX, copies: Int = 1): ByteArray {
+    fun simple(topMatrix: ByteArray = ByteArray(0), glyph: ByteArray = BOX, copies: Int = 1, glyphs: List<ByteArray>? = null): ByteArray {
         val name = index(listOf("Test".encodeToByteArray()))
         val empty = index(emptyList())
-        val charStrings = index(listOf(bytes(14)) + List(copies) { glyph })
+        val charStrings = index(listOf(bytes(14)) + (glyphs ?: List(copies) { glyph }))
         fun top(cs: Int, priv: Int) = topMatrix + int5(cs) + bytes(17) + int5(PRIVATE.size) + int5(priv) + bytes(18)
         val csOffset = 4 + name.size + index(listOf(top(0, 0))).size + 2 * empty.size
         val privOffset = csOffset + charStrings.size
