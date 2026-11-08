@@ -207,12 +207,12 @@ public class KiteRasterCanvas(
         render: () -> Unit, renderMask: (KiteCanvas) -> Unit,
     ) {
         layers.add(Layer(IntArray(width * height), clips.size))
-        render()
+        failSafe(layers.size - 1) { render() }
         val content = popLayer() ?: return
         val luminosity = kind == SoftMask.Kind.Luminosity
         // A luminosity mask composites its group over opaque black (ISO 32000-1, 11.6.5.2).
         layers.add(Layer(IntArray(width * height) { if (luminosity) BLACK else 0 }, clips.size))
-        renderMask(this)
+        failSafe(layers.size - 1) { renderMask(this) }
         val maskLayer = popLayer() ?: return
         val mask = FloatArray(width * height)
         for (i in mask.indices) {
@@ -255,7 +255,7 @@ public class KiteRasterCanvas(
                     }
                 }
                 layers.add(Layer(pixels, clips.size))
-                content()
+                failSafe(layers.size - 1) { content() }
                 val layer = popLayer() ?: return KiteRaster(w, h)
                 return crop(layer.pixels, left, top, w, h)
             }
@@ -268,6 +268,22 @@ public class KiteRasterCanvas(
                 composite(pixels, null, alpha.toFloat(), blendMode)
             }
         })
+    }
+
+    /**
+     * Runs [block], a callback that paints into the layer at [base]. When it throws, the layers and
+     * groups it opened and that layer itself are dropped with what they hold, and the exception goes
+     * on: the canvas stays usable, as the other canvases' `finally` keeps them (#765).
+     */
+    private inline fun failSafe(base: Int, block: () -> Unit) {
+        val groupBase = groups.size
+        try {
+            block()
+        } catch (t: Throwable) {
+            while (layers.size > base && layers.size >= 2) popLayer()
+            while (groups.size > groupBase) groups.removeAt(groups.size - 1)
+            throw t
+        }
     }
 
     /** Takes the top layer off, with the clips pushed inside it, or answers null for the page itself. */

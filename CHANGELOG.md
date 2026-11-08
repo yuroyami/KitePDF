@@ -392,6 +392,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does not hold the lock fails, as on the JVM (#773).
 - A `PageRenderer` that draws a second page draws a form without `/Resources` with that page's resources, where
   it kept the fonts, colour spaces and graphics states of the first page that drew it (#767).
+- When a soft mask's content or mask callback, or a raster step's content, throws, `KiteRasterCanvas` drops the
+  layer it opened and stays usable, where every later paint went into the lost layer (#765).
 
 ## [0.13.0] - 2026-10-09
 

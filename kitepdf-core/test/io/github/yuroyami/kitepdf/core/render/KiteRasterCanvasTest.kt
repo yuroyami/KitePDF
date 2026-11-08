@@ -214,4 +214,20 @@ class KiteRasterCanvasTest {
         assertEquals(0xFF0000FF.toInt(), r[3, 3])
         assertEquals(0xFFFF0000.toInt(), r[7, 7])
     }
+
+    @Test
+    fun a_soft_mask_callback_that_throws_leaves_the_canvas_usable() {
+        // Its layer stayed open, and every later paint went into it unseen (#765).
+        val c = KiteRasterCanvas(10, 10)
+        val box = io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, 10.0, 10.0)
+        for (fails in listOf("content", "mask")) {
+            kotlin.test.assertFailsWith<IllegalStateException> {
+                c.applySoftMask(SoftMask.Kind.Alpha, box, KiteMatrix.IDENTITY,
+                    { if (fails == "content") error("content") },
+                    { if (fails == "mask") error("mask") })
+            }
+        }
+        c.fillPath(rect(0.0, 0.0, 10.0, 10.0), KiteMatrix.IDENTITY, red, evenOdd = false)
+        assertEquals(0xFFFF0000.toInt(), c.toRaster().pixels[55])
+    }
 }
