@@ -24,6 +24,25 @@ class AwtCanvasStateTest {
     }
 
     @Test
+    fun a_dash_too_fine_to_show_strokes_solid_and_at_once() {
+        // 2 w [D D] 0 d 0 0 m 612 792 l S at a scale of 2 took seconds per line on Java2D (#979).
+        val start = System.nanoTime()
+        val img = BufferedImage(1224, 1584, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        val line = KitePath.Builder().apply { moveTo(0.0, 0.0); lineTo(612.0, 792.0) }.build()
+        AwtCanvas(g).strokePath(
+            line, KiteMatrix(2.0, 0.0, 0.0, 2.0, 0.0, 0.0), io.github.yuroyami.kitepdf.core.render.RgbColor(0.0, 0.0, 0.0), 2.0,
+            1.0, KiteBlendMode.Normal, listOf(0.00001, 0.00001), 0.0, 0, 0, 10.0,
+        )
+        g.dispose()
+        assertTrue((System.nanoTime() - start) / 1_000_000 < 2_000, "took ${(System.nanoTime() - start) / 1_000_000} ms")
+        assertEquals(255, img.getRGB(306 * 2, 396 * 2) ushr 24, "the line draws solid")
+        // A pattern of a few hundred dashes still dashes.
+        val path = java.awt.geom.Line2D.Double(0.0, 0.0, 1000.0, 0.0)
+        assertEquals(200.0, dashCount(path, floatArrayOf(5f, 5f)), 1e-9, "100 dashes and 100 gaps")
+    }
+
+    @Test
     fun a_clip_and_a_group_can_interleave() {
         val img = BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
         val g = img.createGraphics()

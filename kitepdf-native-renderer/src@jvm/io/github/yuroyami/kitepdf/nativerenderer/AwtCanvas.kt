@@ -122,7 +122,10 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val cap = when (lineCap) { 1 -> BasicStroke.CAP_ROUND; 2 -> BasicStroke.CAP_SQUARE; else -> BasicStroke.CAP_BUTT }
         val join = when (lineJoin) { 1 -> BasicStroke.JOIN_ROUND; 2 -> BasicStroke.JOIN_BEVEL; else -> BasicStroke.JOIN_MITER }
         val miter = miterLimit.toFloat().coerceAtLeast(1f)
-        val dash = awtDash(dashArray, pen.dashScale)
+        // A pattern that splits the path into more dashes than a page holds strokes solid, as the
+        // pure-Kotlin stroker does: Java2D emits every dash, and a fine one held a page for
+        // minutes or overflowed its arrays (#979).
+        val dash = awtDash(dashArray, pen.dashScale)?.takeIf { d -> dashCount(awt, d) < MAX_AWT_DASHES }
         withComposite(blendMode, alpha) {
             g.color = color.toAwt()
             g.stroke = if (dash != null) {
@@ -1615,6 +1618,32 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
  * 8.4.3.6, #106). Null for an empty or all-zero array, which means solid and
  * is the one array BasicStroke refuses.
  */
+/** More dashes than this in one stroke draw it solid (#979). */
+internal const val MAX_AWT_DASHES = 100_000.0
+
+/** How many dashes [dash] cuts [shape] into: its flattened length over the pattern length, times the entries. */
+internal fun dashCount(shape: java.awt.Shape, dash: FloatArray): Double {
+    val period = dash.sumOf { it.toDouble() } * (if (dash.size % 2 == 1) 2 else 1)
+    if (!(period > 0.0)) return Double.POSITIVE_INFINITY
+    val entries = dash.size * (if (dash.size % 2 == 1) 2 else 1)
+    val limit = MAX_AWT_DASHES * period / entries
+    val it = shape.getPathIterator(null, 0.25)
+    val c = DoubleArray(6)
+    var length = 0.0
+    var x = 0.0; var y = 0.0; var sx = 0.0; var sy = 0.0
+    while (!it.isDone) {
+        when (it.currentSegment(c)) {
+            java.awt.geom.PathIterator.SEG_MOVETO -> { x = c[0]; y = c[1]; sx = x; sy = y }
+            java.awt.geom.PathIterator.SEG_LINETO -> { length += Math.hypot(c[0] - x, c[1] - y); x = c[0]; y = c[1] }
+            java.awt.geom.PathIterator.SEG_CLOSE -> { length += Math.hypot(sx - x, sy - y); x = sx; y = sy }
+        }
+        // Stop as soon as the answer is known: a long path needs no full walk.
+        if (length >= limit || !length.isFinite()) return Double.POSITIVE_INFINITY
+        it.next()
+    }
+    return length / period * entries
+}
+
 internal fun awtDash(dashArray: List<Double>?, scale: Double): FloatArray? {
     val d = dashArray?.map { v -> (v * scale).toFloat().let { if (it.isFinite()) it.coerceAtLeast(0f) else 0f } } ?: return null
     return d.takeIf { it.isNotEmpty() && it.any { v -> v > 0f } }?.toFloatArray()

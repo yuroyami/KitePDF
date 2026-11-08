@@ -278,6 +278,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   times its own size, where it kept the body's points and its lines ran into each other (#831).
 - A source line break between two Chinese or Japanese characters no longer becomes a space on the page or in its
   text, while one between Hangul syllables still does (#834).
+- A dash pattern too fine to show strokes solid on the AWT canvas, as on the pure-Kotlin stroker, where it held a
+  page for minutes or failed it with an `ArrayIndexOutOfBoundsException` from Java2D (#979).
 
 ## [0.13.0] - 2026-10-09
 
