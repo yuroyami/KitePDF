@@ -487,6 +487,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page say Java 11 or newer, and the consumer check builds on Java 11 (#683).
 - `PdfScriptRunner.keystroke` with `commit = true` runs the keystroke that ends the edit, with `event.willCommit`
   true, the whole value in `event.value` and no change, and stores nothing. It ignored `commit` (#779).
+- In `KiteDocView`, a text field that the reader leaves without changing its value runs only its blur script. It
+  was committed again, which ran its validate script, every calculation and every format script, as Acrobat,
+  PDFium and pdf.js do not (#783).
 
 ## [0.13.0] - 2026-10-09
 

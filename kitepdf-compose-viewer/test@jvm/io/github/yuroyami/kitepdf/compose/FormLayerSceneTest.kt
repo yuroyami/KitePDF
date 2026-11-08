@@ -200,6 +200,34 @@ class FormLayerSceneTest {
         }
     }
 
+    @Test
+    fun leaving_a_field_without_typing_runs_its_blur_and_no_commit() {
+        // Acrobat, PDFium and pdf.js commit only a changed value, so passing through a field runs no
+        // validate, calculate or format script (#783).
+        val doc = PdfDocument.open(formPdf())
+        val scripts = FakeScripts(doc)
+        lateinit var state: KiteDocViewState
+        ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                zoomSpec = KiteZoomSpec(doubleTapEnabled = false),
+                scripts = scripts,
+            )
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntil { state.pageGeometry.isNotEmpty() }
+            driver.pumpUntilState { scripts.events.contains("page 0") }
+            scene.sendPointerEvent(PointerEventType.Press, Offset(100f, 60f), type = PointerType.Touch)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(100f, 60f), type = PointerType.Touch)
+            driver.pumpUntilState { scripts.events.contains("focus out") }
+            onTestUiThread { state.blurFocusedField() }
+            driver.pumpUntilState { scripts.events.contains("blur out") }
+            assertEquals(listOf("down out", "up out", "focus out", "blur out"), scripts.events.dropWhile { !it.startsWith("down") })
+        }
+    }
+
     /** Types [char] into the focused node as a desktop keyboard does: a typed event from AWT. */
     @OptIn(InternalComposeUiApi::class)
     private fun type(scene: ImageComposeScene, char: Char) {

@@ -823,6 +823,8 @@ public class KiteDocViewState(
         focusedField = fieldName
         focusedWidget = widgetIndex
         val handler = scripts ?: return
+        // What the field held when it took the caret, which a blur commits only if the reader changed (#783).
+        valueAtFocus = handler.formState.value(fieldName) ?: ""
         val choice = choiceSession
         if (choice != null && choice.name == fieldName) focusChoice(choice)
         else post("focus") { handler.focus(fieldName, widgetIndex) }
@@ -840,6 +842,9 @@ public class KiteDocViewState(
         if (choiceSession != null) dismissChoice() else blurTextField()
     }
 
+    /** The value of [focusedField] when it took the caret; the live form state follows each keystroke. */
+    private var valueAtFocus: String? = null
+
     private fun blurTextField(commit: Boolean = true) {
         val name = focusedField ?: return
         formInputGeneration++
@@ -847,13 +852,19 @@ public class KiteDocViewState(
         focusedWidgetBox = null
         val typed = editingText
         editingText = null
+        val atFocus = valueAtFocus
+        valueAtFocus = null
         val widget = focusedWidget
         val handler = scripts ?: return
         val work: suspend () -> Unit = {
-            if (commit) scriptCall("commit", false) {
-                if (typed != null && (document as? PdfDocument)?.formField(name)?.isEditableCombo == true) {
-                    handler.commitChoice(name, PdfChoiceSelection(emptyList(), freeText = typed))
-                } else handler.commit(name, typed ?: handler.formState.value(name) ?: "")
+            // Only a value the reader changed commits, as PDFium's CFFL_FormField::CommitData checks
+            // IsDataChanged and pdf.js compares with the last committed value: passing through a field
+            // runs no commit keystroke, validate, calculate or format script, only the blur (#783).
+            val changed = typed != null && typed != atFocus
+            if (commit && changed) scriptCall("commit", false) {
+                if ((document as? PdfDocument)?.formField(name)?.isEditableCombo == true) {
+                    handler.commitChoice(name, PdfChoiceSelection(emptyList(), freeText = typed!!))
+                } else handler.commit(name, typed!!)
             }
             scriptCall("blur", Unit) { handler.blur(name, widget) }
             scriptsRan()
