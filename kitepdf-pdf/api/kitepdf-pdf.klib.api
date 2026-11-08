@@ -407,6 +407,7 @@ final class io.github.yuroyami.kitepdf.writer/PdfImage { // io.github.yuroyami.k
         final fun jpeg(kotlin/ByteArray, kotlin/Int, kotlin/Int, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.jpeg|jpeg(kotlin.ByteArray;kotlin.Int;kotlin.Int;kotlin.Boolean){}[0]
         final fun jpx(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.jpx|jpx(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
         final fun jpx(kotlin/ByteArray, kotlin/Int, kotlin/Int, kotlin/String): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.jpx|jpx(kotlin.ByteArray;kotlin.Int;kotlin.Int;kotlin.String){}[0]
+        final fun raw(kotlin/ByteArray, kotlin/Int, kotlin/Int, io.github.yuroyami.kitepdf.writer/PdfImageColorSpace, kotlin/Int = ..., kotlin.collections/List<kotlin/Double>? = ..., kotlin/Boolean = ..., kotlin/ByteArray? = ...): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.raw|raw(kotlin.ByteArray;kotlin.Int;kotlin.Int;io.github.yuroyami.kitepdf.writer.PdfImageColorSpace;kotlin.Int;kotlin.collections.List<kotlin.Double>?;kotlin.Boolean;kotlin.ByteArray?){}[0]
         final fun rgb(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.rgb|rgb(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
         final fun rgba(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.rgba|rgba(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
     }
@@ -1892,6 +1893,49 @@ sealed class io.github.yuroyami.kitepdf.parser/XrefEntry { // io.github.yuroyami
         final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.toString|toString(){}[0]
+    }
+}
+
+sealed class io.github.yuroyami.kitepdf.writer/PdfImageColorSpace { // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace|null[0]
+    abstract val components // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.components|{}components[0]
+        abstract fun <get-components>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.components.<get-components>|<get-components>(){}[0]
+
+    final class Device : io.github.yuroyami.kitepdf.writer/PdfImageColorSpace { // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device|null[0]
+        final val components // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device.components|{}components[0]
+            final fun <get-components>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device.components.<get-components>|<get-components>(){}[0]
+    }
+
+    final class IccBased : io.github.yuroyami.kitepdf.writer/PdfImageColorSpace { // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.IccBased|null[0]
+        constructor <init>(kotlin/ByteArray, kotlin/Int, io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device = ...) // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.IccBased.<init>|<init>(kotlin.ByteArray;kotlin.Int;io.github.yuroyami.kitepdf.writer.PdfImageColorSpace.Device){}[0]
+
+        final val alternate // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.IccBased.alternate|{}alternate[0]
+            final fun <get-alternate>(): io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.IccBased.alternate.<get-alternate>|<get-alternate>(){}[0]
+        final val components // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.IccBased.components|{}components[0]
+            final fun <get-components>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.IccBased.components.<get-components>|<get-components>(){}[0]
+        final val profile // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.IccBased.profile|{}profile[0]
+            final fun <get-profile>(): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.IccBased.profile.<get-profile>|<get-profile>(){}[0]
+    }
+
+    final class Indexed : io.github.yuroyami.kitepdf.writer/PdfImageColorSpace { // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed|null[0]
+        constructor <init>(io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device, kotlin/ByteArray) // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.<init>|<init>(io.github.yuroyami.kitepdf.writer.PdfImageColorSpace.Device;kotlin.ByteArray){}[0]
+
+        final val base // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.base|{}base[0]
+            final fun <get-base>(): io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.base.<get-base>|<get-base>(){}[0]
+        final val components // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.components|{}components[0]
+            final fun <get-components>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.components.<get-components>|<get-components>(){}[0]
+        final val entries // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.entries|{}entries[0]
+            final fun <get-entries>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.entries.<get-entries>|<get-entries>(){}[0]
+        final val palette // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.palette|{}palette[0]
+            final fun <get-palette>(): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Indexed.palette.<get-palette>|<get-palette>(){}[0]
+    }
+
+    final object Companion { // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion|null[0]
+        final val DeviceCMYK // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceCMYK|{}DeviceCMYK[0]
+            final fun <get-DeviceCMYK>(): io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceCMYK.<get-DeviceCMYK>|<get-DeviceCMYK>(){}[0]
+        final val DeviceGray // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceGray|{}DeviceGray[0]
+            final fun <get-DeviceGray>(): io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceGray.<get-DeviceGray>|<get-DeviceGray>(){}[0]
+        final val DeviceRGB // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceRGB|{}DeviceRGB[0]
+            final fun <get-DeviceRGB>(): io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceRGB.<get-DeviceRGB>|<get-DeviceRGB>(){}[0]
     }
 }
 

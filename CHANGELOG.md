@@ -647,6 +647,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PdfSigner writes PAdES pieces: Options.subFilter takes ETSI.CAdES.detached, prepareDocumentTimestamp stages a
   document timestamp, and PdfEditor.addSecurityStore adds certificates, CRLs and OCSP responses with /VRI entries
   to the document security store (#924).
+- PdfImage.raw embeds samples in DeviceGray, DeviceRGB, DeviceCMYK, an Indexed palette or an ICC profile, at 1,
+  2, 4, 8 or 16 bits, with /Decode, /Interpolate and an alpha plane (#920).
 
 ## [0.13.0] - 2026-10-09
 

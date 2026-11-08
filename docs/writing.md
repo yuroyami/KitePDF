@@ -279,8 +279,29 @@ val map = PdfImage.jpx(jp2Bytes, width = 2000, height = 1500)
 - `jpeg` reads the size and the colour space from the JPEG: grey, RGB or CMYK. An Adobe CMYK JPEG gets the `/Decode` its inverted samples need. The overload with `width` and `height` checks them against the file and throws when they differ.
 - `jpx` does not read the size from the file, so pass the real size of the image. It names no colour space, so the one inside the JPEG 2000 file applies; pass `colorSpace` to override it.
 
+`PdfImage.raw` takes samples in any colour space a PDF image has, at 1, 2, 4, 8 or 16 bits per component, each row padded to a whole byte:
+
+```kotlin
+import io.github.yuroyami.kitepdf.writer.PdfImageColorSpace
+
+// CMYK artwork, 4 bytes per pixel
+val artwork = PdfImage.raw(cmykSamples, width, height, PdfImageColorSpace.DeviceCMYK)
+
+// A fax page, 1 bit per pixel: an eighth of its 8-bit size
+val fax = PdfImage.raw(bits, width, height, PdfImageColorSpace.DeviceGray, bitsPerComponent = 1)
+
+// A palette of four RGB colours, 2 bits per pixel
+val chart = PdfImage.raw(indices, width, height, PdfImageColorSpace.Indexed(PdfImageColorSpace.DeviceRGB, palette), bitsPerComponent = 2)
+```
+
+- `PdfImageColorSpace.IccBased(profile, components)` embeds an ICC profile, with a device space of as many components as its alternate.
+- `decode` maps the lowest and highest sample of each component, for example `listOf(1.0, 0.0)` for inverted grey.
+- `interpolate = true` asks a reader to smooth the image when it draws it larger. It is only a hint, which a reader may ignore. KitePDF follows it.
+- `alpha` is an 8-bit plane of `width * height` bytes, written as a soft mask.
+- `raw` checks the sample size, the bits (at most 8 for a palette) and the length of `decode`, and throws when they do not match.
+
 !!! warning
-    `rgb`, `gray`, `jpeg` and `jpx` keep your array and do not copy it. The builder reads the array only when `build()` runs. Do not change or reuse the array until `build()` returns. If you decode frames into one buffer, every page shows the last frame. `rgba` copies the pixels, so you can reuse its array at once.
+    `rgb`, `gray`, `raw`, `jpeg` and `jpx` keep your array and do not copy it. The builder reads the array only when `build()` runs. Do not change or reuse the array until `build()` returns. If you decode frames into one buffer, every page shows the last frame. `rgba` copies the pixels, so you can reuse its array at once.
 
 ### Draw an image
 

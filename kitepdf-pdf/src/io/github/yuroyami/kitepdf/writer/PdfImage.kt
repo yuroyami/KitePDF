@@ -41,13 +41,66 @@ public class PdfImage private constructor(
     /** Optional 8-bit alpha plane (`width*height` bytes) → emitted as a `/SMask`. */
     internal val alpha: ByteArray?,
     /** `/Decode`, or null for the default. */
-    internal val decode: List<Int>? = null,
+    internal val decode: List<Double>? = null,
+    /** A colour space that is more than a device name: an Indexed or an ICC-based one, or null. */
+    internal val space: PdfImageColorSpace? = null,
+    /** `/Interpolate true`, a hint to smooth the image when it is drawn larger (#920). */
+    internal val interpolate: Boolean = false,
 ) {
     init {
         require(width > 0 && height > 0) { "image must be non-empty (was ${width}x$height)" }
     }
 
     public companion object {
+        /**
+         * Raw samples in any colour space a PDF image takes (ISO 32000-1, 8.9.5, Table 89; #920):
+         * [samples] holds [width] by [height] pixels, top row first, each row padded to a whole
+         * byte, so its size is `ceil(width * components * bitsPerComponent / 8) * height`.
+         *
+         * - [colorSpace]: [PdfImageColorSpace.DeviceGray], `DeviceRGB`, `DeviceCMYK`, an
+         *   [PdfImageColorSpace.Indexed] palette over one of them, or an
+         *   [PdfImageColorSpace.IccBased] profile.
+         * - [bitsPerComponent]: 1, 2, 4, 8 or 16, and at most 8 for an Indexed space. A 1-bit page is
+         *   an eighth of its 8-bit size.
+         * - [decode]: two numbers a component that map the lowest and highest sample (8.9.5.2), for
+         *   example `listOf(1.0, 0.0)` for inverted grey; null keeps the default.
+         * - [interpolate]: asks a reader to smooth the image when it draws it larger (Table 89).
+         *   It is only a hint, which a reader may ignore; KitePDF follows it. Leave it false for pixel
+         *   art and barcodes.
+         * - [alpha]: an 8-bit alpha plane of `width * height` bytes, written as a `/SMask`.
+         *
+         * The bytes are kept, not copied, as for [rgb].
+         */
+        public fun raw(
+            samples: ByteArray,
+            width: Int,
+            height: Int,
+            colorSpace: PdfImageColorSpace,
+            bitsPerComponent: Int = 8,
+            decode: List<Double>? = null,
+            interpolate: Boolean = false,
+            alpha: ByteArray? = null,
+        ): PdfImage {
+            require(bitsPerComponent in setOf(1, 2, 4, 8, 16)) { "bits per component are 1, 2, 4, 8 or 16, not $bitsPerComponent" }
+            require(colorSpace !is PdfImageColorSpace.Indexed || bitsPerComponent <= 8) { "an Indexed image has at most 8 bits a sample" }
+            if (colorSpace is PdfImageColorSpace.Indexed) {
+                require(colorSpace.entries <= 1 shl bitsPerComponent) {
+                    "a palette of ${colorSpace.entries} colours needs more than $bitsPerComponent bits a sample"
+                }
+            }
+            val components = colorSpace.components
+            val expected = (width.toLong() * components * bitsPerComponent + 7) / 8 * height
+            require(samples.size.toLong() == expected) {
+                "${width}x$height samples of $components components at $bitsPerComponent bits take $expected bytes, not ${samples.size}"
+            }
+            require(decode == null || decode.size == 2 * components) { "/Decode takes ${2 * components} numbers, not ${decode?.size}" }
+            require(alpha == null || alpha.size == width * height) { "the alpha plane takes ${width * height} bytes, not ${alpha?.size}" }
+            return PdfImage(
+                width, height, (colorSpace as? PdfImageColorSpace.Device)?.name, bitsPerComponent, null, samples, alpha, decode,
+                space = colorSpace.takeIf { it !is PdfImageColorSpace.Device }, interpolate = interpolate,
+            )
+        }
+
         /**
          * 8-bit RGBA, 4 bytes per pixel (R,G,B,A). The alpha channel becomes a
          * `/SMask`; if every pixel is fully opaque the mask is omitted.
@@ -102,7 +155,7 @@ public class PdfImage private constructor(
                 4 -> "DeviceCMYK"
                 else -> throw IllegalArgumentException("a JPEG with ${frame.components} components has no PDF device colour space")
             }
-            val decode = if (frame.components == 4 && frame.adobe) List(4) { listOf(1, 0) }.flatten() else null
+            val decode = if (frame.components == 4 && frame.adobe) List(4) { listOf(1.0, 0.0) }.flatten() else null
             return PdfImage(frame.width, frame.height, space, 8, "DCTDecode", jpegBytes, null, decode)
         }
 
@@ -135,5 +188,61 @@ public class PdfImage private constructor(
          */
         public fun jpx(jp2Bytes: ByteArray, width: Int, height: Int, colorSpace: String): PdfImage =
             PdfImage(width, height, colorSpace, 8, "JPXDecode", jp2Bytes, null)
+    }
+}
+
+/**
+ * The colour space of a [PdfImage.raw] image (ISO 32000-1, 8.6; #920).
+ */
+public sealed class PdfImageColorSpace {
+    /** The number of components a sample has. */
+    public abstract val components: Int
+
+    /** A device colour space. */
+    public class Device internal constructor(internal val name: String, override val components: Int) : PdfImageColorSpace()
+
+    /**
+     * A palette (8.6.6.3): each sample is an index into [palette], which holds the colours one
+     * after another in [base], one byte a component. It has 1 to 256 colours.
+     */
+    public class Indexed(public val base: Device, public val palette: ByteArray) : PdfImageColorSpace() {
+        override val components: Int get() = 1
+
+        /** The number of colours in the palette. */
+        public val entries: Int get() = palette.size / base.components
+
+        init {
+            require(palette.isNotEmpty() && palette.size % base.components == 0) {
+                "a palette over ${base.name} is whole colours of ${base.components} bytes, not ${palette.size} bytes"
+            }
+            require(entries <= 256) { "a palette has at most 256 colours, not $entries" }
+        }
+    }
+
+    /**
+     * An ICC profile (8.6.5.5): [profile] is the profile's bytes, [components] its number of
+     * components (1, 3 or 4), and [alternate] the device space a reader without colour management
+     * uses, by default the one with as many components.
+     */
+    public class IccBased(
+        public val profile: ByteArray,
+        override val components: Int,
+        public val alternate: Device = when (components) {
+            1 -> DeviceGray
+            3 -> DeviceRGB
+            4 -> DeviceCMYK
+            else -> throw IllegalArgumentException("an ICC profile for an image has 1, 3 or 4 components, not $components")
+        },
+    ) : PdfImageColorSpace() {
+        init {
+            require(components in setOf(1, 3, 4)) { "an ICC profile for an image has 1, 3 or 4 components, not $components" }
+            require(alternate.components == components) { "the alternate ${alternate.name} does not have $components components" }
+        }
+    }
+
+    public companion object {
+        public val DeviceGray: Device = Device("DeviceGray", 1)
+        public val DeviceRGB: Device = Device("DeviceRGB", 3)
+        public val DeviceCMYK: Device = Device("DeviceCMYK", 4)
     }
 }

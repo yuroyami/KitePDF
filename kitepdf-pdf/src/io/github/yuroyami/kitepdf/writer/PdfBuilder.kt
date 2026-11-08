@@ -226,8 +226,22 @@ public class PdfBuilder {
             extra["Width"] = PdfInt(image.width.toLong())
             extra["Height"] = PdfInt(image.height.toLong())
             image.colorSpace?.let { extra["ColorSpace"] = PdfName(it) }
+            when (val space = image.space) {
+                is PdfImageColorSpace.Indexed -> extra["ColorSpace"] = PdfArray(
+                    listOf(PdfName("Indexed"), PdfName(space.base.name), PdfInt(space.entries - 1L), io.github.yuroyami.kitepdf.core.parser.PdfString(space.palette)),
+                )
+                is PdfImageColorSpace.IccBased -> {
+                    val iccN = alloc()
+                    objects.add(iccN to PdfStreams.flate(space.profile, linkedMapOf("N" to PdfInt(space.components.toLong()), "Alternate" to PdfName(space.alternate.name))))
+                    extra["ColorSpace"] = PdfArray(listOf(PdfName("ICCBased"), PdfReference(iccN, 0)))
+                }
+                else -> {}
+            }
             extra["BitsPerComponent"] = PdfInt(image.bitsPerComponent.toLong())
-            image.decode?.let { d -> extra["Decode"] = PdfArray(d.map { PdfInt(it.toLong()) }) }
+            image.decode?.let { d ->
+                extra["Decode"] = PdfArray(d.map { v -> if (v == kotlin.math.floor(v) && kotlin.math.abs(v) < 1e9) PdfInt(v.toLong()) else io.github.yuroyami.kitepdf.core.parser.PdfReal(v) })
+            }
+            if (image.interpolate) extra["Interpolate"] = io.github.yuroyami.kitepdf.core.parser.PdfBoolean(true)
             if (smaskRef != null) extra["SMask"] = smaskRef
 
             val n = alloc()
