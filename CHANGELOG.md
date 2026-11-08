@@ -161,6 +161,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   primitives and a budget of pixel operations, past which it is in error and the element draws nothing,
   and its render's cancellation is polled between primitives (#994).
 
+- The members of a page's `/Contents` array share one budget of 256 MiB, past which the rest of the page is
+  dropped with a warning, and a member that the array names again decodes once. The 512 MiB cap applied to
+  each member, so a 66 KB file that named one 64 MiB stream 16 times threw `OutOfMemoryError` (#1018).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

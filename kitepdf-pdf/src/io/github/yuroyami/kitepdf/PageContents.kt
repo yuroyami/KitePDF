@@ -31,9 +31,19 @@ internal object PageContents {
         is PdfArray -> {
             val buf = ByteArrayBuilder(4096)
             var first = true
+            // A member that the array names again reuses its decoded bytes, and the members share
+            // one budget: the 512 MiB cap was per member, so a 66 KB file that named one 64 MiB
+            // stream of spaces 16 times joined a gigabyte and threw OutOfMemoryError (#1018).
+            val decoded = HashMap<PdfReference, ByteArray?>()
+            var total = 0L
             for (part in contents) {
                 val ref = part as? PdfReference ?: continue
-                val bytes = resolveStream(ref)?.let(::decodeOrNull) ?: continue
+                val bytes = (if (decoded.containsKey(ref)) decoded[ref] else resolveStream(ref)?.let(::decodeOrNull).also { decoded[ref] = it }) ?: continue
+                total += bytes.size + 1
+                if (total > MAX_PAGE_CONTENT) {
+                    kiteWarn { "render: the content of a page passes $MAX_PAGE_CONTENT bytes; the rest is dropped" }
+                    break
+                }
                 if (!first) buf.append('\n'.code.toByte())
                 buf.append(bytes)
                 first = false
@@ -52,6 +62,9 @@ internal object PageContents {
         kiteWarn { "render: a $what cannot be decoded and is skipped" }
         ByteArray(0)
     }
+
+    /** The most decoded bytes the members of one page's content array may join to (#1018). */
+    private const val MAX_PAGE_CONTENT = 256L shl 20
 
     private fun decodeOrNull(stream: PdfStream): ByteArray? =
         runCatching { FilterChain.decode(stream) }.getOrNull()
