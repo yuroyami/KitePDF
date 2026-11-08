@@ -41,10 +41,29 @@ class CompositeFanOutTest {
         assertTrue(start.elapsedNow().inWholeSeconds < 10, "took ${start.elapsedNow()}")
     }
 
+    @Test
+    fun aScaledComponentOffsetGoesThroughTheScale() {
+        // Glyph 1 is the square of glyph 2 at a scale of 0.5 and an offset of (1000, 0) (#816).
+        fun minX(flags: Int): Int {
+            val component = u16(flags) + u16(2) + u16(1000) + u16(0) + u16(0x2000)
+            val composite = u16(0xFFFF) + u16(0) + u16(0) + u16(100) + u16(100) + component
+            val font = TrueTypeFont.parse(fanOutFont(levels = 0, first = composite))
+            return font.outline(1)!!.contours.flatMap { it.points }.minOf { it.x }
+        }
+        assertEquals(500, minX(0x080b))
+        assertEquals(1000, minX(0x100b))
+        assertEquals(1000, minX(0x000b))
+    }
+
     /** Glyphs 1 to [levels] are composites of ten copies of the next glyph; the last is a square. */
-    private fun fanOutFont(levels: Int, extra: List<Pair<String, ByteArray>> = emptyList()): ByteArray {
+    private fun fanOutFont(
+        levels: Int,
+        extra: List<Pair<String, ByteArray>> = emptyList(),
+        first: ByteArray? = null,
+    ): ByteArray {
         val glyphs = ArrayList<ByteArray>()
         glyphs.add(ByteArray(0))
+        if (first != null) glyphs.add(first)
         for (g in 1..levels) {
             var body = u16(0xFFFF) + u16(0) + u16(0) + u16(100) + u16(100) // numberOfContours -1, bbox
             for (c in 0 until 10) {

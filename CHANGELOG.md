@@ -252,6 +252,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The pure-Kotlin inflater reads a stored block that follows a dynamic block with a short end-of-block code. It
   dropped the whole bytes its symbol peek had buffered, so LEN and NLEN were read late and the stream failed on
   JS, Wasm and the native targets (#794).
+- A TrueType composite component that sets `SCALED_COMPONENT_OFFSET` has its offset scaled with it, so a scaled
+  accent lands where the font puts it (#816).
 
 ## [0.13.0] - 2026-10-09
 

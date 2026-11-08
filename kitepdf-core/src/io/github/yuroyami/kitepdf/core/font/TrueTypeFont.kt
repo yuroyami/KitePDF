@@ -373,9 +373,15 @@ public class TrueTypeFont private constructor(
                     }
 
                     val (dx, dy) = if (flags and CG_ARGS_ARE_XY_VALUES != 0) {
-                        // arg1/arg2 are x/y offsets in the child's (already scaled)
-                        // coordinate space: the plain, common case.
-                        arg1.toDouble() to arg2.toDouble()
+                        // arg1/arg2 are x/y offsets. SCALED_COMPONENT_OFFSET asks for the
+                        // offset to go through the component's transform too; without it, or
+                        // with UNSCALED_COMPONENT_OFFSET, it is added as it is (OpenType, glyf,
+                        // Composite Glyph Flags; #816).
+                        if (flags and CG_SCALED_COMPONENT_OFFSET != 0 && flags and CG_UNSCALED_COMPONENT_OFFSET == 0) {
+                            (sx * arg1 + sy10 * arg2) to (sy01 * arg1 + sy * arg2)
+                        } else {
+                            arg1.toDouble() to arg2.toDouble()
+                        }
                     } else {
                         // Point-matching: arg1 is a point index into the parent
                         // (points placed so far), arg2 is a point index into this
@@ -628,6 +634,8 @@ public class TrueTypeFont private constructor(
         private const val CG_MORE_COMPONENTS = 0x0020
         private const val CG_WE_HAVE_X_AND_Y_SCALE = 0x0040
         private const val CG_WE_HAVE_TWO_BY_TWO = 0x0080
+        private const val CG_SCALED_COMPONENT_OFFSET = 0x0800
+        private const val CG_UNSCALED_COMPONENT_OFFSET = 0x1000
     }
 }
 
