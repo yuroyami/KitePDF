@@ -158,8 +158,12 @@ internal object RevisionChanges {
         mark(form, Place(Role.FORM, "the form"))
         val formDict = form?.resolve(doc) as? PdfDictionary
         mark(formDict?.get("Fields"), Place(Role.FIELDS, "the list of form fields"))
+        // Each walk enters an object once (ISO 32000-1, 12.7.3.1 and 7.7.3.2 make these trees). The
+        // depth cap alone let a node that lists itself twice double the calls at each level (#967).
+        val entered = HashSet<PdfReference>()
         fun walkField(node: PdfObject, parent: String?, depth: Int) {
             if (depth > MAX_DEPTH) return
+            if (node is PdfReference && !entered.add(node)) return
             val dict = node.resolve(doc) as? PdfDictionary ?: return
             val partial = (dict["T"] as? PdfString)?.asText()
             if (partial == null && dict.getName("Subtype") == "Widget" && parent != null) {
@@ -182,8 +186,10 @@ internal object RevisionChanges {
         for (field in formDict?.getArray("Fields", doc).orEmpty()) walkField(field, null, 0)
 
         var pageNumber = 0
+        val enteredPages = HashSet<PdfReference>()
         fun walkPages(node: PdfObject?, depth: Int) {
             if (node == null || depth > MAX_DEPTH) return
+            if (node is PdfReference && !enteredPages.add(node)) return
             val dict = node.resolve(doc) as? PdfDictionary ?: return
             val kids = dict.getArray("Kids", doc)
             if (kids == null) {

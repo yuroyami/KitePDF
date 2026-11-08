@@ -25,7 +25,7 @@ internal object NameTreeWalker {
      */
     fun collect(root: PdfDictionary, refs: IndirectResolver): LinkedHashMap<String, PdfObject> {
         val out = LinkedHashMap<String, PdfObject>()
-        walk(root, refs, out, depth = 0)
+        walk(root, refs, out, depth = 0, seen = HashSet())
         return out
     }
 
@@ -34,6 +34,7 @@ internal object NameTreeWalker {
         refs: IndirectResolver,
         out: MutableMap<String, PdfObject>,
         depth: Int,
+        seen: HashSet<PdfReference>,
     ) {
         if (depth > MAX_DEPTH) return
         val names = node.getArray("Names", refs)
@@ -47,12 +48,15 @@ internal object NameTreeWalker {
         }
         val kids = node.getArray("Kids", refs) ?: return
         for (kid in kids) {
+            // A tree visits each node once (ISO 32000-1, 7.9.6 and 7.9.7). The depth cap alone let
+            // a node that lists itself twice double the calls at every level, 2^65 in all (#967).
+            if (kid is PdfReference && !seen.add(kid)) continue
             val kidDict = when (kid) {
                 is PdfReference -> refs.resolve(kid) as? PdfDictionary
                 is PdfDictionary -> kid
                 else -> null
             } ?: continue
-            walk(kidDict, refs, out, depth + 1)
+            walk(kidDict, refs, out, depth + 1, seen)
         }
     }
 
@@ -67,7 +71,7 @@ internal object NumberTreeWalker {
 
     fun collect(root: PdfDictionary, refs: IndirectResolver): LinkedHashMap<Int, PdfObject> {
         val out = LinkedHashMap<Int, PdfObject>()
-        walk(root, refs, out, depth = 0)
+        walk(root, refs, out, depth = 0, seen = HashSet())
         return out
     }
 
@@ -76,6 +80,7 @@ internal object NumberTreeWalker {
         refs: IndirectResolver,
         out: MutableMap<Int, PdfObject>,
         depth: Int,
+        seen: HashSet<PdfReference>,
     ) {
         if (depth > MAX_DEPTH) return
         val nums = node.getArray("Nums", refs)
@@ -89,12 +94,15 @@ internal object NumberTreeWalker {
         }
         val kids = node.getArray("Kids", refs) ?: return
         for (kid in kids) {
+            // A tree visits each node once (ISO 32000-1, 7.9.6 and 7.9.7). The depth cap alone let
+            // a node that lists itself twice double the calls at every level, 2^65 in all (#967).
+            if (kid is PdfReference && !seen.add(kid)) continue
             val kidDict = when (kid) {
                 is PdfReference -> refs.resolve(kid) as? PdfDictionary
                 is PdfDictionary -> kid
                 else -> null
             } ?: continue
-            walk(kidDict, refs, out, depth + 1)
+            walk(kidDict, refs, out, depth + 1, seen)
         }
     }
 

@@ -91,6 +91,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/W` width outside 0 to 8 and an `/Index` count past the rows it holds: `/W [0 0 -1]` made the row size
   negative, and `/Index [0 N]` then made N entries from no data (#969).
 
+- Every walk of a name tree, a number tree, the field tree and the page tree of a revision enters each node
+  once. A node whose `/Kids` named itself overflowed the stack from `page.label`, `outline` and `formFields`,
+  which ends the process on a native target and crashed the viewer's outline panel (#964), and one that named
+  itself twice made `attachments`, `documentJavaScripts` and signature validation run for good (#967).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

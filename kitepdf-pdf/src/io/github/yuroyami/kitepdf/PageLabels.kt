@@ -87,21 +87,30 @@ internal class PageLabelTree(private val ranges: List<PageLabelRange>) {
     }
 
     companion object {
+        private const val MAX_TREE_DEPTH = 64
+
         /** Empty tree (used when /PageLabels is missing). */
         val EMPTY = PageLabelTree(emptyList())
 
         fun parse(root: PdfDictionary, refs: IndirectResolver): PageLabelTree {
             val acc = mutableListOf<PageLabelRange>()
-            walk(root, refs, acc)
+            walk(root, refs, acc, 0, HashSet())
             acc.sortBy { it.firstPageIndex }
             return PageLabelTree(acc)
         }
 
+        /**
+         * A number tree (ISO 32000-1, 7.9.7) visits each node once, with a depth cap as a
+         * backstop. A node whose /Kids listed itself recursed until the stack ran out (#964).
+         */
         private fun walk(
             node: PdfDictionary,
             refs: IndirectResolver,
             out: MutableList<PageLabelRange>,
+            depth: Int,
+            seen: HashSet<PdfReference>,
         ) {
+            if (depth > MAX_TREE_DEPTH) return
             val nums = node.getArray("Nums", refs)
             if (nums != null) {
                 var i = 0
@@ -120,12 +129,13 @@ internal class PageLabelTree(private val ranges: List<PageLabelRange>) {
             }
             val kids = node.getArray("Kids", refs) ?: return
             for (kid in kids) {
+                if (kid is PdfReference && !seen.add(kid)) continue
                 val kidDict = when (kid) {
                     is PdfReference -> refs.resolve(kid) as? PdfDictionary
                     is PdfDictionary -> kid
                     else -> null
                 } ?: continue
-                walk(kidDict, refs, out)
+                walk(kidDict, refs, out, depth + 1, seen)
             }
         }
     }

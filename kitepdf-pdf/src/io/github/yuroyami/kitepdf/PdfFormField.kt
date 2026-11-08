@@ -329,6 +329,9 @@ public class PdfFormField internal constructor(
         /** A malformed `/Parent` chain must not loop forever. */
         private const val MAX_PARENT_DEPTH = 32
 
+        /** How deep the field tree may nest (#964). */
+        private const val MAX_FIELD_DEPTH = 64
+
         /** A malformed page tree must not loop forever. */
         private const val MAX_PAGE_NODES = 100_000
 
@@ -343,7 +346,13 @@ public class PdfFormField internal constructor(
             inhV: String?,
             inhQ: Int,
             out: MutableList<PdfFormField>,
+            depth: Int = 0,
+            entered: HashSet<PdfReference> = HashSet(),
         ) {
+            // The field tree is a tree (ISO 32000-1, 12.7.3.1): each node is entered once, under a
+            // depth cap. A /Kids that named its own field recursed until the stack ran out, and built
+            // a longer dotted name at every level (#964).
+            if (depth > MAX_FIELD_DEPTH || (ref != null && !entered.add(ref))) return
             val partial = (node["T"] as? PdfString)?.asText()
             val name = when {
                 partial == null -> parentName
@@ -363,7 +372,7 @@ public class PdfFormField internal constructor(
 
             if (subFields.isNotEmpty()) {
                 for ((kd, kr) in subFields) {
-                    walk(kd, kr, refs, name, ft, da, ff, v, q, out)
+                    walk(kd, kr, refs, name, ft, da, ff, v, q, out, depth + 1, entered)
                 }
                 return
             }

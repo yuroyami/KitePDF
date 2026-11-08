@@ -9,6 +9,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfString
+import io.github.yuroyami.kitepdf.parser.NameTreeWalker
 
 /**
  * A resolved page destination (ISO 32000-1 §12.3.2). Holds the destination's
@@ -68,34 +69,10 @@ internal class DestinationCatalog(
             val legacy = (catalog.getDict("Dests", refs))?.map ?: emptyMap()
             val names = catalog.getDict("Names", refs)
             val destsTree = names?.getDict("Dests", refs)
-            val tree = LinkedHashMap<String, PdfObject>()
-            if (destsTree != null) walkNameTree(destsTree, refs, tree)
+            // The shared walker visits each node once: this one followed every kid with no record of
+            // where it had been, so a /Kids that named its own node overflowed the stack (#964).
+            val tree = if (destsTree != null) NameTreeWalker.collect(destsTree, refs) else LinkedHashMap()
             return DestinationCatalog(legacy, tree)
-        }
-
-        private fun walkNameTree(
-            node: PdfDictionary,
-            refs: IndirectResolver,
-            out: MutableMap<String, PdfObject>,
-        ) {
-            val names = node.getArray("Names", refs)
-            if (names != null) {
-                var i = 0
-                while (i + 1 < names.size) {
-                    val key = (names[i] as? PdfString)?.asText()
-                    if (key != null) out[key] = names[i + 1]
-                    i += 2
-                }
-            }
-            val kids = node.getArray("Kids", refs) ?: return
-            for (kid in kids) {
-                val kidDict = when (kid) {
-                    is PdfReference -> refs.resolve(kid) as? PdfDictionary
-                    is PdfDictionary -> kid
-                    else -> null
-                } ?: continue
-                walkNameTree(kidDict, refs, out)
-            }
         }
     }
 }
