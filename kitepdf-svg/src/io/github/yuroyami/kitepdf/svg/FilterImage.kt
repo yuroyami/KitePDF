@@ -96,6 +96,39 @@ internal class FilterImage(
         return out
     }
 
+    /**
+     * These pixels as a raster of [w] by [h] in sRGB with straight alpha, each pixel the bilinear
+     * mix of the four nearest, as [resized] grows an image, without a float image of that size (#992).
+     */
+    fun toRaster(w: Int, h: Int): KiteRaster {
+        if (w == width && h == height) return toRaster()
+        val srgb = inSpace(toLinear = false)
+        val out = KiteRaster(w, h)
+        if (width == 0 || height == 0 || w == 0 || h == 0) return out
+        val d = srgb.data
+        val fx = width.toDouble() / w
+        val fy = height.toDouble() / h
+        val px = FloatArray(4)
+        for (y in 0 until h) {
+            val sy = ((y + 0.5) * fy - 0.5).coerceIn(0.0, height - 1.0)
+            val iy = sy.toInt(); val jy = minOf(iy + 1, height - 1); val ty = (sy - iy).toFloat()
+            for (x in 0 until w) {
+                val sx = ((x + 0.5) * fx - 0.5).coerceIn(0.0, width - 1.0)
+                val ix = sx.toInt(); val jx = minOf(ix + 1, width - 1); val tx = (sx - ix).toFloat()
+                for (c in 0 until 4) {
+                    val top = d[(iy * width + ix) * 4 + c] * (1 - tx) + d[(iy * width + jx) * 4 + c] * tx
+                    val bottom = d[(jy * width + ix) * 4 + c] * (1 - tx) + d[(jy * width + jx) * 4 + c] * tx
+                    px[c] = top * (1 - ty) + bottom * ty
+                }
+                val a = px[3].coerceIn(0f, 1f)
+                if (a <= 0f) continue
+                fun channel(c: Int) = (px[c] / a).coerceIn(0f, 1f).times(255f).roundToInt()
+                out.pixels[y * w + x] = ((a * 255f).roundToInt() shl 24) or (channel(0) shl 16) or (channel(1) shl 8) or channel(2)
+            }
+        }
+        return out
+    }
+
     /** These pixels as a raster in sRGB with straight alpha. */
     fun toRaster(): KiteRaster {
         val srgb = inSpace(toLinear = false)
@@ -112,6 +145,43 @@ internal class FilterImage(
     }
 
     companion object {
+        /**
+         * The pixels of [raster] at [w] by [h], each the average of what it covers, as [resized]
+         * shrinks an image, without a float image of the raster's own size: that came first, at 16
+         * bytes a pixel, so a filter over a large page asked for hundreds of MB before its pixel
+         * budget shrank it (#992).
+         */
+        fun of(raster: KiteRaster, w: Int, h: Int): FilterImage {
+            if (w >= raster.width && h >= raster.height) return of(raster)
+            val out = FilterImage(w, h, linear = false)
+            val width = raster.width
+            val height = raster.height
+            if (width == 0 || height == 0 || w == 0 || h == 0) return out
+            val fx = width.toDouble() / w
+            val fy = height.toDouble() / h
+            val o = out.data
+            for (y in 0 until h) {
+                val y0 = floor(y * fy).toInt(); val y1 = ceil((y + 1) * fy).toInt().coerceAtMost(height)
+                for (x in 0 until w) {
+                    val x0 = floor(x * fx).toInt(); val x1 = ceil((x + 1) * fx).toInt().coerceAtMost(width)
+                    val n = ((x1 - x0) * (y1 - y0)).coerceAtLeast(1)
+                    var r = 0f; var g = 0f; var b = 0f; var al = 0f
+                    for (sy in y0 until y1) for (sx in x0 until x1) {
+                        val v = raster.pixels[sy * width + sx]
+                        val a = (v ushr 24) / 255f
+                        if (a <= 0f) continue
+                        r += ((v ushr 16) and 0xFF) / 255f * a
+                        g += ((v ushr 8) and 0xFF) / 255f * a
+                        b += (v and 0xFF) / 255f * a
+                        al += a
+                    }
+                    val i = (y * w + x) * 4
+                    o[i] = r / n; o[i + 1] = g / n; o[i + 2] = b / n; o[i + 3] = al / n
+                }
+            }
+            return out
+        }
+
         /** The pixels of [raster], straight sRGB, as an image in sRGB. */
         fun of(raster: KiteRaster): FilterImage {
             val out = FilterImage(raster.width, raster.height, linear = false)

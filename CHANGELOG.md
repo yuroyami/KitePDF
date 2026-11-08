@@ -154,6 +154,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and one render walks at most 500,000 elements, its `<use>` instances included, past which it stops with a
   warning. A 124-byte file drew millions of shapes, and its text and link passes could not be stopped (#991).
 
+- An SVG filter over a large region shrinks its raster as integers before it becomes floats, and grows the
+  result back as integers, so no float image is larger than the 4 million pixel budget: a 149-byte SVG
+  needed more than 448 MB at 4000 by 4000 (#992). A named filter result is kept only until the last
+  primitive that reads it, so 32 named floods no longer hold 512 MB (#993). A filter has at most 256
+  primitives and a budget of pixel operations, past which it is in error and the element draws nothing,
+  and its render's cancellation is polled between primitives (#994).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

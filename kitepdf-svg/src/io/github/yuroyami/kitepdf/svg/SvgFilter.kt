@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.svg
 
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import kotlin.math.cos
 import kotlin.math.floor
@@ -101,6 +102,8 @@ internal class FilterContext(
     val strokePaint: FloatArray?,
     /** Draws an feImage into an image of this run's size, given its subregion in user space as left, top, right and bottom. */
     val images: (FilterPrimitive.Image, DoubleArray) -> FilterImage?,
+    /** The render's cancellation, polled between primitives (#994). */
+    val stop: io.github.yuroyami.kitepdf.core.KiteCancellation? = null,
 ) {
     val width: Int get() = source.width
     val height: Int get() = source.height
@@ -128,6 +131,25 @@ internal class FilterContext(
      * reference to a result that does not exist reads as no reference (15.7.2).
      */
     fun run(primitives: List<FilterPrimitive>): FilterImage {
+        // The work of one filter is bounded whatever its markup: a cap on primitives and a budget of
+        // pixel operations, a 16 by 16 convolution weighing 256 a pixel. A filter past either is in
+        // error, and the element draws nothing (Filter Effects 1, 15.7). A 4.6 KB file of eight such
+        // convolutions ran for 32 seconds after its render was cancelled (#994).
+        if (primitives.size > MAX_PRIMITIVES) {
+            kiteWarn { "svg: a filter of ${primitives.size} primitives is past $MAX_PRIMITIVES" }
+            return FilterImage(width, height, false)
+        }
+        val pixelCount = width.toLong() * height
+        val work = primitives.sumOf { pixelCount * weightOf(it) }
+        if (work > MAX_FILTER_WORK) {
+            kiteWarn { "svg: a filter of $work pixel operations is past $MAX_FILTER_WORK" }
+            return FilterImage(width, height, false)
+        }
+        // Each named result is kept only until the last primitive that reads it: kept to the end, 32
+        // named floods of a 1000 by 1000 element held 512 MB (#993). A dropped name reads as no
+        // reference, which 15.7.2 defines.
+        val lastReader = HashMap<String, Int>()
+        for ((k, q) in primitives.withIndex()) for (name in q.inputs) if (name != null) lastReader[name] = k
         val named = HashMap<String, Result>()
         var last: Result? = null
         fun standard(name: String): Result? = when (name) {
@@ -147,8 +169,10 @@ internal class FilterContext(
             last?.let { return it to false }
             return Result(source, region) to true
         }
-        for (p in primitives) {
+        for ((k, p) in primitives.withIndex()) {
+            if (stop?.isCancelled() == true) return FilterImage(width, height, false)
             val inputs = p.inputs.map { read(it) }
+            for (name in p.inputs) if (name != null && lastReader[name] == k) named.remove(name)
             // The default subregion is the union of the inputs' subregions, or the filter region
             // when there is none, when one is a standard input, and for feTile, which fills it (15.7.3).
             val default = if (inputs.isEmpty() || inputs.any { it.second } || p is FilterPrimitive.Tile) region else inputs.map { it.first.box }.reduce { a, b ->
@@ -161,12 +185,22 @@ internal class FilterContext(
             val image = apply(p, inputs.map { it.first }, subregion)
             image.keepOnly(subregion)
             val result = Result(image, box)
-            p.result?.let { named[it] = result }
+            p.result?.let { if ((lastReader[it] ?: -1) > k) named[it] = result else named.remove(it) }
             last = result
         }
         val out = (last?.image ?: FilterImage(width, height, false)).let { if (it === source) it.copy() else it }
         out.keepOnly(pixels(region))
         return out
+    }
+
+    /** About the operations a pixel of [p] costs. */
+    private fun weightOf(p: FilterPrimitive): Long = when (p) {
+        is FilterPrimitive.Convolve -> maxOf(1L, p.orderX.toLong() * p.orderY)
+        is FilterPrimitive.Morphology -> 2L + (2 * p.rx * scaleX).toLong().coerceIn(0L, 1_000L) + (2 * p.ry * scaleY).toLong().coerceIn(0L, 1_000L)
+        is FilterPrimitive.Lighting -> 16L
+        is FilterPrimitive.Turbulence -> 8L * p.octaves.coerceIn(1, 32)
+        is FilterPrimitive.Blur, is FilterPrimitive.DropShadow -> 12L
+        else -> 2L
     }
 
     private fun apply(p: FilterPrimitive, inputs: List<Result>, subregion: PixelRect): FilterImage {
@@ -360,3 +394,9 @@ internal class FilterContext(
             }
     }
 }
+
+/** The most primitives one filter may have (#994). */
+private const val MAX_PRIMITIVES = 256
+
+/** The most pixel operations one filter may cost, a few seconds of work (#994). */
+private const val MAX_FILTER_WORK = 1_000_000_000L

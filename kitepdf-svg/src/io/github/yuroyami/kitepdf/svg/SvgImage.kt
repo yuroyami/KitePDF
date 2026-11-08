@@ -1438,15 +1438,17 @@ public class SvgImage private constructor(
         load: ((String) -> ByteArray?)?, depth: Int, stop: KiteCancellation?,
     ) {
         val content = filter.content
-        var image = FilterImage.of(scope.render { paintElement(el, ctm, content, canvas, load, depth, stop) })
+        val drawn = scope.render { paintElement(el, ctm, content, canvas, load, depth, stop) }
         var toPixels = scope.toPixels
-        // A filter keeps four floats a pixel for each result, so a large region runs at a lower resolution.
+        // A filter keeps four floats a pixel for each result, so a large region runs at a lower
+        // resolution. The raster shrinks as integers on its way to floats, so no float image is ever
+        // larger than the budget (#992).
         val pixels = scope.width.toLong() * scope.height
         val shrink = if (pixels > FILTER_MAX_PIXELS) sqrt(pixels.toDouble() / FILTER_MAX_PIXELS) else 1.0
         val w = if (shrink > 1.0) maxOf(1, (scope.width / shrink).toInt()) else scope.width
         val h = if (shrink > 1.0) maxOf(1, (scope.height / shrink).toInt()) else scope.height
+        var image = FilterImage.of(drawn, w, h)
         if (shrink > 1.0) {
-            image = image.resized(w, h)
             toPixels = KiteMatrix.scaling(w.toDouble() / scope.width, h.toDouble() / scope.height).concat(toPixels)
         }
         fun flat(color: RgbColor?, opacity: Double): FloatArray? =
@@ -1454,14 +1456,13 @@ public class SvgImage private constructor(
         val fill = if (content.fillRef == null) flat(content.fill, content.fillOpacity) else null
         val stroke = if (content.strokeRef == null) flat(content.stroke, content.strokeOpacity) else null
         val images = { p: FilterPrimitive.Image, box: DoubleArray ->
-            feImage(scope, p, box, ctm, content, canvas, load, depth, stop)?.let { FilterImage.of(it) }?.let { if (shrink > 1.0) it.resized(w, h) else it }
+            feImage(scope, p, box, ctm, content, canvas, load, depth, stop)?.let { if (shrink > 1.0) FilterImage.of(it, w, h) else FilterImage.of(it) }
         }
         for (stage in filter.stages) {
             if (stop?.isCancelled() == true) return
-            image = FilterContext(image, toPixels, stage.region, fill, stroke, images).run(stage.primitives)
+            image = FilterContext(image, toPixels, stage.region, fill, stroke, images, stop).run(stage.primitives)
         }
-        if (shrink > 1.0) image = image.resized(scope.width, scope.height)
-        scope.draw(image.toRaster(), alpha = filter.alpha)
+        scope.draw(image.toRaster(scope.width, scope.height), alpha = filter.alpha)
     }
 
     /**
