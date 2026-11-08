@@ -101,7 +101,7 @@ class Type1Test {
      * A Type 1 font whose glyph /A is a 500 by 700 box, with [fontMatrix] as its
      * `/FontMatrix` line, or none.
      */
-    private fun boxFont(fontMatrix: String?, inEexec: Boolean = false): Type1Font {
+    private fun boxFont(fontMatrix: String?, inEexec: Boolean = false, lengths: (Int, Int) -> Pair<Int, Int> = { a, b -> a to b }): Type1Font {
         fun bytes(vararg v: Int) = ByteArray(v.size) { v[it].toByte() }
         // hsbw 0 500, rmoveto 0 0, rlineto 500 0, rlineto 0 700, rlineto -500 0, closepath, endchar.
         val charstring = csEncrypt(
@@ -113,9 +113,23 @@ class Type1Test {
             .encodeToByteArray() + charstring + "\nND\nend\nend\n".encodeToByteArray()
         val eexec = eexecEncrypt(byteArrayOf(0, 0, 0, 0) + privateText)
         val header = ("%!PS-AdobeFont-1.0: BoxFont 001.000\n12 dict begin\n/FontName /BoxFont def\n" +
-            (if (inEexec) "" else matrixLine) + "/Encoding StandardEncoding def\ncurrentdict end\ncurrentfile eexec\n")
+            (if (inEexec) "" else matrixLine) + "/Encoding StandardEncoding def\ncurrentdict end\ncurrentfile eexec\r\n")
             .encodeToByteArray()
-        return Type1Font.parse(header + eexec, header.size, eexec.size)
+        val (l1, l2) = lengths(header.size, eexec.size)
+        return Type1Font.parse(header + eexec, l1, l2)
+    }
+
+    @Test
+    fun the_encrypted_part_starts_after_the_eexec_token_whatever_length1_says() {
+        // ISO 32000-1, 9.9, Table 126 gives /Length1, which a CR LF after eexec put one byte off (#672).
+        for ((label, lengths) in listOf<Pair<String, (Int, Int) -> Pair<Int, Int>>>(
+            "length1 one short" to { a, b -> (a - 1) to b },
+            "length1 three long" to { a, b -> (a + 3) to b },
+            "no length2" to { a, _ -> a to 0 },
+        )) {
+            val font = boxFont(null, lengths = lengths)
+            assertEquals(listOf(0.0, 0.0, 500.0, 700.0), boxBounds(font), label)
+        }
     }
 
     /** The left, bottom, right and top of the points of glyph /A. */

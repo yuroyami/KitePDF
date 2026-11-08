@@ -42,6 +42,9 @@ internal class Type1Font private constructor(
     private val glyphSpace: KiteMatrix?,
 ) {
 
+    /** Whether the program holds any charstring, which a font with a broken encrypted part does not (#672). */
+    internal val hasCharStrings: Boolean get() = charStrings.isNotEmpty()
+
     private val outlineCache = HashMap<String, KitePath?>()
 
     /** Guards [outlineCache]: a document shares one font between the threads that render its pages (#383). */
@@ -111,7 +114,7 @@ internal class Type1Font private constructor(
             val (flat, l1, l2) = if (isPfb(fontFile)) {
                 unpackPfb(fontFile)
             } else {
-                Triple(fontFile, length1, length2)
+                eexecBounds(fontFile, length1, length2)
             }
 
             // Section 1: cleartext PostScript.
@@ -135,6 +138,32 @@ internal class Type1Font private constructor(
             val fontMatrix = parseFontMatrix(header) ?: parseFontMatrix(plaintext)
 
             return Type1Font(fontName, subrs, charStrings, encoding, lenIV, glyphSpaceMatrix(fontMatrix))
+        }
+
+        /**
+         * Where the clear text ends and how long the encrypted part is. ISO 32000-1, 9.9, Table 126
+         * gives them as /Length1 and /Length2, but readers do not trust them: a CR LF after `eexec`
+         * that /Length1 leaves out made the decryption noise and the font lost every glyph (#672).
+         * The encrypted part starts after the `eexec` token and the white space that follows it, and
+         * runs for /Length2 bytes, or to the end of the program without one. /Length1 stands when
+         * the program has no `eexec` token.
+         */
+        private fun eexecBounds(program: ByteArray, length1: Int, length2: Int): Triple<ByteArray, Int, Int> {
+            val token = "eexec".encodeToByteArray()
+            var at = -1
+            var i = 0
+            while (i + token.size <= program.size) {
+                var match = true
+                for (k in token.indices) if (program[i + k] != token[k]) { match = false; break }
+                if (match) { at = i; break }
+                i++
+            }
+            if (at < 0) return Triple(program, length1.coerceAtLeast(0), length2.coerceAtLeast(0))
+            var start = at + token.size
+            while (start < program.size && program[start].toInt().let { it == 0x20 || it == 0x09 || it == 0x0A || it == 0x0D }) start++
+            val rest = program.size - start
+            val l2 = if (length2 > 0) minOf(length2, rest) else rest
+            return Triple(program, start, l2)
         }
 
         /* ─── PFB container ──────────────────────────────────────────────── */

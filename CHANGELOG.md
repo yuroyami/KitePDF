@@ -404,6 +404,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole, where `<0041>` came out as U+FFFD and `A` (#651).
 - An accented letter that a CFF font builds with the `seac` form of `endchar` draws its base and its accent,
   where it drew nothing, so `café` in an embedded Type1C font lost its `é` (#649).
+- An embedded Type 1 program whose `/Length1` is a few bytes off, or that has no `/Length2`, keeps its glyphs:
+  the encrypted part starts after the `eexec` token, and a program that yields no charstrings counts as no
+  program, so a host face stands in for it in every render mode (#672).
 
 ## [0.13.0] - 2026-10-09
 

@@ -459,12 +459,14 @@ public class PdfFont private constructor(
 
         private fun loadEmbeddedType1(descriptor: PdfDictionary, refs: IndirectResolver): Type1Font? {
             val stream = (descriptor["FontFile"]?.resolve(refs) as? PdfStream) ?: return null
+            // The lengths are hints: the parse finds the eexec token itself (#672).
             val length1 = stream.dict.getInt("Length1")?.toInt() ?: 0
             val length2 = stream.dict.getInt("Length2")?.toInt() ?: 0
-            if (length1 <= 0 || length2 <= 0) return null
+            // A program that yields no charstring is no program, so a host face stands in for it in
+            // every render mode, not only in a canvas that falls back for filled text.
             return runCatching {
                 Type1Font.parse(FilterChain.decode(stream), length1, length2)
-            }.getOrNull()
+            }.getOrNull()?.takeIf { it.hasCharStrings }
         }
 
         /* ─── /Encoding + /Differences ───────────────────────────────────── */
