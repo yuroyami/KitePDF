@@ -257,4 +257,25 @@ class TableTest {
         rec(root)
         return found ?: error("table has no parent block")
     }
+
+    @Test
+    fun spans_past_what_html_counts_are_clamped_and_lay_out() {
+        // One attribute of 2147483647 ran the layout out of memory (#986).
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        for (cell in listOf("""<td colspan="2147483647">x</td>""", """<td rowspan="100000000">x</td>""")) {
+            val t = firstTable(laidOut("<table><tr>$cell<td>y</td></tr></table><p>after</p>"))
+            assertTrue(t.rows[0].cells[0].colspan <= 1000 && t.rows[0].cells[0].rowspan == 1, cell)
+        }
+        val wide = firstTable(build("""<table><colgroup span="2147483647"></colgroup><tr><td>x</td></tr></table>"""))
+        assertEquals(1, wide.rows.size)
+        assertTrue(start.elapsedNow().inWholeSeconds < 20, "took ${start.elapsedNow()}")
+    }
+
+    @Test
+    fun a_row_wider_than_100000_columns_does_not_collide_with_the_next() {
+        // With a key of row * 100,000 + column, the cell of row 2 sat at column 1000 (#986).
+        val first = (0 until 101).joinToString("") { """<td colspan="1000">x</td>""" }
+        val t = firstTable(build("<table><tr>$first</tr><tr><td>y</td></tr></table>"))
+        assertEquals(0, t.rows[1].cells[0].gridCol)
+    }
 }

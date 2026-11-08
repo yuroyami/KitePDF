@@ -614,14 +614,14 @@ internal class BoxBuilder(
                 if (c !is KiteXmlNode.Element) continue
                 when (c.tag) {
                     "col" -> {
-                        val span = c.attrs["span"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                        val span = c.attrs["span"]?.toIntOrNull()?.coerceIn(1, MAX_COLSPAN) ?: 1
                         val w = widthOf(c)
                         repeat(span) { if (w != null) out[idx] = w; idx++ }
                     }
                     "colgroup" -> {
                         if (c.children.any { it is KiteXmlNode.Element && it.tag == "col" }) scan(c)
                         else {
-                            val span = c.attrs["span"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                            val span = c.attrs["span"]?.toIntOrNull()?.coerceIn(1, MAX_COLSPAN) ?: 1
                             val w = widthOf(c)
                             repeat(span) { if (w != null) out[idx] = w; idx++ }
                         }
@@ -645,7 +645,7 @@ internal class BoxBuilder(
     private fun collapseBorders(rows: List<TableRowBox>, table: ComputedStyle): List<TableRowBox> {
         // Grid of covering cells (spans fill every slot they touch).
         val grid = HashMap<Long, BlockBox>()
-        fun key(r: Int, c: Int) = r.toLong() * 100_000L + c
+        fun key(r: Int, c: Int) = (r.toLong() shl 32) or c.toLong()
         var rowCount = 0
         var colCount = 0
         for (row in rows) for (cell in row.cells) {
@@ -710,12 +710,21 @@ internal class BoxBuilder(
 
     /** Assign each cell a grid (row, col), skipping cells occupied by rowspans from above. */
     private fun placeCells(rows: List<TableRowBox>) {
+        // A slot key of row times 100,000 plus column let a row past 100,000 columns collide with the
+        // next row's slots (#986); the row now takes the high 32 bits.
         val occupied = HashSet<Long>()
-        fun key(r: Int, c: Int) = r.toLong() * 100_000L + c
+        fun key(r: Int, c: Int) = (r.toLong() shl 32) or c.toLong()
         for ((r, row) in rows.withIndex()) {
             var col = 0
             for (cell in row.cells) {
                 while (occupied.contains(key(r, col))) col++
+                // HTML, 4.9.12.1, forming a table: a cell that spans past the last row ends there.
+                cell.rowspan = cell.rowspan.coerceAtMost(rows.size - r)
+                // Past a ceiling of grid slots a cell takes one slot, so a few thousand wide cells in
+                // many rows cannot make the grid itself the cost of the layout.
+                if (occupied.size.toLong() + cell.rowspan.toLong() * cell.colspan > MAX_GRID_SLOTS) {
+                    cell.rowspan = 1; cell.colspan = 1
+                }
                 cell.gridRow = r; cell.gridCol = col
                 for (dr in 0 until cell.rowspan) for (dc in 0 until cell.colspan) occupied.add(key(r + dr, col + dc))
                 col += cell.colspan
@@ -760,8 +769,11 @@ internal class BoxBuilder(
                 Display.TABLE_CELL -> {
                     flushStray()
                     cells.add(buildBlock(c, cs, ancestors, null, BLACK, parentSem = parentSem).also { cell ->
-                        cell.colspan = c.attrs["colspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                        cell.rowspan = c.attrs["rowspan"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                        // HTML, 4.9.11: a colspan above 1000 counts as 1000 and a rowspan above 65534 as
+                        // 65534, as the DOM that scripts see already clamps them. Unbounded, one
+                        // attribute ran the layout out of memory (#986).
+                        cell.colspan = c.attrs["colspan"]?.toIntOrNull()?.coerceIn(1, MAX_COLSPAN) ?: 1
+                        cell.rowspan = c.attrs["rowspan"]?.toIntOrNull()?.coerceIn(1, MAX_ROWSPAN) ?: 1
                     })
                 }
                 else -> stray.add(c)
@@ -1276,3 +1288,12 @@ internal fun isDocumentPath(href: String): Boolean {
     val path = href.substringBefore('#').substringBefore('?').lowercase()
     return path.endsWith(".xhtml") || path.endsWith(".html") || path.endsWith(".htm") || path.endsWith(".xht")
 }
+
+/** The largest colspan, and span of col and colgroup, HTML counts (4.9.11, 4.9.3, #986). */
+private const val MAX_COLSPAN = 1000
+
+/** The largest rowspan HTML counts (4.9.11, #986). */
+private const val MAX_ROWSPAN = 65534
+
+/** The most grid slots the spanning cells of one table may cover. */
+private const val MAX_GRID_SLOTS = 1_000_000L

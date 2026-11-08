@@ -109,6 +109,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entity that expanded to nothing cost nothing, so a 600-byte SVG, or an EPUB whose `container.xml` carried
   the same subset, kept `open` busy for hours (#963).
 
+- A table cell's `colspan` counts at most 1000 and its `rowspan` at most 65534, as HTML says, and a rowspan
+  ends at the table's last row. A `span` of `col` or `colgroup` counts at most 1000. One attribute of a
+  one-kilobyte book ran the layout out of memory, and a row past 100,000 columns put its cells in the next
+  row's slots (#986).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
