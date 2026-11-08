@@ -132,6 +132,34 @@ class MeshShadingTest {
         assertTrue(rgb(pulled, 45, 45).first < 170, "the interior points were ignored: ${rgb(pulled, 45, 45)}")
     }
 
+    private fun freeForm(bpc: Int, bpcomp: Int, bytes: ByteArray) = PdfStream(
+        dict = PdfDictionary(mapOf(
+            "ShadingType" to PdfInt(4), "ColorSpace" to PdfName("DeviceGray"),
+            "BitsPerCoordinate" to PdfInt(bpc.toLong()), "BitsPerComponent" to PdfInt(bpcomp.toLong()), "BitsPerFlag" to PdfInt(8),
+            "Decode" to PdfArray(listOf(0, 612, 0, 792, 0, 1).map { PdfInt(it.toLong()) }),
+            "Length" to PdfInt(bytes.size.toLong()),
+        )),
+        rawBytes = bytes,
+    )
+
+    @Test
+    fun a_mesh_cut_in_the_padding_of_a_record_keeps_its_whole_triangles() {
+        // With 12-bit coordinates and a 4-bit component a record is 36 bits padded to 40. One whole triangle of three
+        // records, then a cut one whose third record ends 4 bits early (#788).
+        val shading = KiteShading.parse(freeForm(12, 4, ByteArray(15 + 5 + 9)), noResolver)
+        assertEquals(1, (shading as KiteShading.TriangleMesh).triangles.size)
+    }
+
+    @Test
+    fun a_mesh_of_seventy_thousand_triangles_reads_to_its_end() {
+        // A triangle of three 4-byte records, then 69,999 records with flag 1 that each add one (#791).
+        val count = 70_000
+        val bytes = ByteArray(12 + 4 * (count - 1))
+        for (i in 0 until count - 1) bytes[12 + 4 * i] = 1
+        val shading = KiteShading.parse(freeForm(8, 8, bytes), noResolver)
+        assertEquals(count, (shading as KiteShading.TriangleMesh).triangles.size)
+    }
+
     @Test
     fun a_lattice_whose_widths_are_zero_paints_nothing_and_ends() {
         // Widths of 0 read no bits, so the rows never used up the empty stream (#974).

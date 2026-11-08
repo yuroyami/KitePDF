@@ -256,6 +256,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accent lands where the font puts it (#816).
 - Every contour of a CFF glyph is closed, not only the last. A Type 2 moveto now closes the open subpath, so
   outlined text keeps the closing edge of each contour (#778).
+- A free-form triangle mesh cut off inside the padding of its last record keeps the triangles before the cut,
+  where it painted nothing (#788).
+- A mesh shading reads past 65,536 triangles or patches. The bound is now on the memory of the parsed mesh, the
+  same for all three forms, and a mesh it cuts off says so through `kiteWarn` (#791).
 
 ## [0.13.0] - 2026-10-09
 

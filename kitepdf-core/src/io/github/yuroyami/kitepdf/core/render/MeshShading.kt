@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.core.render
 
 import io.github.yuroyami.kitepdf.core.KiteRectangle
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -133,7 +134,11 @@ internal object MeshShadingParser {
             if (perRow < 2) return null
             var prev: List<Vertex>? = null
             // The same bound on the output as the free-form mesh.
-            while (bs.remaining >= minVertexBits * perRow && triangles.size < MAX_TRIANGLES) {
+            while (bs.remaining >= minVertexBits * perRow) {
+                if (triangles.size + 2 * (perRow - 1) > MAX_TRIANGLES) {
+                    warnCut("triangle", triangles.size)
+                    break
+                }
                 val row = (0 until perRow).map {
                     val (x, y) = layout.readPoint(bs)
                     Vertex(x, y, layout.readColor(bs))
@@ -158,12 +163,19 @@ internal object MeshShadingParser {
                 bs.alignToByte()
                 return v
             }
-            while (bs.remaining >= layout.bpf + minVertexBits && triangles.size < MAX_TRIANGLES) {
+            // A vertex record padded to a byte, for the two vertices a flag of 0 reads after the
+            // first: the stream may end without the padding of the last one (#788).
+            val recordBits = ((layout.bpf + minVertexBits) + 7) and 7L.inv()
+            while (bs.remaining >= layout.bpf + minVertexBits) {
+                if (triangles.size >= MAX_TRIANGLES) {
+                    warnCut("triangle", triangles.size)
+                    break
+                }
                 val flag = bs.read(layout.bpf).toInt()
                 val v = readVertex()
                 when (flag) {
                     0 -> {
-                        if (bs.remaining < 2 * (layout.bpf + minVertexBits)) break
+                        if (bs.remaining < recordBits + layout.bpf + minVertexBits) break
                         bs.read(layout.bpf) // flags of the 2nd/3rd vertex are 0 by spec
                         val v2 = readVertex()
                         bs.read(layout.bpf)
@@ -208,8 +220,11 @@ internal object MeshShadingParser {
         var py: DoubleArray? = null
         var pc: Array<VertexColor>? = null
 
-        while (patches.size < MAX_PATCHES) {
-            if (bs.remaining < layout.bpf) break
+        while (bs.remaining >= layout.bpf) {
+            if (patches.size >= MAX_PATCHES) {
+                warnCut("patch", patches.size)
+                break
+            }
             val flag = bs.read(layout.bpf).toInt()
             val newPoints = if (flag == 0) pointsPerPatch else pointsPerPatch - 4
             val newColors = if (flag == 0) 4 else 2
@@ -311,11 +326,22 @@ internal object MeshShadingParser {
         intArrayOf(12, 13, 8, 15, 0, 1, 11, 3),
     )
 
-    private const val MAX_TRIANGLES = 65_536
+    /**
+     * ISO 32000-1, 8.7.4.5.5 to 8.7.4.5.8 set no limit on a mesh, so the bound is on the memory
+     * the parsed mesh takes: a vertex of a few bytes adds a triangle of about 230 bytes, and a
+     * patch takes about 420, so a few kilobytes of Flate data could otherwise fill the heap.
+     * 64 MiB keeps a GIS or CAD mesh of a few hundred thousand triangles whole (#791).
+     */
+    private const val MAX_MESH_BYTES = 64L shl 20
+    private const val MAX_TRIANGLES = (MAX_MESH_BYTES / 230).toInt()
+    private const val MAX_PATCHES = (MAX_MESH_BYTES / 420).toInt()
+
+    private fun warnCut(kind: String, count: Int) {
+        kiteWarn { "Mesh shading stopped after $count ${kind}s: the rest of the stream is over the mesh memory bound" }
+    }
     private val COORDINATE_BITS = setOf(1, 2, 4, 8, 12, 16, 24, 32)
     private val COMPONENT_BITS = setOf(1, 2, 4, 8, 12, 16)
     private val FLAG_BITS = setOf(2, 4, 8)
-    private const val MAX_PATCHES = 65_536
 }
 
 private fun io.github.yuroyami.kitepdf.core.parser.PdfArray.numAt(i: Int): Double = when (val v = this[i]) {
