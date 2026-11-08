@@ -789,6 +789,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteCanvas.drawGlyphs` now says that a glyph of a host-font run draws at the pen and its `xOffset` and
   `yOffset` are not read, and `CoreGraphicsCanvas` and `KiteRasterCanvas` stop applying them there, as the other
   canvases already did (#904).
+- The tests open encrypted PDFs that qpdf wrote: RC4-128, AES-128 and AES-256, each with a classic cross-
+  reference and with object streams, unencrypted metadata, owner-only passwords, and `/StmF /Identity` files for
+  R4 and R6. `tools/encrypted_fixtures.py` makes them (#908).
 
 ## [0.13.0] - 2026-10-09
 
