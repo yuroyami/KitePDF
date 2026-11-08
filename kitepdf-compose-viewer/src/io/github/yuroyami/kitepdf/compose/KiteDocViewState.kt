@@ -1205,7 +1205,15 @@ public class KiteDocViewState(
         val newLength = stripSlotLength(orientation == androidx.compose.foundation.gestures.Orientation.Vertical, kitePageAspect(page), crossPx, lengthLimitPx)
         return index to (at.offsetPx.toLong() * newLength / oldLength).toInt().coerceIn(0, newLength)
     }
-    internal var zoomRange: ClosedFloatingPointRange<Float> by mutableStateOf(1f..8f)
+
+    /**
+     * The bounds that [setZoom], [animateZoomTo] and [resetZoom] clamp into: those of the view's
+     * [KiteZoomSpec] after the layout's own rule, so a [KiteDocLayout.Continuous] strip starts at 1
+     * whatever lower minimum the spec asks for (#398). Snapshot state: a zoom slider that reads it
+     * recomposes when the spec or the layout changes it (#900).
+     */
+    public var zoomRange: ClosedFloatingPointRange<Float> by mutableStateOf(1f..8f)
+        internal set
     /**
      * The viewport's size in px. A change keeps the point of the page at the viewport's centre
      * where it can, and fits the pan into the new bounds, so a zoomed page never ends up outside a

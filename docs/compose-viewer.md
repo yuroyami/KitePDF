@@ -147,7 +147,7 @@ state.resetZoom()
 state.panBy(Offset(100f, 50f))
 ```
 
-`state.zoom` is the current zoom (1 means that the page fits), `state.panOffset` is the current pan, and `state.isZoomed` is true above the smallest zoom.
+`state.zoom` is the current zoom (1 means that the page fits), `state.panOffset` is the current pan, and `state.isZoomed` is true above the smallest zoom. `state.zoomRange` is the range that `setZoom` clamps into: the limits of `KiteZoomSpec`, except that a `Continuous` strip starts at 1. A zoom slider reads its bounds from it.
 
 ## Layouts
 

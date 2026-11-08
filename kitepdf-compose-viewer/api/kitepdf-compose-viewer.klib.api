@@ -329,6 +329,8 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
         final fun <set-skipsNonLinearChapters>(kotlin/Boolean) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.skipsNonLinearChapters.<set-skipsNonLinearChapters>|<set-skipsNonLinearChapters>(kotlin.Boolean){}[0]
     final var zoom // io.github.yuroyami.kitepdf.compose/KiteDocViewState.zoom|{}zoom[0]
         final fun <get-zoom>(): kotlin/Float // io.github.yuroyami.kitepdf.compose/KiteDocViewState.zoom.<get-zoom>|<get-zoom>(){}[0]
+    final var zoomRange // io.github.yuroyami.kitepdf.compose/KiteDocViewState.zoomRange|{}zoomRange[0]
+        final fun <get-zoomRange>(): kotlin.ranges/ClosedFloatingPointRange<kotlin/Float> // io.github.yuroyami.kitepdf.compose/KiteDocViewState.zoomRange.<get-zoomRange>|<get-zoomRange>(){}[0]
 
     final fun clearSelection() // io.github.yuroyami.kitepdf.compose/KiteDocViewState.clearSelection|clearSelection(){}[0]
     final fun currentBookmark(): io.github.yuroyami.kitepdf.core/KiteBookmark // io.github.yuroyami.kitepdf.compose/KiteDocViewState.currentBookmark|currentBookmark(){}[0]

@@ -2,6 +2,8 @@ package io.github.yuroyami.kitepdf.compose
 
 import androidx.compose.foundation.layout.fillMaxSize
 import io.github.yuroyami.kitepdf.compose.EdtImageComposeScene as ImageComposeScene
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -146,6 +148,33 @@ class MinZoomSceneTest {
                 onTestUiThread { state.setZoom(0.5f) }
                 driver.pumpFrames(2)
                 assertEquals(1f, state.zoom)
+            }
+        }
+    }
+
+    @Test
+    fun the_state_reports_the_range_the_layout_clamps_into() {
+        // A Continuous strip starts at 1 whatever the spec asks for (#398); the state says so (#900).
+        forBothEffectOrders { queued ->
+            val doc = PdfDocument.open(pagesPdf(4))
+            lateinit var state: KiteDocViewState
+            var layout by androidx.compose.runtime.mutableStateOf<KiteDocLayout>(KiteDocLayout.Paged())
+            var seen: ClosedFloatingPointRange<Float>? = null
+            val (scene, driver) = drivenScene(200, 200, queued) {
+                state = rememberKiteDocViewState(doc)
+                // A host's slider reads the range in composition.
+                seen = state.zoomRange
+                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = layout, zoomSpec = KiteZoomSpec(minZoom = 0.5f, maxZoom = 4f))
+            }
+            scene.use {
+                driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+                driver.pumpFrames(5)
+                assertEquals(0.5f..4f, state.zoomRange)
+                assertEquals(0.5f..4f, seen)
+                layout = KiteDocLayout.Continuous()
+                driver.pumpFrames(10)
+                assertEquals(1f..4f, state.zoomRange)
+                assertEquals(1f..4f, seen, "the host recomposed with the new range")
             }
         }
     }

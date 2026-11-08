@@ -657,6 +657,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or the first bytes of the file opened as the file (#832).
 - The open functions declare @Throws, so a Swift or Objective-C caller gets an error it can catch for a wrong
   password or a broken file instead of the app ending (#706).
+- KiteDocViewState.zoomRange is public: the bounds setZoom clamps into after the layout's own rule, as snapshot
+  state for a host's zoom slider (#900).
 
 ## [0.13.0] - 2026-10-09
 
