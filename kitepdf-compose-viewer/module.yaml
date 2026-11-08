@@ -21,9 +21,12 @@ apply:
   - //library.module-template.yaml
   - //compose.module-template.yaml
 
+# The viewer's public API names types of both format modules (PdfScriptHandler, EpubScriptHandler,
+# PdfAction, EpubLink, PdfDocument, EpubDocument), so they are exported: an app that adds one format
+# module compiles the README's sample (#689). Both were runtime dependencies already.
 dependencies:
-  - //kitepdf-pdf
-  - //kitepdf-epub
+  - //kitepdf-pdf: exported
+  - //kitepdf-epub: exported
   - $compose.runtime: exported
   - $compose.foundation: exported
   - $compose.ui: exported
