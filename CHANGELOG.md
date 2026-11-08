@@ -665,6 +665,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the vector images, the glyph masks, and the PDF's own caches (#903).
 - Arabic and Hebrew text from a PDF reads in logical order: extractText, structured text lines, search and copied
   text turn a right-to-left line from the order its glyphs stand on the page into the order it is read in (#913).
+- A book's page text holds right-to-left text in logical order, at the paragraph's own direction, so copying and
+  searching Hebrew or Arabic in an EPUB works; Bidi.logicalOrder and logicalEdges are shared with PDF text
+  (#933).
 
 ## [0.13.0] - 2026-10-09
 

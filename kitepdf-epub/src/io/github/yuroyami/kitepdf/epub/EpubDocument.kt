@@ -3602,11 +3602,19 @@ public class EpubPage internal constructor(
             )
         }
         val top = displayY(page, line.yTop)
+        // The layout placed each right-to-left run reversed, so the line stands in visual order;
+        // its text reads in logical order, at the paragraph's own direction, with its edges
+        // following the logical chars (#933).
+        val visualEdges = edges.toDoubleArray()
+        val paraLevel = line.owner?.style?.direction?.let { if (it == Direction.RTL) 1 else 0 }
+        val logical = io.github.yuroyami.kitepdf.core.text.Bidi.logicalOrder(sb, paraLevel)
+        val text = if (logical == null) sb.toString() else buildString(sb.length) { for (i in logical.first) append(sb[i]) }
+        val charEdges = if (logical == null) visualEdges else io.github.yuroyami.kitepdf.core.text.Bidi.logicalEdges(visualEdges, logical.first, logical.second)
         return KiteTextLine(
-            text = sb.toString(),
+            text = text,
             // Display-space rect: y-min lives in [KiteRectangle.bottom] (see KiteStructuredText).
-            bounds = io.github.yuroyami.kitepdf.core.KiteRectangle(edges.first(), top, edges.last(), top + line.height),
-            charEdges = edges.toDoubleArray(),
+            bounds = io.github.yuroyami.kitepdf.core.KiteRectangle(visualEdges.first(), top, visualEdges.last(), top + line.height),
+            charEdges = charEdges,
             end = line.end,
         )
     }

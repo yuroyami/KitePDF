@@ -114,14 +114,7 @@ internal object KiteTextAdapter {
             if (logical != null) {
                 // The edges follow the logical order: a character of a right-to-left run starts at
                 // its right edge. Inside a run each character ends where the next starts (#913).
-                val (order, levels) = logical
-                val visualEdges = edges.copyOf()
-                for (j in order.indices) {
-                    val k = order[j]
-                    edges[j] = if (levels[k] % 2 == 1) visualEdges[k + 1] else visualEdges[k]
-                }
-                val k = order.last()
-                edges[order.size] = if (levels[k] % 2 == 1) visualEdges[k] else visualEdges[k + 1]
+                io.github.yuroyami.kitepdf.core.text.Bidi.logicalEdges(edges, logical.first, logical.second).copyInto(edges)
             }
         } else {
             for (i in 0..text.length) {

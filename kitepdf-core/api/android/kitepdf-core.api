@@ -2665,6 +2665,9 @@ public final class io/github/yuroyami/kitepdf/core/text/Bidi {
 	public static synthetic fun baseLevel$default (Lio/github/yuroyami/kitepdf/core/text/Bidi;[ILjava/lang/Integer;ILjava/lang/Object;)I
 	public final fun classify (I)I
 	public final fun lineLevels ([I[II)[I
+	public final fun logicalEdges ([D[I[I)[D
+	public final fun logicalOrder (Ljava/lang/CharSequence;Ljava/lang/Integer;)Lkotlin/Pair;
+	public static synthetic fun logicalOrder$default (Lio/github/yuroyami/kitepdf/core/text/Bidi;Ljava/lang/CharSequence;Ljava/lang/Integer;ILjava/lang/Object;)Lkotlin/Pair;
 	public final fun reorderVisually ([I)[I
 	public final fun resolveLevels ([II)[I
 }

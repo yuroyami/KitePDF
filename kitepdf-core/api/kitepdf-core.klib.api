@@ -3211,6 +3211,8 @@ final object io.github.yuroyami.kitepdf.core.text/Bidi { // io.github.yuroyami.k
     final fun baseLevel(kotlin/IntArray, kotlin/Int? = ...): kotlin/Int // io.github.yuroyami.kitepdf.core.text/Bidi.baseLevel|baseLevel(kotlin.IntArray;kotlin.Int?){}[0]
     final fun classify(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.text/Bidi.classify|classify(kotlin.Int){}[0]
     final fun lineLevels(kotlin/IntArray, kotlin/IntArray, kotlin/Int): kotlin/IntArray // io.github.yuroyami.kitepdf.core.text/Bidi.lineLevels|lineLevels(kotlin.IntArray;kotlin.IntArray;kotlin.Int){}[0]
+    final fun logicalEdges(kotlin/DoubleArray, kotlin/IntArray, kotlin/IntArray): kotlin/DoubleArray // io.github.yuroyami.kitepdf.core.text/Bidi.logicalEdges|logicalEdges(kotlin.DoubleArray;kotlin.IntArray;kotlin.IntArray){}[0]
+    final fun logicalOrder(kotlin/CharSequence, kotlin/Int? = ...): kotlin/Pair<kotlin/IntArray, kotlin/IntArray>? // io.github.yuroyami.kitepdf.core.text/Bidi.logicalOrder|logicalOrder(kotlin.CharSequence;kotlin.Int?){}[0]
     final fun reorderVisually(kotlin/IntArray): kotlin/IntArray // io.github.yuroyami.kitepdf.core.text/Bidi.reorderVisually|reorderVisually(kotlin.IntArray){}[0]
     final fun resolveLevels(kotlin/IntArray, kotlin/Int): kotlin/IntArray // io.github.yuroyami.kitepdf.core.text/Bidi.resolveLevels|resolveLevels(kotlin.IntArray;kotlin.Int){}[0]
 }

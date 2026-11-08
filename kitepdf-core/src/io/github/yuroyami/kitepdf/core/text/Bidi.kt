@@ -112,6 +112,89 @@ public object Bidi {
         return order
     }
 
+    /**
+     * The logical order of a line of text in visual order, left to right as it stands on a page,
+     * and the bidi level of each of its chars, or null when [visual] has no right-to-left letter
+     * (#913, #933). `order[j]` is the index into [visual] of the char that reads at logical
+     * position `j`. [paraLevel] is the line's paragraph level, 0 or 1; null takes 1 when the line
+     * holds at least as many right-to-left letters as left-to-right ones.
+     *
+     * The levels of the visual sequence are resolved as if it were logical, and rule L2 is applied
+     * to them, which undoes the reordering of L2: each run at an odd level comes out reversed, and
+     * the numbers and Latin words inside it keep their own order. A run of combining marks before
+     * a right-to-left letter takes that letter's class, since a shaper reverses a whole cluster,
+     * and a surrogate pair moves as one.
+     */
+    public fun logicalOrder(visual: CharSequence, paraLevel: Int? = null): Pair<IntArray, IntArray>? {
+        var anyRtl = false
+        for (c in visual) {
+            val t = classify(c.code)
+            if (t == R || t == AL) { anyRtl = true; break }
+        }
+        if (!anyRtl) return null
+        val starts = ArrayList<Int>(visual.length)
+        val cps = ArrayList<Int>(visual.length)
+        var i = 0
+        while (i < visual.length) {
+            val pair = visual[i].isHighSurrogate() && i + 1 < visual.length && visual[i + 1].isLowSurrogate()
+            starts += i
+            cps += if (pair) 0x10000 + ((visual[i].code - 0xD800) shl 10) + (visual[i + 1].code - 0xDC00) else visual[i].code
+            i += if (pair) 2 else 1
+        }
+        val points = cps.toIntArray()
+        var rtl = 0
+        var ltr = 0
+        for (cp in points) when (classify(cp)) {
+            R, AL -> rtl++
+            L -> ltr++
+        }
+        val classed = points.copyOf()
+        var m = points.size - 1
+        while (m >= 0) {
+            val t = classify(points[m])
+            if (t == R || t == AL) {
+                var k = m - 1
+                while (k >= 0 && classify(points[k]) == NSM) classed[k--] = points[m]
+                m = k
+            } else {
+                m--
+            }
+        }
+        val level = if (paraLevel == 0 || paraLevel == 1) paraLevel else if (rtl >= ltr) 1 else 0
+        val levels = resolveLevels(classed, level)
+        val order = reorderVisually(levels)
+        val charOrder = IntArray(visual.length)
+        val charLevels = IntArray(visual.length)
+        var at = 0
+        for (k in order) {
+            val to = if (k + 1 < starts.size) starts[k + 1] else visual.length
+            for (c in starts[k] until to) charOrder[at++] = c
+        }
+        for (k in starts.indices) {
+            val to = if (k + 1 < starts.size) starts[k + 1] else visual.length
+            for (c in starts[k] until to) charLevels[c] = levels[k]
+        }
+        return charOrder to charLevels
+    }
+
+    /**
+     * The edges of a line in logical [order], from the ascending [visualEdges] of its chars in
+     * visual order, one more than the chars: a char of a right-to-left run starts at its right
+     * edge, so the edges descend inside such a run, as [io.github.yuroyami.kitepdf.core.KiteTextLine]
+     * reads them.
+     */
+    public fun logicalEdges(visualEdges: DoubleArray, order: IntArray, levels: IntArray): DoubleArray {
+        val out = DoubleArray(visualEdges.size)
+        if (order.isEmpty()) return visualEdges.copyOf()
+        for (j in order.indices) {
+            val k = order[j]
+            out[j] = if (levels[k] % 2 == 1) visualEdges[k + 1] else visualEdges[k]
+        }
+        val k = order.last()
+        out[order.size] = if (levels[k] % 2 == 1) visualEdges[k] else visualEdges[k + 1]
+        return out
+    }
+
     /** The level of a paragraph of the bidi classes [types] (P2, P3). */
     internal fun baseLevelOfTypes(types: IntArray): Int {
         val first = firstStrong(types, matchingPdis(types), 0, types.size)
