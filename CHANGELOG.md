@@ -594,6 +594,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   many (#1014).
 - A redacted page loses its `/Thumb` and its `/PieceInfo`, and a redacted form XObject its `/PieceInfo`, as the
   editor cannot redact a picture of the old page or an application's private copy of it (#1011).
+- A marked-content sequence whose content a redaction removes loses its `/ActualText`, `/Alt` and `/E`, inline or
+  named, so `extractText` no longer reads the removed words from them (#1008).
 
 ## [0.13.0] - 2026-10-09
 

@@ -228,6 +228,39 @@ internal fun PdfEditor.redactSoftMasks(resources: PdfDictionary?, hits: List<Red
     return SoftMaskRedaction(renames, additions)
 }
 
+/**
+ * The named property lists of [strips] (by `BDC` index, from the engine), each copied into
+ * [resources] without its replacement text under a new name, with [ops] repointed to the copies,
+ * and the original entry dropped once no `BDC` names it (ISO 32000-1, 14.6.2 and 14.9; #1008).
+ * Another page or sequence can share the original, so it is not changed in place.
+ */
+internal fun PdfEditor.stripNamedPropertyLists(
+    resources: PdfDictionary?,
+    strips: Map<Int, String>,
+    ops: List<Operation>,
+): Pair<List<Operation>, PdfDictionary?> {
+    if (strips.isEmpty() || resources == null) return ops to resources
+    val properties = runCatching { resources.getDict("Properties", effective) }.getOrNull() ?: return ops to resources
+    val merged = LinkedHashMap(properties.map)
+    val copies = HashMap<String, String>()
+    val out = ops.toMutableList()
+    for ((index, name) in strips) {
+        val op = out.getOrNull(index)?.takeIf { it.operator == "BDC" && (it.operands.getOrNull(1) as? PdfName)?.value == name } ?: continue
+        val list = runCatching { properties[name]?.resolve(effective) }.getOrNull() as? PdfDictionary ?: continue
+        if (REPLACEMENT_TEXT_KEYS.none { it in list.map }) continue
+        val copy = copies.getOrPut(name) {
+            var i = 1
+            while ("${name}R$i" in merged) i++
+            "${name}R$i".also { merged[it] = PdfDictionary(LinkedHashMap(list.map).apply { for (k in REPLACEMENT_TEXT_KEYS) remove(k) }) }
+        }
+        out[index] = Operation("BDC", listOf(op.operands[0], PdfName(copy)))
+    }
+    if (copies.isEmpty()) return ops to resources
+    val stillNamed = out.filter { it.operator == "BDC" || it.operator == "DP" }.mapNotNull { (it.operands.getOrNull(1) as? PdfName)?.value }.toSet()
+    for (name in copies.keys) if (name !in stillNamed) merged.remove(name)
+    return out to withEntry(resources, "Properties", PdfDictionary(merged))
+}
+
 /** [ops] with each `gs` that [redaction] repoints naming its redacted ExtGState; no index moves. */
 internal fun PdfEditor.applySoftMaskRedaction(ops: List<Operation>, redaction: SoftMaskRedaction): List<Operation> {
     if (redaction.renames.isEmpty()) return ops
@@ -325,7 +358,8 @@ internal fun PdfEditor.redactFormXObject(
 
         val nested = recurseIntoForms(formResources, engine.formXObjectHits)
         val masks = redactSoftMasks(formResources, engine.softMaskHits)
-        val finalOps = applyFormRedaction(applySoftMaskRedaction(filtered, masks), nested)
+        val (marked, strippedResources) = stripNamedPropertyLists(formResources, engine.namedPropertyStrips, applySoftMaskRedaction(filtered, masks))
+        val finalOps = applyFormRedaction(marked, nested)
         val body = ContentStreamWriter.serialize(finalOps)
 
         // Keep every non-encoding dict entry (/BBox, /Matrix, /Group, /Type,
@@ -336,7 +370,10 @@ internal fun PdfEditor.redactFormXObject(
             withoutKeys(stream.dict, UNREDACTABLE_KEYS), engine.droppedImageNames, engine.survivingImageNames,
         )
         newDict = prunePageResourceXObjects(newDict, nested.droppedNames, namesStillDrawn(finalOps))
-        val newResources = withSoftMaskAdditions(withFormAdditions(newDict.getDict("Resources", effective), nested), masks, finalOps)
+        val formOwnResources = newDict.getDict("Resources", effective)?.let { own ->
+            strippedResources?.getDict("Properties", effective)?.let { withEntry(own, "Properties", it) } ?: own
+        }
+        val newResources = withSoftMaskAdditions(withFormAdditions(formOwnResources, nested), masks, finalOps)
         if (newResources != null) newDict = withEntry(newDict, "Resources", newResources)
         updateObject(target, PdfStreams.flate(body, extraFrom(newDict)))
     } catch (e: Throwable) {

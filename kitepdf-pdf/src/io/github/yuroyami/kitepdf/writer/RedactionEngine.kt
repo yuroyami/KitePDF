@@ -232,10 +232,29 @@ internal class RedactionEngine(
     /** One segment's user-space bounding box (ISO 32000-1, 8.5.2). */
     private data class SegmentBounds(val minX: Double, val minY: Double, val maxX: Double, val maxY: Double)
 
+    /**
+     * The `BDC` operators, by index in the output, whose sequence lost content and whose property
+     * list is a named resource: the caller gives each a copy of the list without its replacement
+     * text (#1008). An inline list is stripped here.
+     */
+    val namedPropertyStrips = LinkedHashMap<Int, String>()
+
+    /** How many pieces of content the engine has removed or replaced so far: a glyph run, a path, an image. */
+    private var removals = 0
+
+    /** An open marked-content sequence: where its operator sits in the output, and [removals] when it opened. */
+    private class MarkedSequence(val removalsAtStart: Int, val outputStart: Int)
+
     fun run(ops: List<Operation>): List<Operation> {
         val out = ArrayList<Operation>(ops.size)
+        val marked = ArrayList<MarkedSequence>()
         for (op in ops) {
             when (op.operator) {
+                "BDC", "BMC" -> { marked += MarkedSequence(removals, out.size); out.add(op) }
+                "EMC" -> {
+                    marked.removeLastOrNull()?.let { seq -> if (lostContent(out, seq)) dropReplacementText(out, seq.outputStart) }
+                    out.add(op)
+                }
                 "q" -> { stack.addLast(gs); out.add(op) }
                 "Q" -> { gs = stack.removeLastOrNull() ?: gs; out.add(op) }
                 "cm" -> { gs = gs.copy(ctm = gs.ctm.concat(matrix(op))); out.add(op) }
@@ -323,14 +342,44 @@ internal class RedactionEngine(
                 "f", "F", "f*", "B", "B*", "b", "b*", "S", "s", "n" -> paintPath(op, out)
 
                 "Do" -> handleDo(op, out)
-                "BI" -> if (op.inlineImage == null || !imageBoxIntersects()) out.add(op)
-                "sh" -> if (!shadingIntersectsRedaction()) out.add(op)
+                "BI" -> if (op.inlineImage == null || !imageBoxIntersects()) out.add(op) else removals++
+                "sh" -> if (!shadingIntersectsRedaction()) out.add(op) else removals++
 
                 else -> out.add(op)
             }
         }
         flushUnpaintedPath(out)
+        // A sequence the content leaves open still encloses what follows it.
+        for (seq in marked.asReversed()) if (lostContent(out, seq)) dropReplacementText(out, seq.outputStart)
         return out
+    }
+
+    /**
+     * Whether the sequence [seq], up to now, lost anything: a glyph run, a path or an image the
+     * engine removed, or a form or a soft mask group in it that paints into a region (#1008).
+     */
+    private fun lostContent(out: List<Operation>, seq: MarkedSequence): Boolean {
+        if (removals > seq.removalsAtStart) return true
+        val range = seq.outputStart until out.size
+        return formXObjectHits.any { it.intersects && it.opIndex in range } || softMaskHits.any { it.opIndex in range }
+    }
+
+    /**
+     * ISO 32000-1, 14.9.3 to 14.9.5: `/ActualText` is the content's replacement text, `/Alt` its
+     * description and `/E` its expansion, so a sequence that lost content loses them, whole, as the
+     * engine removes too much rather than too little (#1008). An inline property list is stripped
+     * here; a named one is left to the caller through [namedPropertyStrips].
+     */
+    private fun dropReplacementText(out: MutableList<Operation>, at: Int) {
+        val op = out.getOrNull(at)?.takeIf { it.operator == "BDC" } ?: return
+        when (val props = op.operands.getOrNull(1)) {
+            is PdfDictionary -> if (REPLACEMENT_TEXT_KEYS.any { it in props.map }) {
+                val stripped = PdfDictionary(LinkedHashMap(props.map).apply { for (k in REPLACEMENT_TEXT_KEYS) remove(k) })
+                out[at] = Operation(op.operator, listOf(op.operands[0], stripped))
+            }
+            is PdfName -> namedPropertyStrips[at] = props.value
+            else -> {}
+        }
     }
 
     /* ─── Paths ──────────────────────────────────────────────────────────── */
@@ -427,11 +476,12 @@ internal class RedactionEngine(
         when {
             !hit -> { out.addAll(pathOps); out.add(op) }
             pathClips -> {
+                removals++
                 out.addAll(pathOps)
                 if (op.operator in CLOSING_PAINT_OPERATORS) out.add(Operation("h", emptyList()))
                 out.add(Operation("n", emptyList()))
             }
-            else -> Unit // construction and paint go together
+            else -> removals++ // construction and paint go together
         }
         // The paint operator is what makes a pending `W` take effect (8.5.4).
         // Record the clip's page-space boundary so a later `sh` can be judged
@@ -551,6 +601,7 @@ internal class RedactionEngine(
         val font = gs.text.font ?: missingFont
         val shown = show(bytes, font)
         if (shown.hit) {
+            removals++
             compensation(shown)?.let { out.add(Operation("TJ", listOf(PdfArray(listOf(PdfReal(it)))))) }
         } else {
             out.add(Operation("Tj", listOf(PdfString(bytes))))
@@ -568,6 +619,7 @@ internal class RedactionEngine(
                 is PdfString -> {
                     val shown = show(item.bytes, font)
                     if (shown.hit) {
+                        removals++
                         compensation(shown)?.let { items.add(PdfReal(it)) }
                     } else {
                         items.add(item)
@@ -705,6 +757,7 @@ internal class RedactionEngine(
         if (xobjectName != null && xobjectName in imageXObjectNames) {
             if (imageBoxIntersects()) {
                 droppedImageNames.add(xobjectName)
+                removals++
                 return // drop the draw op
             }
             survivingImageNames.add(xobjectName)
@@ -833,3 +886,6 @@ private val STROKING_PAINT_OPERATORS = setOf("S", "s", "B", "B*", "b", "b*")
 
 /** Painting operators that close the current subpath before painting (ISO 32000-1, 8.5.3). */
 private val CLOSING_PAINT_OPERATORS = setOf("s", "b", "b*")
+
+/** The entries of a marked-content property list that hold the text of its content (ISO 32000-1, 14.9.3 to 14.9.5; #1008). */
+internal val REPLACEMENT_TEXT_KEYS: List<String> = listOf("ActualText", "Alt", "E")
