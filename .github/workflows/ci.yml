@@ -39,6 +39,9 @@ env:
 jobs:
   jvm:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -153,6 +156,25 @@ jobs:
       - name: Test every module (JVM, Android host tests)
         run: ./kotlin test -p jvm -p android
 
+      # The counts per module, in the job summary, marked where skips rose or tests fell since the last
+      # green run on main (#942). Reading them never fails the run.
+      - name: Summarise the test counts
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --status success -L 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+          if [ -n "$prev" ]; then gh run download "$prev" --repo "$GITHUB_REPOSITORY" -n test-counts-jvm -D build/previous-counts || true; fi
+          python3 scripts/test_summary.py --reports build/reports --label "JVM and Android host tests" --out build/test-counts/jvm.json --previous build/previous-counts/jvm.json
+
+      - name: Upload the test counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-counts-jvm
+          path: build/test-counts/
+          if-no-files-found: ignore
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -192,6 +214,9 @@ jobs:
 
   apple:
     runs-on: macos-latest
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
@@ -211,6 +236,25 @@ jobs:
 
       - name: Test the iOS simulator and macOS arm64 suites
         run: ./kotlin test -p iosSimulatorArm64 -p macosArm64
+
+      # The counts per module, in the job summary, marked where skips rose or tests fell since the last
+      # green run on main (#942). Reading them never fails the run.
+      - name: Summarise the test counts
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --status success -L 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+          if [ -n "$prev" ]; then gh run download "$prev" --repo "$GITHUB_REPOSITORY" -n test-counts-apple -D build/previous-counts || true; fi
+          python3 scripts/test_summary.py --reports build/reports --label "iOS simulator and macOS arm64" --out build/test-counts/apple.json --previous build/previous-counts/apple.json
+
+      - name: Upload the test counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-counts-apple
+          path: build/test-counts/
+          if-no-files-found: ignore
 
   web:
     runs-on: ubuntu-latest
@@ -248,6 +292,9 @@ jobs:
 
   other-targets:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 60
     env:
       # The toolchain runs one task for each core, and each Kotlin/Native compiler takes up to 3 GB.
@@ -268,6 +315,25 @@ jobs:
 
       - name: Test the Linux x64 suites
         run: ./kotlin test -p linuxX64
+
+      # The counts per module, in the job summary, marked where skips rose or tests fell since the last
+      # green run on main (#942). Reading them never fails the run.
+      - name: Summarise the test counts
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --status success -L 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+          if [ -n "$prev" ]; then gh run download "$prev" --repo "$GITHUB_REPOSITORY" -n test-counts-linux -D build/previous-counts || true; fi
+          python3 scripts/test_summary.py --reports build/reports --label "Linux x64" --out build/test-counts/linux.json --previous build/previous-counts/linux.json
+
+      - name: Upload the test counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-counts-linux
+          path: build/test-counts/
+          if-no-files-found: ignore
 
       - name: Compile the other native targets
         run: >
