@@ -215,7 +215,7 @@ internal class SignatureValidator(
     private fun result(status: Status, detail: String?, chain: List<X509> = emptyList(), signedTime: PdfDate? = null): PdfSignatureValidation {
         // Trust speaks for the signer only when the signature holds: an invalid one claims nothing.
         val anchorAt = chain.indexOfFirst { c -> anchors.any { it.der.contentEquals(c.der) } }
-        val pathProblem = if (status == Status.Valid && anchorAt >= 0) pathProblem(chain, anchorAt) else null
+        val pathProblem = if (status == Status.Valid && anchorAt >= 0) pathProblem(chain, anchorAt) ?: purposeProblem(chain[0]) else null
         // RFC 5280, 6.1.3 (a)(2) at the signing time: every certificate below the anchor (#634).
         val below = if (anchorAt >= 0) chain.subList(0, anchorAt) else chain
         val expired = signedTime?.let { t -> below.firstOrNull { !validAt(it, t) } }
@@ -253,6 +253,26 @@ internal class SignatureValidator(
         val days = era * 146097L + doe - 719468
         val offset = if (d.tzSign == 'Z') 0 else (d.tzHour * 3600 + d.tzMinute * 60) * (if (d.tzSign == '-') -1 else 1)
         return days * 86400 + d.hour * 3600 + d.minute * 60 + d.second - offset
+    }
+
+    /**
+     * Why [signer]'s certificate may not make this signature, or null (#1000). RFC 5280, 4.2.1.3: a
+     * key that signs data has digitalSignature or nonRepudiation when the certificate limits its
+     * key usage. RFC 3161, 2.3: a time stamping authority's certificate has one extended key usage,
+     * id-kp-timeStamping, in a critical extension, so a document timestamp (ISO 32000-2, 12.8.5)
+     * by any other certificate states a time nobody vouches for.
+     */
+    private fun purposeProblem(signer: X509): String? {
+        if (signer.hasKeyUsage && !signer.signsData) {
+            return "the chain is not trusted: the key usage of ${signer.commonName} does not allow signing"
+        }
+        if (subFilter == "ETSI.RFC3161" &&
+            (signer.extendedKeyUsages != listOf(TIME_STAMPING) || !signer.extendedKeyUsageCritical)
+        ) {
+            return "the timestamp is not trusted: ${signer.commonName} is not a time stamping authority, " +
+                "whose certificate has the one critical extended key usage id-kp-timeStamping"
+        }
+        return null
     }
 
     /**
@@ -303,6 +323,8 @@ internal class SignatureValidator(
     }
 
     private companion object {
+        const val TIME_STAMPING = "1.3.6.1.5.5.7.3.8"
+
         const val MAX_CHAIN = 10
 
         fun certificateOf(cert: X509, revocation: RevocationResult) = PdfCertificate(

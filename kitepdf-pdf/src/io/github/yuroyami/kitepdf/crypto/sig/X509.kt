@@ -36,6 +36,10 @@ internal class X509(
     val hasKeyUsage: Boolean,
     /** Whether that extension sets keyCertSign, bit 5. */
     val keyCertSign: Boolean,
+    /** Whether it sets digitalSignature (bit 0) or nonRepudiation (bit 1), which a key that signs data needs. */
+    val signsData: Boolean,
+    /** Whether the extended key usage extension is critical. */
+    val extendedKeyUsageCritical: Boolean,
     /** The OIDs of critical extensions this validator does not process (RFC 5280, 4.2). */
     val unknownCritical: List<String>,
     /** The extended key usages (RFC 5280, 4.2.1.12), such as OCSP signing. */
@@ -69,6 +73,8 @@ internal class X509(
             var pathLength: Int? = null
             var hasKeyUsage = false
             var keyCertSign = false
+            var signsData = false
+            var ekuCritical = false
             val unknownCritical = ArrayList<String>()
             var usages = emptyList<String>()
             for (ext in extensions) {
@@ -89,8 +95,12 @@ internal class X509(
                         // A BIT STRING: its first byte counts the unused bits, then bit 0 is the top bit.
                         val bits = Asn1.read(value, 0)?.content()
                         keyCertSign = bits != null && bits.size >= 2 && (bits[1].toInt() and 0x04) != 0
+                        signsData = bits != null && bits.size >= 2 && (bits[1].toInt() and 0xC0) != 0
                     }
-                    "2.5.29.37" -> usages = Asn1.read(value, 0)?.children.orEmpty().mapNotNull { it.oid() }
+                    "2.5.29.37" -> {
+                        usages = Asn1.read(value, 0)?.children.orEmpty().mapNotNull { it.oid() }
+                        ekuCritical = critical
+                    }
                     else -> if (critical && id !in PROCESSED) unknownCritical += id ?: "?"
                 }
             }
@@ -117,6 +127,8 @@ internal class X509(
                 pathLength = pathLength,
                 hasKeyUsage = hasKeyUsage,
                 keyCertSign = keyCertSign,
+                signsData = signsData,
+                extendedKeyUsageCritical = ekuCritical,
                 unknownCritical = unknownCritical,
                 extendedKeyUsages = usages,
             )

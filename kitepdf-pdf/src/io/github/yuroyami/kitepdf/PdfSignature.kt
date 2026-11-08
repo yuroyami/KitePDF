@@ -168,7 +168,9 @@ public class PdfSignatureValidation internal constructor(
     /**
      * The time inside the signed data, or null when it holds none. For a signature it is the
      * signing-time attribute, which the signer states. For a document timestamp it is the time
-     * the timestamp authority states.
+     * the timestamp authority states; [isTrusted] holds only when the signer's certificate is a
+     * time stamping authority's, with the one critical extended key usage id-kp-timeStamping
+     * (RFC 3161, 2.3).
      */
     public val signedTime: PdfDate?,
     /** Why [status] is not [Status.Valid], or else why the chain is not trusted, in words, or null. */

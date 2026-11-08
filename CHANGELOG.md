@@ -446,6 +446,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anchor was inside its validity period at the signing time, null when the signature states no time. A chain that
   was not is no longer trusted: `isTrusted` is false and `detail` names the certificate. This changes `isTrusted`
   for a signature made with an expired certificate (#634).
+- A document timestamp is trusted only when its signer's certificate is a time stamping authority's, with the one
+  critical extended key usage id-kp-timeStamping (RFC 3161, 2.3), and a signature only when its certificate's key
+  usage, if it has one, allows signing. Any trusted certificate could state a timestamp's time (#1000).
 
 ## [0.13.0] - 2026-10-09
 
