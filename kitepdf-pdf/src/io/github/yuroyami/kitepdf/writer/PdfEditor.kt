@@ -289,6 +289,11 @@ public class PdfEditor internal constructor(
      * set) so viewers use the appearance we just generated.
      *
      * Only `/Tx` (text) fields are supported; buttons/choices come later.
+     *
+     * A password field (`/Ff` bit 14) draws one asterisk a character, never its value, as ISO
+     * 32000-1, 12.7.4.3, Table 228 asks. Its `/V` still takes [value], since the caller asked for it;
+     * the note to the same entry advises a reader never to store a password, so an app that saves
+     * what its reader typed skips such fields (#954).
      */
     public fun setTextFieldValue(field: PdfFormField, value: String) {
         require(field.type == PdfFormField.FieldType.Text) {
@@ -309,7 +314,9 @@ public class PdfEditor internal constructor(
             ),
         )
         val da = FieldAppearance.parseDA(field.defaultAppearance)
-        val ap = FieldAppearance.build(value, abs(rect.width), abs(rect.height), da, fontRef, field.isMultiline, field.quadding)
+        // A password field draws asterisks, never its value (ISO 32000-1, 12.7.4.3, Table 228, #954).
+        val shown = if ((field.flags and FieldAppearance.PASSWORD) != 0) FieldAppearance.masked(value) else value
+        val ap = FieldAppearance.build(shown, abs(rect.width), abs(rect.height), da, fontRef, field.isMultiline, field.quadding)
         val apDict = PdfDictionary(linkedMapOf("N" to (addObject(ap) as PdfObject)))
         val vStr = PdfString(PdfText.encodeTextString(value))
         // A rich text field keeps its rich value in step with the plain one, so a reader that

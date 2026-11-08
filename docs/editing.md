@@ -99,12 +99,15 @@ val editor = doc.edit()
 for (name in state.changedFields) {
     val field = doc.formField(name) ?: continue
     val value = state.value(name) ?: continue
-    if (field.type == PdfFormField.FieldType.Text) {
+    // A password field's value is not kept in the file (ISO 32000-1, 12.7.4.3).
+    if (field.type == PdfFormField.FieldType.Text && field.flags and (1 shl 13) == 0) {
         editor.setTextFieldValue(field, value)
     }
 }
 val saved = editor.saveIncremental()
 ```
+
+A password field draws one asterisk a character, never its value, in the appearance that `setTextFieldValue` writes, on the page in the viewer, and in the viewer's accessibility tree. `setTextFieldValue` still stores the value in `/V` when you call it, so the loop above skips such fields, as the note to Table 228 advises.
 
 ## Stamps and watermarks
 

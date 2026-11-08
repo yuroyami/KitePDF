@@ -186,6 +186,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in PDFium and pdf.js, and a nested script no longer restarts the deadline of the event around it, so a
   calculate script that calls `calculateNow()` no longer runs without end (#962).
 
+- A text field with the Password flag draws one asterisk a character, never its value, in the appearance
+  that `setTextFieldValue` writes and on the page in the viewer, as ISO 32000-1, Table 228 asks (#954). Its
+  accessibility node carries password semantics and no value, where a screen reader or any accessibility
+  service read the password in clear (#953). `docs/editing.md` skips password fields when it saves.
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

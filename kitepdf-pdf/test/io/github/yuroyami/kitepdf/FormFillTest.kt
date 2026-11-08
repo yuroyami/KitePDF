@@ -56,6 +56,22 @@ class FormFillTest {
         assertEquals("Ådá — 名前", KitePDF.open(out).formField("FullName")?.value)
     }
 
+    @Test fun a_password_field_draws_asterisks_and_never_its_value() {
+        // ISO 32000-1, 12.7.4.3, Table 228: a password is echoed in an unreadable form (#954).
+        val doc = KitePDF.open(buildFormPdf(flags = 1 shl 13))
+        val out = doc.edit().apply { setTextFieldValue(doc.formField("FullName")!!, "hunter2") }.saveIncremental()
+        val reopened = KitePDF.open(out)
+        val apText = FilterChain.decode(reopened.pages[0].annotations.first().appearanceStream!!).decodeToString()
+        assertTrue("hunter2" !in apText && "*******" in apText, apText)
+        // The viewer's live appearance of a changed value is masked too.
+        val state = PdfFormState(doc)
+        state.setValue("FullName", "s3cret")
+        val canvas = io.github.yuroyami.kitepdf.core.render.RecordingCanvas()
+        doc.pages[0].renderAnnotationsTo(canvas, io.github.yuroyami.kitepdf.core.render.KiteMatrix.IDENTITY, state) { true }
+        val drawn = canvas.calls.joinToString(" ") { it.toString() }
+        assertTrue("s3cret" !in drawn, "the live appearance drew the password")
+    }
+
     /* ─── Fixture: a one-field AcroForm ──────────────────────────────────── */
 
     /**
@@ -63,7 +79,7 @@ class FormFillTest {
      * Object map: 1 Catalog, 2 Pages, 3 Page, 4 Helv font, 5 widget/field,
      * 6 AcroForm.
      */
-    private fun buildFormPdf(): ByteArray {
+    private fun buildFormPdf(flags: Int = 0): ByteArray {
         val buf = ByteArrayBuilder()
         val offsets = mutableListOf<Int>()
         fun write(s: String) = buf.append(s.encodeToByteArray())
@@ -78,7 +94,7 @@ class FormFillTest {
         offsets.add(buf.size())
         write("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
         offsets.add(buf.size())
-        write("5 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Tx /T (FullName) /Rect [100 700 400 720] /DA (/Helv 12 Tf 0 g) /P 3 0 R /F 4 >>\nendobj\n")
+        write("5 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Tx /T (FullName) /Ff $flags /Rect [100 700 400 720] /DA (/Helv 12 Tf 0 g) /P 3 0 R /F 4 >>\nendobj\n")
         offsets.add(buf.size())
         write("6 0 obj\n<< /Fields [5 0 R] /DA (/Helv 12 Tf 0 g) /DR << /Font << /Helv 4 0 R >> >> >>\nendobj\n")
 

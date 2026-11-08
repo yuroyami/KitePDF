@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.password
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +58,8 @@ internal class PageAccessNode(
     val state: String? = null,
     val checked: Boolean? = null,
     val enabled: Boolean = true,
+    /** A password field: its node says it is one, and carries no value (#953). */
+    val password: Boolean = false,
 )
 
 /** The viewer's tap, which a link or a field node runs at its centre, as a finger would. */
@@ -117,7 +120,11 @@ internal fun accessNodes(page: KitePage, formState: PdfFormState?, strings: Kite
             }
             val onState = hit.widget.onStateName
             val checked = if (kind == AccessKind.CHECKBOX || kind == AccessKind.RADIO) onState != null && value == onState else null
-            out += PageAccessNode(page.pageToDisplay(r), name, kind, state = value?.takeIf { checked == null }, checked = checked, enabled = !formState.isReadOnly(field.fullyQualifiedName))
+            // ISO 32000-1, 12.7.4.3, Table 228: a password "should not be echoed visibly", and a screen
+            // reader or any accessibility service reads this tree, so the node never holds the value (#953).
+            val password = kind == AccessKind.TEXT_FIELD && field.flags and PASSWORD != 0
+            val state = if (password) null else value?.takeIf { checked == null }
+            out += PageAccessNode(page.pageToDisplay(r), name, kind, state = state, checked = checked, enabled = !formState.isReadOnly(field.fullyQualifiedName), password = password)
         }
     }
     return out
@@ -227,7 +234,7 @@ private fun androidx.compose.ui.semantics.SemanticsPropertyReceiver.describe(nod
         }
         AccessKind.TEXT_FIELD -> {
             contentDescription = node.label
-            node.state?.let { stateDescription = it }
+            if (node.password) password() else node.state?.let { stateDescription = it }
             onClick { act() }
         }
         AccessKind.CHOICE -> {
@@ -261,3 +268,6 @@ private const val PUSH_BUTTON = 1 shl 16
 
 /** The `/Ff` flag of a radio button (ISO 32000-1, Table 226). */
 private const val RADIO = 1 shl 15
+
+/** `/Ff` bit 14 of a text field: it takes a password (ISO 32000-1, 12.7.4.3, Table 228). */
+private const val PASSWORD = 1 shl 13

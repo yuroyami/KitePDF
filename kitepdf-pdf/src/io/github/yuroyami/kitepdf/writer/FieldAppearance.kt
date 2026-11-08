@@ -235,6 +235,9 @@ internal object FieldAppearance {
         val isPushButton = fieldType == "Btn" && (flags and PUSH_BUTTON) != 0
         val text = when {
             isPushButton -> (missingAsNull { mk?.get("CA")?.resolve(refs) } as? PdfString)?.asText() ?: ""
+            // ISO 32000-1, 12.7.4.3, Table 228: a password field echoes its characters in an unreadable
+            // form, so the page, a raster of it and its text never show the value (#954).
+            fieldType == "Tx" && (flags and PASSWORD) != 0 -> masked(valueOverride ?: valueText(inherited(widget, "V", refs), refs))
             fieldType == "Tx" || fieldType == "Ch" -> valueOverride ?: valueText(inherited(widget, "V", refs), refs)
             else -> ""
         }
@@ -389,6 +392,16 @@ internal object FieldAppearance {
 
     /** `/Ff` bit 13: the text field wraps its value on several lines. */
     private const val MULTILINE = 1 shl 12
+
+    /** `/Ff` bit 14: the text field takes a password, which it never shows (Table 228). */
+    internal const val PASSWORD = 1 shl 13
+
+    /** One asterisk for each character of [value], what a password field shows of it (#954). */
+    internal fun masked(value: String): String {
+        var count = 0
+        for (c in value) if (!c.isLowSurrogate()) count++
+        return "*".repeat(count)
+    }
 
     /** `/Ff` bit 26: the text field's value is rich text, in `/RV`. */
     private const val RICH_TEXT = 1 shl 25
