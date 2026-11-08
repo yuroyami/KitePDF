@@ -57,6 +57,11 @@ internal data class InlineRun(
     val breakAll: Boolean = false,
     /** `word-break: keep-all`: CJK letters join into words, as Latin ones do (#508). */
     val keepAll: Boolean = false,
+    /**
+     * `white-space: nowrap`: the run's spaces and the letters around them are no place to break,
+     * so the run's text stays on one line (CSS Text 3, 3; #845).
+     */
+    val noWrap: Boolean = false,
     /** `line-break` (CSS Text 3, 5.3, #508). */
     val lineBreak: LineBreak = LineBreak.AUTO,
     /** `text-orientation`, which only vertical text reads (CSS Writing Modes 3, 5.1, #508). */

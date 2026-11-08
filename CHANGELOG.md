@@ -264,6 +264,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the book from laying out (#828).
 - `rem` resolves against the computed font size of the root element, so `html { font-size: 62.5% } body { font-
   size: 1.6rem }` gives body text the reader's size, where it came out 1.6 times larger (#850).
+- `white-space: nowrap` keeps its text on one line, on a block and on a span, where every space stayed a place to
+  break (#845).
+- `white-space: pre-line` collapses runs of spaces and tabs and keeps only the line breaks, where it kept every
+  space as `pre` does (#846).
 
 ## [0.13.0] - 2026-10-09
 

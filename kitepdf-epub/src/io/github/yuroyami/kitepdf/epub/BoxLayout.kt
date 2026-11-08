@@ -2200,6 +2200,8 @@ internal class BoxLayout(
         var wordBreaksAll = false
         // The `line-break` of the word's characters (#508).
         var wordLineBreak = LineBreak.AUTO
+        // Whether a nowrap run gave the word a character, so it is not hyphenated (#845).
+        var wordNoWrap = false
         // The next character's place in the block's text; it counts what draws nothing too.
         var srcAt = 0
         fun endWord() {
@@ -2214,7 +2216,8 @@ internal class BoxLayout(
                 // bases (a hyphen inside a ruby-annotated base is never wanted).
                 val isRuby = word.first().rubyGroup >= 0
                 // break-all applies no hyphenation (CSS Text 3, 5.2).
-                val pts = if (ligated || isRuby || wordBreaksAll) emptyList() else {
+                // Nor does a word that a nowrap run keeps on one line (#845).
+                val pts = if (ligated || isRuby || wordBreaksAll || wordNoWrap) emptyList() else {
                     val s = LinkedHashSet(softHyphens)
                     val h = hyphenator
                     if (hyphensAuto && h != null) s.addAll(hyphenPoints(word, h))
@@ -2249,6 +2252,7 @@ internal class BoxLayout(
                     tokens.add(Token.Word(word, w, pts, wordWraps, wordBreaksAll, wordLineBreak))
                 }
                 word = ArrayList(); wordW = 0.0; softHyphens = ArrayList(); wordWraps = false; wordBreaksAll = false
+                wordNoWrap = false
                 wordLineBreak = LineBreak.AUTO
             }
         }
@@ -2349,7 +2353,7 @@ internal class BoxLayout(
                     combinedTo = end
                     if (run.rubyGroup >= 0) {
                         // A ruby base stays one word.
-                        word.add(cell); wordW += cell.width
+                        word.add(cell); wordW += cell.width; wordNoWrap = wordNoWrap || run.noWrap
                     } else {
                         endWord()
                         val last = tokens.lastOrNull()
@@ -2446,9 +2450,10 @@ internal class BoxLayout(
                     cp == 0x00AD -> softHyphens.add(word.size) // soft hyphen: a break point, drawn only if used
                     // A zero-width space is a place to break and nothing more (#577).
                     cp == 0x200B -> endWord()
-                    // A no-break space joins the characters on its two sides into one word (#577).
-                    isGlueSpace(cp) -> {
-                        val c = spaceCell(cp, level, src); word.add(c); wordW += c.width
+                    // A no-break space joins the characters on its two sides into one word (#577),
+                    // and so does every space of a nowrap run (#845).
+                    isGlueSpace(cp) || (run.noWrap && cp == ' '.code) -> {
+                        val c = spaceCell(cp, level, src); word.add(c); wordW += c.width; wordNoWrap = wordNoWrap || run.noWrap
                         wordWraps = wordWraps || run.overflowWrap
                         wordBreaksAll = wordBreaksAll || run.breakAll || run.lineBreak == LineBreak.ANYWHERE
                         wordLineBreak = run.lineBreak
@@ -2478,9 +2483,9 @@ internal class BoxLayout(
                     }
                     // keep-all: CJK letters join the word like Latin ones. A break may still come
                     // before an opener and after a closer (#508).
-                    FontMetrics.isWide(cp) && run.rubyGroup < 0 && run.keepAll && run.lineBreak != LineBreak.ANYWHERE -> {
+                    FontMetrics.isWide(cp) && run.rubyGroup < 0 && (run.keepAll || run.noWrap) && run.lineBreak != LineBreak.ANYWHERE -> {
                         if (isOpener(cp, run.lineBreak)) endWord()
-                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width
+                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width; wordNoWrap = wordNoWrap || run.noWrap
                         wordWraps = wordWraps || run.overflowWrap
                         wordLineBreak = run.lineBreak
                         if (isCloser(cp, run.lineBreak)) endWord()
@@ -2504,7 +2509,7 @@ internal class BoxLayout(
                         }
                     }
                     else -> {
-                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width
+                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width; wordNoWrap = wordNoWrap || run.noWrap
                         wordWraps = wordWraps || run.overflowWrap
                         // line-break: anywhere breaks a word wherever its line ends, as break-all does (#508).
                         wordBreaksAll = wordBreaksAll || run.breakAll || run.lineBreak == LineBreak.ANYWHERE

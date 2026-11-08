@@ -1098,7 +1098,9 @@ internal class BoxBuilder(
         fun appendText(raw: String, style: ComputedStyle) {
             if (raw.isEmpty()) return
             if (style.whiteSpace == WhiteSpaceMode.PRE || style.whiteSpace == WhiteSpaceMode.PRE_WRAP || style.whiteSpace == WhiteSpaceMode.PRE_LINE) {
-                runs.add(makeRun(transformPre(raw, style.textTransform, style.fullWidth), style))
+                val kept = if (style.whiteSpace == WhiteSpaceMode.PRE_LINE) collapsePreLine(raw, lineStart = !blockHasContent || lastWasBreak) else raw
+                if (kept.isEmpty()) return
+                runs.add(makeRun(transformPre(kept, style.textTransform, style.fullWidth), style))
                 blockHasContent = true; pendingSpace = false; lastWasBreak = false
                 return
             }
@@ -1152,6 +1154,30 @@ internal class BoxBuilder(
         private fun collapsible(cp: Int): Boolean =
             cp < 0x10000 && cp.toChar().isWhitespace() && (cp == 0x20 || cp.toChar().category != CharCategory.SPACE_SEPARATOR)
 
+        /**
+         * `white-space: pre-line` keeps only the segment breaks: a run of spaces and tabs collapses
+         * to one space, and the spaces next to a break or at the start of a line go (CSS Text 3,
+         * 4.1.1 and 4.1.2; #846).
+         */
+        private fun collapsePreLine(raw: String, lineStart: Boolean): String {
+            val sb = StringBuilder(raw.length)
+            var atLineStart = lineStart
+            var pending = false
+            for (ch in raw) {
+                when (ch) {
+                    ' ', '\t' -> pending = true
+                    '\n' -> { sb.append('\n'); pending = false; atLineStart = true }
+                    '\r' -> {}
+                    else -> {
+                        if (pending && !atLineStart) sb.append(' ')
+                        sb.append(ch); pending = false; atLineStart = false
+                    }
+                }
+            }
+            if (pending && !atLineStart) sb.append(' ')
+            return sb.toString()
+        }
+
         /** Transform preserved-whitespace text: word boundaries follow whitespace. */
         private fun transformPre(raw: String, tt: TextTransform, wide: Boolean): String {
             if (tt == TextTransform.NONE && !wide) return raw
@@ -1167,10 +1193,11 @@ internal class BoxBuilder(
             return sb.toString()
         }
 
-        // A space outside a composition stays out of it.
+        // A space outside a composition stays out of it, and one outside a nowrap run stays a
+        // place to break (#845).
         private fun samePaint(a: InlineRun, b: InlineRun): Boolean =
             a.underline == b.underline && a.lineThrough == b.lineThrough && a.overline == b.overline && a.backgroundColor == b.backgroundColor &&
-                a.combineGroup == b.combineGroup
+                a.combineGroup == b.combineGroup && a.noWrap == b.noWrap
 
         private fun makeRun(text: String, style: ComputedStyle) = InlineRun(
             text = text, fontSizePt = style.fontSizePt,
@@ -1184,9 +1211,11 @@ internal class BoxBuilder(
             element = element,
             letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
             smallCaps = style.smallCaps,
-            overflowWrap = style.overflowWrap || style.wordBreak == WordBreak.BREAK_WORD,
-            breakAll = style.wordBreak == WordBreak.BREAK_ALL,
+            // Both break only where white space lets a line wrap, which nowrap does not (CSS Text 3, 5.5; #845).
+            overflowWrap = (style.overflowWrap || style.wordBreak == WordBreak.BREAK_WORD) && style.whiteSpace != WhiteSpaceMode.NOWRAP,
+            breakAll = style.wordBreak == WordBreak.BREAK_ALL && style.whiteSpace != WhiteSpaceMode.NOWRAP,
             keepAll = style.wordBreak == WordBreak.KEEP_ALL,
+            noWrap = style.whiteSpace == WhiteSpaceMode.NOWRAP,
             lineBreak = style.lineBreak,
             textOrientation = style.textOrientation,
             lineThrough = style.lineThrough,
