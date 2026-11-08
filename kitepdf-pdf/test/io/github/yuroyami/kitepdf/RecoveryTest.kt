@@ -110,4 +110,14 @@ class RecoveryTest {
         assertTrue(stream is PdfStream)
         assertEquals(body, stream.rawBytes.decodeToString())
     }
+
+    @Test fun repair_of_many_streams_without_endstream_stays_linear() {
+        // Each stream scanned to the end of the file for its endstream: 13 s for 869 KB (#966).
+        val sb = StringBuilder("%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\n")
+        for (i in 3 until 40_003) sb.append("$i 0 obj<<>>stream\n")
+        val bytes = sb.toString().encodeToByteArray()
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        PdfDocument.openOrNull(bytes)
+        assertTrue(start.elapsedNow().inWholeSeconds < 10, "repair took ${start.elapsedNow()}")
+    }
 }

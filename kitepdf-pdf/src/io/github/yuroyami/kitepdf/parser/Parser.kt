@@ -34,6 +34,12 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
 internal class Parser(
     private val lexer: Lexer,
     private val resolver: IndirectResolver? = null,
+    /**
+     * Where the first "endstream" at or after an offset starts, or -1, for a caller that parses many
+     * objects of one file and has every such offset at hand. Without it each stream whose /Length is
+     * wrong scans on to the next keyword, which repair paid once per stream (#966).
+     */
+    private val endstreamAfter: ((Int) -> Int)? = null,
 ) {
 
     public constructor(bytes: ByteArray) : this(Lexer(ByteReader(bytes)))
@@ -210,7 +216,7 @@ internal class Parser(
             if (endstreamAppearsAt(candidate)) bodyEnd = candidate
         }
         if (bodyEnd < 0) {
-            val es = reader.indexOf(ENDSTREAM, streamStart)
+            val es = endstreamAfter?.invoke(streamStart) ?: reader.indexOf(ENDSTREAM, streamStart)
             if (es < 0) throw PdfFormatException("Stream from $streamStart has no 'endstream'")
             // The EOL immediately before "endstream" is part of the keyword delimiter,
             // not the stream data (§7.3.8.1). Strip one trailing CR, LF, or CRLF.
@@ -244,7 +250,7 @@ internal class Parser(
 
     /** Advance the reader past the next "endstream" keyword (best effort). */
     private fun skipToAfterEndstream() {
-        val es = reader.indexOf(ENDSTREAM, reader.pos())
+        val es = endstreamAfter?.invoke(reader.pos()) ?: reader.indexOf(ENDSTREAM, reader.pos())
         if (es >= 0) reader.seek(es + ENDSTREAM.size)
     }
 

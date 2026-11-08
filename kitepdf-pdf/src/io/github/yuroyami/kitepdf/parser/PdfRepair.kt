@@ -32,6 +32,21 @@ import io.github.yuroyami.kitepdf.core.filters.FilterChain
 internal object PdfRepair {
 
     private val OBJ = "obj".encodeToByteArray()
+    private val ENDSTREAM = "endstream".encodeToByteArray()
+
+    /** Every offset where [needle] starts in [bytes], in order. */
+    private fun keywordOffsets(bytes: ByteArray, needle: ByteArray): IntArray {
+        val out = ArrayList<Int>()
+        val r = ByteReader(bytes)
+        var from = 0
+        while (true) {
+            val at = r.indexOf(needle, from)
+            if (at < 0) break
+            out.add(at)
+            from = at + needle.size
+        }
+        return out.toIntArray()
+    }
     private val TRAILER = "trailer".encodeToByteArray()
     private const val MAX_OBJ_NUM = 50_000_000L
     private const val MAX_GEN = 65_535
@@ -51,6 +66,16 @@ internal object PdfRepair {
         var id: PdfObject? = null
         var info: PdfObject? = null
 
+        // Every "endstream" of the file, found in one pass, so a stream whose /Length is missing or
+        // wrong finds its end by a binary search instead of a scan of the rest of the file (#966).
+        val endstreams = keywordOffsets(bytes, ENDSTREAM)
+        val endstreamAfter = { from: Int ->
+            var lo = 0
+            var hi = endstreams.size
+            while (lo < hi) { val mid = (lo + hi) ushr 1; if (endstreams[mid] < from) lo = mid + 1 else hi = mid }
+            if (lo < endstreams.size) endstreams[lo] else -1
+        }
+
         // ── Pass 1: find every "N G obj" header. ───────────────────────────
         var search = 0
         while (true) {
@@ -62,11 +87,14 @@ internal object PdfRepair {
             entries[num] = XrefEntry.InUse(num, gen, headerStart)
 
             // Peek the object body to recover trailer fields and note object streams.
+            val r = ByteReader(bytes)
             val obj = runCatching {
-                val r = ByteReader(bytes)
                 r.seek(headerStart)
-                Parser(Lexer(r)).readIndirectObject().value
+                Parser(Lexer(r), endstreamAfter = endstreamAfter).readIndirectObject().value
             }.getOrNull() ?: continue
+            // The scan resumes after a stream it parsed, as MuPDF's pdf_repair_xref does, so the
+            // bytes of one stream are read once, however many objects follow it.
+            if (obj is PdfStream) search = maxOf(search, r.pos())
 
             val dict = when (obj) {
                 is PdfStream -> obj.dict

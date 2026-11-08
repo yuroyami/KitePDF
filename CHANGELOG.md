@@ -126,6 +126,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within a budget of operations and of buffer growth, as HarfBuzz's do, so a context lookup that applies
   itself no longer hangs the layout (#985).
 
+- Repair finds the `endstream` of a stream whose `/Length` is wrong by a search of the offsets it collected
+  in one pass, and resumes its scan after a stream it parsed, as MuPDF does. Each such stream scanned to
+  the end of the file, so repair took time quadratic in the file and an 869 KB file blocked `open` for 13 s
+  (#966).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
