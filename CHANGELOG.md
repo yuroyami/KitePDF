@@ -775,6 +775,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the draw: a group or soft mask paints without its layer, and an image draws its placeholder (#889).
 - On the desktop and Apple Compose viewers, the outline that host text strokes and clips by now comes from the
   face its fill draws in, so a fill-and-stroke run or SVG text with a stroke lines up with its fill (#891).
+- The bytecode cache that the script engines of a process share no longer keeps a script larger than its whole 64
+  MiB budget, which stayed in memory after its document closed and evicted every other entry (#896).
 
 ## [0.13.0] - 2026-10-09
 

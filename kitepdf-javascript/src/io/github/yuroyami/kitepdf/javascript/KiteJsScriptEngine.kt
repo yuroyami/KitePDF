@@ -126,7 +126,7 @@ public class KiteJsScriptEngine(
      * The bytecode of the large scripts that engines of this process compiled, the one used last
      * at the end. Bytecode is only ever read back for the very source that it was written from.
      */
-    private object Bytecodes {
+    internal object Bytecodes {
         private class Entry(val source: String, val name: String, val bytes: ByteArray)
 
         private val lock = KiteLock()
@@ -138,13 +138,23 @@ public class KiteJsScriptEngine(
             if (i < 0) null else entries.removeAt(i).also { entries.add(it) }.bytes
         }
 
+        /**
+         * Keeps [bytes] for [source] within [MAX_CACHED_SCRIPTS] and [MAX_CACHED_BYTES], dropping the
+         * entries used least recently. An entry larger than the whole budget is not kept, as
+         * [io.github.yuroyami.kitepdf.core.render.KiteBitmapCache] keeps no bitmap larger than its
+         * budget: the script still runs, and only the sharing between engines is lost for it (#896).
+         */
         fun keep(source: String, name: String, bytes: ByteArray) = lock.withLock {
+            if (bytes.size.toLong() + source.length * 2L > MAX_CACHED_BYTES) return@withLock
             entries.add(Entry(source, name, bytes))
             var total = entries.sumOf { it.bytes.size.toLong() + it.source.length * 2L }
-            while (entries.size > MAX_CACHED_SCRIPTS || total > MAX_CACHED_BYTES && entries.size > 1) {
+            while (entries.size > MAX_CACHED_SCRIPTS || total > MAX_CACHED_BYTES) {
                 total -= entries.removeAt(0).let { it.bytes.size.toLong() + it.source.length * 2L }
             }
         }
+
+        /** How many sources keep their bytecode now. */
+        internal val size: Int get() = lock.withLock { entries.size }
 
         fun forget(bytes: ByteArray) = lock.withLock { entries.removeAll { it.bytes === bytes } }
     }
@@ -155,7 +165,7 @@ public class KiteJsScriptEngine(
 
         /** How many sources keep their bytecode at most, and how much memory they and their bytecode take. */
         private const val MAX_CACHED_SCRIPTS = 16
-        private const val MAX_CACHED_BYTES = 64L shl 20
+        internal const val MAX_CACHED_BYTES = 64L shl 20
 
         /** The engine underneath. Nothing else in this module names it. */
         internal val ENGINE = QuickJs

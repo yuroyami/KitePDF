@@ -93,4 +93,17 @@ class KiteJsScriptEngineTest {
             KiteJsScriptEngine().use { js -> assertFailsWith<KiteScriptException> { js.evaluate("$source (", "broken.js") } }
         }
     }
+
+    @Test
+    fun a_script_larger_than_the_whole_cache_is_not_kept_for_the_process() {
+        // The source counts two bytes a character, so this one alone is past the ceiling (#896).
+        val huge = "x".repeat((KiteJsScriptEngine.MAX_CACHED_BYTES / 2 + 1).toInt())
+        val small = "y".repeat(40 * 1024)
+        KiteJsScriptEngine.Bytecodes.keep(small, "small.js", ByteArray(16))
+        val before = KiteJsScriptEngine.Bytecodes.size
+        KiteJsScriptEngine.Bytecodes.keep(huge, "huge.js", ByteArray(16))
+        assertEquals(before, KiteJsScriptEngine.Bytecodes.size, "the huge entry is neither kept nor evicts the others")
+        assertTrue(KiteJsScriptEngine.Bytecodes.find(huge, "huge.js") == null)
+        assertTrue(KiteJsScriptEngine.Bytecodes.find(small, "small.js") != null)
+    }
 }
