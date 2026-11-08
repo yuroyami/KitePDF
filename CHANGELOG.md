@@ -352,6 +352,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for a bare `%f` (#763).
 - `util.printf` with the `,2` or `,3` flag writes a comma as the decimal mark, and `,4` groups with an
   apostrophe, where `%,2.2f` of 1234.56 gave `1.234.56` (#761).
+- `AFSimple_Calculate` counts an empty field as 0 and stores the result rounded to six decimals, as PDFium does,
+  so an average with an empty field halves and 0.1 + 0.2 stores `0.3` (#772).
+- `AFSpecial_Format` puts every phone number and SSN through its mask, as PDFium, MuPDF and pdf.js do, where a
+  value of another length stayed as typed (#776).
+- `AFNumber_Keystroke` refuses an exponent and the decimal mark of the other separator style, on a keystroke and
+  on commit (#785).
 
 ## [0.13.0] - 2026-10-09
 

@@ -62,6 +62,33 @@ class FormScriptTest {
     }
 
     @Test
+    fun an_empty_field_counts_as_zero_and_the_result_is_rounded(): TestResult = scriptTest {
+        // PDFium counts an empty field as 0 and stores six decimals (#772).
+        for ((function, a, b, expected) in listOf(
+            listOf("SUM", "0.1", "0.2", "0.3"), listOf("PRD", "1.1", "1.1", "1.21"),
+            listOf("AVG", "10", "", "5"), listOf("MIN", "10", "", "0"), listOf("MAX", "-5", "", "0"),
+        )) {
+            val doc = PdfDocument.open(invoicePdf(calculate = "AFSimple_Calculate\\('$function', new Array\\('a', 'b'\\)\\)"))
+            PdfScriptRunner(doc).use { runner ->
+                runner.setFieldValue("a", a)
+                runner.setFieldValue("b", b)
+                assertEquals(expected, runner.formState.value("total"), "$function of '$a' and '$b'")
+            }
+        }
+    }
+
+    @Test
+    fun a_number_keystroke_refuses_an_exponent_and_the_other_decimal_mark(): TestResult = scriptTest {
+        // PDFium and pdf.js take digits and the style's mark only (#785).
+        val doc = PdfDocument.open(invoicePdf())
+        PdfScriptRunner(doc).use { runner ->
+            assertFalse(runner.keystroke("digits", "1e5").accepted)
+            assertFalse(runner.keystroke("digits", "1,5").accepted, "style 0 takes a period")
+            assertTrue(runner.keystroke("digits", "1.5").accepted)
+        }
+    }
+
+    @Test
     fun a_total_recalculates_when_a_field_changes(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->

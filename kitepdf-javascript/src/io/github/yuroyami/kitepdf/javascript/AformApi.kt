@@ -74,10 +74,14 @@ internal object AformApi {
     return value.substring(0, start) + String(e.change === undefined ? '' : e.change) + value.substring(end);
   }
 
-  function isNumberText(text) {
+  // Digits and the decimal mark of the style, a comma for styles 2 and 3 and a period otherwise, with
+  // no exponent: a keystroke may leave a number unfinished, a commit may not (PDFium, pdf.js; #785).
+  function isNumberText(text, sepStyle, commit) {
     var t = String(text).trim();
     if (t === '') return true;
-    return /^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?${'$'}/.test(t);
+    var comma = Number(sepStyle) === 2 || Number(sepStyle) === 3;
+    if (commit) return (comma ? /^[+-]?(\d+(,\d*)?|,\d+)${'$'}/ : /^[+-]?(\d+(\.\d*)?|\.\d+)${'$'}/).test(t);
+    return (comma ? /^[+-]?\d*(,\d*)?${'$'}/ : /^[+-]?\d*(\.\d*)?${'$'}/).test(t);
   }
 
   function formatNumber(value, nDec, sepStyle, negStyle, currency, prepend) {
@@ -120,8 +124,8 @@ internal object AformApi {
   function AFNumber_Keystroke(nDec, sepStyle, negStyle, currStyle, strCurrency, bCurrencyPrepend) {
     var e = g.event;
     var merged = AFMergeChange(e);
-    if (merged === '' || merged === '-' || merged === '+' || merged === '.' || merged === ',') return;
-    if (!isNumberText(merged)) {
+    if (!e.willCommit && (merged === '' || merged === '-' || merged === '+')) return;
+    if (!isNumberText(merged, sepStyle, e.willCommit)) {
       e.rc = false;
       if (e.willCommit) {
         g.app.alert({ cMsg: 'The value entered does not match the format of the field [ ' + (e.targetName || '') + ' ]' });
@@ -198,17 +202,12 @@ internal object AformApi {
       case 1:
         e.value = digits.length > 5 ? digits.substring(0, 5) + '-' + digits.substring(5, 9) : digits;
         break;
+      // Every value goes through the style's mask, as PDFium, MuPDF and pdf.js put it (#776).
       case 2:
-        if (digits.length === 10) {
-          e.value = '(' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
-        } else if (digits.length === 7) {
-          e.value = digits.substring(0, 3) + '-' + digits.substring(3);
-        }
+        e.value = g.util.printx(g.util.printx('9999999999', e.value).length >= 10 ? '(999) 999-9999' : '999-9999', e.value);
         break;
       case 3:
-        if (digits.length === 9) {
-          e.value = digits.substring(0, 3) + '-' + digits.substring(3, 5) + '-' + digits.substring(5);
-        }
+        e.value = g.util.printx('999-99-9999', e.value);
         break;
     }
   }
@@ -264,8 +263,9 @@ internal object AformApi {
       if (!field) continue;
       var parts = field.getArray();
       for (var p = 0; p < parts.length; p++) {
+        // An empty field counts as 0, as PDFium, pdf.js and MuPDF count it (#772).
         var n = AFMakeNumber(parts[p].value);
-        if (n === null) continue;
+        if (n === null) n = 0;
         count++;
         switch (String(cFunction).toUpperCase()) {
           case 'PRD': result = result === null ? n : result * n; break;
@@ -277,7 +277,8 @@ internal object AformApi {
     }
     if (result === null) result = 0;
     if (String(cFunction).toUpperCase() === 'AVG') result = count === 0 ? 0 : result / count;
-    g.event.value = result;
+    // Rounded to six decimals, as PDFium stores it, so 0.1 + 0.2 is 0.3.
+    g.event.value = Math.round(result * 1e6) / 1e6;
   }
 
   function AFSimple(cFunction, nValue1, nValue2) {

@@ -196,4 +196,15 @@ class PdfiumParityTest {
             "[0, 1, 2, 3, 4].map(function (k) { return util.printf('%,' + k + '.2f', 1234.56); }).join('|')",
         ))
     }
+
+    @Test
+    fun special_format_puts_every_value_through_its_mask(): TestResult = scriptTest {
+        // PDFium, MuPDF and pdf.js (#776).
+        fun special(style: Int, value: String) = eval(
+            "(function () { var e = { value: '$value' }; var saved = event; event = e; try { AFSpecial_Format($style); } finally { event = saved; } return e.value; })()",
+        )
+        assertEquals("(123) 456-7890", special(2, "1234567890"))
+        assertEquals("123-4567", special(2, "12345678"))
+        assertEquals("123-45-678", special(3, "12345678"))
+    }
 }
