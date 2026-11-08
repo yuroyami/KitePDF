@@ -661,6 +661,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state for a host's zoom slider (#900).
 - KiteDocViewState.visiblePages lists every page at least partly on screen, as snapshot state, for reading
   progress and read marks (#901).
+- KiteDocViewState.dropCaches frees the viewer's caches for a low-memory signal: the bitmaps of pages off screen,
+  the vector images, the glyph masks, and the PDF's own caches (#903).
 
 ## [0.13.0] - 2026-10-09
 

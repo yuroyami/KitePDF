@@ -802,6 +802,7 @@ private fun ContinuousLayout(
     val rasterizer = rasterSpec?.let {
         rememberKitePageRasterizer(maxOf(KITE_DEFAULT_MAX_RASTER_PIXELS, it.maxBitmapLongSide.toLong() * it.maxBitmapLongSide))
     }?.also { it.textOffMain = state.hostTextOffMain }
+    rasterizer?.let { state.RegisterRasterizer(it) }
     DisposableEffect(state, listState) {
         // A strip on the other axis starts unpanned: the old pan lies on the axis this one scrolls.
         if (state.stripOrientation.let { it != null && it != orientation }) state.panOffset = Offset.Zero
@@ -1376,6 +1377,7 @@ private fun KitePageRaster(
         ),
     )
     if (state != null) rasterizer.textOffMain = state.hostTextOffMain
+    if (state != null && sharedRasterizer == null) state.RegisterRasterizer(rasterizer)
     val onRendered by rememberUpdatedState(onPageRendered)
 
     // The slot's size reaches the raster size only once it stops changing: a window drag, a split

@@ -74,6 +74,14 @@ internal class GlyphMaskCache(private val budgetBytes: Long = DEFAULT_BUDGET_BYT
     private val lock = KiteLock()
     private var bytes = 0L
 
+    /** Drops every mask; the next glyph that needs one builds it again (#903). */
+    fun clear() {
+        lock.withLock {
+            entries.clear()
+            bytes = 0L
+        }
+    }
+
     /** How many masks this cache built. For tests. */
     internal var built: Int = 0
         private set

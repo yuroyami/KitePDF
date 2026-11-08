@@ -1333,6 +1333,51 @@ public class KiteDocViewState(
         return bitmapCache
     }
 
+    /** The rasterizers that draw this state's pages, for [dropCaches] to clear their glyph masks. */
+    private val rasterizers = LinkedHashSet<KitePageRasterizer>()
+
+    /** Registers [rasterizer] while it is in the composition. */
+    @androidx.compose.runtime.Composable
+    internal fun RegisterRasterizer(rasterizer: KitePageRasterizer) {
+        androidx.compose.runtime.DisposableEffect(this, rasterizer) {
+            rasterizers += rasterizer
+            onDispose { rasterizers -= rasterizer }
+        }
+    }
+
+    /** The page bitmaps the cache holds now. For tests. */
+    internal val cachedBitmapCount: Int get() = bitmapCache?.size ?: 0
+
+    /**
+     * Frees the viewer's caches for a low-memory signal (#903): the page bitmaps of every page
+     * that is not on screen, the images that [KiteRenderSpec.Vectorized] converted, and the glyph
+     * masks of the rasterizers. The pages on screen keep their bitmaps and their deep-zoom tiles,
+     * so nothing on screen flashes or draws again, and a page that comes back draws again and
+     * fills the cache as before. With [document] true it also calls the document's own drop calls,
+     * [io.github.yuroyami.kitepdf.PdfDocument.dropDecodedImageCache], `dropOperationCache` and
+     * `dropFontCache`, for a PDF.
+     *
+     * ```kotlin
+     * // Android: in an Activity or Application
+     * override fun onTrimMemory(level: Int) { super.onTrimMemory(level); state.dropCaches() }
+     * // iOS: on UIApplicationDidReceiveMemoryWarningNotification
+     * state.dropCaches()
+     * ```
+     */
+    public fun dropCaches(document: Boolean = true) {
+        val onScreen = visiblePages.mapNotNullTo(HashSet<Any>()) { pageAt(it) }
+        bitmapCache?.retainOnly(onScreen)
+        vectorImageCache?.clear()
+        for (rasterizer in rasterizers.toList()) rasterizer.glyphMasks.clear()
+        if (document) {
+            (this.document as? io.github.yuroyami.kitepdf.PdfDocument)?.let { pdf ->
+                pdf.dropDecodedImageCache()
+                pdf.dropOperationCache()
+                pdf.dropFontCache()
+            }
+        }
+    }
+
     /** One converted-image budget for all vector slots, including pages recycled by the strip (#371). */
     private var vectorImageCache: KiteBitmapCache<ImageBitmap>? = null
     private var vectorImageCacheBudget = 0L

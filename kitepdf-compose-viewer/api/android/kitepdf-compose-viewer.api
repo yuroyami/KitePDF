@@ -189,6 +189,8 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun commitFocusedField (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun currentBookmark ()Lio/github/yuroyami/kitepdf/core/KiteBookmark;
 	public final fun displayRectToViewport (ILio/github/yuroyami/kitepdf/core/KiteRectangle;)Landroidx/compose/ui/geometry/Rect;
+	public final fun dropCaches (Z)V
+	public static synthetic fun dropCaches$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;ZILjava/lang/Object;)V
 	public final fun getCurrentLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getCurrentPage ()I
 	public final fun getCurrentScrollPosition ()Lio/github/yuroyami/kitepdf/compose/KiteScrollPosition;

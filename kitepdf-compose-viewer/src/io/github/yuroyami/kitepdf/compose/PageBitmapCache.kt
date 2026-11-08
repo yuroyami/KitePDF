@@ -117,6 +117,20 @@ internal class PageBitmapCache(private val maxBytes: Long) {
         }
     }
 
+    /** Drops every entry whose page is not in [pages], the pages on screen, which draw their next frame from what is left (#903). */
+    fun retainOnly(pages: Set<Any>) {
+        lock.withLock {
+            val it = entries.keys.iterator()
+            while (it.hasNext()) {
+                val key = it.next()
+                if (key.pageIdentity !in pages) {
+                    it.remove()
+                    bytes -= bytesOf(key)
+                }
+            }
+        }
+    }
+
     /** True when [key] is cached (test/diagnostic aid; does not touch recency). */
     fun contains(key: Key): Boolean = lock.withLock { entries.containsKey(key) }
 

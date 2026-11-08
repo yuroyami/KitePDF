@@ -1073,6 +1073,23 @@ A new bitmap fades in over 160 ms. During a render after a zoom, the old bitmap 
 - When a page scrolls away, the viewer cancels its render.
 - After a zoom stops, the viewer waits 220 ms before it renders the page again, so a quick pinch does not start many renders.
 
+## Low memory
+
+The viewer's page bitmaps are its largest cache, up to 96 MB by default. `state.dropCaches()` frees the bitmaps of the pages off screen, the images of `Vectorized` mode and the glyph masks, and for a PDF calls the document's own drop calls. The pages on screen keep their bitmaps, so nothing flashes, and a page that comes back draws again.
+
+```kotlin
+// Android, in an Activity or Application
+override fun onTrimMemory(level: Int) {
+    super.onTrimMemory(level)
+    state.dropCaches()
+}
+
+// iOS, on UIApplication.didReceiveMemoryWarningNotification
+state.dropCaches()
+```
+
+Pass `document = false` to keep the document's caches.
+
 ## See also
 
 - [Reading PDFs](reading.md)
