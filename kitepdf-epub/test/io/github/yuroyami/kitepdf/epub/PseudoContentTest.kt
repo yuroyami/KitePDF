@@ -50,9 +50,11 @@ class PseudoContentTest {
     }
 
     @Test
-    fun counter_and_url_values_are_inert() {
+    fun url_values_are_inert_and_a_counter_prints_its_value() {
         val base = drawnText("<h2>Title</h2>", "")
-        assertEquals(base, drawnText("<h2>Title</h2>", """h2::before{content:counter(ch) ". "}"""))
+        // A counter never reset or incremented is made at 0 where it is used (CSS Lists and Counters 3, 4.4.1; #934).
+        val counted = drawnText("<h2>Title</h2>", """h2::before{content:counter(ch) ". "}""")
+        assertTrue("0. Title" in counted, "got: $counted")
         assertEquals(base, drawnText("<h2>Title</h2>", """h2::before{content:url(x.png)}"""))
         assertEquals(base, drawnText("<h2>Title</h2>", """h2::before{content:none}"""))
     }

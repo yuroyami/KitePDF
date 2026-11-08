@@ -556,6 +556,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KiteImageData.withInterpolate` is public (#936).
 - A book's CSS reads `calc()`, `min()`, `max()` and `clamp()` in lengths, percentages, numbers and line heights,
   with `+`, `-`, `*`, `/` and nesting; `CssValues.number` reads a number that one of them gives (#930).
+- A book's CSS counters work: `counter-reset`, `counter-increment` and `counter-set` run in document order with
+  CSS scoping, and `counter()` and `counters()` in `content` print them in the predefined counter styles (#934).
 
 ## [0.13.0] - 2026-10-09
 

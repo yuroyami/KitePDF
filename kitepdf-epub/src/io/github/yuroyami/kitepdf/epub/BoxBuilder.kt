@@ -1304,21 +1304,9 @@ internal class BoxBuilder(
         ListType.UPPER_ALPHA -> alpha(ordinal) + "."
     }
 
-    private fun roman(n: Int): String {
-        if (n !in 1..3999) return n.toString()
-        val vals = intArrayOf(1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1)
-        val syms = arrayOf("M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I")
-        val sb = StringBuilder(); var x = n
-        for (i in vals.indices) while (x >= vals[i]) { sb.append(syms[i]); x -= vals[i] }
-        return sb.toString()
-    }
+    private fun roman(n: Int): String = io.github.yuroyami.kitepdf.epub.css.CounterStyles.roman(n)
 
-    private fun alpha(n: Int): String {
-        if (n < 1) return n.toString()
-        val sb = StringBuilder(); var x = n
-        while (x > 0) { x--; sb.append('A' + (x % 26)); x /= 26 }
-        return sb.reverse().toString()
-    }
+    private fun alpha(n: Int): String = io.github.yuroyami.kitepdf.epub.css.CounterStyles.alpha(n)
 
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)

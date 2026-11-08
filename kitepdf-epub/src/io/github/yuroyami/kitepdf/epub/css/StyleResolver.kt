@@ -87,7 +87,9 @@ internal class StyleResolver(
         if (root) remPt = rootFontSizePt
         // Names lose their prefix, so xml:lang reads as lang; an empty value means unknown (HTML, 3.2.6.2).
         val lang = el.attrs["lang"]?.trim()
-        val built = build(parent, inCascadeOrder(offered))
+        val cascaded = inCascadeOrder(offered)
+        countersOf(el, ancestors, cascaded, scopeRoot = ancestors.firstOrNull())
+        val built = build(parent, cascaded)
         val cs = if (lang == null) built else built.copy(language = lang.ifEmpty { null })
         if (root) remPt = cs.fontSizePt
         // The HTML `dir` attribute wins over the CSS `direction` property.
@@ -138,9 +140,9 @@ internal class StyleResolver(
     /**
      * Generated content for [el]'s `::before`/`::after` ([side]), or null when
      * no rule with a usable `content:` applies. The pseudo's style inherits
-     * from its originating element ([elementStyle]), per spec. A `counter()`,
-     * `counters()` or `url()` content value makes the rule inert (we cannot
-     * synthesize those), as do `none`/`normal`.
+     * from its originating element ([elementStyle]), per spec. A `url()` content
+     * value makes the rule inert, as do `none`/`normal`; `counter()` and
+     * `counters()` print the counters in scope (#934).
      */
     fun computePseudo(
         el: KiteXmlNode.Element,
@@ -163,6 +165,8 @@ internal class StyleResolver(
         val raw = ordered.lastOrNull { it.first == "content" }?.second ?: return null
         val parts = parseContentValue(raw) ?: return null
         val style = build(elementStyle, ordered.filter { it.first != "content" })
+        // The pseudo-element is the element's first or last child, so its counters run there (#934).
+        countersOf(null, listOf(el) + ancestors, ordered, scopeRoot = el)
         val content = generate(parts, el, ancestors, style.quotes).takeIf { it.isNotEmpty() } ?: return null
         return PseudoContent(style, content)
     }
@@ -220,6 +224,66 @@ internal class StyleResolver(
      */
     private var quoteDepth = 0
 
+    /**
+     * One counter instance (CSS Lists and Counters 3, 4.4): its [name], the element whose children
+     * its scope covers, null for the whole document, and its value.
+     */
+    private class Counter(val name: String, val scopeRoot: KiteXmlNode.Element?, var value: Int)
+
+    /**
+     * The counters in scope, outermost first. The box builder asks for each element's style and
+     * generated content once and in document order, as [quoteDepth] needs too, so the counters
+     * run through the document as CSS counts them (#934).
+     */
+    private val counters = ArrayList<Counter>()
+
+    /** The elements whose counter properties ran, so a second style lookup of one does not count it again. */
+    private val counted = HashSet<KiteXmlNode.Element>()
+
+    /**
+     * Applies the `counter-reset`, `counter-increment` and `counter-set` of [cascaded], in that
+     * order (CSS Lists and Counters 3, 4.3), for [el] with [ancestors] (null for a pseudo-element,
+     * whose ancestors then start with its element). A new counter's scope is the children of
+     * [scopeRoot]: the element's parent, so the element, its descendants and its later siblings.
+     */
+    private fun countersOf(el: KiteXmlNode.Element?, ancestors: List<KiteXmlNode.Element>, cascaded: List<Pair<String, String>>, scopeRoot: KiteXmlNode.Element?) {
+        if (el != null && !counted.add(el)) return
+        // A counter whose scope this place has left goes: its root is no ancestor any more.
+        counters.removeAll { it.scopeRoot != null && ancestors.none { a -> a === it.scopeRoot } }
+        fun last(prop: String) = cascaded.lastOrNull { it.first == prop }?.second
+        val reset = last("counter-reset")?.let { counterList(it, 0) }
+        val increment = last("counter-increment")?.let { counterList(it, 1) }
+        val set = last("counter-set")?.let { counterList(it, 0) }
+        if (reset == null && increment == null && set == null) return
+        reset?.forEach { (name, value) ->
+            val sibling = counters.lastOrNull { it.name == name }?.takeIf { it.scopeRoot === scopeRoot }
+            if (sibling != null) sibling.value = value else counters += Counter(name, scopeRoot, value)
+        }
+        increment?.forEach { (name, by) -> instance(name, scopeRoot).value += by }
+        set?.forEach { (name, value) -> instance(name, scopeRoot).value = value }
+    }
+
+    /** The innermost counter [name] in scope, made at [scopeRoot] with 0 when there is none (4.4.1). */
+    private fun instance(name: String, scopeRoot: KiteXmlNode.Element?): Counter =
+        counters.lastOrNull { it.name == name } ?: Counter(name, scopeRoot, 0).also { counters += it }
+
+    /** A `counter-*` value: names, each with an optional integer, else [default]; `none` is empty. */
+    private fun counterList(v: String, default: Int): List<Pair<String, Int>>? {
+        val words = v.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (words.isEmpty()) return null
+        if (words.size == 1 && words[0].lowercase() == "none") return emptyList()
+        val out = ArrayList<Pair<String, Int>>()
+        var i = 0
+        while (i < words.size) {
+            val name = words[i]
+            if (name.toIntOrNull() != null || name.lowercase() in setOf("none", "inherit", "initial", "unset")) return null
+            val value = words.getOrNull(i + 1)?.toIntOrNull()
+            out += name to (value ?: default)
+            i += if (value != null) 2 else 1
+        }
+        return out
+    }
+
     /** The text of [parts], for [el] with the `quotes` value [quotes], moving [quoteDepth] as its quote marks do. */
     private fun generate(parts: List<ContentPart>, el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, quotes: List<String>?): String {
         val marks by lazy { quotes ?: quoteMarks(contentLanguage(el, ancestors)) }
@@ -235,6 +299,15 @@ internal class StyleResolver(
             ContentPart.NoOpenQuote -> quoteDepth++
             ContentPart.CloseQuote -> if (quoteDepth > 0) sb.append(mark(--quoteDepth, close = true))
             ContentPart.NoCloseQuote -> if (quoteDepth > 0) quoteDepth--
+            // CSS Lists and Counters 3, 4.6: the innermost value, or every value outermost first.
+            is ContentPart.CounterValue -> {
+                val type = part.style
+                if (part.separator == null) sb.append(CounterStyles.format(instance(part.name, el).value, type))
+                else {
+                    val all = counters.filter { it.name == part.name }.ifEmpty { listOf(instance(part.name, el)) }
+                    sb.append(all.joinToString(part.separator) { CounterStyles.format(it.value, type) })
+                }
+            }
         }
         return sb.toString()
     }
@@ -247,18 +320,20 @@ internal class StyleResolver(
         object CloseQuote : ContentPart()
         object NoOpenQuote : ContentPart()
         object NoCloseQuote : ContentPart()
+        /** `counter(name, style)`, or with a [separator] `counters(name, separator, style)` (#934). */
+        class CounterValue(val name: String, val separator: String?, val style: ListType) : ContentPart()
     }
 
     /**
      * `content:` value → its components: quoted strings (CSS escapes decoded), `attr(name)` and
-     * the quote keywords; `none`/`normal` and anything with `counter()`/`counters()`/`url()`
+     * the quote keywords, `counter()` and `counters()`; `none`/`normal` and anything with `url()`
      * return null (rule inert).
      */
     private fun parseContentValue(v: String): List<ContentPart>? {
         val s = v.trim()
         val lower = s.lowercase()
         if (lower == "none" || lower == "normal") return null
-        if ("counter(" in lower || "counters(" in lower || "url(" in lower) return null
+        if ("url(" in lower) return null
         val parts = ArrayList<ContentPart>()
         var i = 0
         while (i < s.length) {
@@ -275,6 +350,20 @@ internal class StyleResolver(
                     parts += ContentPart.Text(cssUnescape(s.substring(i + 1, j)))
                     i = j + 1
                 }
+                lower.startsWith("counter(", i) || lower.startsWith("counters(", i) -> {
+                    val open = s.indexOf('(', i)
+                    val close = closingParen(s, open)
+                    if (close < 0) return null
+                    val args = splitArgs(s.substring(open + 1, close))
+                    val plural = lower.startsWith("counters(", i)
+                    val name = args.getOrNull(0)?.takeIf { it.isNotEmpty() && !it.startsWith('"') && !it.startsWith('\'') } ?: return null
+                    val separator = if (plural) args.getOrNull(1)?.let(::stringOf) ?: return null else null
+                    val styleArg = args.getOrNull(if (plural) 2 else 1)
+                    val style = if (styleArg == null) ListType.DECIMAL else parseListType(styleArg) ?: return null
+                    if (args.size > (if (plural) 3 else 2)) return null
+                    parts += ContentPart.CounterValue(name, separator, style)
+                    i = close + 1
+                }
                 lower.startsWith("attr(", i) -> {
                     val close = s.indexOf(')', i)
                     if (close < 0) return null
@@ -289,6 +378,47 @@ internal class StyleResolver(
     }
 
     private fun isNameChar(c: Char) = c.isLetterOrDigit() || c == '-' || c == '_'
+
+    /** The index of the `)` that closes the `(` at [open], past quoted strings, or -1. */
+    private fun closingParen(s: String, open: Int): Int {
+        var i = open + 1
+        while (i < s.length) {
+            val c = s[i]
+            when {
+                c == '"' || c == '\'' -> { i++; while (i < s.length && s[i] != c) { if (s[i] == '\\') i++; i++ } }
+                c == ')' -> return i
+            }
+            i++
+        }
+        return -1
+    }
+
+    /** Comma-separated arguments, trimmed, with commas inside strings kept. */
+    private fun splitArgs(s: String): List<String> {
+        val out = ArrayList<String>()
+        val sb = StringBuilder()
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '"' || c == '\'') {
+                val start = i
+                i++
+                while (i < s.length && s[i] != c) { if (s[i] == '\\') i++; i++ }
+                sb.append(s, start, minOf(i + 1, s.length))
+            } else if (c == ',') {
+                out += sb.toString().trim(); sb.clear()
+            } else sb.append(c)
+            i++
+        }
+        out += sb.toString().trim()
+        return out
+    }
+
+    /** The text of a quoted CSS string [arg], escapes decoded, or null when it is no string. */
+    private fun stringOf(arg: String): String? {
+        if (arg.length < 2 || (arg[0] != '"' && arg[0] != '\'') || arg.last() != arg[0]) return null
+        return cssUnescape(arg.substring(1, arg.length - 1))
+    }
 
     /**
      * A `quotes` value: `none`, `auto`, or pairs of strings, open then close for each level
