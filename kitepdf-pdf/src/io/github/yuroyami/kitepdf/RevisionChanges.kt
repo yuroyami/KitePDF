@@ -51,10 +51,14 @@ internal object RevisionChanges {
         val oldPlaces = placesOf(old)
         var reachable: Set<Long>? = null
         val out = ArrayList<PdfRevisionChange>()
-        for (number in (old.xref.keys + new.xref.keys).sorted()) {
+        val numbers = (old.xref.keys + new.xref.keys).sorted()
+        // An object stream written again under its own number changes its members, whose entries stay
+        // the same (ISO 32000-1, 7.5.7 and 7.5.8.3), so a member of a changed stream is compared too (#1003).
+        val changedStreams = numbers.filterTo(HashSet()) { old.xref[it] != new.xref[it] }
+        for (number in numbers) {
             val oldEntry = old.xref[number]
             val newEntry = new.xref[number]
-            if (oldEntry == newEntry) continue
+            if (oldEntry == newEntry && (newEntry as? XrefEntry.Compressed)?.containingObjectStream !in changedStreams) continue
             val before = objectOf(old, number, oldEntry)
             val after = objectOf(new, number, newEntry)
             // A cross-reference stream or an object stream is a container that nothing references, so
