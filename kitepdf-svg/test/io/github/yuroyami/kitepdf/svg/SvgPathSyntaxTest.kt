@@ -70,4 +70,16 @@ class SvgPathSyntaxTest {
         val img = assertNotNull(SvgImage.parse(svg.encodeToByteArray()))
         img.render(RecordingCanvas(), KiteMatrix.IDENTITY, null)
     }
+
+    @Test
+    fun anSvgWhoseRootComesAfterALongPrologIsAnSvg() {
+        // XML 1.0, 2.8: an Illustrator DOCTYPE with entities pushed <svg past byte 512 (#740).
+        val entities = (1..12).joinToString("\n") { "<!ENTITY ns_e$it \"http://ns.adobe.com/Extensibility/$it.0/\">" }
+        val svg = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- Generator: Adobe Illustrator 24.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->\n" +
+            "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\" [\n$entities\n]>\n" +
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect width=\"10\" height=\"10\" fill=\"red\"/></svg>"
+        kotlin.test.assertTrue(svg.indexOf("<svg") > 512)
+        kotlin.test.assertTrue(SvgImage.isSvg(svg.encodeToByteArray()))
+        kotlin.test.assertFalse(SvgImage.isSvg(("<?xml version=\"1.0\"?>" + " ".repeat(600) + "<html><body/></html>").encodeToByteArray()))
+    }
 }

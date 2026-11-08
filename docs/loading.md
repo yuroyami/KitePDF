@@ -42,7 +42,7 @@ when (KiteDoc.formatOf(bytes)) {
 | EPUB | the file is a ZIP whose first entry is the OCF `mimetype`, or a ZIP that holds `META-INF/container.xml` |
 | XPS and OpenXPS | the file is a ZIP whose package relationships lead to a fixed document sequence |
 | CBZ | the file is any other ZIP whose entries are all images (hidden files and `ComicInfo.xml` do not count) |
-| SVG | the first 512 bytes hold an `<svg>` element |
+| SVG | the first 512 bytes hold an `<svg>` element, or the root element after the XML prolog, within the first 64 KiB, is `svg` |
 
 KitePDF checks a ZIP for EPUB, then XPS, then CBZ. It checks any other file for PDF, then SVG. When no format matches, `KiteDoc.open` still tries the bytes as a damaged PDF, because the PDF reader can rebuild a file that lost its header. [XPS and OpenXPS](xps.md) explains how an XPS package is found.
 

@@ -1825,7 +1825,51 @@ public class SvgImage private constructor(
         /** True when [bytes] open like an SVG file. */
         public fun isSvg(bytes: ByteArray): Boolean {
             val head = TextEncoding.decode(bytes.copyOfRange(0, minOf(bytes.size, 512)))
-            return head.contains("<svg")
+            if (head.contains("<svg")) return true
+            // XML 1.0, 2.8: the prolog, a declaration, comments, processing instructions and a
+            // DOCTYPE whose internal subset may be any length, comes before the root element, so
+            // an Illustrator export puts <svg past the first 512 bytes (#740).
+            val window = TextEncoding.decode(bytes.copyOfRange(0, minOf(bytes.size, PROLOG_WINDOW)))
+            return rootElementName(window)?.substringAfter(':') == "svg"
+        }
+
+        /** How far [isSvg] reads to get past a long prolog. */
+        private const val PROLOG_WINDOW = 1 shl 16
+
+        /** The name of the first element of [xml] after its prolog, or null when the prolog does not end in it. */
+        private fun rootElementName(xml: String): String? {
+            var i = 0
+            val n = xml.length
+            while (i < n) {
+                val c = xml[i]
+                when {
+                    c.isWhitespace() || c == '\uFEFF' -> i++
+                    xml.startsWith("<?", i) -> i = xml.indexOf("?>", i + 2).takeIf { it >= 0 }?.plus(2) ?: return null
+                    xml.startsWith("<!--", i) -> i = xml.indexOf("-->", i + 4).takeIf { it >= 0 }?.plus(3) ?: return null
+                    xml.startsWith("<!", i) -> {
+                        // A DOCTYPE: its quoted literals and its internal subset may hold a '>'.
+                        var j = i + 2
+                        var depth = 0
+                        while (j < n) {
+                            val d = xml[j]
+                            if (d == '"' || d == '\'') { j = xml.indexOf(d, j + 1).takeIf { it >= 0 } ?: return null }
+                            else if (d == '[') depth++
+                            else if (d == ']') depth--
+                            else if (d == '>' && depth <= 0) break
+                            j++
+                        }
+                        if (j >= n) return null
+                        i = j + 1
+                    }
+                    c == '<' -> {
+                        var j = i + 1
+                        while (j < n && !xml[j].isWhitespace() && xml[j] != '>' && xml[j] != '/') j++
+                        return xml.substring(i + 1, j)
+                    }
+                    else -> return null
+                }
+            }
+            return null
         }
 
         /** Parse a whole `.svg` file, or null when there is no `<svg>` in it. */

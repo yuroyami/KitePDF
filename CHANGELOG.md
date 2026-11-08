@@ -366,6 +366,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where it took the result of the event before it, often another field's value (#751).
 - A script reaches a field that has kids: `getField` answers it by its own name, and `getArray` answers the
   terminal fields under it, so `AFSimple_Calculate("SUM", "amount")` sums `amount.0` and `amount.1` (#753).
+- An SVG whose root element comes after a long XML prolog, such as an Illustrator export with entity
+  declarations, is recognised by `KiteDoc.formatOf` and `open`, which read past the first 512 bytes to the root
+  element (#740).
 
 ## [0.13.0] - 2026-10-09
 
