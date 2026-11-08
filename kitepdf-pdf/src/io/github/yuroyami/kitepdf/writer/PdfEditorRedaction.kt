@@ -331,8 +331,9 @@ internal fun PdfEditor.redactFormXObject(
         // Keep every non-encoding dict entry (/BBox, /Matrix, /Group, /Type,
         // /Subtype) intact, prune the XObjects nothing draws any more so the GC
         // takes their streams, and add the clones the nested descent minted.
+        // A redacted form loses its page-piece data, which the editor cannot redact (#1011).
         var newDict = prunePageResourceXObjects(
-            stream.dict, engine.droppedImageNames, engine.survivingImageNames,
+            withoutKeys(stream.dict, UNREDACTABLE_KEYS), engine.droppedImageNames, engine.survivingImageNames,
         )
         newDict = prunePageResourceXObjects(newDict, nested.droppedNames, namesStillDrawn(finalOps))
         val newResources = withSoftMaskAdditions(withFormAdditions(newDict.getDict("Resources", effective), nested), masks, finalOps)
@@ -856,3 +857,10 @@ internal class SaveRestoreWrap(val open: String, val close: String) {
         }
     }
 }
+
+/** What a redacted page or form loses, as the editor cannot redact it: its thumbnail and its page-piece data (#1011). */
+internal val UNREDACTABLE_KEYS: List<String> = listOf("Thumb", "PieceInfo")
+
+/** [dict] without [keys]. */
+internal fun withoutKeys(dict: PdfDictionary, keys: List<String>): PdfDictionary =
+    if (keys.none { it in dict.map }) dict else PdfDictionary(LinkedHashMap(dict.map).apply { for (k in keys) remove(k) })

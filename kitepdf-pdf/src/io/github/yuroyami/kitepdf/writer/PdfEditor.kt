@@ -1010,8 +1010,11 @@ public class PdfEditor internal constructor(
         }
         val streamRef = addObject(PdfStreams.flate(out.toByteArray()))
 
-        // Rebuild the page dict: new /Contents, pruned /XObject, filtered /Annots.
-        var newPage = withEntry(pageDict, "Contents", streamRef)
+        // Rebuild the page dict: new /Contents, pruned /XObject, filtered /Annots. The thumbnail
+        // is a picture of the page before the redaction (ISO 32000-1, 12.3.4), and page-piece
+        // data belongs to the application that wrote it, which can keep the whole page there
+        // (14.5): the editor cannot redact either, so a redacted page loses both (#1011).
+        var newPage = withEntry(withoutKeys(pageDict, UNREDACTABLE_KEYS), "Contents", streamRef)
         // Resources may be inherited from an ancestor /Pages node rather than present
         // on the leaf dict. Bake the effective resources (plus any form clones) onto
         // the page before pruning so the image XObject entry is actually removed

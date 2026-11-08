@@ -269,6 +269,7 @@ Redaction removes more than the region in some cases, as it removes too much rat
 
 - An annotation whose `/Rect` the editor cannot read goes, as the renderer still draws it somewhere.
 - A file attachment in a region takes its file out of the catalog's `/Names /EmbeddedFiles` tree too, so the document loses that attachment.
+- A redacted page loses its thumbnail (`/Thumb`), which shows the page as it was, and its page-piece data (`/PieceInfo`), where an application such as Illustrator can keep the whole page. A redacted form XObject loses its `/PieceInfo` too.
 
 ### Several calls
 
