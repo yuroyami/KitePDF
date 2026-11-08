@@ -17,6 +17,10 @@ package io.github.yuroyami.kitepdf.core.text
  * 5. Valid UTF-8 stays UTF-8; anything else is decoded as Windows-1252,
  *    which never fails and covers the Western-European mojibake case.
  *
+ * A declared legacy single-byte encoding of the WHATWG Encoding Standard, such as windows-1251,
+ * KOI8-R or ISO-8859-15, decodes with its own table, as a browser reads the same file. A declared
+ * multi-byte one other than UTF-16 falls to step 5.
+ *
  * ```kotlin
  * val html = TextEncoding.decode(zip.read("chapter1.xhtml")!!)
  * ```
@@ -29,7 +33,8 @@ public object TextEncoding {
         utf16WithoutBom(bytes)?.let { return it }
         return when (val declared = canonical(declaredName(bytes) ?: hint)) {
             UTF_16LE, UTF_16BE, CP1252, ISO_8859_15 -> declared
-            else -> if (isValidUtf8(bytes)) UTF_8 else CP1252
+            else -> if (declared != null && SingleByteEncodings.high(declared) != null) declared
+                else if (isValidUtf8(bytes)) UTF_8 else CP1252
         }
     }
 
@@ -42,7 +47,8 @@ public object TextEncoding {
             UTF_16BE -> decodeUtf16(bytes, if (bom != null) 2 else 0, littleEndian = false)
             CP1252 -> decode1252(bytes)
             ISO_8859_15 -> decodeLatin9(bytes)
-            else -> bytes.decodeToString(if (enc == UTF_8 && bom != null) 3 else 0, bytes.size)
+            UTF_8 -> bytes.decodeToString(if (bom != null) 3 else 0, bytes.size)
+            else -> SingleByteEncodings.high(enc)?.let { decodeSingleByte(bytes, it) } ?: bytes.decodeToString(if (enc == UTF_8 && bom != null) 3 else 0, bytes.size)
         }
     }
 
@@ -148,7 +154,8 @@ public object TextEncoding {
         "utf-16", "utf-16le", "utf16", "utf16le", "unicode" -> UTF_16LE
         "utf-16be", "utf16be" -> UTF_16BE
         "windows-1252", "cp1252", "cp-1252", "iso-8859-1", "iso8859-1", "latin1", "latin-1" -> CP1252
-        else -> null
+        // Every other single-byte label of the WHATWG Encoding Standard names its own table (#878).
+        else -> SingleByteEncodings.forLabel(name.trim().trim('"', '\'').lowercase())
     }
 
     /* ─── Decoders ───────────────────────────────────────────────────────── */
@@ -169,6 +176,16 @@ public object TextEncoding {
         for (i in b.indices) {
             val v = b[i].toInt() and 0xFF
             chars[i] = if (v in 0x80..0x9F) CP1252_HIGH[v - 0x80] else v.toChar()
+        }
+        return chars.concatToString()
+    }
+
+    /** A single-byte encoding: ASCII below 0x80, and [high] gives the character of each byte above. */
+    private fun decodeSingleByte(b: ByteArray, high: String): String {
+        val chars = CharArray(b.size)
+        for (i in b.indices) {
+            val v = b[i].toInt() and 0xFF
+            chars[i] = if (v < 0x80) v.toChar() else high[v - 0x80]
         }
         return chars.concatToString()
     }

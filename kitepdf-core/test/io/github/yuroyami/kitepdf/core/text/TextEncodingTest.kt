@@ -113,4 +113,23 @@ class TextEncodingTest {
         assertEquals("ISO-8859-15", TextEncoding.sniff(head + body))
         assertTrue(TextEncoding.decode(head + body).endsWith("<p>c\u0153ur 5 \u20AC \u0160\u0161\u017D\u017E\u0152\u0178</p>"))
     }
+
+    @Test
+    fun a_declared_single_byte_encoding_decodes_with_its_own_table() {
+        // Привет in windows-1251 and in KOI8-R, and Greek in ISO-8859-7, which used to read as windows-1252.
+        fun doc(encoding: String, vararg body: Int) =
+            "<?xml version=\"1.0\" encoding=\"$encoding\"?><p>".encodeToByteArray() + bytes(*body) + "</p>".encodeToByteArray()
+        val cp1251 = doc("windows-1251", 0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2)
+        assertEquals("windows-1251", TextEncoding.sniff(cp1251))
+        assertTrue(TextEncoding.decode(cp1251).endsWith("<p>\u041F\u0440\u0438\u0432\u0435\u0442</p>"))
+        val koi8 = doc("koi8-r", 0xF0, 0xD2, 0xC9, 0xD7, 0xC5, 0xD4)
+        assertEquals("KOI8-R", TextEncoding.sniff(koi8))
+        assertTrue(TextEncoding.decode(koi8).endsWith("<p>\u041F\u0440\u0438\u0432\u0435\u0442</p>"))
+        val greek = doc("ISO-8859-7", 0xE1, 0xE2, 0xE3)
+        assertTrue(TextEncoding.decode(greek).endsWith("<p>\u03B1\u03B2\u03B3</p>"))
+        // A byte the index leaves out reads as U+FFFD, as the WHATWG decoder gives it.
+        assertTrue(TextEncoding.decode(doc("ISO-8859-7", 0xAE)).endsWith("<p>\uFFFD</p>"))
+        // A label the standard does not know keeps the old fallback.
+        assertEquals("windows-1252", TextEncoding.sniff(doc("x-unknown", 0xE9)))
+    }
 }

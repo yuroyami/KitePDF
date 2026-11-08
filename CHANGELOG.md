@@ -430,6 +430,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `UnsatisfiedLinkError` or `NoClassDefFoundError` left the runner and could end the app (#830).
 - The time an `app.alert` or `app.response` dialog waits for the reader no longer counts against a script's
   budget, where a reply after five seconds stopped the script that asked (#872).
+- A book or a document that declares a legacy single-byte encoding of the WHATWG Encoding Standard, such as
+  windows-1251, KOI8-R or ISO-8859-7, decodes with that encoding's own table, where it decoded as windows-1252
+  (#878).
 
 ## [0.13.0] - 2026-10-09
 
