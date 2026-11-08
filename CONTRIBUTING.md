@@ -187,6 +187,8 @@ KITEPDF_DOOM=true ./kotlin test -m kitepdf-javascript -p jvm --include-classes='
 
 It runs the script on KiteJS and reports the start-up time and the frame times. The same flag turns on the KiteJS probes next to it. Without the flag and the file, these tests report as skipped.
 
+The Kotlin/Native and web twins, `DoomPdfNativeBenchmark` and `DoomPdfWebBenchmark`, are marked `@Ignore`, because kotlin-test has no assumption there and an early return would read as a pass. A run reports them as ignored. To run one, take `@Ignore` off with `doom.pdf` in place.
+
 The benchmark gives the game a clock of its own, which moves one Doom tic for each frame that the harness pumps. So the time of a frame is the real time that the engine needs to move the game by one tic, and 1000 divided by it gives frames per second. The run first plays 15 seconds of game time to get past the still title screen, because a frame measured there is the cost of drawing nothing.
 
 ## Issues and commits

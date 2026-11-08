@@ -4,13 +4,14 @@ package io.github.yuroyami.kitepdf.javascript
 
 import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfDocument
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.time.TimeSource
 import kotlinx.coroutines.test.TestResult
 
-/** Whether this runs on Node with `KITEPDF_DOOM=true`. A browser has no `process`. */
-private fun doomEnabled(): Boolean = js("typeof process !== 'undefined' && !!process.env && process.env.KITEPDF_DOOM === 'true'")
+/** Whether this runs on Node. A browser has no `process`. */
+private fun isNode(): Boolean = js("typeof process !== 'undefined' && !!process.env")
 
 /** The repo's `corpus/pdf/doom.pdf`, found by walking up from the working folder, or null. */
 private fun doomPath(): String? = js(
@@ -32,15 +33,18 @@ private fun readLatin1(path: String): String = js("process.getBuiltinModule('fs'
 /**
  * DoomPDF on the web, as `DoomPdfBenchmarkTest` runs it on the JVM, but through the calls a viewer
  * makes: the page-open script and every frame run with pausing on, so the event loop runs while
- * the game works (#489). Opt-in, on Node only: `KITEPDF_DOOM=true` plus the file
- * `corpus/pdf/doom.pdf` (https://doompdf.pages.dev/doom.pdf).
+ * the game works (#489). Opt-in, on Node only: kotlin-test on the web has no assumption, and a test
+ * that returns early reads as passed (#44), so the benchmark is [Ignore]d and the runners count it
+ * as ignored (#726). Take [Ignore] off, with the file `corpus/pdf/doom.pdf`
+ * (https://doompdf.pages.dev/doom.pdf), to run it.
  */
 class DoomPdfWebBenchmark {
 
+    @Ignore
     @Test
     fun doom_runs_on_the_web_with_pausing(): TestResult = scriptTest {
-        if (!doomEnabled()) return@scriptTest println("Run with KITEPDF_DOOM=true to run DoomPDF.")
-        val path = doomPath() ?: return@scriptTest println("corpus/pdf/doom.pdf is missing")
+        check(isNode()) { "DoomPDF runs on Node only: it reads corpus/pdf/doom.pdf from the file system" }
+        val path = doomPath() ?: error("corpus/pdf/doom.pdf is missing: download it to run DoomPDF")
         val bytes = readLatin1(path).let { text -> ByteArray(text.length) { text[it].code.toByte() } }
         val doc = PdfDocument.open(bytes)
         assertTrue(doc.pages[0].openAction is PdfAction.JavaScript, "the page's open action is not a script")

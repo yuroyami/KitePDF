@@ -19,22 +19,24 @@ import platform.posix.fread
 import platform.posix.fseek
 import platform.posix.ftell
 import platform.posix.getcwd
-import platform.posix.getenv
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import kotlin.time.TimeSource
 
 /**
  * DoomPDF on Kotlin/Native, as `DoomPdfBenchmarkTest` runs it on the JVM: QuickJS as an Apple app
- * links it, through the same script runner and the same clock. Opt-in: `KITEPDF_DOOM=true` plus
- * the file `corpus/pdf/doom.pdf` (https://doompdf.pages.dev/doom.pdf).
+ * links it, through the same script runner and the same clock. Opt-in: kotlin-test on Kotlin/Native
+ * has no assumption, and a test that returns early reads as passed (#44), so the benchmark is
+ * [Ignore]d and a run reports it as ignored (#726). Take [Ignore] off, with the file
+ * `corpus/pdf/doom.pdf` (https://doompdf.pages.dev/doom.pdf), to run it.
  */
 class DoomPdfNativeBenchmark {
 
+    @Ignore
     @Test
     fun doom_runs_on_native() {
-        if (getenv("KITEPDF_DOOM")?.toKString() != "true") return println("Run with KITEPDF_DOOM=true to run DoomPDF.")
-        val bytes = doomPath()?.let(::readFile) ?: return println("corpus/pdf/doom.pdf is missing")
+        val bytes = doomPath()?.let(::readFile) ?: error("corpus/pdf/doom.pdf is missing: download it to run DoomPDF")
         val doc = PdfDocument.open(bytes)
         assertTrue(doc.pages[0].openAction is PdfAction.JavaScript, "the page's open action is not a script")
 
