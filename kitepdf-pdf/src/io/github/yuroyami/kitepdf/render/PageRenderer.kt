@@ -143,6 +143,9 @@ public class PageRenderer(
     )
     private val formResourceCache = HashMap<Long, FormResources>()
 
+    /** The resources of the forms without their own, for the page being drawn: [pageResources] (#767). */
+    private val pageFormResourceCache = HashMap<Long, FormResources>()
+
     /** The table of each soft mask transfer function, built once per function. */
     private val maskTransfers = HashMap<KiteFunction, KiteMaskTransfer>()
 
@@ -269,6 +272,7 @@ public class PageRenderer(
         deviceCtm: KiteMatrix = defaultDeviceCtm(page),
         annotations: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean = { true },
     ) {
+        if (pageResources !== page.resources) pageFormResourceCache.clear()
         pageResources = page.resources
         optionalContent = page.internalDocument.optionalContent
         activeClipCount = 0
@@ -300,6 +304,7 @@ public class PageRenderer(
         deviceCtm: KiteMatrix = defaultDeviceCtm(page),
         annotations: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean = { true },
     ) {
+        if (pageResources !== page.resources) pageFormResourceCache.clear()
         pageResources = page.resources
         val fonts = loadFonts(page.resources)
         val xobjects = loadXObjects(page.resources)
@@ -1076,7 +1081,10 @@ public class PageRenderer(
         }
         // Keyed by object number so lookups don't deep-hash the stream's
         // dictionary (the old PdfStream key hashed the whole map + bytes).
-        val res = objectNumber?.let { formResourceCache.getOrPut(it) { buildResources() } }
+        // A form without /Resources takes those of the page it is drawn on (ISO 32000-1, 7.8.3), so
+        // its entry is the page's own and goes when another page is drawn (#767).
+        val cache = if (ownResources) formResourceCache else pageFormResourceCache
+        val res = objectNumber?.let { cache.getOrPut(it) { buildResources() } }
             ?: buildResources()
         val childFonts = res.fonts
         val childXObjects = res.xobjects

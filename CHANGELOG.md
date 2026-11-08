@@ -390,6 +390,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On Kotlin/Native each thread gets a lock owner id of its own from a counter, where a 32-bit hash of
   `pthread_self` let two threads share an id and enter one `KiteLock` together, and `unlock` from a thread that
   does not hold the lock fails, as on the JVM (#773).
+- A `PageRenderer` that draws a second page draws a form without `/Resources` with that page's resources, where
+  it kept the fonts, colour spaces and graphics states of the first page that drew it (#767).
 
 ## [0.13.0] - 2026-10-09
 

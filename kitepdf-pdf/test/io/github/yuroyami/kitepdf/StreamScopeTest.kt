@@ -160,6 +160,27 @@ class StreamScopeTest {
     }
 
     @Test
+    fun a_form_without_resources_uses_the_page_it_is_drawn_on() {
+        // ISO 32000-1, 7.8.3; a reused renderer kept the first page's resources for it (#767).
+        val pdf = TestPdf.build(listOf(
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R /Resources << /XObject << /Fm 6 0 R >> /ExtGState << /GS 7 0 R >> >> >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R /Resources << /XObject << /Fm 6 0 R >> /ExtGState << /GS 8 0 R >> >> >>",
+            TestPdf.stream("/Fm Do"),
+            TestPdf.stream("/GS gs 0 0 1 rg 20 20 100 100 re f", "/Type /XObject /Subtype /Form /BBox [0 0 200 200]"),
+            "<< /Type /ExtGState /ca 0.5 >>",
+            "<< /Type /ExtGState /ca 1 >>",
+        ))
+        val doc = PdfDocument.open(pdf)
+        val canvas = RecordingCanvas()
+        val renderer = PageRenderer(canvas, doc)
+        renderer.render(doc.pages[0], KiteMatrix.IDENTITY)
+        renderer.render(doc.pages[1], KiteMatrix.IDENTITY)
+        assertEquals(listOf(0.5, 1.0), canvas.calls.filterIsInstance<RecordingCanvas.Call.Fill>().map { it.alpha })
+    }
+
+    @Test
     fun marked_content_nesting_is_capped() {
         val content = "/X BMC ".repeat(10_000) + "0 0 1 rg 0 0 10 10 re f " + "EMC ".repeat(10_000) + "0 1 0 rg 20 20 10 10 re f"
         val doc = PdfDocument.open(TestPdf.onePage(content))
