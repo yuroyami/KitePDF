@@ -1627,8 +1627,9 @@ private fun PageTiles(
     LaunchedEffect(page, full, tiles, paper, colors.theme, hairline, drawsFormLayer, canvasDecorator, contentVersion) {
         // A tile that left the view gives its memory back; the cache keeps it for a return.
         bitmaps.keys.retainAll(tiles.toSet())
-        val middle = shown?.center ?: return@LaunchedEffect
-        for (tile in tiles.sortedBy { (Offset(it.center.x / sx, it.center.y / sy) - middle).getDistanceSquared() }) {
+        if (shown == null) return@LaunchedEffect
+        // tilesOver gives the tiles nearest the middle of the view first.
+        for (tile in tiles) {
             if (tile in bitmaps) continue
             val result = rasterizer.rasterizeCachedOrNull(
                 cache, page, full.width, full.height, colors.pageBackground, hairline, colors.theme, pageIndex,
@@ -1655,7 +1656,11 @@ private fun PageTiles(
     }
 }
 
-/** The tiles of a page drawn [full] that meet [part] of its slot, which the page's pixels scale by [sx] and [sy]. */
+/**
+ * The tiles of a page drawn [full] that meet [part] of its slot, which the page's pixels scale by
+ * [sx] and [sy], nearest the middle of [part] first. Past [MAX_TILES] the cap leaves out the tiles
+ * farthest from the middle, not the bottom rows of the view (#898).
+ */
 internal fun tilesOver(part: Rect, sx: Float, sy: Float, full: IntSize): List<IntRect> {
     val firstColumn = (part.left * sx / TILE_PX).toInt().coerceAtLeast(0)
     val lastColumn = ((part.right * sx - 1) / TILE_PX).toInt().coerceAtMost((full.width - 1) / TILE_PX)
@@ -1664,16 +1669,20 @@ internal fun tilesOver(part: Rect, sx: Float, sy: Float, full: IntSize): List<In
     val out = ArrayList<IntRect>()
     for (row in firstRow..lastRow) for (column in firstColumn..lastColumn) {
         out += IntRect(column * TILE_PX, row * TILE_PX, minOf((column + 1) * TILE_PX, full.width), minOf((row + 1) * TILE_PX, full.height))
-        if (out.size >= MAX_TILES) return out
     }
-    return out
+    val middle = part.center
+    // Stable, so tiles as near as each other keep their reading order.
+    return out.sortedBy { (Offset(it.center.x / sx, it.center.y / sy) - middle).getDistanceSquared() }.take(MAX_TILES)
 }
 
 /** The side of a tile in pixels: large enough that a phone screen needs a dozen at most (#375). */
 internal const val TILE_PX = 1024
 
-/** The most tiles of one page at once, which bounds the memory of a very large view. */
-private const val MAX_TILES = 48
+/**
+ * The most tiles of one page at once, which bounds the memory of a very large view. A 5K view
+ * at quality 2 needs 84 at zoom 3, and a view needs them all to show no stretched bitmap (#898).
+ */
+internal const val MAX_TILES = 128
 
 /** How long a pan rests before the tiles follow it. */
 private const val TILE_SETTLE_MS = 120L

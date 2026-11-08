@@ -783,6 +783,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An XPS image brush whose `ImageSource` is `{ColorConvertedBitmap image profile}` reads its RGB samples through
   the ICC profile it names, instead of drawing them as sRGB. `KiteImageData.withIccProfile` gives an image the
   profile a container names for it (#895).
+- At deep zoom on a large view with `quality` above 1, the tiles cover the whole view: the cap on tiles per page
+  is 128, and a cap that still cuts leaves out the tiles farthest from the middle instead of the bottom rows
+  (#898).
 
 ## [0.13.0] - 2026-10-09
 

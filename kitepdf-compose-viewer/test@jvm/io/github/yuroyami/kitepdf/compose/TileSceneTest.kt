@@ -10,6 +10,7 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * A page whose bitmap the long-side cap cuts down draws the part on screen again at full
@@ -101,5 +102,29 @@ class TileSceneTest {
         )
         // A part that ends on a tile edge does not take the next tile.
         assertEquals(listOf(IntRect(0, 0, 1024, 1024)), tilesOver(Rect(0f, 0f, 128f, 128f), 8f, 8f, full))
+    }
+
+    @Test
+    fun a_large_view_at_a_high_quality_gets_a_tile_for_every_part_of_it() {
+        // A fit-width letter page on a 5K view at quality 2 and zoom 3, 30% down and across (#898).
+        val view = IntSize(5120, 2880)
+        val zoom = 3f
+        val slot = IntSize(view.width, (view.width * 11 / 8.5).toInt())
+        val s = 2f * zoom
+        val full = IntSize((slot.width * s).toInt(), (slot.height * s).toInt())
+        val w = view.width / zoom; val h = view.height / zoom
+        val part = Rect(slot.width * 0.3f, slot.height * 0.3f, slot.width * 0.3f + w, slot.height * 0.3f + h)
+        val tiles = tilesOver(part, s, s, full)
+        // Every pixel row and column of the part on screen lies in a tile.
+        val covered = { x: Float, y: Float -> tiles.any { it.left <= x * s && x * s < it.right && it.top <= y * s && y * s < it.bottom } }
+        for (fy in listOf(0.01f, 0.5f, 0.99f)) for (fx in listOf(0.01f, 0.5f, 0.99f)) {
+            val x = part.left + part.width * fx; val y = part.top + part.height * fy
+            assertTrue(covered(x, y), "no tile at ${fx * 100}% across and ${fy * 100}% down of ${tiles.size} tiles")
+        }
+        // Past the cap, the tiles nearest the middle stay.
+        val huge = tilesOver(Rect(0f, 0f, slot.width.toFloat(), slot.height.toFloat()), s, s, full)
+        assertEquals(MAX_TILES, huge.size)
+        val middle = huge.first()
+        assertTrue(middle.left <= full.width / 2 && full.width / 2 <= middle.right + TILE_PX, "the first tile is near the middle: $middle")
     }
 }
