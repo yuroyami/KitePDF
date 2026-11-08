@@ -147,7 +147,9 @@ public sealed class KiteColorSpace {
             val comp = base.componentCount
             val lo = DoubleArray(comp) { base.componentMin(it) }
             val hi = DoubleArray(comp) { base.componentMax(it) }
-            Array(hival.coerceAtLeast(0) + 1) { idx ->
+            // 8.6.6.3: hival is 0 to 255. A larger one sized a table of hival + 1 colours, so a
+            // page of a few hundred bytes asked for gigabytes, or wrapped negative (#970).
+            Array(hival.coerceIn(0, MAX_HIVAL) + 1) { idx ->
                 val off = idx * comp
                 if (off + comp > palette.size) RgbColor.BLACK
                 else base.toRgb(DoubleArray(comp) { i -> lo[i] + (palette[off + i].toInt() and 0xFF) / 255.0 * (hi[i] - lo[i]) })
@@ -444,14 +446,18 @@ public sealed class KiteColorSpace {
             return Lab(wp, range)
         }
 
+        /** The largest index an Indexed space may have (ISO 32000-1, 8.6.6.3). */
+        private const val MAX_HIVAL = 255
+
         private fun resolveIndexed(arr: PdfArray, refs: IndirectResolver, depth: Int): KiteColorSpace {
             // [/Indexed <base> <hival> <lookup>]
             val baseObj = arr.getOrNull(1)
             val base = resolve(baseObj, refs, depth + 1)
+            // ISO 32000-1, 8.6.6.3: an integer from 0 to 255. MuPDF and PDFium clamp it there (#970).
             val hival = (arr.getOrNull(2)?.let {
                 when (it) {
-                    is PdfInt -> it.value.toInt()
-                    is PdfReal -> it.value.toInt()
+                    is PdfInt -> it.value.coerceIn(0L, MAX_HIVAL.toLong()).toInt()
+                    is PdfReal -> if (it.value.isNaN()) 0 else it.value.coerceIn(0.0, MAX_HIVAL.toDouble()).toInt()
                     else -> 0
                 }
             }) ?: 0

@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added triangles until memory ran out, and only had to sit in the page's resources. A lattice-form mesh
   stops at 65,536 triangles, as a free-form one does (#974).
 
+- An `/Indexed` colour space clamps `hival` to 255, as ISO 32000-1, MuPDF and PDFium do. A page of a few
+  hundred bytes sized a table of `hival + 1` colours at the `cs` operator, which asked for gigabytes or
+  wrapped negative and threw out of the render (#970).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
