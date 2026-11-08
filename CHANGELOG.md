@@ -823,6 +823,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The EPUB cascade indexes the style rules by the id, class or tag of their subject, so an element is tested only
   against the rules that can match it, and a book with thousands of rules no longer lays each chapter out seconds
   slower (#856).
+- A run in an embedded font whose glyphs have no outlines now draws nothing on every canvas. The AWT, Android,
+  CoreGraphics and Canvas2D canvases drew it in a host font, which hid fonts KitePDF could not read from the
+  differential sweep (#853).
 
 ## [0.13.0] - 2026-10-09
 

@@ -165,7 +165,6 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
             this.color = color.toArgb(alpha)
             applyPaintBlend(blendMode)
         }
-        var drewAny = false
         var penX = 0.0
         for (glyph in glyphs) {
             val outline = glyph.outline
@@ -175,15 +174,12 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
                     .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 val p = toAndroidPath(outline, glyphMatrix, scratchPath).apply { fillType = Path.FillType.WINDING }
                 canvas.drawPath(p, paint)
-                drewAny = true
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
-        // Embedded font present but produced no glyphs (e.g. a subset we can't
-        // decode). Fall back to a system font rather than rendering blank.
-        if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
-            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
-        }
+        // A glyph that the embedded program gives no outline draws nothing, on every canvas: the
+        // program is the source of the glyphs (ISO 32000-1, 9.9), and a host face in its place
+        // hid a font that KitePDF could not read (#280, #853).
     }
 
     /**

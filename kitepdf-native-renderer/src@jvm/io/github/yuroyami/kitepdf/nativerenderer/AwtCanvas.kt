@@ -181,7 +181,6 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
 
         val unitScale = fontSize / unitsPerEm   // glyph outlines: font units → text space
         val advanceScale = fontSize / 1000.0    // PDF glyph widths are 1/1000 em, NOT font units
-        var drewAny = false
         // Glyph positions snap to MuPDF's subpixel grid, and glyph pixels come from the cache,
         // when this Graphics draws in whole device pixels: no transform, or a shift by whole pixels.
         val base = g.transform
@@ -205,16 +204,13 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
                     if (!cache || !drawCachedGlyph(outline, glyphMatrix, unitsPerEm, awtColor)) {
                         g.fill(toAwtPath(outline, glyphMatrix, scratchPath).apply { windingRule = Path2D.WIND_NON_ZERO })
                     }
-                    drewAny = true
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
         }
-        // Embedded font present but produced no glyphs (e.g. a subset we can't
-        // decode). Fall back to a system font rather than rendering blank.
-        if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
-            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
-        }
+        // A glyph that the embedded program gives no outline draws nothing, on every canvas: the
+        // program is the source of the glyphs (ISO 32000-1, 9.9), and a host face in its place
+        // hid a font that KitePDF could not read (#280, #853).
     }
 
     /** The pixels of one glyph at one size, subpixel position and colour; null for an outline that covers nothing. */

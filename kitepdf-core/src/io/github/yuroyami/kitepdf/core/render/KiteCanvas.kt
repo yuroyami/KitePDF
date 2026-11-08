@@ -108,7 +108,8 @@ public interface KiteCanvas {
      * handler (PDF, EPUB, and others) drives text the same way.
      *
      * Embedded fonts ([hasOutlines] = true) carry a resolved [TextGlyph.outline]
-     * per glyph; scale each by [fontSize]/[unitsPerEm], advance the pen by
+     * per glyph; a glyph without one draws nothing, on every canvas, also when no
+     * glyph of the run has one (ISO 32000-1, 9.9; #853). Scale each by [fontSize]/[unitsPerEm], advance the pen by
      * `advanceWidth * fontSize / 1000 + advanceAdjust` (the adjust term carries
      * character/word spacing), and paint under [textToDevice].
      * Non-embedded fonts ([hasOutlines] = false) carry no outlines; render

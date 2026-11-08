@@ -278,7 +278,6 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
 
         val unitScale = fontSize / unitsPerEm  // glyph outlines: font units → text space
         val advanceScale = fontSize / 1000.0   // advances are 1/1000 em, not font units
-        var drewAny = false
         CGContextSaveGState(ctx)
         try {
             CGContextSetBlendMode(ctx, paintBlend(blendMode))
@@ -292,18 +291,15 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     buildPath(outline, glyphMatrix)
                     CGContextFillPath(ctx)
-                    drewAny = true
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
         } finally {
             CGContextRestoreGState(ctx)
         }
-        // Embedded font present but produced no glyphs (e.g. a subset we can't
-        // decode). Fall back to a system font rather than rendering blank.
-        if (!drewAny && glyphs.any { it.text.isNotBlank() }) {
-            drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
-        }
+        // A glyph that the embedded program gives no outline draws nothing, on every canvas: the
+        // program is the source of the glyphs (ISO 32000-1, 9.9), and a host face in its place
+        // hid a font that KitePDF could not read (#280, #853).
     }
 
     /**
