@@ -268,6 +268,11 @@ internal data class ComputedStyle(
      * [tabLengthPt] when that is set. Inherited.
      */
     val tabSpaces: Double = 8.0,
+    /**
+     * `image-rendering`: false for `pixelated`, `crisp-edges` and SVG 1.1's `optimizeSpeed`, which
+     * draw an enlarged image with hard pixel edges (CSS Images 3; #936). Inherited.
+     */
+    val smoothImages: Boolean = true,
     val tabLengthPt: Double? = null,
     /**
      * A unitless `line-height`: the number is what computes and inherits, and each element's

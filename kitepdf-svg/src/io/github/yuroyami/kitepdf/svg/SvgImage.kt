@@ -196,6 +196,11 @@ public class SvgImage private constructor(
         val fontSpec: FontSpec = FontSpec.SansSerif,
         val textAnchor: String? = null,
         val visible: Boolean = true,
+        /**
+         * `image-rendering`, inherited: false for `pixelated`, `crisp-edges` and SVG 1.1's
+         * `optimizeSpeed`, which draw an enlarged image with hard pixel edges (CSS Images 3; #936).
+         */
+        val smoothImages: Boolean = true,
         val dash: List<Double>? = null,
         val dashOffset: Double = 0.0,
         val lineCap: Int = 0,
@@ -489,7 +494,7 @@ public class SvgImage private constructor(
         val placed = compose(origin, compose(fit.matrix, KiteMatrix(iw, 0.0, 0.0, -ih, 0.0, ih)))
         if (fit.slice) canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, w, h) }.build(), origin, evenOdd = false)
         try {
-            canvas.drawImage(image, placed, paint.opacity)
+            canvas.drawImage(image.withInterpolate(paint.smoothImages && image.interpolate), placed, paint.opacity)
         } finally {
             if (fit.slice) canvas.popClip()
         }
@@ -1679,6 +1684,11 @@ public class SvgImage private constructor(
                 "hidden", "collapse" -> false
                 "visible" -> true
                 else -> p.visible
+            },
+            smoothImages = when (declaration("image-rendering")?.trim()?.lowercase()) {
+                "pixelated", "crisp-edges", "optimizespeed", "-webkit-optimize-contrast" -> false
+                "auto", "smooth", "high-quality", "optimizequality" -> true
+                else -> p.smoothImages
             },
             // SVG 1.1, 11.4: the stroke properties are inherited like the rest (#92).
             dash = when (val raw = declaration("stroke-dasharray")?.trim()) {

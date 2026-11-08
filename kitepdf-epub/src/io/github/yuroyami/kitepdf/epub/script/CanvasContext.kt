@@ -543,6 +543,9 @@ internal class CanvasContext(val canvas: KiteXmlNode.Element, private val host: 
         val box = sourceElement(source, sx, sy, abs(sw0), abs(sh0), dx, dy, abs(dw0), abs(dh0), "i${bitmap.id()}_") ?: return
         val g = element("g", "transform" to matrix(state.transform))
         if (state.alpha < 1.0) g.attrs = g.attrs + ("opacity" to num(state.alpha))
+        // HTML, image smoothing: with imageSmoothingEnabled false a scaled image draws with nearest
+        // pixels. Each draw keeps the flag it had, as a script can change it between draws (#936).
+        if (!state.smoothing) g.attrs = g.attrs + ("image-rendering" to "pixelated")
         g.children.add(box)
         val m = state.transform
         val corners = listOf(dx to dy, dx + abs(dw0) to dy, dx to dy + abs(dh0), dx + abs(dw0) to dy + abs(dh0))

@@ -682,6 +682,10 @@ internal class StyleResolver(
             "top" -> b.topPt = sizeValue(b, v, refWidthPt)
             "right" -> b.rightPt = sizeValue(b, v, refWidthPt)
             "bottom" -> b.bottomPt = sizeValue(b, v, refWidthPt)
+            "image-rendering" -> when (v.trim().lowercase()) {
+                "pixelated", "crisp-edges", "optimizespeed", "-webkit-optimize-contrast", "-moz-crisp-edges" -> b.smoothImages = false
+                "auto", "smooth", "high-quality", "optimizequality" -> b.smoothImages = true
+            }
             "object-fit" -> b.objectFit = when (v.trim().lowercase()) {
                 "contain" -> ObjectFit.CONTAIN; "cover" -> ObjectFit.COVER; else -> ObjectFit.FILL
             }
@@ -763,6 +767,7 @@ internal class StyleResolver(
             "letter-spacing" -> dst.letterSpacingPt = src.letterSpacingPt
             "word-spacing" -> dst.wordSpacingPt = src.wordSpacingPt
             "tab-size", "-moz-tab-size", "-o-tab-size" -> { dst.tabSpaces = src.tabSpaces; dst.tabLengthPt = src.tabLengthPt }
+            "image-rendering" -> dst.smoothImages = src.smoothImages
             "hyphens" -> dst.hyphensAuto = src.hyphensAuto
             "direction" -> dst.direction = src.direction
             "writing-mode" -> dst.writingMode = src.writingMode
@@ -1243,6 +1248,7 @@ internal class StyleResolver(
         var letterSpacingPt = parent.letterSpacingPt // inherited
         var wordSpacingPt = parent.wordSpacingPt // inherited
         var tabSpaces = parent.tabSpaces // inherited
+        var smoothImages = parent.smoothImages // inherited
         var tabLengthPt = parent.tabLengthPt // inherited
         var smallCaps = parent.smallCaps // inherited
         var minWidthPt: Double? = null; var minHeightPt: Double? = null; var maxHeightPt: Double? = null
@@ -1391,6 +1397,7 @@ internal class StyleResolver(
                 emphasisPosition = emphasisPosition,
                 textCombineUpright = textCombineUpright,
                 tabSpaces = tabSpaces,
+                smoothImages = smoothImages,
                 tabLengthPt = tabLengthPt,
                 lineHeightFactor = lineHeightFactor,
                 language = language,
@@ -1406,7 +1413,7 @@ internal class StyleResolver(
             "font-weight", "font-style", "text-anchor", "stroke-dasharray", "stroke-dashoffset",
             "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stop-color", "stop-opacity",
             "mask", "mask-type", "filter", "flood-color", "flood-opacity", "lighting-color",
-            "color-interpolation-filters",
+            "color-interpolation-filters", "image-rendering",
         )
 
         /** What the layout applies to the outermost `svg` as a box, so the SVG must not apply it again. */

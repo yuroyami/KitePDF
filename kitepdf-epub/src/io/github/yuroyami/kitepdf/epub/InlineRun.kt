@@ -85,6 +85,8 @@ internal data class InlineRun(
     /** The image's `alt`, for the reading order. Empty string means decorative. */
     val imageAlt: String? = null,
     val imageObjectFit: ObjectFit = ObjectFit.FILL,
+    /** False when the image's `image-rendering` asks for hard pixel edges (#936). */
+    val imageSmooth: Boolean = true,
     val lineThrough: DecorationLine? = null,
     val overline: DecorationLine? = null,
     /** The emphasis marks over the run's letters, or null for none (CSS Text Decoration 3, 3, #508). */

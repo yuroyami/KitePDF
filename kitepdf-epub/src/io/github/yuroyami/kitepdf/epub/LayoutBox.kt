@@ -219,6 +219,8 @@ internal class PlacedImage(
     val zipPath: String = "",
     /** The `<img>` or `<svg>` element, in a chapter that scripts run in (see [InlineRun.element]). */
     val element: KiteXmlNode.Element? = null,
+    /** False when the image's `image-rendering` asks for hard pixel edges (#936). */
+    val smooth: Boolean = true,
 )
 
 /** A formula placed on a line, its baseline on the line's, at document-space inline position [x] (#32). */

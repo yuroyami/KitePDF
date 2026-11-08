@@ -132,4 +132,23 @@ class CanvasDrawingTest {
         runner(book).chapterOpened(0)
         assertNull(fillsOf(book.page(KiteLocation(0, 0)), 0, 0, 0).firstOrNull { it.width > 100 }, "no black box")
     }
+
+    @Test
+    fun a_draw_with_smoothing_off_keeps_hard_pixel_edges(): TestResult = scriptTest {
+        // HTML, image smoothing: with imageSmoothingEnabled false a scaled image draws with nearest pixels (#936).
+        suspend fun images(smoothing: Boolean): List<Boolean> {
+            val book = canvasBook(
+                "var d = document.createElement('canvas'); d.width = 2; d.height = 2;" +
+                    "var y = d.getContext('2d'); var p = y.createImageData(2, 2);" +
+                    "for (var i = 0; i < 16; i += 4) { var on = (i == 0 || i == 12) ? 0 : 255; p.data[i] = on; p.data[i + 1] = on; p.data[i + 2] = on; p.data[i + 3] = 255; }" +
+                    "y.putImageData(p, 0, 0); x.imageSmoothingEnabled = $smoothing; x.drawImage(d, 0, 0, 200, 100);",
+            )
+            runner(book).chapterOpened(0)
+            val canvas = io.github.yuroyami.kitepdf.core.render.RecordingCanvas()
+            book.page(KiteLocation(0, 0)).renderTo(canvas)
+            return canvas.calls.filterIsInstance<io.github.yuroyami.kitepdf.core.render.RecordingCanvas.Call.Image>().map { it.image.interpolate }
+        }
+        assertEquals(listOf(false), images(false))
+        assertEquals(listOf(true), images(true))
+    }
 }

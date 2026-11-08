@@ -2091,6 +2091,7 @@ internal class BoxLayout(
         val svgImage: SvgImage? = null,
         val imageAlt: String? = null,
         val imageObjectFit: ObjectFit = ObjectFit.FILL,
+        val imageSmooth: Boolean = true,
         // The image's file in the archive; empty for an <svg> written in the chapter.
         val imageZipPath: String = "",
         // A formula cell (cp = U+FFFC): its layout and what the reading order says for it (#32).
@@ -2309,7 +2310,7 @@ internal class BoxLayout(
                     0xFFFC, inlineSize, run.fontSizePt, fontSpec(run.family, run.bold, run.italic),
                     run.color, 0.0, null,
                     href = run.href, element = run.element, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
-                    imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit, imageZipPath = run.imageSrc,
+                    imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit, imageSmooth = run.imageSmooth, imageZipPath = run.imageSrc,
                     level = levelsOfRun?.get(0) ?: 0, src = src,
                 )
                 tokens.add(Token.Word(listOf(cell), inlineSize))
@@ -2914,7 +2915,7 @@ internal class BoxLayout(
             if (c.isImage) {
                 closeGroup(x)
                 imageSink?.add(
-                    PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt, c.imageObjectFit, c.imageZipPath, c.element),
+                    PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt, c.imageObjectFit, c.imageZipPath, c.element, smooth = c.imageSmooth),
                 )
                 x += c.padBefore + c.width + c.padAfter
                 spaces = 0; spacesWidth = 0.0

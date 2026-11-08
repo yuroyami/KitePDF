@@ -220,7 +220,7 @@ internal class BoxBuilder(
                                 cs.cssFloat == CssFloat.NONE
                             ) {
                                 inl.addImage(
-                                    resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"], cs.objectFit,
+                                    resolveHref(src), style, cs.widthPt ?: aw?.times(0.75), cs.heightPt ?: ah?.times(0.75), child.attrs["alt"], cs.objectFit, smoothImages = cs.smoothImages,
                                     element = child.takeIf { tracksElements },
                                 )
                             } else {
@@ -277,7 +277,7 @@ internal class BoxBuilder(
                         if ((cs.display == Display.INLINE || cs.display == Display.INLINE_BLOCK) && cs.cssFloat == CssFloat.NONE &&
                             hasTextBeside(child)
                         ) {
-                            inl.addImage("", style, cs.widthPt ?: w, cs.heightPt ?: h, alt = "", objectFit = cs.objectFit, svg = svg, element = child.takeIf { tracksElements })
+                            inl.addImage("", style, cs.widthPt ?: w, cs.heightPt ?: h, alt = "", objectFit = cs.objectFit, smoothImages = cs.smoothImages, svg = svg, element = child.takeIf { tracksElements })
                         } else {
                             flush()
                             children.add(ImageBox(cs, "", svg, attrWidth = w, attrHeight = h).also { it.source = child })
@@ -296,7 +296,7 @@ internal class BoxBuilder(
                                 val svgSem = svgSemantics(child, sem)
                                 inl.addImage(
                                     "", style, cs.widthPt ?: svgSizePt(child.attrs["width"], cs), cs.heightPt ?: svgSizePt(child.attrs["height"], cs),
-                                    alt = if (svgSem.hidden) "" else svgSem.label, objectFit = cs.objectFit, svg = svg,
+                                    alt = if (svgSem.hidden) "" else svgSem.label, objectFit = cs.objectFit, smoothImages = cs.smoothImages, svg = svg,
                                     element = child.takeIf { tracksElements },
                                 )
                             }
@@ -831,7 +831,7 @@ internal class BoxBuilder(
                             if (cs.display == Display.NONE) continue
                             val aw = child.attrs["width"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
                             val ah = child.attrs["height"]?.trim()?.removeSuffix("px")?.toDoubleOrNull()?.times(0.75)
-                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah, child.attrs["alt"], cs.objectFit, element = child.takeIf { tracksElements })
+                            inl.addImage(resolveHref(src), style, cs.widthPt ?: aw, cs.heightPt ?: ah, child.attrs["alt"], cs.objectFit, smoothImages = cs.smoothImages, element = child.takeIf { tracksElements })
                         }
                         continue
                     }
@@ -872,7 +872,7 @@ internal class BoxBuilder(
                             child.attrs["id"]?.takeIf { it.isNotBlank() }?.let(anchorSink::add)
                             inl.addImage(
                                 "", style, cs.widthPt ?: canvasSizePt(drawing, "width"), cs.heightPt ?: canvasSizePt(drawing, "height"),
-                                alt = "", objectFit = cs.objectFit, svg = svg, element = child.takeIf { tracksElements },
+                                alt = "", objectFit = cs.objectFit, smoothImages = cs.smoothImages, svg = svg, element = child.takeIf { tracksElements },
                             )
                         }
                         continue
@@ -887,7 +887,7 @@ internal class BoxBuilder(
                             val sem = svgSemantics(child, parentSem)
                             inl.addImage(
                                 "", style, cs.widthPt ?: svgSizePt(child.attrs["width"], cs), cs.heightPt ?: svgSizePt(child.attrs["height"], cs),
-                                alt = if (sem.hidden) "" else sem.label, objectFit = cs.objectFit, svg = svg,
+                                alt = if (sem.hidden) "" else sem.label, objectFit = cs.objectFit, smoothImages = cs.smoothImages, svg = svg,
                                 element = child.takeIf { tracksElements },
                             )
                         }
@@ -1089,6 +1089,8 @@ internal class BoxBuilder(
             objectFit: ObjectFit = ObjectFit.FILL, svg: SvgImage? = null,
             /** The `<img>` or `<svg>` itself, in a chapter that scripts run in (#41). */
             element: KiteXmlNode.Element? = null,
+            /** `image-rendering` other than pixelated (#936). */
+            smoothImages: Boolean = true,
         ) {
             if (pendingSpace && blockHasContent && !lastWasBreak) {
                 runs.add(pendingSpaceRun ?: makeRun(" ", style))
@@ -1097,7 +1099,7 @@ internal class BoxBuilder(
             runs.add(
                 makeRun("￼", style).copy(
                     imageSrc = src, imageSvg = svg, imageCssW = cssW, imageCssH = cssH, imageAlt = alt, imageObjectFit = objectFit,
-                    element = element ?: this.element,
+                    imageSmooth = smoothImages, element = element ?: this.element,
                 ),
             )
         }

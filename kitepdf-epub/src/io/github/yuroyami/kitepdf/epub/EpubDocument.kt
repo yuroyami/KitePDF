@@ -2259,7 +2259,7 @@ public class EpubPage internal constructor(
                     continue
                 }
                 paintImage(canvas, ctm, im.image, im.svg, im.width, im.height,
-                    margin + im.x, base, im.objectFit, resourceDir(im.zipPath))
+                    margin + im.x, base, im.objectFit, resourceDir(im.zipPath), smooth = im.smooth)
             }
             // Formulas: their baselines on the line's (#32).
             for (m in line.maths) paintMath(canvas, ctm, m, margin + m.x, base)
@@ -2309,7 +2309,7 @@ public class EpubPage internal constructor(
                         paintRemoteImage(canvas, ctm, box.zipPath, box.drawWidth, box.drawHeight, left, bottom, box.style.objectFit) -> Unit
                     box.media != null && box.image == null -> paintMediaPlaceholder(canvas, ctm, left, bottom, box.drawWidth, box.drawHeight)
                     else -> paintImage(canvas, ctm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                        left, bottom, box.style.objectFit, resourceDir(box.zipPath))
+                        left, bottom, box.style.objectFit, resourceDir(box.zipPath), smooth = box.style.smoothImages)
                 }
                 if (radii != null) canvas.popClip()
             },
@@ -2423,7 +2423,7 @@ public class EpubPage internal constructor(
                     continue
                 }
                 paintImage(canvas, deviceCtm, im.image, im.svg, im.width, im.height,
-                    axisX(0.0), displayHeight - top - im.height, im.objectFit, resourceDir(im.zipPath))
+                    axisX(0.0), displayHeight - top - im.height, im.objectFit, resourceDir(im.zipPath), smooth = im.smooth)
             }
         }
 
@@ -2453,7 +2453,7 @@ public class EpubPage internal constructor(
                         paintRemoteImage(canvas, deviceCtm, box.zipPath, box.drawWidth, box.drawHeight, left, bottom, box.style.objectFit) -> Unit
                     box.media != null && box.image == null -> paintMediaPlaceholder(canvas, deviceCtm, left, bottom, box.drawWidth, box.drawHeight)
                     else -> paintImage(canvas, deviceCtm, box.image, box.svg, box.drawWidth, box.drawHeight,
-                        left, bottom, box.style.objectFit, resourceDir(box.zipPath))
+                        left, bottom, box.style.objectFit, resourceDir(box.zipPath), smooth = box.style.smoothImages)
                 }
             },
         )
@@ -2611,6 +2611,8 @@ public class EpubPage internal constructor(
     private fun paintImage(
         canvas: KiteCanvas, deviceCtm: KiteMatrix, image: KiteImageData?, svg: SvgImage?,
         width: Double, height: Double, left: Double, bottom: Double, objectFit: ObjectFit, baseDir: String,
+        /** False for `image-rendering: pixelated` and its kin: an enlarged image keeps hard pixel edges (#936). */
+        smooth: Boolean = true,
     ) {
         val intrinsicW = svg?.width ?: image?.width?.toDouble() ?: return
         val intrinsicH = svg?.height ?: image?.height?.toDouble() ?: return
@@ -2636,7 +2638,7 @@ public class EpubPage internal constructor(
                 else svg.render(canvas, deviceCtm.concat(m), svgLoader(baseDir))
             } else if (image != null) {
                 val m = KiteMatrix(dw, 0.0, 0.0, dh, x, y)
-                canvas.drawImage(image, deviceCtm.concat(m))
+                canvas.drawImage(if (smooth) image else image.withInterpolate(false), deviceCtm.concat(m))
             }
         } finally {
             if (cover) canvas.popClip()

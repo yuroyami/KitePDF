@@ -200,8 +200,11 @@ public class KiteImageData internal constructor(
         ) to r
     }
 
-    /** This image with [interpolate] set to [on]. */
-    internal fun withInterpolate(on: Boolean): KiteImageData =
+    /**
+     * This image with [interpolate] set to [on]: false draws an enlarged image with nearest
+     * pixels, as `image-rendering: pixelated` and a canvas with smoothing off ask (#936).
+     */
+    public fun withInterpolate(on: Boolean): KiteImageData =
         if (on == interpolate) this else copy(interpolate = on, identity = bitmapIdentity)
 
     /** The images [withIntent] made from this one, two per intent. */

@@ -116,7 +116,7 @@ internal class SvgStyles(root: KiteXmlNode.Element, host: ((KiteXmlNode.Element)
             "font-weight", "font-style", "text-anchor", "stroke-dasharray", "stroke-dashoffset",
             "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stop-color", "stop-opacity",
             "mask", "mask-type", "filter", "flood-color", "flood-opacity", "lighting-color",
-            "color-interpolation-filters", "mix-blend-mode", "isolation",
+            "color-interpolation-filters", "mix-blend-mode", "isolation", "image-rendering",
         )
 
         /** The same declaration grammar for a standalone gradient parser. */
@@ -228,6 +228,10 @@ internal class SvgStyles(root: KiteXmlNode.Element, host: ((KiteXmlNode.Element)
                 "text-anchor" -> lower in setOf("start", "middle", "end")
                 "color-interpolation-filters" -> lower in setOf("auto", "srgb", "linearrgb")
                 "isolation" -> lower in setOf("auto", "isolate")
+                "image-rendering" -> lower in setOf(
+                    "auto", "smooth", "high-quality", "pixelated", "crisp-edges", "optimizespeed", "optimizequality",
+                    "-webkit-optimize-contrast",
+                )
                 "mix-blend-mode" -> lower in BLEND_MODES
                 "visibility" -> lower in setOf("visible", "hidden", "collapse")
                 "font-style" -> lower in setOf("normal", "italic", "oblique")
