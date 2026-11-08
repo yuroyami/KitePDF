@@ -311,6 +311,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at German points, where the chapter's one language applied to all its text (#864).
 - `text-transform` uses the full case mappings, so `Straße` uppercases to `STRASSE`, a capital sigma that ends a
   word lowercases to `ς`, and a Turkish or Azeri `i` keeps its dot as `İ` (#873).
+- A simple font with `/Widths` but no `/FirstChar` keeps its widths, read from code 0 as Poppler reads them,
+  where every glyph advanced by 500 (#657).
+- `/MissingWidth` is read from the font descriptor, integer or real, so a code that `/Widths` does not cover
+  advances by it instead of 0 (#655).
+- A CFF font with the predefined Expert or ExpertSubset charset names its glyphs in that charset's order, where
+  it took the ISOAdobe names and its old-style figures and small capitals drew nothing (#818).
 
 ## [0.13.0] - 2026-10-09
 

@@ -633,8 +633,10 @@ public class PdfFont private constructor(
         ): WidthTable {
             val widths = IntArray(256)
             val present = BooleanArray(256)
-            val firstChar = dict.getInt("FirstChar")?.toInt() ?: -1
             val arr = dict.getArray("Widths", refs) // /Widths is often an indirect reference
+            // Table 111 requires /FirstChar, but a writer may leave it out: with /Widths present it
+            // reads as 0, as Poppler reads it, so the widths are kept (#657).
+            val firstChar = dict.getInt("FirstChar")?.toInt() ?: if (arr != null) 0 else -1
             // Standard-14 metrics seed the table (a real, defined width) for the
             // built-in fonts; these count as "present" so we don't fall back. With
             // no /Widths, a Windows core-font name borrows the metrics of the
@@ -663,8 +665,15 @@ public class PdfFont private constructor(
             // standard-14 font with NO /Widths at all we keep a sane 500 so text
             // doesn't collapse (we can't know the real metric for unseeded codes).
             val hasWidthsArray = firstChar in 0..255 && arr != null
-            val fallback = dict.getInt("MissingWidth")?.toInt()
-                ?: if (hasWidthsArray) 0 else 500
+            // /MissingWidth is a number of the font descriptor (ISO 32000-1, 9.8.1, Table 122; #655).
+            val missing = dict.getDict("FontDescriptor", refs)?.let { fd ->
+                when (val v = fd["MissingWidth"]?.let { runCatching { it.resolve(refs) }.getOrNull() }) {
+                    is PdfInt -> v.value.toDouble()
+                    is PdfReal -> v.value
+                    else -> null
+                }
+            }?.takeIf { it.isFinite() }
+            val fallback = missing?.toInt() ?: if (hasWidthsArray) 0 else 500
             return WidthTable(widths, present, fallback)
         }
 

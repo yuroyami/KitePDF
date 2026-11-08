@@ -22,6 +22,38 @@ import kotlin.test.assertEquals
  */
 class FontWidthResolutionTest {
 
+    private fun dict(vararg e: Pair<String, PdfObject>) = PdfDictionary(linkedMapOf(*e))
+
+    @Test fun widths_without_first_char_start_at_code_0() {
+        // Table 111 requires /FirstChar; without it, as in Poppler, /Widths starts at 0 (#657).
+        val font = PdfFont.from(
+            dict(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("TrueType"), "BaseFont" to PdfName("Foo"),
+                "LastChar" to PdfInt(90), "Widths" to PdfArray(List(91) { PdfInt(250) }), "Encoding" to PdfName("WinAnsiEncoding"),
+            ),
+            IndirectResolver { null },
+        )
+        assertEquals(250, font.widthOf('A'.code))
+    }
+
+    @Test fun missing_width_comes_from_the_font_descriptor() {
+        // ISO 32000-1, 9.8.1, Table 122: /MissingWidth is a number of the descriptor (#655).
+        val descriptor = dict(
+            "Type" to PdfName("FontDescriptor"), "FontName" to PdfName("Custom"), "Flags" to PdfInt(32),
+            "MissingWidth" to io.github.yuroyami.kitepdf.core.parser.PdfReal(400.0),
+        )
+        val font = PdfFont.from(
+            dict(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("Type1"), "BaseFont" to PdfName("Custom"),
+                "FirstChar" to PdfInt(65), "LastChar" to PdfInt(66), "Widths" to PdfArray(listOf(PdfInt(600), PdfInt(600))),
+                "Encoding" to PdfName("WinAnsiEncoding"), "FontDescriptor" to descriptor,
+            ),
+            IndirectResolver { null },
+        )
+        assertEquals(600, font.widthOf('A'.code))
+        assertEquals(400, font.widthOf('C'.code))
+    }
+
     @Test fun composite_resolves_indirect_W() {
         // /W [ 10 [500 600] 20 25 700 ] delivered via an indirect reference.
         val wArray = PdfArray(
