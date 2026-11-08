@@ -44,6 +44,10 @@ internal class Type1CharstringInterpreter(
     /** Left sidebearing x set by hsbw/sbw. Needed for seac accent placement. */
     private var sbx = 0.0
 
+    /** The glyph's advance in charstring units, from hsbw or sbw, or null when it has neither (#916). */
+    var advanceWidth: Double? = null
+        private set
+
     /* ─── Flex state (OtherSubrs 0/1/2) ──────────────────────────────────── */
     /** True between OtherSubr 1 (flex begin) and OtherSubr 0 (flex end). */
     private var inFlex = false
@@ -152,7 +156,8 @@ internal class Type1CharstringInterpreter(
             11 -> { done = false; return }             // return (depth is decremented by execute's finally)
             13 -> {                                    // hsbw: sbx wx
                 if (stack.size >= 2) {
-                    /* wx = */ stack.removeLast()
+                    val wx = stack.removeLast()
+                    if (advanceWidth == null) advanceWidth = wx
                     val sb = stack.removeLast()
                     sbx = sb
                     x = sb; y = 0.0
@@ -213,7 +218,8 @@ internal class Type1CharstringInterpreter(
             7 -> {                                     // sbw: sbx sby wx wy
                 if (stack.size >= 4) {
                     /* wy = */ stack.removeLast()
-                    /* wx = */ stack.removeLast()
+                    val wx = stack.removeLast()
+                    if (advanceWidth == null) advanceWidth = wx
                     val sby = stack.removeLast()
                     val sb = stack.removeLast()
                     sbx = sb

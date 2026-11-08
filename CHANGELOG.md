@@ -286,6 +286,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `extractText()` decodes text after `Q` with the font that `q` saved, and text in a form with the font of its
   caller, as the renderer does. It kept the last `Tf` font, so a Helvetica word after a Symbol one read as Greek
   (#825).
+- A simple font with an embedded CFF or Type 1 program and no `/Widths` advances each glyph by the width its
+  charstring gives, as it already did for TrueType, where every glyph took the default width (#916).
 
 ## [0.13.0] - 2026-10-09
 

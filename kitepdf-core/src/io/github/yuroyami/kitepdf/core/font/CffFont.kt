@@ -129,6 +129,27 @@ public class CffFont private constructor(
      * 9.2.4): [outline] mapped through the `FontMatrix` of its FontDict. It is [outline]
      * itself when that matrix is the default, `[0.001 0 0 0.001 0 0]`.
      */
+    private val advanceCache = HashMap<Int, Double?>()
+
+    /**
+     * The advance of [glyphId] in glyph space, 1000 units an em: the width its charstring gives,
+     * or the default width, through the `FontMatrix` of its FontDict. A simple font without
+     * `/Widths` advances by these, as MuPDF and Poppler do (ISO 32000-1, 9.6.2.1; #916).
+     */
+    internal fun glyphSpaceAdvance(glyphId: Int): Double? {
+        if (glyphId < 0 || glyphId >= charStrings.size) return null
+        glyphLock.withLock { if (advanceCache.containsKey(glyphId)) return advanceCache[glyphId] }
+        val fd = if (fdSelect.isNotEmpty()) fdSelect[glyphId] else 0
+        val cs = charStrings[glyphId]
+        val raw = if (cs.isEmpty() || isCff2) null else runCatching {
+            CharstringInterpreter(cs, localSubrsPerFd.getOrNull(fd) ?: emptyList(), globalSubrs, defaultWidthX, nominalWidthX)
+                .also { it.interpret() }.advanceWidth
+        }.getOrNull()
+        // Charstring units are 1/1000 em under the default matrix; another one scales them.
+        val w = raw?.let { v -> glyphSpaceMatrices.getOrNull(fd)?.let { v * it.a } ?: v }?.takeIf { it.isFinite() }
+        return glyphLock.withLock { advanceCache.getOrPut(glyphId) { w } }
+    }
+
     internal fun glyphSpaceOutline(glyphId: Int): KitePath? {
         val raw = outline(glyphId) ?: return null
         val fd = if (fdSelect.isNotEmpty()) fdSelect[glyphId] else 0

@@ -12,6 +12,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.KitePath
+import kotlin.math.roundToInt
 
 /**
  * A resolved PDF font.
@@ -234,7 +235,8 @@ public class PdfFont private constructor(
         val code = byteCode and 0xFF
         // A DEFINED width wins even when it is exactly 0 (e.g. combining marks);
         // only a truly absent entry falls back to /MissingWidth (defaultWidth).
-        return if (hasSimpleWidth[code]) simpleWidths[code] else defaultWidth
+        // A code with none takes the embedded program's advance before /MissingWidth (#916).
+        return if (hasSimpleWidth[code]) simpleWidths[code] else if (composite == null) simpleWidth(code, simpleGid(code)) else defaultWidth
     }
 
     /** True iff the underlying embedded font has its own advance metrics. */
@@ -309,6 +311,11 @@ public class PdfFont private constructor(
         embeddedTtf?.let { ttf ->
             val w = ttf.advanceWidth(gid)
             if (w > 0) return scaleToEm(w, ttf.unitsPerEm)
+        }
+        // A CFF or Type 1 program gives the advance its charstring sets (#916).
+        embeddedCff?.glyphSpaceAdvance(gid)?.let { if (it > 0.0) return it.roundToInt() }
+        embeddedType1?.let { t1 ->
+            glyphNameForByte[c]?.let { t1.advanceForGlyphName(it) }?.let { if (it > 0.0) return it.roundToInt() }
         }
         return defaultWidth
     }

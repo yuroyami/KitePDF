@@ -104,6 +104,21 @@ class FontMatrixTest {
     }
 
     @Test
+    fun a_simple_font_without_widths_advances_by_its_cff_widths() {
+        // ISO 32000-1, 9.6.2.1 requires /Widths; without them the program's advances apply (#916).
+        fun font(matrix: ByteArray) = PdfFont.from(
+            dict(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("Type1"), "BaseFont" to PdfName("Test"),
+                "FontDescriptor" to descriptor(TestCff.simple(matrix, TestCff.WIDE_BOX), "Type1C"),
+            ),
+            refs,
+        )
+        assertEquals(600, font(ByteArray(0)).widthOf(32))
+        assertEquals(600.0, font(ByteArray(0)).layoutBytes(byteArrayOf(32)).single().advanceWidth, 1e-9)
+        assertEquals(300, font(half).widthOf(32), "a matrix of 2000 units an em halves the advance")
+    }
+
+    @Test
     fun a_subset_records_units_per_em_that_are_not_1000() {
         val source = CffFont.parse(TestCff.simple())
         val plain = CffFont.parse(CffSubsetter.subset(source, setOf(1)).cff)
@@ -151,6 +166,9 @@ internal object TestCff {
         return listOf(xs.min(), ys.min(), xs.max(), ys.max())
     }
 
+    /** [BOX] with a width of 600: `600 0 0 rmoveto ...`. */
+    val WIDE_BOX = bytes(248, 236) + bytes(139, 139, 21, 248, 136, 139, 139, 249, 80, 252, 136, 139, 5, 14)
+
     /** Type 2 charstring: `0 0 rmoveto 500 0 0 700 -500 0 rlineto endchar`. */
     private val BOX = bytes(139, 139, 21, 248, 136, 139, 139, 249, 80, 252, 136, 139, 5, 14)
 
@@ -196,10 +214,10 @@ internal object TestCff {
     fun matrix(vararg numbers: String): ByteArray = numbers.fold(ByteArray(0)) { acc, s -> acc + real(s) } + bytes(12, 7)
 
     /** A non-CID program: glyph 0 is `.notdef` and glyph 1 is the box. [topMatrix] goes in the Top DICT. */
-    fun simple(topMatrix: ByteArray = ByteArray(0)): ByteArray {
+    fun simple(topMatrix: ByteArray = ByteArray(0), glyph: ByteArray = BOX): ByteArray {
         val name = index(listOf("Test".encodeToByteArray()))
         val empty = index(emptyList())
-        val charStrings = index(listOf(bytes(14), BOX))
+        val charStrings = index(listOf(bytes(14), glyph))
         fun top(cs: Int, priv: Int) = topMatrix + int5(cs) + bytes(17) + int5(PRIVATE.size) + int5(priv) + bytes(18)
         val csOffset = 4 + name.size + index(listOf(top(0, 0))).size + 2 * empty.size
         val privOffset = csOffset + charStrings.size

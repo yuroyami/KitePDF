@@ -60,6 +60,24 @@ internal class Type1Font private constructor(
         return path
     }
 
+    private val advanceCache = HashMap<String, Double?>()
+
+    /**
+     * The advance of [glyphName] in glyph space, 1000 units an em, from the `hsbw` or `sbw` of its
+     * charstring through `/FontMatrix`, or null when the font lacks the glyph. A simple font
+     * without `/Widths` advances by these, as MuPDF and Poppler do (ISO 32000-1, 9.6.2.1; #916).
+     */
+    internal fun advanceForGlyphName(glyphName: String): Double? {
+        outlineLock.withLock { if (advanceCache.containsKey(glyphName)) return advanceCache[glyphName] }
+        val cs = charStrings[glyphName]
+        val wx = if (cs == null) null else runCatching {
+            Type1CharstringInterpreter(decryptCharstring(cs, lenIV), subrs, ::seacCharstring).also { it.interpret() }.advanceWidth
+        }.getOrNull()
+        val w = wx?.let { v -> glyphSpace?.let { v * it.a } ?: v }?.takeIf { it.isFinite() }
+        outlineLock.withLock { advanceCache[glyphName] = w }
+        return w
+    }
+
     /**
      * seac resolver: map a StandardEncoding code to that glyph's *decrypted*
      * charstring bytes, or null if the font lacks it. Used by the interpreter to
