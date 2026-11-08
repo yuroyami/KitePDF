@@ -33,6 +33,33 @@ class ZipReaderTest {
     }
 
     @Test
+    fun names_without_the_utf8_flag_read_as_code_page_437() {
+        // APPNOTE 4.4.4 and Appendix D: two CP437 names decoded as UTF-8 were both U+FFFD (#762).
+        val png = byteArrayOf(1, 2, 3)
+        fun cp(vararg b: Int) = ByteArray(b.size) { b[it].toByte() } + ".png".encodeToByteArray()
+        val zip = ZipFixture.build(listOf(
+            ZipFixture.Spec("e", png, rawName = cp(0x82)),
+            ZipFixture.Spec("a", png, rawName = cp(0x84)),
+        ))
+        assertEquals(setOf("\u00E9.png", "\u00E4.png"), ZipReader(zip).names)
+    }
+
+    @Test
+    fun a_unicode_path_field_whose_crc_matches_names_the_entry() {
+        // APPNOTE 4.6.9: the Info-ZIP Unicode Path extra field, 0x7075.
+        val stored = "?.png".encodeToByteArray()
+        val utf8 = "\u65E5.png".encodeToByteArray()
+        val crc = Crc32.of(stored)
+        val field = byteArrayOf(0x75, 0x70, (5 + utf8.size).toByte(), 0, 1,
+            crc.toByte(), (crc shr 8).toByte(), (crc shr 16).toByte(), (crc shr 24).toByte()) + utf8
+        val zip = ZipFixture.build(listOf(ZipFixture.Spec("x", byteArrayOf(1), rawName = stored, extraField = field)))
+        assertEquals(setOf("\u65E5.png"), ZipReader(zip).names)
+        // A name stored as UTF-8 without the flag stays UTF-8.
+        val plain = ZipFixture.build(listOf(ZipFixture.Spec("caf\u00E9.png", byteArrayOf(1))))
+        assertEquals(setOf("caf\u00E9.png"), ZipReader(plain).names)
+    }
+
+    @Test
     fun a_deflated_entry_still_reads() {
         val zip = ZipFixture.build(listOf(ZipFixture.Spec("b.bin", long, deflate = true)))
         assertContentEquals(long, ZipReader(zip).read("b.bin"))
@@ -298,6 +325,10 @@ internal object ZipFixture {
         val corruptData: Boolean = false,
         /** Write these bytes as the entry's payload instead of encoding [data]. */
         val payload: ByteArray? = null,
+        /** The name's bytes as stored, in place of [name] in UTF-8, with the UTF-8 flag clear. */
+        val rawName: ByteArray? = null,
+        /** An extra field for the central directory record. */
+        val extraField: ByteArray? = null,
     )
 
     fun build(specs: List<Spec>, zip64Eocd: Boolean = false): ByteArray {
@@ -314,7 +345,7 @@ internal object ZipFixture {
             }
             val offset = out.size
             val flags = if (s.dataDescriptor) 0x08 else 0
-            val nb = s.name.encodeToByteArray()
+            val nb = s.rawName ?: s.name.encodeToByteArray()
             out.u32(0x04034b50); out.u16(if (s.zip64Extra) 45 else 20); out.u16(flags)
             out.u16(if (s.deflate) 8 else 0); out.u16(0); out.u16(0)
             if (s.hideSizes) { out.u32(0); out.u32(0); out.u32(0) }
@@ -330,13 +361,14 @@ internal object ZipFixture {
         val cdStart = out.size
         for (p in placed) {
             val s = p.spec
-            val nb = s.name.encodeToByteArray()
+            val nb = s.rawName ?: s.name.encodeToByteArray()
             val sentinel = 0xFFFFFFFFL
             val extra = Buf()
             if (s.zip64Extra) {
                 extra.u16(0x0001); extra.u16(16)
                 extra.u64(s.data.size.toLong()); extra.u64(p.payload.size.toLong())
             }
+            s.extraField?.let { extra.raw(it) }
             out.u32(0x02014b50); out.u16(45); out.u16(if (s.zip64Extra) 45 else 20)
             out.u16(if (s.dataDescriptor) 0x08 else 0)
             out.u16(if (s.deflate) 8 else 0); out.u16(0); out.u16(0)

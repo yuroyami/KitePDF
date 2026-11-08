@@ -271,6 +271,45 @@ public class ZipReader private constructor(
         }
     }
 
+    /**
+     * The name of a central directory entry (PKWARE APPNOTE 6.3, 4.4.4 and Appendix D): UTF-8 when
+     * bit 11 of [flags] is set; else the UTF-8 name of an Info-ZIP Unicode Path extra field (4.6.9)
+     * whose CRC matches the stored name; else code page 437. A stored name that is valid UTF-8
+     * stays UTF-8, as many tools write UTF-8 without the flag and an EPUB's names are UTF-8. Two
+     * CP437 names decoded as UTF-8 both became U+FFFD and emptied the archive (#762).
+     */
+    private fun entryName(raw: ByteArray, offset: Int, length: Int, flags: Int, extraStart: Long, extraLen: Int): String {
+        if ((flags and 0x800) != 0) return raw.decodeToString(offset, offset + length)
+        var x = extraStart
+        val xEnd = extraStart + extraLen
+        while (hasRange(x, 4, xEnd)) {
+            val id = u16(x)
+            val len = u16(x + 2)
+            val fieldEnd = checkedEnd(x, 4L + len, xEnd) ?: break
+            if (id == 0x7075 && len >= 5 && bytes.byteAt(x + 4) == 1) {
+                val crc = u32(x + 5)
+                if (crc == Crc32.of(raw, offset, offset + length)) {
+                    bytes.window(x + 9, len - 5)?.let { w -> return w.array.decodeToString(w.offset, w.offset + len - 5) }
+                }
+            }
+            x = fieldEnd
+        }
+        var ascii = true
+        for (k in offset until offset + length) if (raw[k] < 0) { ascii = false; break }
+        if (ascii) return raw.decodeToString(offset, offset + length)
+        try {
+            return raw.decodeToString(offset, offset + length, throwOnInvalidSequence = true)
+        } catch (_: CharacterCodingException) {
+            // Not UTF-8: code page 437.
+        }
+        val sb = StringBuilder(length)
+        for (k in offset until offset + length) {
+            val b = raw[k].toInt() and 0xFF
+            sb.append(if (b < 0x80) b.toChar() else CP437_HIGH[b - 0x80])
+        }
+        return sb.toString()
+    }
+
     private fun parseCentralDirectory(): Map<String, Entry> {
         val eocd = findEocd() ?: return emptyMap()
         // Disk fields: 0 is single-part, 0xFFFF is a ZIP64 sentinel some
@@ -341,8 +380,8 @@ public class ZipReader private constructor(
             val recordSize = CENTRAL_FILE_HEADER_SIZE.toLong() + nameLen + extraLen + commentLen
             val recordEnd = checkedEnd(at, recordSize, directoryEnd) ?: return emptyMap()
             val nameStart = at + CENTRAL_FILE_HEADER_SIZE
-            val name = bytes.window(nameStart, nameLen)?.let { it.array.decodeToString(it.offset, it.offset + nameLen) }
-                ?: return emptyMap()
+            val nameWindow = bytes.window(nameStart, nameLen) ?: return emptyMap()
+            val name = entryName(nameWindow.array, nameWindow.offset, nameLen, flags, nameStart + nameLen, extraLen)
 
             // ZIP64 extra field (id 0x0001) replaces whatever was sentinelled,
             // in this fixed order: uncompressed, compressed, local offset, disk.
@@ -511,3 +550,14 @@ public class ZipReader private constructor(
         private const val LOCAL_FILE_SIG = 0x04034b50L
     }
 }
+
+/** Code page 437 from 0x80 to 0xFF, the encoding of a ZIP entry name without the UTF-8 flag (APPNOTE, Appendix D). */
+private val CP437_HIGH: String =
+    "\u00C7\u00FC\u00E9\u00E2\u00E4\u00E0\u00E5\u00E7\u00EA\u00EB\u00E8\u00EF\u00EE\u00EC\u00C4\u00C5" +
+    "\u00C9\u00E6\u00C6\u00F4\u00F6\u00F2\u00FB\u00F9\u00FF\u00D6\u00DC\u00A2\u00A3\u00A5\u20A7\u0192" +
+    "\u00E1\u00ED\u00F3\u00FA\u00F1\u00D1\u00AA\u00BA\u00BF\u2310\u00AC\u00BD\u00BC\u00A1\u00AB\u00BB" +
+    "\u2591\u2592\u2593\u2502\u2524\u2561\u2562\u2556\u2555\u2563\u2551\u2557\u255D\u255C\u255B\u2510" +
+    "\u2514\u2534\u252C\u251C\u2500\u253C\u255E\u255F\u255A\u2554\u2569\u2566\u2560\u2550\u256C\u2567" +
+    "\u2568\u2564\u2565\u2559\u2558\u2552\u2553\u256B\u256A\u2518\u250C\u2588\u2584\u258C\u2590\u2580" +
+    "\u03B1\u00DF\u0393\u03C0\u03A3\u03C3\u00B5\u03C4\u03A6\u0398\u03A9\u03B4\u221E\u03C6\u03B5\u2229" +
+    "\u2261\u00B1\u2265\u2264\u2320\u2321\u00F7\u2248\u00B0\u2219\u00B7\u221A\u207F\u00B2\u25A0\u00A0"

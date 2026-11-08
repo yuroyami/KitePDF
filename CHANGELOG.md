@@ -369,6 +369,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An SVG whose root element comes after a long XML prolog, such as an Illustrator export with entity
   declarations, is recognised by `KiteDoc.formatOf` and `open`, which read past the first 512 bytes to the root
   element (#740).
+- A ZIP entry name without the UTF-8 flag reads as code page 437, or as the Unicode Path extra field gives it, so
+  a comic whose names an older tool wrote opens instead of reading as empty; a name that is valid UTF-8 stays
+  UTF-8 (#762).
 
 ## [0.13.0] - 2026-10-09
 
