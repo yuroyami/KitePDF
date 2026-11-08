@@ -232,4 +232,50 @@ class SelectorMatchTest {
         body.children.add(0, moved)
         assertEquals(null, previousElement(moved))
     }
+
+    @Test
+    fun the_rule_index_finds_each_rule_by_its_id_class_tag_or_none() {
+        // The cascade tests an element only against the rules its id, classes and tag can match (#856).
+        val css = (1..3000).joinToString("\n") { "p.c$it span.s$it { color: blue }" } + """
+            #x { color: red }
+            .k.j { color: red }
+            P.up { color: red }
+            *.any { color: red }
+            [data-z] { color: red }
+            p.c7 span.s7 { color: red }
+            span.s9 { color: red }
+            #late.k { color: blue }
+        """.trimIndent()
+        val html = """<div>
+            <p id="x">id</p>
+            <p id="kj" class="k  j k">two classes, one twice</p>
+            <p id="up" class="up">tag in another case</p>
+            <p id="any" class="any">universal</p>
+            <p id="z" data-z="1">no key</p>
+            <p class="c7"><span id="s7" class="s7">late rule wins</span></p>
+            <p class="c9"><span id="s9" class="s9">the more specific rule wins</span></p>
+            <p class="c8"><span id="miss" class="s7">no match</span></p>
+            <p id="late" class="k">the id rule is more specific</p>
+        </div>"""
+        val s = resolve(html, css)
+        assertEquals(setOf("x", "kj", "up", "any", "z", "s7"), s.redIds())
+        assertEquals(RgbColor(0.0, 0.0, 1.0), s.getValue("late").color)
+        assertEquals(RgbColor(0.0, 0.0, 1.0), s.getValue("s9").color)
+    }
+
+    @Test
+    fun an_element_is_tested_only_against_the_rules_that_can_match_it() {
+        // Every selector of every rule was tested against every element, three times with ::before and ::after (#856).
+        val resolver = StyleResolver(CssParser.parse((1..3000).joinToString("\n") { "p.c$it span.s$it { color: blue }" }, Origin.AUTHOR), 12.0, 328.0)
+        val tree = HtmlParser.parse("<div>" + "<p class=\"c5\">x <span class=\"s5\">y</span></p>".repeat(10) + "</div>")
+        var elements = 0
+        fun walk(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, parent: ComputedStyle) {
+            val cs = if (el.tag == "#root") resolver.initial() else resolver.compute(el, ancestors, parent).also { elements++ }
+            val childAnc = if (el.tag == "#root") ancestors else listOf(el) + ancestors
+            for (c in el.children) if (c is KiteXmlNode.Element) walk(c, childAnc, cs)
+        }
+        walk(tree, emptyList(), resolver.initial())
+        assertTrue(elements > 20)
+        assertTrue(resolver.selectorTests < elements * 20, "${resolver.selectorTests} selector tests for $elements elements and 3,000 rules")
+    }
 }

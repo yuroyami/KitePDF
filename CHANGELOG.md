@@ -820,6 +820,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default `close` does nothing (#887).
 - An EPUB table lays each cell's content out once instead of twice, so a paragraph inside six nested tables is
   laid out once, not 64 times (#859).
+- The EPUB cascade indexes the style rules by the id, class or tag of their subject, so an element is tested only
+  against the rules that can match it, and a book with thousands of rules no longer lays each chapter out seconds
+  slower (#856).
 
 ## [0.13.0] - 2026-10-09
 

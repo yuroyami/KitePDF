@@ -43,6 +43,75 @@ internal class StyleResolver(
 
     fun initial(): ComputedStyle = ComputedStyle.initial(rootFontSizePt, direction = baseDirection)
 
+    /** One selector of the rule at [order] in [rules]. */
+    private class Indexed(val order: Int, val selector: Selector)
+
+    /**
+     * The selectors of [rules] by the id, else a class, else the tag of their subject compound,
+     * and the rest in [any], as Blink's RuleSet and Gecko's selector maps keep them (#856). An
+     * element is tested only against the selectors that can match it, not every rule of the book.
+     */
+    private class RuleIndex(entries: List<Indexed>) {
+        private val byId = HashMap<String, MutableList<Indexed>>()
+        private val byClass = HashMap<String, MutableList<Indexed>>()
+        private val byTag = HashMap<String, MutableList<Indexed>>()
+        private val any = ArrayList<Indexed>()
+
+        init {
+            for (e in entries) {
+                val subject = e.selector.parts.last()
+                val id = subject.conditions.firstNotNullOfOrNull { (it as? IdCondition)?.id }
+                val cls = subject.conditions.firstNotNullOfOrNull { (it as? ClassCondition)?.name }
+                when {
+                    id != null -> byId.getOrPut(id) { ArrayList() } += e
+                    cls != null -> byClass.getOrPut(cls) { ArrayList() } += e
+                    // A layout tree names its elements in any case, so the tag is the key in lower case.
+                    subject.tag != null -> byTag.getOrPut(asciiLower(subject.tag)) { ArrayList() } += e
+                    else -> any += e
+                }
+            }
+        }
+
+        /** The selectors that may match [el], in no particular order. */
+        fun candidates(el: KiteXmlNode.Element, visit: (Indexed) -> Unit) {
+            any.forEach(visit)
+            byTag[asciiLower(el.tag)]?.forEach(visit)
+            el.attrs["id"]?.let { byId[it] }?.forEach(visit)
+            val classes = el.attrs["class"] ?: return
+            var seen: HashSet<String>? = null
+            for (name in classes.split(' ', '\t', '\n', '\r', '\u000C')) {
+                if (name.isEmpty()) continue
+                val list = byClass[name] ?: continue
+                // A class written twice must not offer its rules twice.
+                if (seen == null) seen = HashSet()
+                if (seen.add(name)) list.forEach(visit)
+            }
+        }
+    }
+
+    /** The rules that style an element, and those of its `::before` and `::after`. */
+    private val elementIndex: RuleIndex by lazy { index { it.pseudoElement == null } }
+    private val beforeIndex: RuleIndex by lazy { index { it.pseudoElement == PseudoSide.BEFORE } }
+    private val afterIndex: RuleIndex by lazy { index { it.pseudoElement == PseudoSide.AFTER } }
+
+    private fun index(keep: (Selector) -> Boolean): RuleIndex = RuleIndex(
+        rules.flatMapIndexed { order, rule -> rule.selectors.filter(keep).map { Indexed(order, it) } },
+    )
+
+    /** How many selectors this resolver has tested against an element, which a test counts (#856). */
+    internal var selectorTests = 0
+
+    /** The highest specificity by which each rule of [index] matches [el], by the rule's order. */
+    private fun matchedRules(index: RuleIndex, el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>): Map<Int, Int> {
+        val matched = HashMap<Int, Int>()
+        index.candidates(el) { e ->
+            selectorTests++
+            val spec = e.selector.specificity
+            if ((matched[e.order] ?: -1) < spec && e.selector.matches(el, ancestors)) matched[e.order] = spec
+        }
+        return matched
+    }
+
     /**
      * What `rem` means: the computed font size of the root element, once it is styled, and the
      * initial font size, the reader's, inside the root's own `font-size` (CSS Values and Units 4,
@@ -69,14 +138,11 @@ internal class StyleResolver(
         fun offer(prop: String, v: String, weight: Long) { offered.add(Offered(prop, v, weight)) }
 
         presentationalHints(el, ancestors, ::offer)
-        rules.forEachIndexed { order, rule ->
-            var spec = -1
-            // ::before/::after selectors style generated content ([computePseudo]),
-            // never the element itself.
-            for (sel in rule.selectors) {
-                if (sel.pseudoElement == null && sel.matches(el, ancestors)) spec = maxOf(spec, sel.specificity)
-            }
-            if (spec < 0) return@forEachIndexed
+        // ::before/::after selectors style generated content ([computePseudo]), never the element itself.
+        val matched = matchedRules(elementIndex, el, ancestors)
+        for (order in matched.keys.sorted()) {
+            val rule = rules[order]
+            val spec = matched.getValue(order)
             for (d in rule.declarations) offer(d.property, d.value, weight(rule.origin, d.important, spec, order))
         }
         if (useAuthorCss) el.attrs["style"]?.let { inline ->
@@ -250,12 +316,10 @@ internal class StyleResolver(
         side: PseudoSide,
     ): PseudoContent? {
         val offered = ArrayList<Offered>()
-        rules.forEachIndexed { order, rule ->
-            var spec = -1
-            for (sel in rule.selectors) {
-                if (sel.pseudoElement == side && sel.matches(el, ancestors)) spec = maxOf(spec, sel.specificity)
-            }
-            if (spec < 0) return@forEachIndexed
+        val matched = matchedRules(if (side == PseudoSide.BEFORE) beforeIndex else afterIndex, el, ancestors)
+        for (order in matched.keys.sorted()) {
+            val rule = rules[order]
+            val spec = matched.getValue(order)
             for (d in rule.declarations) offered.add(Offered(d.property, d.value, weight(rule.origin, d.important, spec, order)))
         }
         val ordered = inCascadeOrder(offered)
