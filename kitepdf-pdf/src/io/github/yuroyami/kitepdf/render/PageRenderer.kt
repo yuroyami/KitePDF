@@ -277,6 +277,7 @@ public class PageRenderer(
         pageBaseCtm = deviceCtm
         patternBaseCtm = deviceCtm
         pageCropBox = page.cropBox
+        pageDeviceBounds = deviceBounds(page.cropBox, deviceCtm)
         formDepth = 0
         dispatchedOps = 0L
         markedContentStack.clear()
@@ -314,6 +315,7 @@ public class PageRenderer(
         pageBaseCtm = deviceCtm
         patternBaseCtm = deviceCtm
         pageCropBox = page.cropBox
+        pageDeviceBounds = deviceBounds(page.cropBox, deviceCtm)
         formDepth = 0
         dispatchedOps = 0L
         cancelled = false
@@ -1842,7 +1844,9 @@ public class PageRenderer(
         if (xs == 0.0 || ys == 0.0) return
         val patternCtm = patternBaseCtm.concat(pat.matrix)
         val toPattern = patternCtm.invert() ?: return
-        val dev = deviceBounds(clipPath, s.ctm) ?: return
+        // Only the part of the fill on the page can show, so the cells are counted there: a fill that
+        // ran far past the page counted cells that nothing draws and reached the limit (#769).
+        val dev = deviceBounds(clipPath, s.ctm)?.let { b -> pageDeviceBounds?.let { p -> intersectBounds(b, p) } ?: b } ?: return
 
         // Map the region's device-space corners into pattern space to find the
         // range of tile indices that can intersect it.
@@ -1928,7 +1932,10 @@ public class PageRenderer(
                 // A spent operator budget or a cancelled render ends the lattice too: dispatch alone
                 // returns at once, but each cell still pushed a clip and built its state (#971).
                 if (cancelled || dispatchedOps > MAX_DISPATCHED_OPS) break@cells
-                val tileCtm = patternCtm.concat(KiteMatrix.translation(i * xs, j * ys))
+                // Table 75: a step may be negative, and the lattice is the same as for its absolute
+                // value, which the index range is weighed by; the signed step placed the mirror image
+                // of the cells the fill needs, which the fill clip cut away (#771).
+                val tileCtm = patternCtm.concat(KiteMatrix.translation(i * kotlin.math.abs(xs), j * kotlin.math.abs(ys)))
                 patternBaseCtm = tileCtm
                 val tileState = GraphicsStack(
                     if (uncolored) GraphicsState(ctm = tileCtm, fillColor = color, strokeColor = color)
@@ -1954,6 +1961,19 @@ public class PageRenderer(
             if (groupBox != null) canvas.endTransparencyGroup()
             canvas.popClip()
         }
+    }
+
+    /** The device bounds of the page's crop box, which bound the cells a pattern fill counts (#769). */
+    private var pageDeviceBounds: DoubleArray? = null
+
+    /** The device bounds of [box] under [ctm]. */
+    private fun deviceBounds(box: io.github.yuroyami.kitepdf.core.KiteRectangle, ctm: KiteMatrix): DoubleArray? =
+        deviceBounds(KitePath.Builder().apply { rectangle(box.left, box.bottom, box.right - box.left, box.top - box.bottom) }.build(), ctm)
+
+    /** The overlap of two device bounds, or null when they do not meet. */
+    private fun intersectBounds(a: DoubleArray, b: DoubleArray): DoubleArray? {
+        val out = doubleArrayOf(maxOf(a[0], b[0]), maxOf(a[1], b[1]), minOf(a[2], b[2]), minOf(a[3], b[3]))
+        return if (out[0] <= out[2] && out[1] <= out[3]) out else null
     }
 
     /** Axis-aligned device-space bounds of [path] under [ctm], or null if empty. */
@@ -2866,7 +2886,9 @@ public class PageRenderer(
         val EMPTY_OUTLINE: KitePath = KitePath.Builder().build()
 
         /** Safety cap on tiling-pattern tile count to bound adversarial inputs. */
-        const val MAX_TILES = 20_000L
+        // Past this many cells a fill paints nothing; the operator budget bounds the work as well. At
+        // 20,000 a fine hatch over a Letter page vanished (#769).
+        const val MAX_TILES = 250_000L
         /** Max Form-XObject nesting depth before bailing (recursion guard). */
         const val MAX_FORM_DEPTH = 15
 

@@ -237,6 +237,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as one grey (#786). An image `/Decode` with a number that is not finite reads with its default range, where
   a NaN reached `roundToInt` and failed the page on several canvases (#805).
 
+- A tiling pattern fill counts only the cells on the page, and paints up to 250,000 of them, where it painted
+  nothing past 20,000: a fine hatch over a Letter page, or a fill that ran far past the page, left the area
+  blank (#769). A negative `/XStep` or `/YStep` paints the same lattice as its absolute value, where the cells
+  landed on the far side of the pattern origin and the fill clip cut them away (#771).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

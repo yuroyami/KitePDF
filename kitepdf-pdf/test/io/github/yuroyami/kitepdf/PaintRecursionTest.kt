@@ -96,4 +96,31 @@ class PaintRecursionTest {
         quickly("render") { assertTrue(render(file).blueAt20(), "the blue square after the fill draws") }
         quickly("recording") { PdfDocument.open(file).pages[0].renderTo(RecordingCanvas(), KiteMatrix.IDENTITY) }
     }
+
+    private fun isRed(p: Int) = ((p shr 16) and 0xFF) > 200 && ((p shr 8) and 0xFF) < 60
+
+    @Test
+    fun aFineHatchOverThePagePaints() {
+        // A 2 point cell over the page needed 10,000 cells, past a limit of 20,000 only with a fill
+        // that ran far off the page, where the fill painted nothing (#769).
+        val file = pdf(
+            "/Pattern << /P0 5 0 R >>",
+            "/Pattern cs /P0 scn -5000 -5000 10200 10200 re f",
+            stream("/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 2 2] /XStep 2 /YStep 2 /Resources << >>", "1 0 0 rg 0 0 2 2 re f"),
+        )
+        quickly("render") { assertTrue(isRed(render(file)[100, 100]), "the hatch paints") }
+    }
+
+    @Test
+    fun aNegativeStepPaintsTheSameLattice() {
+        // Cells were placed at the mirror image of the ones the fill needs (#771).
+        for (steps in listOf("/XStep -10 /YStep 10", "/XStep 10 /YStep -10", "/XStep -10 /YStep -10")) {
+            val file = pdf(
+                "/Pattern << /P0 5 0 R >>",
+                "/Pattern cs /P0 scn 40 40 40 40 re f",
+                stream("/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 10 10] $steps /Resources << >>", "1 0 0 rg 0 0 10 10 re f"),
+            )
+            assertTrue(isRed(render(file)[60, 140]) || isRed(render(file)[60, 60]), steps)
+        }
+    }
 }
