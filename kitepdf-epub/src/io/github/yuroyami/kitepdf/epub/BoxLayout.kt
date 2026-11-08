@@ -455,8 +455,9 @@ internal class BoxLayout(
     /**
      * Lay out a floated child against the left/right content edge at [topY]
      * and register its exclusion band. Width: an image floats at its natural
-     * draw size; a block floats at its explicit CSS width, else half the
-     * content width (a shrink-to-fit approximation, commented simplification).
+     * draw size; a block floats at its explicit CSS width, else at its
+     * shrink-to-fit width, min(max(preferred minimum, available), preferred)
+     * (CSS 2.1, 10.3.5; #851).
      */
     private fun placeFloat(child: LayoutBox, contentLeft: Double, contentW: Double, topY: Double) {
         val s = child.style
@@ -465,7 +466,7 @@ internal class BoxLayout(
             is BlockBox -> {
                 val extra = s.marginLeftPt + s.marginRightPt + s.borderLeft.effective +
                     s.borderRight.effective + s.paddingLeftPt + s.paddingRightPt
-                val budget = (s.widthPt?.plus(extra) ?: (contentW / 2)).coerceAtMost(contentW)
+                val budget = (s.widthPt?.plus(extra) ?: shrinkToFit(child, contentW - extra)?.plus(extra) ?: contentW).coerceAtMost(contentW)
                 layoutBlock(child, contentLeft, budget, topY)
             }
             is TableBox -> layoutTable(child, contentLeft, contentW, topY)
@@ -481,6 +482,18 @@ internal class BoxLayout(
         val x = if (isLeft) contentLeft else contentLeft + contentW - child.borderBoxWidth
         shiftSubtree(child, x - child.x, y - child.y)
         activeFloats.add(FloatBand(isLeft, child.x, child.x + child.borderBoxWidth, child.y, child.bottom))
+    }
+
+    /**
+     * The shrink-to-fit content width of [box] in [available] points (CSS 2.1, 10.3.5): its
+     * preferred width, but no wider than the room and no narrower than its longest word. A
+     * hundredth of a point over the measure keeps rounding from wrapping the last word.
+     * Null when the box has nothing to measure.
+     */
+    private fun shrinkToFit(box: LayoutBox, available: Double): Double? {
+        val (preferred, minimum) = measureContent(box)
+        if (preferred <= 0.0) return null
+        return minOf(maxOf(minimum, available), preferred) + SHRINK_SLACK
     }
 
     /**
@@ -3188,6 +3201,9 @@ internal class BoxLayout(
     }
 
     private companion object {
+        /** How much a shrink-to-fit width takes past its measure, so rounding does not wrap its last word (#851). */
+        const val SHRINK_SLACK = 0.01
+
         /** A width no line of text reaches, to measure text that does not wrap (#33). */
         const val FLEX_UNBOUNDED = 1.0e6
 
