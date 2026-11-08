@@ -22,6 +22,14 @@ internal interface ScriptThread {
         return true
     }
 
+    /** Queues [block] here and returns at once. A thread that is closed refuses it with the runner's closed error. */
+    fun post(block: () -> Unit) {
+        call(block)
+    }
+
+    /** True on this thread itself, where a call runs in place. */
+    val isHere: Boolean get() = !isOwnThread
+
     /** Stops the thread after the work already queued. */
     fun close()
 
@@ -44,6 +52,31 @@ internal interface ScriptThread {
 
     /** Called here once [user] has closed its engines for good. */
     fun leave(user: EngineUser) {}
+}
+
+/**
+ * Runs [block] here while the caller suspends instead of blocking its thread (#865). A cancelled
+ * caller calls [onCancel], which stops the script at its next deadline check, waits for [block]
+ * to end, so that the next call does not run beside it, and then ends with its cancellation.
+ */
+internal suspend fun <T> ScriptThread.callSuspending(onCancel: () -> Unit, block: () -> T): T {
+    if (isHere) return block()
+    val result = kotlinx.coroutines.CompletableDeferred<Result<T>>()
+    post { result.complete(runCatching(block)) }
+    val outcome = try {
+        result.await()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        onCancel()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { result.join() }
+        throw e
+    }
+    return outcome.getOrThrow()
+}
+
+/** One suspending call of a runner, which its caller's cancellation marks, and the deadline check reads (#865). */
+internal class CallToken {
+    @kotlin.concurrent.Volatile
+    var cancelled: Boolean = false
 }
 
 /** A runner whose engines may have to close so that another runner's can open on the thread they share. */

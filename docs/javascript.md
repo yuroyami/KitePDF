@@ -225,6 +225,8 @@ The viewer runs the scripts of a chapter when the reader first gets to it:
 
 A runner can be called from any thread. It runs every call on a thread of its own, one at a time and in order, and `close()` stops that thread. The callbacks of the runner run on that thread too. A form script ends in milliseconds, but a document with a program in the open action of a page can work for tens of seconds before it shows anything. Meanwhile, the reader can still scroll and close the document.
 
+The `suspend` event methods, such as `runAction`, `keystroke`, `pumpTimers` and `chapterOpened`, suspend their caller while the script runs instead of blocking its thread, and they are cancellable: cancelling the caller stops the script at its next check, and the call ends with the cancellation once the script has stopped. The other methods, such as `run` and `setFieldValue`, block their caller until the script ends.
+
 `close()` can be called on any thread, also on the one that a callback waits for, such as the UI thread that shows an `onAlert` dialog. While a call of the runner is running, `close()` returns at once: the running script stops at its next check, and the engine closes when the call ends. Otherwise it waits at most a second for the engine to close. A script that sits in one long built-in call holds its thread until the call returns, and `close()` does not wait for it.
 
 `PdfFormState` can be read and written from two threads, because the scripts write it and the viewer reads it.

@@ -45,6 +45,12 @@ private class PosixScriptThread : ScriptThread {
         return runBlocking { withTimeoutOrNull(millis) { done.await() } } != null
     }
 
+    override fun post(block: () -> Unit) {
+        check(tasks.trySend(block).isSuccess) { "the script runner is closed" }
+    }
+
+    override val isHere: Boolean get() = runningOn === this
+
     override fun close() {
         tasks.close()
     }

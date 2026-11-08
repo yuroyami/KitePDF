@@ -6,6 +6,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -161,5 +163,35 @@ class RunnerLifecycleTest {
         }
         assertEquals(emptyList(), odd, "a late call failed in another way")
         assertEquals(before, registeredEngines(), "a late call left an engine open")
+    }
+
+    @Test
+    fun cancelling_the_caller_of_an_event_method_stops_its_script() {
+        // The suspend methods are cancellable: the script stops at its next check, and writes nothing after (#865).
+        val runner = PdfScriptRunner(PdfDocument.open(pdf("0")), policy = PdfScriptPolicy.LONG_RUNNING)
+        val action = io.github.yuroyami.kitepdf.PdfAction.JavaScript(
+            "var s = Date.now(); while (Date.now() - s < 1500) {} getField('log').value = 'written after cancel';",
+            io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap()),
+        )
+        runBlocking {
+            val job = launch(kotlinx.coroutines.Dispatchers.Default) { runner.runAction(action) }
+            kotlinx.coroutines.delay(200)
+            val started = System.nanoTime()
+            job.cancelAndJoin()
+            val millis = (System.nanoTime() - started) / 1_000_000
+            assertTrue(millis < 700, "cancelAndJoin took $millis ms")
+        }
+        assertEquals("", runner.formState.value("log").orEmpty(), "the script wrote after its caller was cancelled")
+        // A script that never ends stops too, though the policy has no budget.
+        runBlocking {
+            val job = launch(kotlinx.coroutines.Dispatchers.Default) {
+                runner.runAction(io.github.yuroyami.kitepdf.PdfAction.JavaScript("while (true) {}", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())))
+            }
+            kotlinx.coroutines.delay(200)
+            kotlinx.coroutines.withTimeout(3_000) { job.cancelAndJoin() }
+        }
+        // The runner still works for the next call.
+        assertEquals("2", runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript("1 + 1", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap()))))
+        runner.close()
     }
 }

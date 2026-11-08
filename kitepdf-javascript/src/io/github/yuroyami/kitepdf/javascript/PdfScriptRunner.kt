@@ -122,7 +122,23 @@ public class PdfScriptRunner(
      */
     private suspend fun <T> pausingCall(block: suspend () -> T): T {
         check(!closed) { "the script runner is closed" }
-        if (engineSource == null && scriptThread.value.isOwnThread) return onScriptThread(block)
+        if (engineSource == null && scriptThread.value.isOwnThread) {
+            // The caller suspends while the script runs, and its cancellation stops the script (#865).
+            val token = CallToken()
+            return scriptThread.value.callSuspending(onCancel = { token.cancelled = true }) {
+                counted {
+                    val outer = currentToken
+                    currentToken = token
+                    try {
+                        // A call cancelled while it waited in the queue runs nothing.
+                        if (token.cancelled) throw kotlinx.coroutines.CancellationException("the caller was cancelled")
+                        withPausing(false) { runNow(block) }
+                    } finally {
+                        currentToken = outer
+                    }
+                }
+            }
+        }
         return turns.withLock { counted { withPausing(true) { block() } } }
     }
 
@@ -861,9 +877,15 @@ public class PdfScriptRunner(
     /** True while [ensureEngine] loads the Acrobat API, which no budget counts (#869). */
     private var settingUp = false
 
+    /** The suspending call the script thread runs now, whose caller's cancellation stops its script (#865). */
+    @kotlin.concurrent.Volatile
+    private var currentToken: CallToken? = null
+
     private fun deadlinePassed(): Boolean {
         // A runner that is closing stops the script it runs at the next check (#365).
         if (closed) return true
+        // So does the cancellation of the call's caller (#865).
+        if (currentToken?.cancelled == true) return true
         if (settingUp) return false
         if (policy.budgetMillis <= 0 && policy.documentBudgetMillis <= 0) return false
         val now = now()

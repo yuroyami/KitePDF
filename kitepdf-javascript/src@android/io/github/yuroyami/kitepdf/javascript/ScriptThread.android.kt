@@ -45,6 +45,16 @@ private class ExecutorScriptThread : ScriptThread {
         }
     }
 
+    override fun post(block: () -> Unit) {
+        try {
+            executor.execute(block)
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            throw IllegalStateException("the script runner is closed")
+        }
+    }
+
+    override val isHere: Boolean get() = Thread.currentThread() === thread
+
     override fun close() {
         executor.shutdown()
     }

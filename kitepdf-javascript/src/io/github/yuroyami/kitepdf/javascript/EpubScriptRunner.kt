@@ -165,8 +165,21 @@ public class EpubScriptRunner(
         val thread = scriptThread.value
         if (thread.isOwnThread) {
             // A call that races a close finds the thread shut down, and is a call after the close (#860).
+            // The caller suspends while the script runs, and its cancellation stops the script (#865).
+            val token = CallToken()
             return try {
-                thread.call { turn { session -> runNow { block(session) } } }
+                thread.callSuspending(onCancel = { token.cancelled = true }) {
+                    turn { session ->
+                        val outer = currentToken
+                        currentToken = token
+                        try {
+                            if (token.cancelled) throw kotlinx.coroutines.CancellationException("the caller was cancelled")
+                            runNow { block(session) }
+                        } finally {
+                            currentToken = outer
+                        }
+                    }
+                }
             } catch (e: IllegalStateException) {
                 if (closed) null else throw e
             }
@@ -225,8 +238,14 @@ public class EpubScriptRunner(
     }
 
     /** True once the call in progress has used the policy's time, or the runner is closing. */
+    /** The suspending call the script thread runs now, whose caller's cancellation stops its script (#865). */
+    @kotlin.concurrent.Volatile
+    private var currentToken: CallToken? = null
+
     private fun deadlinePassed(): Boolean {
         if (closed) return true
+        // So does the cancellation of the call's caller (#865).
+        if (currentToken?.cancelled == true) return true
         if (settingUp || policy.budgetMillis <= 0) return false
         return now() - callStartedAt > policy.budgetMillis
     }

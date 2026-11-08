@@ -801,6 +801,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Closing a script runner from one of its own callbacks, such as `onRequest` for `this.closeDoc()`, no longer
   throws or leaks the engine: the engine closes when the call ends. A call that races `close()` fails with the
   runner's closed error and opens no engine, and `close()` is safe from two threads at once (#858, #860).
+- The `suspend` event methods of `PdfScriptRunner` and `EpubScriptRunner` suspend their caller instead of
+  blocking its thread, and they are cancellable: cancelling the caller stops the script at its next check, and
+  nothing it would have written after lands (#865).
 
 ## [0.13.0] - 2026-10-09
 
