@@ -197,4 +197,24 @@ class FormStateRenderTest {
         val black = plain.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().first { "Ada" in it.text }
         assertEquals(0.0, black.color.r)
     }
+
+    @Test
+    fun need_appearances_draws_a_text_field_from_its_value_not_its_stale_appearance() {
+        // ISO 32000-1, 12.7.2, Table 218: the reader constructs the appearances (#910).
+        fun pdf(flag: Boolean) = TestPdf.build(
+            listOf(
+                "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] /NeedAppearances $flag /DA (/Helv 12 Tf 0 g) >> >>",
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [4 0 R] >>",
+                "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /V (Hello) /DA (/Helv 12 Tf 0 g) /Rect [20 80 180 120] /P 3 0 R /AP << /N 5 0 R >> >>",
+                TestPdf.stream("0 g 0 0 160 40 re f", "/Type /XObject /Subtype /Form /BBox [0 0 160 40]"),
+            ),
+        )
+        val stale = RecordingCanvas().also { PdfDocument.open(pdf(false)).pages[0].renderTo(it, KiteMatrix.IDENTITY) }
+        assertFalse("Hello" in drawnText(stale), "without the flag the stored appearance stands")
+        val needed = RecordingCanvas().also { PdfDocument.open(pdf(true)).pages[0].renderTo(it, KiteMatrix.IDENTITY) }
+        assertTrue("Hello" in drawnText(needed), "the value is drawn: <${drawnText(needed)}>")
+        assertTrue(needed.calls.filterIsInstance<RecordingCanvas.Call.Fill>().none { it.color == io.github.yuroyami.kitepdf.core.render.RgbColor.BLACK && (it.path.bounds(it.ctm)?.width ?: 0.0) > 100 },
+            "the black box of the stale appearance is gone")
+    }
 }

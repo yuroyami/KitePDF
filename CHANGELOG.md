@@ -540,6 +540,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the viewer's own (#722).
 - `ImageDecoder.decodeRaw` returns null for sides that are not positive or a pixel array shorter than `width *
   height * 4`, on every target, where Skia read past the array (#892).
+- With `/NeedAppearances true`, a text or choice field draws from its value, `/DA` and `/MK` instead of from a
+  stored appearance a server left stale (#910).
 
 ## [0.13.0] - 2026-10-09
 

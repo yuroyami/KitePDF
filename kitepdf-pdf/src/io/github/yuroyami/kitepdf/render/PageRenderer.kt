@@ -497,7 +497,7 @@ public class PageRenderer(
         if (oc != null && ocEntry != null && !isOcObjectVisible(ocEntry, oc)) return
         // A form being filled draws from the live value, not from the appearance the file
         // stores, because that one still shows what the field held when it was written.
-        val liveAppearance = liveWidgetAppearance(annot)
+        val liveAppearance = liveWidgetAppearance(annot) ?: neededAppearance(annot)
         val stream = annot.appearanceStream
         when {
             liveAppearance != null -> renderAppearanceForRect(liveAppearance, annot.rect, state)
@@ -540,6 +540,27 @@ public class PageRenderer(
         return io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
             annot.raw, annot.rect.width, annot.rect.height, resolver, valueOverride = shown ?: state.value(name) ?: "",
             textColor = color,
+        )
+    }
+
+    /** Whether the form's `/NeedAppearances` is true, read once per renderer. */
+    private val formNeedsAppearances: Boolean by lazy {
+        runCatching { document?.acroForm?.needAppearances == true }.getOrDefault(false)
+    }
+
+    /**
+     * ISO 32000-1, 12.7.2, Table 218: with `/NeedAppearances` true the reader constructs the
+     * appearances of the form's widgets, so a text or choice field draws from its value, `/DA` and
+     * `/MK`, not from a stored appearance a server left stale when it wrote `/V` (#910). Check
+     * boxes, radio buttons and push buttons keep their stored appearances, which do not show `/V`
+     * text. Null when the flag is clear or [annot] is no such widget.
+     */
+    private fun neededAppearance(annot: io.github.yuroyami.kitepdf.PdfAnnotation): PdfStream? {
+        if (annot.subtype != Subtype.Widget || !formNeedsAppearances) return null
+        val type = io.github.yuroyami.kitepdf.writer.FieldAppearance.fieldTypeOf(annot.raw, resolver)
+        if (type != "Tx" && type != "Ch") return null
+        return choiceAppearance(annot) ?: io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
+            annot.raw, annot.rect.width, annot.rect.height, resolver,
         )
     }
 

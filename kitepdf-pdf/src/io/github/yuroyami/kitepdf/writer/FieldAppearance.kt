@@ -277,6 +277,10 @@ internal object FieldAppearance {
 
     /* ─── Appearance for a widget that carries none ────────────────────────── */
 
+    /** The field type, `/FT`, of [widget] or the field it inherits from, or null. */
+    internal fun fieldTypeOf(widget: PdfDictionary, refs: IndirectResolver): String? =
+        (inherited(widget, "FT", refs) as? PdfName)?.value
+
     /**
      * The appearance a reader draws for a form widget with no `/AP` stream.
      *
