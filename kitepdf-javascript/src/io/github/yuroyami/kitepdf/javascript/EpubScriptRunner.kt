@@ -163,28 +163,35 @@ public class EpubScriptRunner(
     private suspend fun <T> call(block: suspend (EpubScriptSession) -> T): T? {
         if (closed) return null
         val thread = scriptThread.value
-        if (thread.isOwnThread) return thread.call { turn { session -> runNow { block(session) } } }
+        if (thread.isOwnThread) {
+            // A call that races a close finds the thread shut down, and is a call after the close (#860).
+            return try {
+                thread.call { turn { session -> runNow { block(session) } } }
+            } catch (e: IllegalStateException) {
+                if (closed) null else throw e
+            }
+        }
         return turns.withLock { turn { session -> block(session) } }
     }
 
     /** One call of the runner, with the budget started; a [close] that came while it was paused ends it. */
     private inline fun <T> turn(block: (EpubScriptSession) -> T): T? {
-        if (closed) return null
-        callStartedAt = now()
+        // Counted before the closed check, so a close either sees this call or this call sees the close (#860).
         busy++
         try {
+            if (closed) return null
+            callStartedAt = now()
             return block(sessionHere())
         } finally {
             busy--
-            if (closed && busy == 0 && closeWaits) closeHere()
+            // A close that came during a call leaves the session to the call that ends last (#858, #862).
+            if (closed && busy == 0) closeOnce()
         }
     }
 
     /** Takes turns where a script may pause, so that no call reaches an engine while its script waits. */
     private val turns = Mutex()
 
-    /** Whether [close] came while a script was paused, and left the closing to the call that runs it. */
-    private var closeWaits = false
 
     /** The session, made on first use on the script thread. Each chapter's engine opens on a thread of its own. */
     private fun sessionHere(): EpubScriptSession = session ?: EpubScriptSession(
@@ -224,20 +231,28 @@ public class EpubScriptRunner(
         return now() - callStartedAt > policy.budgetMillis
     }
 
+    /**
+     * Marks the runner closed and closes its session. It returns at once while a call of the runner
+     * is running, also from a callback on a chapter's thread: the running script stops at its next
+     * check, and the session closes when the last call ends (#858, #862). Safe from any thread and
+     * from two at once, and it never throws (#860).
+     */
     override fun close() {
-        if (closed) return
-        closed = true
+        if (!lock.withLock { if (closed) false else { closed = true; true } }) return
         if (!scriptThread.isInitialized()) return
-        // A paused script cannot close; it stops at its next check of the deadline, and its call closes the runner.
-        if (busy > 0 && !scriptThread.value.isOwnThread) {
-            closeWaits = true
-            return
-        }
-        closeHere()
+        if (busy > 0) return
+        closeOnce()
+    }
+
+    private var sessionClosed = false
+
+    /** Runs [closeHere] once, whichever of [close] and the last call gets here first. */
+    private fun closeOnce() {
+        if (!lock.withLock { if (sessionClosed) false else { sessionClosed = true; true } }) return
+        runCatching { closeHere() }
     }
 
     private fun closeHere() {
-        closeWaits = false
         val thread = scriptThread.value
         try {
             // A script that never reaches its interrupt check holds the thread, and this caller does not wait for it (#996).

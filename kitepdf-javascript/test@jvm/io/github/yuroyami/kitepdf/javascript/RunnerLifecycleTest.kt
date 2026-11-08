@@ -102,4 +102,64 @@ class RunnerLifecycleTest {
         assertFalse(script.isAlive, "the script call ended")
         ui.shutdown()
     }
+
+    /** The engines KiteJS's QuickJS host has open in this process, which a closed engine leaves. */
+    private fun registeredEngines(): Int {
+        val host = Class.forName("io.github.yuroyami.kitejs.quickjs.bridge.QuickJsHost")
+        val field = host.getDeclaredField("engines").apply { isAccessible = true }
+        val ref = field.get(host.getField("INSTANCE").get(null))
+        return ((ref as java.util.concurrent.atomic.AtomicReference<*>).get() as Map<*, *>).size
+    }
+
+    @Test
+    fun a_close_from_a_callback_of_the_runner_closes_its_engine_when_the_call_ends() {
+        // closeDoc() asks the host, which closes the runner from onRequest, on the script thread (#858).
+        val before = registeredEngines()
+        lateinit var runner: PdfScriptRunner
+        var thrown: Throwable? = null
+        runner = PdfScriptRunner(PdfDocument.open(pdf("0")), onRequest = { thrown = runCatching { runner.close() }.exceptionOrNull() })
+        runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript("this.closeDoc(); 'after'", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())))
+        assertEquals(null, thrown, "close threw in the callback")
+        assertTrue(runner.failures.none { "running a script" in it.message.orEmpty() }, "${runner.failures.map { it.message }}")
+        assertEquals(before, registeredEngines(), "the engine stayed open")
+        runner.close()
+    }
+
+    @Test
+    fun a_close_from_a_book_script_console_returns_and_closes_the_session() {
+        // onConsole runs on the chapter's own thread while the runner's thread waits for it (#858).
+        val before = registeredEngines()
+        lateinit var runner: EpubScriptRunner
+        runner = EpubScriptRunner(ScriptBooks.chapter("<p>text</p><script>console.log('hello')</script>"), onConsole = { _, _ -> runner.close() })
+        val opener = thread(isDaemon = true, name = "opener") { runCatching { runBlocking { runner.chapterOpened(0) } } }
+        opener.join(15_000)
+        assertFalse(opener.isAlive, "chapterOpened never returned")
+        assertEquals(before, registeredEngines(), "an engine of the book stayed open")
+    }
+
+    @Test
+    fun a_call_that_races_close_opens_no_engine_and_fails_as_closed() {
+        val doc = PdfDocument.open(pdf("0"))
+        val before = registeredEngines()
+        val odd = ArrayList<String>()
+        repeat(200) { trial ->
+            val runner = PdfScriptRunner(doc)
+            runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript("1", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())))
+            var last: Throwable? = null
+            val caller = thread(isDaemon = true) {
+                while (true) {
+                    val e = runCatching { runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript("1", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap()))) }.exceptionOrNull()
+                    if (e != null) { last = e; break }
+                }
+            }
+            Thread.sleep((trial % 5).toLong())
+            val closers = List(2) { thread(isDaemon = true) { runner.close() } }
+            closers.forEach { it.join(10_000) }
+            caller.join(10_000)
+            val e = last
+            if (e !is IllegalStateException || e.message != "the script runner is closed") odd += "trial $trial: $e"
+        }
+        assertEquals(emptyList(), odd, "a late call failed in another way")
+        assertEquals(before, registeredEngines(), "a late call left an engine open")
+    }
 }

@@ -18,7 +18,13 @@ private class ExecutorScriptThread : ScriptThread {
 
     override fun <T> call(block: () -> T): T {
         if (Thread.currentThread() === thread) return block()
-        return executor.submit(Callable { runCatching(block) }).get().getOrThrow()
+        // A call that comes after close() is a call to a closed runner, not a failure of the executor (#860).
+        val task = try {
+            executor.submit(Callable { runCatching(block) })
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            throw IllegalStateException("the script runner is closed")
+        }
+        return task.get().getOrThrow()
     }
 
     override fun callWithin(millis: Long, block: () -> Unit): Boolean {
@@ -26,7 +32,11 @@ private class ExecutorScriptThread : ScriptThread {
             block()
             return true
         }
-        val task = executor.submit { runCatching(block) }
+        val task = try {
+            executor.submit { runCatching(block) }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            return true
+        }
         return try {
             task.get(millis, java.util.concurrent.TimeUnit.MILLISECONDS)
             true

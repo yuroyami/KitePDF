@@ -127,12 +127,16 @@ public class PdfScriptRunner(
     }
 
     private inline fun <T> counted(block: () -> T): T {
+        // Counted before the closed check, so a close either sees this call or this call sees the close (#860).
         busy++
         try {
+            // A call that passed the check on its caller's thread before a close opens nothing once on this one.
+            check(!closed) { "the script runner is closed" }
             return block()
         } finally {
             busy--
-            if (closeWaits && busy == 0) closeHere()
+            // A close that came during a call leaves the engine to the call that ends last (#858, #862).
+            if (closed && busy == 0) closeOnce()
         }
     }
 
@@ -152,8 +156,6 @@ public class PdfScriptRunner(
     /** Takes turns where a script may pause, so that no call reaches the engine while its script waits. */
     private val turns = Mutex()
 
-    /** Whether [close] came while a script was paused, and left the closing to the call that runs it. */
-    private var closeWaits = false
 
     private val host = PdfScriptHost(
         document,
@@ -944,19 +946,28 @@ public class PdfScriptRunner(
         return formState.value(fieldName).orEmpty()
     }
 
+    /**
+     * Marks the runner closed and closes its engine. It returns at once while a call of the runner
+     * is running, also from inside one of its callbacks: the running script stops at its next
+     * check, and the engine closes when the last call ends (#858, #862). Safe from any thread and
+     * from two at once, and it never throws (#860).
+     */
     override fun close() {
-        if (closed) return
-        closed = true
-        // A paused script cannot close; it stops at its next check of the deadline, and its call closes the runner.
-        if (busy > 0 && (engineSource != null || scriptThread.isInitialized() && !scriptThread.value.isOwnThread)) {
-            closeWaits = true
-            return
-        }
-        closeHere()
+        if (!closeLock.withLock { if (closed) false else { closed = true; true } }) return
+        if (busy > 0) return
+        closeOnce()
+    }
+
+    private val closeLock = io.github.yuroyami.kitepdf.core.KiteLock()
+    private var engineClosed = false
+
+    /** Runs [closeHere] once, whichever of [close] and the last call gets here first. */
+    private fun closeOnce() {
+        if (!closeLock.withLock { if (engineClosed) false else { engineClosed = true; true } }) return
+        runCatching { closeHere() }
     }
 
     private fun closeHere() {
-        closeWaits = false
         // Nothing to close when no script ever ran, because no engine was ever opened.
         if (engineSource != null || !scriptThread.isInitialized()) {
             openEngine?.close()

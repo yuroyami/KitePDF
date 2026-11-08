@@ -31,7 +31,7 @@ private class PosixScriptThread : ScriptThread {
     override fun <T> call(block: () -> T): T {
         if (runningOn === this) return block()
         val result = CompletableDeferred<T>()
-        check(tasks.trySend { result.completeWith(runCatching(block)) }.isSuccess) { "the script thread is closed" }
+        check(tasks.trySend { result.completeWith(runCatching(block)) }.isSuccess) { "the script runner is closed" }
         return runBlocking { result.await() }
     }
 

@@ -798,6 +798,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PdfScriptRunner.close()` and `EpubScriptRunner.close()` return at once while one of their calls is running, so
   closing a runner on the UI thread while a script's alert or prompt waits for that thread no longer deadlocks.
   The engine closes when the call ends (#862).
+- Closing a script runner from one of its own callbacks, such as `onRequest` for `this.closeDoc()`, no longer
+  throws or leaks the engine: the engine closes when the call ends. A call that races `close()` fails with the
+  runner's closed error and opens no engine, and `close()` is safe from two threads at once (#858, #860).
 
 ## [0.13.0] - 2026-10-09
 
