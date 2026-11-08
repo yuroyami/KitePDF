@@ -416,6 +416,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `setInfo` sets `/ModDate` to the time of the edit and rewrites the catalog's XMP packet to match, `dc:title`,
   `dc:creator`, `dc:description`, `pdf:Keywords`, `xmp:CreatorTool`, `pdf:Producer` and the two XMP dates, where
   the packet kept the old title (#692).
+- `PdfSigner.prepareSignature` keeps the page, form and catalog edits staged earlier in the same editor, where a
+  stamp, a rotation or `/NeedAppearances` went back to the base (#680).
+- `PdfSigner.prepareSignature` keeps every other field and annotation when `/AcroForm` is direct or `/Fields` or
+  `/Annots` is an indirect array, where signing took them out of the form and off the page (#674).
 
 ## [0.13.0] - 2026-10-09
 

@@ -25,6 +25,46 @@ class PdfSignerTest {
     }
 
     @Test
+    fun signing_keeps_the_edits_staged_before_it() {
+        // ISO 32000-1, 7.5.6: the signed revision holds the page as the editor left it (#680).
+        val doc = baseDoc()
+        val editor = doc.edit()
+        editor.rotatePage(doc.pages[0], 90)
+        val signer = PdfSigner(doc, editor, placeholderSize = 1024)
+        signer.prepareSignature("Sig1")
+        val out = PdfDocument.open(signer.saveForSigning().bytes)
+        assertEquals(90, out.pages[0].rotation, "the rotation survives the signature")
+        assertNotNull(out.formFields.firstOrNull { it.fullyQualifiedName == "Sig1" })
+    }
+
+    @Test
+    fun signing_keeps_a_direct_form_and_indirect_arrays() {
+        // ISO 32000-1, 7.3.10: /AcroForm, /Fields and /Annots may be direct or indirect (#674).
+        val sb = StringBuilder("%PDF-1.7\n")
+        val offsets = IntArray(8)
+        fun obj(n: Int, body: String) { offsets[n] = sb.length; sb.append("$n 0 obj\n$body\nendobj\n") }
+        obj(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields 6 0 R /DA (/Helv 0 Tf 0 g) >> >>")
+        obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        obj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots 5 0 R >>")
+        obj(4, "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /Rect [10 10 90 30] /P 3 0 R >>")
+        obj(5, "[4 0 R 7 0 R]")
+        obj(6, "[4 0 R]")
+        obj(7, "<< /Type /Annot /Subtype /Text /Rect [100 100 120 120] >>")
+        val xref = sb.length
+        sb.append("xref\n0 8\n0000000000 65535 f \n")
+        for (n in 1..7) sb.append(offsets[n].toString().padStart(10, '0') + " 00000 n \n")
+        sb.append("trailer\n<< /Size 8 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        val doc = PdfDocument.open(sb.toString().encodeToByteArray())
+        val signer = PdfSigner(doc, doc.edit(), placeholderSize = 1024)
+        signer.prepareSignature("Sig1")
+        val out = PdfDocument.open(signer.saveForSigning().bytes)
+        assertEquals(setOf("name", "Sig1"), out.formFields.map { it.fullyQualifiedName }.toSet())
+        assertEquals(3, out.pages[0].annotations.size, "the text note and both widgets stay on the page")
+        val acro = out.catalog.getDict("AcroForm", out)!!
+        assertEquals("(/Helv 0 Tf 0 g)", acro["DA"].toString(), "the form keeps its other entries")
+    }
+
+    @Test
     fun byte_range_covers_everything_except_contents() {
         val doc = baseDoc()
         val editor = doc.edit()

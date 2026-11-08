@@ -83,34 +83,57 @@ public class PdfSigner(
             ),
         )
 
+        // The page, the catalog and the form are read as the editor has them, staged edits
+        // included: an incremental update holds the new version of each changed object (ISO
+        // 32000-1, 7.5.6), and the base copies undid a stamp, a rotation or /NeedAppearances (#680).
+        // Each container may be direct or indirect (7.3.10): a direct one is written back where it
+        // was, and an indirect array grows in its own object (#674).
+        fun current(ref: PdfReference): PdfObject? = editor.effectiveObject(ref.objectNumber)
+        fun appended(container: PdfObject?, item: PdfObject): PdfObject? = when (container) {
+            is PdfReference -> {
+                val arr = current(container) as? PdfArray
+                editor.updateObject(container, PdfArray((arr?.items ?: emptyList()) + item))
+                null // the holder keeps its reference
+            }
+            is PdfArray -> PdfArray(container.items + item)
+            else -> PdfArray(listOf(item))
+        }
+
         // Page /Annots gains the widget.
-        val pageDict = LinkedHashMap(page.dictionary.map)
-        val annots = (pageDict["Annots"] as? PdfArray)?.items ?: emptyList()
-        pageDict["Annots"] = PdfArray(annots + fieldRef)
+        val pageDict = LinkedHashMap((current(pageRef) as? PdfDictionary ?: page.dictionary).map)
+        appended(pageDict["Annots"], fieldRef)?.let { pageDict["Annots"] = it }
         editor.updateObject(pageRef, PdfDictionary(pageDict))
 
         // AcroForm /Fields gains the field; /SigFlags marks the doc signed.
-        val rootRef = (doc.trailer["Root"] as? PdfReference)
+        val rootRef = (editor.trailerOverrides["Root"] ?: doc.trailer["Root"]) as? PdfReference
             ?: throw IllegalStateException("Trailer /Root is not an indirect reference")
-        val catalog = LinkedHashMap(doc.catalog.map)
-        val acroRef = catalog["AcroForm"] as? PdfReference
-        if (acroRef != null) {
-            val acro = (doc.resolve(acroRef) as? PdfDictionary)?.map?.let { LinkedHashMap(it) } ?: LinkedHashMap()
-            val fields = (acro["Fields"] as? PdfArray)?.items ?: emptyList()
-            acro["Fields"] = PdfArray(fields + fieldRef)
-            acro["SigFlags"] = PdfInt(3)
-            editor.updateObject(acroRef, PdfDictionary(acro))
-        } else {
-            val newAcro = editor.addObject(
-                PdfDictionary(
-                    linkedMapOf(
-                        "Fields" to PdfArray(listOf<PdfObject>(fieldRef)),
-                        "SigFlags" to PdfInt(3),
+        val catalog = LinkedHashMap((current(rootRef) as? PdfDictionary ?: doc.catalog).map)
+        when (val acroEntry = catalog["AcroForm"]) {
+            is PdfReference -> {
+                val acro = (current(acroEntry) as? PdfDictionary)?.map?.let { LinkedHashMap(it) } ?: LinkedHashMap()
+                appended(acro["Fields"], fieldRef)?.let { acro["Fields"] = it }
+                acro["SigFlags"] = PdfInt(3)
+                editor.updateObject(acroEntry, PdfDictionary(acro))
+            }
+            is PdfDictionary -> {
+                val acro = LinkedHashMap(acroEntry.map)
+                appended(acro["Fields"], fieldRef)?.let { acro["Fields"] = it }
+                acro["SigFlags"] = PdfInt(3)
+                catalog["AcroForm"] = PdfDictionary(acro)
+                editor.updateObject(rootRef, PdfDictionary(catalog))
+            }
+            else -> {
+                val newAcro = editor.addObject(
+                    PdfDictionary(
+                        linkedMapOf(
+                            "Fields" to PdfArray(listOf<PdfObject>(fieldRef)),
+                            "SigFlags" to PdfInt(3),
+                        ),
                     ),
-                ),
-            )
-            catalog["AcroForm"] = newAcro
-            editor.updateObject(rootRef, PdfDictionary(catalog))
+                )
+                catalog["AcroForm"] = newAcro
+                editor.updateObject(rootRef, PdfDictionary(catalog))
+            }
         }
         prepared = true
     }
