@@ -299,6 +299,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A numeric character reference in a `text/html` chapter follows HTML's rules: `&#150;` is an en dash through
   windows-1252, and `&#0;`, a surrogate or a number past U+10FFFF is U+FFFD. XHTML chapters keep XML's rules
   (#871).
+- An `@media` block, and a `link`, `style` or `@import` with a media list, applies only when its query matches a
+  screen of the page's size: `print`, `speech` and unknown types such as `amzn-kf8` no longer restyle the page,
+  and `width`, `height`, `orientation` and `prefers-color-scheme` are read (#841).
 
 ## [0.13.0] - 2026-10-09
 

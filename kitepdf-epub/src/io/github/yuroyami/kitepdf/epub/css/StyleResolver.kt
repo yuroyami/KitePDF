@@ -36,7 +36,10 @@ internal class StyleResolver(
     private val useAuthorCss: Boolean = true,
 ) {
     private val rules: List<StyleRule> =
-        UaStylesheet.rules + (if (useAuthorCss) authorRules else emptyList()) + readerRules
+        (UaStylesheet.rules + (if (useAuthorCss) authorRules else emptyList()) + readerRules).filter { rule ->
+            // A page is a screen of the content area's size (CSS Conditional Rules 3, 6; #841).
+            rule.media.all { MediaQueries.matches(it, refWidthPt, refHeightPt) }
+        }
 
     fun initial(): ComputedStyle = ComputedStyle.initial(rootFontSizePt, direction = baseDirection)
 

@@ -66,7 +66,10 @@ internal object CssScan {
      * Every `@import` rule of [css], as `@import\s+(?:url\(\s*)?["']?([^"')\s;]+)["']?\s*\)?[^;{]*;`
      * without case matched it, replaced by what [replace] makes of its target.
      */
-    fun replaceImports(css: String, replace: (target: String) -> String): String {
+    fun replaceImports(css: String, replace: (target: String) -> String): String = replaceImports(css) { target, _ -> replace(target) }
+
+    /** [replaceImports], with the conditions that follow the target, such as a media query list, trimmed. */
+    fun replaceImports(css: String, replace: (target: String, conditions: String) -> String): String {
         val ruleEnd = nextStop(css) { it == ';' || it == '{' }
         val out = StringBuilder(css.length)
         var copied = 0
@@ -90,7 +93,7 @@ internal object CssScan {
             val end = ruleEnd[j]
             if (end >= css.length || css[end] != ';') continue
             out.append(css, copied, at)
-            out.append(replace(target))
+            out.append(replace(target, css.substring(j, end).trim()))
             copied = end + 1
             i = end + 1
         }

@@ -510,10 +510,10 @@ internal class ParsedEpub(
         val faceRules = ArrayList<Pair<FontFaceRule, String>>()
         walkStyleSources(
             tree, docDir,
-            onLink = { sheet -> rules.addAll(sheetRules(sheet)) },
-            onInline = { text ->
+            onLink = { sheet, media -> rules.addAll(withMedia(sheetRules(sheet), media)) },
+            onInline = { text, media ->
                 val css = CssParser.parseAll(absoluteUrls(inlineImports(text, docDir, 0, HashSet()), docDir), Origin.AUTHOR)
-                rules.addAll(css.rules)
+                rules.addAll(withMedia(css.rules, media))
                 for (rule in css.fontFaces) {
                     faceRules += rule to docDir
                     if (!remoteFirst(rule)) loadFace(rule, docDir) { null }?.let(faces::add)
@@ -648,7 +648,7 @@ internal class ParsedEpub(
         budget: IntArray = intArrayOf(MAX_IMPORTED_CHARS),
     ): String {
         if (depth >= 8 || "@import" !in css) return css
-        return CssScan.replaceImports(css) { target ->
+        return CssScan.replaceImports(css) { target, conditions ->
             val path = EpubDocument.resolvePath(baseDir, target)
             // [visited] holds the sheets on the way here, so only an import of one of them is a
             // cycle; a sheet imported again elsewhere takes its place in the cascade there too
@@ -657,7 +657,9 @@ internal class ParsedEpub(
             else try {
                 val text = readTextAt(path)?.let { absoluteUrls(inlineImports(it, dirOf(path), depth + 1, visited, budget), dirOf(path)) } ?: ""
                 budget[0] -= text.length
-                if (budget[0] < 0) "" else text
+                // A media query list after the target scopes the sheet as an @media block would (#841).
+                val media = conditions.takeIf { it.isNotEmpty() && !it.equals("all", true) && !it.startsWith("supports(", true) && !it.startsWith("layer", true) }
+                if (budget[0] < 0) "" else if (media != null && text.isNotEmpty()) "@media $media {\n$text\n}" else text
             } finally {
                 visited.remove(path)
             }
@@ -852,21 +854,30 @@ internal class ParsedEpub(
             return null
         }
 
+        /**
+         * [rules] under the `media` attribute of the `link` or `style` element that brought them,
+         * which means what an `@media` block around them would (HTML, 4.2.4 and 4.2.6; #841).
+         */
+        private fun withMedia(rules: List<StyleRule>, media: String?): List<StyleRule> {
+            val m = media?.trim()?.takeIf { it.isNotEmpty() && !it.equals("all", ignoreCase = true) } ?: return rules
+            return rules.map { StyleRule(it.selectors, it.declarations, it.origin, listOf(m) + it.media) }
+        }
+
         /** Visit a document's author CSS in document order: linked sheets, then `<style>` blocks. */
         private fun walkStyleSources(
             tree: KiteXmlNode.Element,
             docDir: String,
-            onLink: (String) -> Unit,
-            onInline: (String) -> Unit,
+            onLink: (String, String?) -> Unit,
+            onInline: (String, String?) -> Unit,
         ) {
             fun walk(el: KiteXmlNode.Element) {
                 when (el.tag) {
                     "link" -> {
                         val rel = el.attrs["rel"]?.lowercase() ?: ""
                         val href = el.attrs["href"]
-                        if ("stylesheet" in rel && href != null) onLink(EpubDocument.resolvePath(docDir, href))
+                        if ("stylesheet" in rel && href != null) onLink(EpubDocument.resolvePath(docDir, href), el.attrs["media"])
                     }
-                    "style" -> onInline(buildString { for (c in el.children) if (c is KiteXmlNode.Text) append(c.text) })
+                    "style" -> onInline(buildString { for (c in el.children) if (c is KiteXmlNode.Text) append(c.text) }, el.attrs["media"])
                     else -> for (c in el.children) if (c is KiteXmlNode.Element) walk(c)
                 }
             }

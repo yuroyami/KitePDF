@@ -20,6 +20,8 @@ internal class StyleRule(
     val selectors: List<Selector>,
     val declarations: List<Declaration>,
     val origin: Origin,
+    /** The media query lists of the `@media` blocks around the rule, all of which must match (#841). */
+    val media: List<String> = emptyList(),
 )
 
 /** An `@font-face` rule: a named face, its candidate source URLs, and its style. */

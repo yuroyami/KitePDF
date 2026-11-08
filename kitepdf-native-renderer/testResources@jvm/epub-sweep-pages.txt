@@ -56,7 +56,7 @@ a4c97946b91b 193 se-kenneth-grahame-the-wind-in-the-willows
 79f3a408d555 260 se-mark-twain-the-adventures-of-tom-sawyer
 b026087fc3c5 251 se-mark-twain-the-prince-and-the-pauper
 ff04b5f16bcb 262 se-mary-shelley-frankenstein
-2d08aefca883 124 se-oscar-wilde-the-importance-of-being-earnest
+2d08aefca883 106 se-oscar-wilde-the-importance-of-being-earnest
 ade4d511fbce 87 se-robert-louis-stevenson-the-strange-case-of-dr-jekyll-and-mr-hyde
 3001e3550153 243 se-robert-louis-stevenson-treasure-island
 88d065f95c5c 239 se-w-e-b-du-bois-the-souls-of-black-folk

@@ -7,7 +7,8 @@ import io.github.yuroyami.kitepdf.core.kiteWarn
  * A forgiving CSS parser for the EPUB subset. Strips comments, scans rules by
  * brace matching, splits grouped selectors and declarations, and expands the
  * shorthands that matter for book layout (`margin`, `padding`, `list-style`).
- * `@media`/`@supports` blocks are flattened (a reflow reader honours all media);
+ * `@supports` blocks are flattened, and the rules of an `@media` block keep its query, which
+ * the resolver evaluates against the page (#841);
  * `@font-face`/`@page`/`@import`/`@charset` are skipped here; `@font-face` is
  * read separately by the font registry.
  * Malformed input is salvaged, never thrown on -- real EPUB CSS is messy.
@@ -37,7 +38,10 @@ internal object CssParser {
         var ruled = false
     }
 
-    private fun parseInto(css: String, start: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int, sheet: Sheet) {
+    private fun parseInto(
+        css: String, start: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int, sheet: Sheet,
+        media: List<String> = emptyList(),
+    ) {
         var i = start
         while (i < end) {
             while (i < end && css[i].isWhitespace()) i++
@@ -45,7 +49,7 @@ internal object CssParser {
             if (css.startsWith("<!--", i)) { i += 4; continue }
             if (css.startsWith("-->", i)) { i += 3; continue }
             if (i >= end) break
-            if (css[i] == '@') { i = handleAtRule(css, i, end, origin, out, faces, nesting, sheet); continue }
+            if (css[i] == '@') { i = handleAtRule(css, i, end, origin, out, faces, nesting, sheet, media); continue }
             val brace = css.indexOf('{', i)
             if (brace < 0 || brace >= end) break
             val prelude = css.substring(i, brace).trim()
@@ -56,12 +60,15 @@ internal object CssParser {
             // layout draws nothing for, as `::first-line`, stays valid and leaves the rest of the list.
             val selectors = Selector.parseList(prelude, sheet.namespaces)?.filterNot { it.otherPseudoElement }.orEmpty()
             val decls = parseDeclarations(body)
-            if (selectors.isNotEmpty() && decls.isNotEmpty()) out.add(StyleRule(selectors, decls, origin))
+            if (selectors.isNotEmpty() && decls.isNotEmpty()) out.add(StyleRule(selectors, decls, origin, media))
             i = close + 1
         }
     }
 
-    private fun handleAtRule(css: String, at: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int, sheet: Sheet): Int {
+    private fun handleAtRule(
+        css: String, at: Int, end: Int, origin: Origin, out: ArrayList<StyleRule>, faces: ArrayList<FontFaceRule>, nesting: Int, sheet: Sheet,
+        media: List<String>,
+    ): Int {
         var j = at + 1
         while (j < end && (css[j].isLetterOrDigit() || css[j] == '-')) j++
         val keyword = css.substring(at + 1, j).lowercase()
@@ -84,7 +91,9 @@ internal object CssParser {
                 if (nesting >= MAX_NESTING) {
                     kiteWarn { "epub: CSS blocks nested beyond $MAX_NESTING levels are skipped" }
                 } else {
-                    parseInto(css, brace + 1, close, origin, out, faces, nesting + 1, sheet) // flatten: always-matching
+                    // @supports always matches; @media keeps its query for the resolver (#841).
+                    val inner = if (keyword == "media") media + css.substring(j, brace).trim() else media
+                    parseInto(css, brace + 1, close, origin, out, faces, nesting + 1, sheet, inner)
                 }
             }
             "font-face" -> parseFontFace(css.substring(brace + 1, close))?.let { faces.add(it) }
