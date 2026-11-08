@@ -1509,6 +1509,21 @@ final class io.github.yuroyami.kitepdf/PdfSignature { // io.github.yuroyami.kite
     final fun validate(kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ...): io.github.yuroyami.kitepdf/PdfSignatureValidation // io.github.yuroyami.kitepdf/PdfSignature.validate|validate(kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>){}[0]
 }
 
+final class io.github.yuroyami.kitepdf/PdfSignatureTimestamp { // io.github.yuroyami.kitepdf/PdfSignatureTimestamp|null[0]
+    final val authority // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.authority|{}authority[0]
+        final fun <get-authority>(): io.github.yuroyami.kitepdf/PdfCertificate? // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.authority.<get-authority>|<get-authority>(){}[0]
+    final val detail // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.detail|{}detail[0]
+        final fun <get-detail>(): kotlin/String? // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.detail.<get-detail>|<get-detail>(){}[0]
+    final val isTrusted // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.isTrusted|{}isTrusted[0]
+        final fun <get-isTrusted>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.isTrusted.<get-isTrusted>|<get-isTrusted>(){}[0]
+    final val isValid // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.isValid|{}isValid[0]
+        final fun <get-isValid>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.isValid.<get-isValid>|<get-isValid>(){}[0]
+    final val time // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.time|{}time[0]
+        final fun <get-time>(): io.github.yuroyami.kitepdf/PdfDate? // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.time.<get-time>|<get-time>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf/PdfSignatureTimestamp.toString|toString(){}[0]
+}
+
 final class io.github.yuroyami.kitepdf/PdfSignatureValidation { // io.github.yuroyami.kitepdf/PdfSignatureValidation|null[0]
     final val areChangesPermitted // io.github.yuroyami.kitepdf/PdfSignatureValidation.areChangesPermitted|{}areChangesPermitted[0]
         final fun <get-areChangesPermitted>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfSignatureValidation.areChangesPermitted.<get-areChangesPermitted>|<get-areChangesPermitted>(){}[0]
@@ -1532,6 +1547,8 @@ final class io.github.yuroyami.kitepdf/PdfSignatureValidation { // io.github.yur
         final fun <get-signer>(): io.github.yuroyami.kitepdf/PdfCertificate? // io.github.yuroyami.kitepdf/PdfSignatureValidation.signer.<get-signer>|<get-signer>(){}[0]
     final val status // io.github.yuroyami.kitepdf/PdfSignatureValidation.status|{}status[0]
         final fun <get-status>(): io.github.yuroyami.kitepdf/PdfSignatureValidation.Status // io.github.yuroyami.kitepdf/PdfSignatureValidation.status.<get-status>|<get-status>(){}[0]
+    final val timestamp // io.github.yuroyami.kitepdf/PdfSignatureValidation.timestamp|{}timestamp[0]
+        final fun <get-timestamp>(): io.github.yuroyami.kitepdf/PdfSignatureTimestamp? // io.github.yuroyami.kitepdf/PdfSignatureValidation.timestamp.<get-timestamp>|<get-timestamp>(){}[0]
 
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf/PdfSignatureValidation.toString|toString(){}[0]
 

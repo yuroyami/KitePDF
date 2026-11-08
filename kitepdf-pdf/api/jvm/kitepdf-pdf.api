@@ -1131,6 +1131,15 @@ public final class io/github/yuroyami/kitepdf/PdfSignature {
 	public static synthetic fun validate$default (Lio/github/yuroyami/kitepdf/PdfSignature;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation;
 }
 
+public final class io/github/yuroyami/kitepdf/PdfSignatureTimestamp {
+	public final fun getAuthority ()Lio/github/yuroyami/kitepdf/PdfCertificate;
+	public final fun getDetail ()Ljava/lang/String;
+	public final fun getTime ()Lio/github/yuroyami/kitepdf/PdfDate;
+	public final fun isTrusted ()Z
+	public final fun isValid ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/github/yuroyami/kitepdf/PdfSignatureValidation {
 	public final fun getAreChangesPermitted ()Z
 	public final fun getCertificatesValidAtSigning ()Ljava/lang/Boolean;
@@ -1140,6 +1149,7 @@ public final class io/github/yuroyami/kitepdf/PdfSignatureValidation {
 	public final fun getSignedTime ()Lio/github/yuroyami/kitepdf/PdfDate;
 	public final fun getSigner ()Lio/github/yuroyami/kitepdf/PdfCertificate;
 	public final fun getStatus ()Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+	public final fun getTimestamp ()Lio/github/yuroyami/kitepdf/PdfSignatureTimestamp;
 	public final fun isModifiedAfterSigning ()Z
 	public final fun isTrusted ()Z
 	public final fun isValid ()Z

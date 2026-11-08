@@ -10,6 +10,8 @@ internal class CmsSigner(
     val signatureAlgorithm: String,
     val signatureParameters: Asn1Node?,
     val signature: ByteArray,
+    /** The unsigned attributes, [1] after the signature (RFC 5652, 5.3), or null. */
+    private val unsignedAttributes: Asn1Node? = null,
 ) {
     val hasSignedAttributes: Boolean get() = signedAttributes != null
 
@@ -26,6 +28,11 @@ internal class CmsSigner(
 
     /** The first value of the signed attribute [oid], or null when the signer has none. */
     fun attribute(oid: String): Asn1Node? = signedAttributes?.children
+        ?.firstOrNull { it.children.firstOrNull()?.oid() == oid }
+        ?.children?.getOrNull(1)?.children?.firstOrNull()
+
+    /** The first value of the unsigned attribute [oid], such as a signature time-stamp token, or null (#925). */
+    fun unsignedAttribute(oid: String): Asn1Node? = unsignedAttributes?.children
         ?.firstOrNull { it.children.firstOrNull()?.oid() == oid }
         ?.children?.getOrNull(1)?.children?.firstOrNull()
 
@@ -61,6 +68,8 @@ internal class CmsSignedData(
         const val SIGNING_CERTIFICATE = "1.2.840.113549.1.9.16.2.12"
         const val SIGNING_CERTIFICATE_V2 = "1.2.840.113549.1.9.16.2.47"
         const val TST_INFO = "1.2.840.113549.1.9.16.1.4"
+        /** id-aa-signatureTimeStampToken (RFC 3161, Appendix A). */
+        const val SIGNATURE_TIME_STAMP = "1.2.840.113549.1.9.16.2.14"
         const val REVOCATION_ARCHIVAL = "1.2.840.113583.1.1.8"
         private const val OCSP_RESPONSE_INFO = "1.3.6.1.5.5.7.16.2"
 
@@ -97,6 +106,7 @@ internal class CmsSignedData(
             val signedAttributes = if (c[i].tag == 0xA0) c[i++] else null
             val signatureAlgorithm = c.getOrNull(i++) ?: return null
             val signature = c.getOrNull(i)?.takeIf { it.tag == Asn1.OCTET_STRING || it.tag == 0x24 }?.content() ?: return null
+            val unsignedAttributes = c.getOrNull(i + 1)?.takeIf { it.tag == 0xA1 }
             val byName = sid.tag == Asn1.SEQUENCE
             return CmsSigner(
                 issuerDer = if (byName) sid.children.getOrNull(0)?.encoded() else null,
@@ -107,6 +117,7 @@ internal class CmsSignedData(
                 signatureAlgorithm = signatureAlgorithm.children.firstOrNull()?.oid() ?: return null,
                 signatureParameters = signatureAlgorithm.children.getOrNull(1),
                 signature = signature,
+                unsignedAttributes = unsignedAttributes,
             )
         }
     }

@@ -151,6 +151,8 @@ internal object SigFixtures {
         val corruptSignature: Boolean = false,
         /** The revocation field of the SignedData, [1]: CRLs, and OCSP responses as other formats. */
         val revocation: List<ByteArray> = emptyList(),
+        /** A signature time-stamp token for the signature value, an unsigned attribute (RFC 3161, Appendix A). */
+        val timestamp: ((ByteArray) -> ByteArray)? = null,
     )
 
     /**
@@ -186,6 +188,7 @@ internal object SigFixtures {
             *(attributes?.let { arrayOf(byteArrayOf(0xA0.toByte()) + it.copyOfRange(1, it.size)) } ?: emptyArray()),
             sigAlg,
             octets(finalSignature),
+            *(o.timestamp?.let { stamp -> arrayOf(tagged(0xA1, seq(oid("1.2.840.113549.1.9.16.2.14"), set(stamp(finalSignature))))) } ?: emptyArray()),
         )
         val encapsulated = if (encapsulate) seq(oid(o.contentType), tagged(0xA0, octets(content))) else seq(oid(o.contentType))
         val signedData = seq(

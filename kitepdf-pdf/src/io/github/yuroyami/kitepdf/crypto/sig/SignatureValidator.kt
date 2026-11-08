@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.crypto.sig
 import io.github.yuroyami.kitepdf.PdfCertificate
 import io.github.yuroyami.kitepdf.PdfDate
 import io.github.yuroyami.kitepdf.PdfRevocation
+import io.github.yuroyami.kitepdf.PdfSignatureTimestamp
 import io.github.yuroyami.kitepdf.PdfSignatureValidation
 import io.github.yuroyami.kitepdf.PdfSignatureValidation.Status
 
@@ -26,6 +27,9 @@ internal class SignatureValidator(
 ) {
     private val anchors = trustAnchors.mapNotNull { X509.parse(it) }
     private var modified = false
+
+    /** The signer's signature time-stamp token, once [cms] has read it (#925). */
+    private var timestamp: PdfSignatureTimestamp? = null
 
     // The revocation data found so far: the document's and the caller's, then the signature's own.
     private val crls = ArrayList<Crl>()
@@ -134,6 +138,7 @@ internal class SignatureValidator(
         val pool = cms.certificates + pool()
         val cert = pool.firstOrNull { signer.names(it) } ?: return result(Status.Malformed, "the signature holds no certificate for its signer")
         val chain = chainOf(cert, pool)
+        timestamp = timestampOf(signer)
         var signedTime = asn1Date(signer.attribute(CmsSignedData.SIGNING_TIME)?.time())
         val content = when (subFilter) {
             "adbe.pkcs7.sha1" -> {
@@ -195,6 +200,59 @@ internal class SignatureValidator(
         else "the signing certificate attribute names a different certificate"
     }
 
+    /**
+     * The signer's signature time-stamp token (RFC 3161, Appendix A; ETSI EN 319 122-1, 5.3), or
+     * null when it has none. The token is a SignedData over a TSTInfo whose imprint is the digest
+     * of the signer's signature value. It is valid when that imprint matches and the authority's
+     * signature holds, and trusted when the authority's chain reaches a trust anchor, its
+     * certificate has the one critical extended key usage id-kp-timeStamping (RFC 3161, 2.3), and
+     * its chain was valid at the time it states.
+     */
+    private fun timestampOf(signer: CmsSigner): PdfSignatureTimestamp? {
+        val node = signer.unsignedAttribute(CmsSignedData.SIGNATURE_TIME_STAMP) ?: return null
+        fun invalid(detail: String, time: PdfDate? = null, authority: PdfCertificate? = null) =
+            PdfSignatureTimestamp(time, isValid = false, isTrusted = false, authority = authority, detail = detail)
+        val token = CmsSignedData.parse(node.encoded()) ?: return invalid("the time-stamp token is not a CMS SignedData")
+        val message = token.content?.takeIf { token.contentType == CmsSignedData.TST_INFO }
+            ?: return invalid("the time-stamp token encapsulates no TSTInfo")
+        val info = Asn1.read(message, 0) ?: return invalid("the TSTInfo of the time-stamp token cannot be read")
+        val time = asn1Date(info.children.getOrNull(4)?.time())
+        val imprint = info.children.getOrNull(2)
+        val imprintHash = Hash.byOid(imprint?.children?.firstOrNull()?.children?.firstOrNull()?.oid())
+            ?: return invalid("the time-stamp token digests with a hash KitePDF does not know", time)
+        if (imprint?.children?.getOrNull(1)?.content()?.contentEquals(imprintHash.digest(signer.signature)) != true) {
+            return invalid("the time-stamp token stamps another signature", time)
+        }
+        val authoritySigner = token.signers.firstOrNull() ?: return invalid("the time-stamp token names no signer", time)
+        val pool = token.certificates + pool()
+        val cert = pool.firstOrNull { authoritySigner.names(it) } ?: return invalid("the time-stamp token holds no certificate for its authority", time)
+        val chain = chainOf(cert, pool)
+        val authority = certificateOf(cert, revocationOf(cert, chain.getOrNull(1), time?.let(::utcSeconds)))
+        val hash = Hash.byOid(authoritySigner.digestAlgorithm)
+            ?: return invalid("the time-stamp token digests with ${authoritySigner.digestAlgorithm}, which KitePDF does not know", time, authority)
+        val key = cert.key ?: return invalid("the authority's certificate holds a kind of key KitePDF does not check", time, authority)
+        val covered = if (authoritySigner.hasSignedAttributes) {
+            val digest = authoritySigner.attribute(CmsSignedData.MESSAGE_DIGEST)?.takeIf { it.tag == Asn1.OCTET_STRING }?.content()
+            if (digest?.contentEquals(hash.digest(message)) != true) return invalid("the TSTInfo changed after the authority signed it", time, authority)
+            authoritySigner.signedAttributesForSignature()!!
+        } else {
+            message
+        }
+        val verified = Signatures.verify(authoritySigner.signatureAlgorithm, authoritySigner.signatureParameters, authoritySigner.digestAlgorithm, key, covered, authoritySigner.signature)
+            ?: return invalid("the time-stamp token uses ${authoritySigner.signatureAlgorithm}, which KitePDF does not check", time, authority)
+        if (!verified) return invalid("the time-stamp token does not match its authority's certificate", time, authority)
+        essProblem(authoritySigner, cert)?.let { return invalid(it, time, authority) }
+        val anchorAt = chain.indexOfFirst { c -> anchors.any { it.der.contentEquals(c.der) } }
+        val below = if (anchorAt >= 0) chain.subList(0, anchorAt) else chain
+        val problem = when {
+            anchorAt < 0 -> "the time-stamp authority's chain reaches no trust anchor"
+            else -> pathProblem(chain, anchorAt)
+                ?: timeStampingProblem(cert)
+                ?: time?.let { t -> below.firstOrNull { !validAt(it, t) }?.let { "the time-stamp authority is not trusted: ${it.commonName} was not valid at $t" } }
+        }
+        return PdfSignatureTimestamp(time, isValid = true, isTrusted = problem == null && time != null, authority = authority, detail = problem)
+    }
+
     /** The certificates outside the signature: the document's own and the trust anchors. */
     private fun pool(): List<X509> = documentCerts.mapNotNull { X509.parse(it) } + anchors
 
@@ -213,24 +271,28 @@ internal class SignatureValidator(
     }
 
     private fun result(status: Status, detail: String?, chain: List<X509> = emptyList(), signedTime: PdfDate? = null): PdfSignatureValidation {
+        // A trusted time-stamp token proves when the signature existed, so dates and revocation are
+        // judged at its time, as Acrobat judges them, and at the signer's claim only without one (#925).
+        val checkTime = timestamp?.takeIf { it.isTrusted }?.time ?: signedTime
         // Trust speaks for the signer only when the signature holds: an invalid one claims nothing.
         val anchorAt = chain.indexOfFirst { c -> anchors.any { it.der.contentEquals(c.der) } }
         val pathProblem = if (status == Status.Valid && anchorAt >= 0) pathProblem(chain, anchorAt) ?: purposeProblem(chain[0]) else null
         // RFC 5280, 6.1.3 (a)(2) at the signing time: every certificate below the anchor (#634).
         val below = if (anchorAt >= 0) chain.subList(0, anchorAt) else chain
-        val expired = signedTime?.let { t -> below.firstOrNull { !validAt(it, t) } }
-        val validAtSigning = if (signedTime == null || chain.isEmpty()) null else expired == null
-        val dateProblem = expired?.let { "the chain is not trusted: ${it.commonName} was not valid at the signing time $signedTime" }
+        val expired = checkTime?.let { t -> below.firstOrNull { !validAt(it, t) } }
+        val validAtSigning = if (checkTime == null || chain.isEmpty()) null else expired == null
+        val dateProblem = expired?.let { "the chain is not trusted: ${it.commonName} was not valid at the signing time $checkTime" }
         val trusted = status == Status.Valid && anchorAt >= 0 && pathProblem == null && validAtSigning != false
         // Revocation data counts only from an issuer that may issue: a false issuer signs no CRL.
         val certificates = chain.mapIndexed { i, cert ->
             val issuer = chain.getOrNull(i + 1)?.takeIf { pathProblem == null || i + 1 <= anchorAt && canIssue(chain, i + 1, anchorAt) == null }
-            certificateOf(cert, revocationOf(cert, issuer, signedTime?.let(::utcSeconds)))
+            certificateOf(cert, revocationOf(cert, issuer, checkTime?.let(::utcSeconds)))
         }
         return PdfSignatureValidation(
             status, certificates.firstOrNull(), certificates, trusted, modified, signedTime,
             detail ?: pathProblem ?: dateProblem.takeIf { status == Status.Valid },
             certificatesValidAtSigning = validAtSigning,
+            timestamp = timestamp,
         )
     }
 
@@ -254,13 +316,15 @@ internal class SignatureValidator(
         if (signer.hasKeyUsage && !signer.signsData) {
             return "the chain is not trusted: the key usage of ${signer.commonName} does not allow signing"
         }
-        if (subFilter == "ETSI.RFC3161" &&
-            (signer.extendedKeyUsages != listOf(TIME_STAMPING) || !signer.extendedKeyUsageCritical)
-        ) {
-            return "the timestamp is not trusted: ${signer.commonName} is not a time stamping authority, " +
-                "whose certificate has the one critical extended key usage id-kp-timeStamping"
-        }
+        if (subFilter == "ETSI.RFC3161") return timeStampingProblem(signer)
         return null
+    }
+
+    /** Why [authority] may not stamp time (RFC 3161, 2.3), or null. */
+    private fun timeStampingProblem(authority: X509): String? {
+        if (authority.extendedKeyUsages == listOf(TIME_STAMPING) && authority.extendedKeyUsageCritical) return null
+        return "the timestamp is not trusted: ${authority.commonName} is not a time stamping authority, " +
+            "whose certificate has the one critical extended key usage id-kp-timeStamping"
     }
 
     /**

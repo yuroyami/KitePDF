@@ -164,6 +164,29 @@ public class PdfSignature internal constructor(
     }
 }
 
+/**
+ * A signature time-stamp token: a timestamp authority's proof that the signature existed at
+ * [time] (RFC 3161, 2.4.2). The signer's own claim, [PdfSignatureValidation.signedTime], stays
+ * beside it.
+ */
+public class PdfSignatureTimestamp internal constructor(
+    /** The time the authority states (`genTime`), or null when it does not read. */
+    public val time: PdfDate?,
+    /** Whether the token stamps this signature and the authority's signature over it holds. */
+    public val isValid: Boolean,
+    /**
+     * Whether the token is valid, the authority's chain reaches a trust anchor and was valid at
+     * [time], and its certificate has the one critical extended key usage id-kp-timeStamping.
+     */
+    public val isTrusted: Boolean,
+    /** The authority's certificate, or null when the token holds none. */
+    public val authority: PdfCertificate?,
+    /** Why the token is not valid or not trusted, in words, or null. */
+    public val detail: String?,
+) {
+    override fun toString(): String = "PdfSignatureTimestamp(time=$time, isValid=$isValid, isTrusted=$isTrusted)"
+}
+
 /** The result of [PdfSignature.validate]. */
 public class PdfSignatureValidation internal constructor(
     /** Whether the signature matches the signed bytes and the signer's certificate. */
@@ -214,6 +237,13 @@ public class PdfSignatureValidation internal constructor(
      * nothing but a timestamp vouches for; for a document timestamp it is the authority's.
      */
     public val certificatesValidAtSigning: Boolean? = null,
+    /**
+     * The signature time-stamp token that a timestamp authority added to the signer (RFC 3161,
+     * Appendix A; ETSI EN 319 122-1, 5.3), or null when it has none. When it is trusted, its time is
+     * the time [certificatesValidAtSigning] and revocation are judged at, rather than [signedTime],
+     * which the signer states (#925).
+     */
+    public val timestamp: PdfSignatureTimestamp? = null,
 ) {
     /** True when [status] is [Status.Valid]. */
     public val isValid: Boolean get() = status == Status.Valid
@@ -222,7 +252,7 @@ public class PdfSignatureValidation internal constructor(
     public val areChangesPermitted: Boolean get() = changes?.all { it.isPermitted } ?: !isModifiedAfterSigning
 
     internal fun withChanges(changes: List<PdfRevisionChange>?): PdfSignatureValidation =
-        PdfSignatureValidation(status, signer, chain, isTrusted, isModifiedAfterSigning, signedTime, detail, changes, certificatesValidAtSigning)
+        PdfSignatureValidation(status, signer, chain, isTrusted, isModifiedAfterSigning, signedTime, detail, changes, certificatesValidAtSigning, timestamp)
 
     /** Whether a signature matches the signed bytes and the signer's certificate. */
     public enum class Status {

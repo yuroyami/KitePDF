@@ -636,6 +636,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PdfEditor.encrypt sets new passwords and permissions on an existing document, and removeEncryption takes the
   encryption off; both apply at saveRewritten, and need the owner password or a user password that allows changes
   (#927).
+- PdfSignatureValidation.timestamp reports the signature time-stamp token of a signer: its time, whether it is
+  valid and trusted, and the authority's certificate; a trusted token's time is the time certificate dates and
+  revocation are judged at (#925).
 
 ## [0.13.0] - 2026-10-09
 
