@@ -35,10 +35,10 @@ public class KiteShaper private constructor(private val face: EmbeddedFace) {
 
     /**
      * [text] as one line of glyphs. [rightToLeft] sets the paragraph direction; null takes it
-     * from the first strong character (UAX #9, rules P2 and P3). A line break or tab is drawn as
-     * a space.
+     * from the first strong character (UAX #9, rules P2 and P3). [language], a BCP 47 tag, picks
+     * the font's mark lookups for it (#915). A line break or tab is drawn as a space.
      */
-    public fun shape(text: String, rightToLeft: Boolean? = null): ShapedLine {
+    public fun shape(text: String, rightToLeft: Boolean? = null, language: String? = null): ShapedLine {
         val cps = codePoints(text)
         val starts = IntArray(cps.size + 1)
         run { var u = 0; for (i in cps.indices) { starts[i] = u; u += if (cps[i] >= 0x10000) 2 else 1 }; starts[cps.size] = u }
@@ -57,7 +57,7 @@ public class KiteShaper private constructor(private val face: EmbeddedFace) {
             }
             var end = i + 1
             while (end < cps.size && !isSpace(cps[end]) && levels[end] == levels[i]) end++
-            shapeWord(cps, i, end, levels[i], logical)
+            shapeWord(cps, i, end, levels[i], logical, language)
             i = end
         }
 
@@ -97,7 +97,7 @@ public class KiteShaper private constructor(private val face: EmbeddedFace) {
         val glyph: GsubGlyph? = null,
     )
 
-    private fun shapeWord(cps: IntArray, start: Int, end: Int, level: Int, out: MutableList<Placed>) {
+    private fun shapeWord(cps: IntArray, start: Int, end: Int, level: Int, out: MutableList<Placed>, language: String?) {
         val word = cps.copyOfRange(start, end)
         val gids = IntArray(word.size) { face.gidFor(word[it]) }
         val gsub = face.gsub ?: OpenTypeGsub.EMPTY
@@ -124,35 +124,36 @@ public class KiteShaper private constructor(private val face: EmbeddedFace) {
             val kern = face.kern1000(a.gid, b.gid).toDouble()
             if (kern != 0.0) { if (rtl) b.advance += kern else a.advance += kern }
         }
-        attachMarks(out, first)
+        attachMarks(out, first, script, language)
     }
 
     /** The GPOS marks of a word: onto the mark below them, a ligature component, or the base, as the layout attaches them. */
-    private fun attachMarks(glyphs: MutableList<Placed>, first: Int) {
+    private fun attachMarks(glyphs: MutableList<Placed>, first: Int, script: String, language: String?) {
         val scale = 1000.0 / face.unitsPerEm
+        val plan = face.marksPlan(script, language)
         var base = -1
-        var stacked = -1
-        var stackedX = 0.0
-        var stackedY = 0.0
+        // The marks attached since the base, the nearest last, with their offsets in font units.
+        val stacked = ArrayList<Triple<Int, Double, Double>>()
         for (k in first until glyphs.size) {
             val c = glyphs[k]
             if (base >= 0 && !c.invisible) {
                 val b = glyphs[base]
                 val components = b.glyph?.components ?: 1
-                val off = (if (stacked >= 0) face.markStackOffset(glyphs[stacked].gid, c.gid) else null)
-                    ?.let { (stackedX + it.first) to (stackedY + it.second) }
-                    ?: (if (components > 1) face.markLigatureOffset(b.gid, c.gid, components - 1) else null)
-                    ?: face.markOffset(b.gid, c.gid)
+                val stack = if (stacked.isEmpty()) null else
+                    face.markStack(IntArray(stacked.size) { glyphs[stacked[stacked.size - 1 - it].first].gid }, c.gid, plan)
+                val off = stack?.let { (o, at) -> stacked[stacked.size - 1 - at].let { (it.second + o.first) to (it.third + o.second) } }
+                    ?: (if (components > 1) face.markLigatureOffset(b.gid, c.gid, components - 1, plan) else null)
+                    ?: face.markOffset(b.gid, c.gid, plan)
                 if (off != null) {
                     c.base = base
                     c.dx = off.first * scale
                     c.dy = off.second * scale
-                    stacked = k; stackedX = off.first; stackedY = off.second
+                    stacked += Triple(k, off.first, off.second)
                     continue
                 }
             }
             base = k
-            stacked = -1
+            stacked.clear()
         }
     }
 

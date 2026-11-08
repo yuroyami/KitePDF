@@ -737,6 +737,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writer embeds the font in, whole or subset (#902). The subsetter writes such a glyph from its outline, since
   the CID-keyed font it makes has no glyph names for `seac` to find the components by. Poppler drew nothing for
   it before.
+- GPOS marks take the lookups of the language system of their text (#915): those of the `mark`, `mkmk`, `abvm`
+  and `blwm` features for the script and the `lang` of the text, in lookup list order, as HarfBuzz takes them. A
+  lookup flag now counts: a mark that `MarkAttachmentType`, `UseMarkFilteringSet` or `IgnoreMarks` leaves out is
+  not placed by the lookup, and a mark-to-mark lookup stacks on the nearest mark it does not pass over.
+  `OpenTypeMarks.plan` and `OpenTypeLanguage` are new, and `KiteShaper.shape` takes a language.
 
 ## [0.13.0] - 2026-10-09
 

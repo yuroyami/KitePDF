@@ -7,26 +7,60 @@ package io.github.yuroyami.kitepdf.core.font
  * (base anchor − mark anchor); the caller applies it to the mark glyph's origin
  * without touching the pen advance (marks are zero-advance).
  *
- * Three lookup types, all anchor-based and all consulted (the `mark` and
- * `mkmk` features are on by default, so no feature filtering is needed):
+ * Three lookup types, all anchor-based:
  *
  *  - **type 4, mark-to-base**: a mark onto a letter.
  *  - **type 6, mark-to-mark**: a mark onto the mark below it, which is what
  *    stacks two diacritics instead of overprinting them.
  *  - **type 5, mark-to-ligature**: a mark onto one component of a ligature.
  *
+ * A [Plan] picks the lookups as HarfBuzz does (#915): those of the `mark`, `mkmk`, `abvm` and `blwm` features of
+ * the language system of the text's script and language, in lookup list order. Without a plan,
+ * or for a font with no such language system, every lookup of the three types counts, as before.
+ * A mark-to-mark lookup's flag picks the mark below: one that `MarkAttachmentType` or
+ * `UseMarkFilteringSet` leaves out is passed over, by the classes and sets of GDEF.
+ *
  * Anchor formats 1/2/3 all read; format 3's device tables are ignored, so the
  * plain x/y coordinate is used.
  */
 public class OpenTypeMarks private constructor(
-    private val markToBase: List<MarkBase>,
-    private val markToMark: List<MarkBase>,
-    private val markToLigature: List<MarkLigature>,
+    private val lookups: List<MarkLookup>,
+    private val scripts: Map<String, ScriptRecord>,
+    private val features: List<Pair<String, IntArray>>,
+    private val markAttach: Map<Int, Int>?,
+    private val markSets: List<Set<Int>>,
 ) {
+    /** The lookups that a text of one script and language takes, in lookup list order. */
+    public class Plan internal constructor(internal val lookups: List<Int>)
+
+    internal class ScriptRecord(val default: IntArray?, val languages: Map<String, IntArray>)
+
+    internal class MarkLookup(val type: Int, val flag: Int, val markSet: Int, val toBase: List<MarkBase>, val toLigature: List<MarkLigature>)
+
+    private val all = Plan(lookups.indices.toList())
+
+    /**
+     * The plan for [script], an OpenType script tag such as `latn`, and [language], an OpenType
+     * language system tag such as `VIT `, or a BCP 47 tag such as `vi`, which [OpenTypeLanguage]
+     * maps. The default language system of the script stands for a language the font lacks, and
+     * `DFLT` for a script it lacks. A font with neither takes every lookup.
+     */
+    public fun plan(script: String?, language: String?): Plan {
+        val record = script?.let { scripts[it] } ?: scripts["DFLT"] ?: scripts["dflt"] ?: return all
+        val tag = language?.let { if (it.length == 4 && it.any { c -> c.isUpperCase() }) it else OpenTypeLanguage.tagOf(it) }
+        val featureIndices = tag?.let { record.languages[it] } ?: record.default ?: return all
+        val chosen = featureIndices.flatMap { fi ->
+            val f = features.getOrNull(fi) ?: return@flatMap emptyList()
+            if (f.first in MARK_FEATURES) f.second.toList() else emptyList()
+        }.distinct().sorted()
+        return Plan(chosen)
+    }
+
+    private fun lookupsOf(plan: Plan?): List<MarkLookup> = (plan ?: all).lookups.mapNotNull { lookups.getOrNull(it) }
 
     /** Attachment offset (font units) placing [markGid] on [baseGid], or null. */
-    public fun offset(baseGid: Int, markGid: Int): Pair<Double, Double>? {
-        for (st in markToBase) st.offset(baseGid, markGid)?.let { return it }
+    public fun offset(baseGid: Int, markGid: Int, plan: Plan? = null): Pair<Double, Double>? {
+        for (l in lookupsOf(plan)) if (l.type == 4 && !passesOver(l, markGid)) for (st in l.toBase) st.offset(baseGid, markGid)?.let { return it }
         return null
     }
 
@@ -34,27 +68,134 @@ public class OpenTypeMarks private constructor(
      * Offset placing [markGid] on top of [belowGid], another mark, relative to
      * that mark's own drawn origin. This is what stacks diacritics.
      */
-    public fun stackOffset(belowGid: Int, markGid: Int): Pair<Double, Double>? {
-        for (st in markToMark) st.offset(belowGid, markGid)?.let { return it }
+    public fun stackOffset(belowGid: Int, markGid: Int): Pair<Double, Double>? =
+        stackOffset(intArrayOf(belowGid), markGid, null)?.first
+
+    /**
+     * The mark-to-mark offset of [markGid] and the index in [below] of the mark it goes on: [below]
+     * holds the marks before it since the base, the nearest first. Each lookup of [plan] takes the
+     * nearest mark that its flag does not pass over, and the first lookup that covers the pair wins.
+     */
+    public fun stackOffset(below: IntArray, markGid: Int, plan: Plan?): Pair<Pair<Double, Double>, Int>? {
+        for (l in lookupsOf(plan)) {
+            // A lookup applies only to a mark its flag does not pass over, as HarfBuzz applies it.
+            if (l.type != 6 || passesOver(l, markGid)) continue
+            val at = below.indices.firstOrNull { !passesOver(l, below[it]) } ?: continue
+            for (st in l.toBase) st.offset(below[at], markGid)?.let { return it to at }
+        }
         return null
     }
 
+    /** Whether the flag of [lookup] passes over the mark [gid] (OpenType 1.9, "Lookup Table"). */
+    private fun passesOver(lookup: MarkLookup, gid: Int): Boolean {
+        val flag = lookup.flag
+        return when {
+            flag and IGNORE_MARKS != 0 -> true
+            flag and USE_MARK_FILTERING_SET != 0 -> markSets.getOrNull(lookup.markSet)?.contains(gid) != true
+            flag and MARK_ATTACHMENT_TYPE != 0 -> (markAttach?.get(gid) ?: 0) != (flag ushr 8)
+            else -> false
+        }
+    }
+
     /** Offset placing [markGid] on [component] of the ligature [ligGid], or null. */
-    public fun ligatureOffset(ligGid: Int, markGid: Int, component: Int): Pair<Double, Double>? {
-        for (st in markToLigature) st.offset(ligGid, markGid, component)?.let { return it }
+    public fun ligatureOffset(ligGid: Int, markGid: Int, component: Int, plan: Plan? = null): Pair<Double, Double>? {
+        for (l in lookupsOf(plan)) if (l.type == 5 && !passesOver(l, markGid)) for (st in l.toLigature) st.offset(ligGid, markGid, component)?.let { return it }
         return null
     }
 
     public companion object {
-        public fun from(gpos: ByteArray?): OpenTypeMarks? {
+        /** The features whose lookups place marks: `mark` and `mkmk`, and the above-base and below-base marks of the Indic and USE shapers. */
+        private val MARK_FEATURES = setOf("mark", "mkmk", "abvm", "blwm")
+        private const val IGNORE_MARKS = 0x0008
+        private const val USE_MARK_FILTERING_SET = 0x0010
+        private const val MARK_ATTACHMENT_TYPE = 0xFF00
+
+        /** The marks of [gpos], with the mark classes and mark sets of [gdef] for the lookup flags. */
+        public fun from(gpos: ByteArray?, gdef: ByteArray? = null): OpenTypeMarks? {
             gpos ?: return null
-            val parsed = runCatching { parse(gpos) }.getOrNull() ?: return null
-            val (base, mark, liga) = parsed
-            return if (base.isEmpty() && mark.isEmpty() && liga.isEmpty()) null
-            else OpenTypeMarks(base, mark, liga)
+            val lookups = runCatching { parse(gpos) }.getOrNull() ?: return null
+            if (lookups.none { it.toBase.isNotEmpty() || it.toLigature.isNotEmpty() }) return null
+            val (scripts, features) = runCatching { layout(gpos) }.getOrDefault(emptyMap<String, ScriptRecord>() to emptyList())
+            val (attach, sets) = gdef?.let { runCatching { parseGdef(it) }.getOrNull() } ?: (null to emptyList())
+            return OpenTypeMarks(lookups, scripts, features, attach, sets)
         }
 
-        private fun parse(b: ByteArray): Triple<List<MarkBase>, List<MarkBase>, List<MarkLigature>> {
+        /** The ScriptList and the FeatureList of [b], a GPOS table. */
+        private fun layout(b: ByteArray): Pair<Map<String, ScriptRecord>, List<Pair<String, IntArray>>> {
+            val r = R(b)
+            r.u16(); r.u16()
+            val scriptOff = r.u16()
+            val featureOff = r.u16()
+            fun tag(v: Long) = CharArray(4) { ((v ushr (24 - 8 * it)) and 0xFF).toInt().toChar() }.concatToString()
+            fun langSys(off: Int): IntArray { val lr = R(b); lr.seek(off); lr.u16(); lr.u16(); val n = lr.u16(); return IntArray(n) { lr.u16() } }
+            val scripts = HashMap<String, ScriptRecord>()
+            if (scriptOff != 0) {
+                r.seek(scriptOff)
+                val n = r.u16()
+                repeat(n) {
+                    val t = tag(r.u32())
+                    val so = scriptOff + r.u16()
+                    val sr = R(b); sr.seek(so)
+                    val defaultOff = sr.u16()
+                    val ln = sr.u16()
+                    val langs = HashMap<String, IntArray>()
+                    repeat(ln) { val lt = tag(sr.u32()); langs[lt] = langSys(so + sr.u16()) }
+                    scripts[t] = ScriptRecord(defaultOff.takeIf { it != 0 }?.let { langSys(so + it) }, langs)
+                }
+            }
+            val features = ArrayList<Pair<String, IntArray>>()
+            if (featureOff != 0) {
+                r.seek(featureOff)
+                val n = r.u16()
+                repeat(n) {
+                    val t = tag(r.u32())
+                    val fo = featureOff + r.u16()
+                    val fr = R(b); fr.seek(fo); fr.u16()
+                    val c = fr.u16()
+                    features += t to IntArray(c) { fr.u16() }
+                }
+            }
+            return scripts to features
+        }
+
+        /** The mark attachment classes and the mark glyph sets of a GDEF table. */
+        private fun parseGdef(b: ByteArray): Pair<Map<Int, Int>?, List<Set<Int>>> {
+            val r = R(b)
+            r.u16()
+            val minor = r.u16()
+            r.u16(); r.u16(); r.u16()
+            val markAttachOff = r.u16()
+            val markSetsOff = if (minor >= 2) r.u16() else 0
+            val sets = ArrayList<Set<Int>>()
+            if (markSetsOff != 0) {
+                r.seek(markSetsOff); r.u16()
+                val n = r.u16()
+                val offs = LongArray(n) { r.u32() }
+                for (o in offs) sets += readCoverage(b, markSetsOff + o.toInt()).keys
+            }
+            return (markAttachOff.takeIf { it != 0 }?.let { readClassDef(b, it) }) to sets
+        }
+
+        private fun readClassDef(b: ByteArray, off: Int): Map<Int, Int> {
+            val r = R(b); r.seek(off)
+            val out = HashMap<Int, Int>()
+            when (r.u16()) {
+                1 -> { val start = r.u16(); val n = r.u16(); for (i in 0 until n) out[start + i] = r.u16() }
+                2 -> {
+                    val n = r.u16()
+                    var expanded = 0L
+                    for (i in 0 until n) {
+                        val s = r.u16(); val e = r.u16(); val c = r.u16()
+                        expanded += maxOf(0, e - s + 1)
+                        if (expanded > MAX_RANGE_GLYPHS) return out
+                        for (g in s..e) out[g] = c
+                    }
+                }
+            }
+            return out
+        }
+
+        private fun parse(b: ByteArray): List<MarkLookup> {
             val r = R(b)
             r.u16(); r.u16() // major/minor
             r.u16() // scriptList
@@ -63,16 +204,18 @@ public class OpenTypeMarks private constructor(
             r.seek(lookupListOff)
             val lookupCount = r.u16()
             val lookupOffsets = IntArray(lookupCount) { r.u16() }
-            val toBase = ArrayList<MarkBase>()
-            val toMark = ArrayList<MarkBase>()
-            val toLiga = ArrayList<MarkLigature>()
+            val out = ArrayList<MarkLookup>()
             for (lo in lookupOffsets) {
                 val base = lookupListOff + lo
                 r.seek(base)
-                var type = r.u16()
-                r.u16() // flag
+                val type = r.u16()
+                val flag = r.u16()
                 val subCount = r.u16()
                 val subOffsets = IntArray(subCount) { r.u16() }
+                val markSet = if (flag and USE_MARK_FILTERING_SET != 0) r.u16() else 0
+                val toBase = ArrayList<MarkBase>()
+                val toLiga = ArrayList<MarkLigature>()
+                var lookupType = type
                 for (so in subOffsets) {
                     var subBase = base + so
                     var effType = type
@@ -82,16 +225,18 @@ public class OpenTypeMarks private constructor(
                         effType = er.u16()
                         subBase += er.u32().toInt()
                     }
+                    lookupType = effType
                     when (effType) {
                         // 4 and 6 share a layout: coverage, coverage, classes,
                         // mark array, and an array of anchors per class.
-                        4 -> runCatching { parseMarkBase(b, subBase) }.getOrNull()?.let { toBase.add(it) }
-                        6 -> runCatching { parseMarkBase(b, subBase) }.getOrNull()?.let { toMark.add(it) }
+                        4, 6 -> runCatching { parseMarkBase(b, subBase) }.getOrNull()?.let { toBase.add(it) }
                         5 -> runCatching { parseMarkLigature(b, subBase) }.getOrNull()?.let { toLiga.add(it) }
                     }
                 }
+                // Every lookup keeps its place, so the indices of the FeatureList still name it.
+                out += MarkLookup(lookupType, flag, markSet, toBase, toLiga)
             }
-            return Triple(toBase, toMark, toLiga)
+            return out
         }
 
         /**
@@ -197,7 +342,7 @@ public class OpenTypeMarks private constructor(
         }
     }
 
-    private class MarkBase(
+    internal class MarkBase(
         private val markCov: Map<Int, Int>,
         private val baseCov: Map<Int, Int>,
         private val markClass: IntArray,
@@ -215,7 +360,7 @@ public class OpenTypeMarks private constructor(
         }
     }
 
-    private class MarkLigature(
+    internal class MarkLigature(
         private val markCov: Map<Int, Int>,
         private val ligCov: Map<Int, Int>,
         private val markClass: IntArray,

@@ -2286,7 +2286,7 @@ internal class BoxLayout(
                 // Letters stood upright one per em neither join nor kern (#508).
                 val stacked = word.any { uprightOnlyByStyle(it.cp, it.orientation) }
                 val ligated = !stacked && shapeWord(word) // GSUB: joining forms, ligatures, contextual substitutions
-                positionMarks(word)             // GPOS mark-to-base attachment
+                positionMarks(word, wordLang)   // GPOS mark-to-base attachment
                 if (!stacked) kernWord(word)
                 // Skip hyphenation when a ligature collapsed cells (soft-hyphen indices
                 // + the reconstructed word text would no longer line up), and for ruby
@@ -2717,35 +2717,40 @@ internal class BoxLayout(
      * base and the pen there has not passed the base. Its offset then counts back
      * from the base origin over the marks between them, not over the base (#622).
      */
-    private fun positionMarks(cells: List<Cell>) {
+    private fun positionMarks(cells: List<Cell>, language: String? = null) {
         var base: Cell? = null
         var baseAdvance = 0.0 // font units of the base's own advance
         var advSinceBase = 0.0 // font units from the base origin to the current pen
-        // The last attached mark, and its drawn origin relative to the base.
-        var stacked: Cell? = null
-        var stackedX = 0.0
-        var stackedY = 0.0
+        // The marks attached since the base, the nearest last, each with its drawn origin relative to the base.
+        val attached = ArrayList<Triple<Cell, Double, Double>>()
+        // The mark lookups of the word's script and language (#915), one plan for each face.
+        val plans = HashMap<EmbeddedFace, io.github.yuroyami.kitepdf.core.font.OpenTypeMarks.Plan?>()
+        fun planOf(face: EmbeddedFace) = plans.getOrPut(face) {
+            val script = TextShaper.script(IntArray(cells.size) { cells[it].cp }, face.gsub ?: io.github.yuroyami.kitepdf.core.font.OpenTypeGsub.EMPTY)
+            face.marksPlan(script, language)
+        }
         for (c in cells) {
             val face = c.face
             val b = base
             if (face != null && b != null && b.face === face && c.gid >= 0) {
-                val prev = stacked
-                val off = (if (prev != null) face.markStackOffset(prev.gid, c.gid) else null)
-                    ?.let { (stackedX + it.first) to (stackedY + it.second) }
-                    ?: (if (b.ligComponents > 1) face.markLigatureOffset(b.gid, c.gid, b.ligComponents - 1) else null)
-                    ?: face.markOffset(b.gid, c.gid)
+                val plan = planOf(face)
+                val stack = if (attached.isEmpty()) null else
+                    face.markStack(IntArray(attached.size) { attached[attached.size - 1 - it].first.gid }, c.gid, plan)
+                val off = stack?.let { (o, at) -> attached[attached.size - 1 - at].let { (it.second + o.first) to (it.third + o.second) } }
+                    ?: (if (b.ligComponents > 1) face.markLigatureOffset(b.gid, c.gid, b.ligComponents - 1, plan) else null)
+                    ?: face.markOffset(b.gid, c.gid, plan)
                 if (off != null) {
                     val advance = face.advanceRaw(c.gid) // usually 0 for a mark
                     // Right to left, the marks from the base up to this one lie between it and the base.
                     c.glyphXOffset = if (c.level % 2 == 1) off.first + (advSinceBase - baseAdvance + advance) else off.first - advSinceBase
                     c.glyphYOffset = off.second
                     advSinceBase += advance
-                    stacked = c; stackedX = off.first; stackedY = off.second
+                    attached += Triple(c, off.first, off.second)
                     continue // still attached to the same base
                 }
             }
             base = c
-            stacked = null
+            attached.clear()
             advSinceBase = if (face != null && c.gid >= 0) face.advanceRaw(c.gid).toDouble() else 0.0
             baseAdvance = advSinceBase
         }

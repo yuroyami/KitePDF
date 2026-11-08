@@ -52,7 +52,7 @@ internal class FontProgram(
                 ttf, cff,
                 kern = OpenTypeKern.from(ttf.rawTable("kern"), gpos),
                 gsub = OpenTypeGsub.from(ttf.rawTable("GSUB"), ttf.rawTable("GDEF")),
-                marks = OpenTypeMarks.from(gpos),
+                marks = OpenTypeMarks.from(gpos, ttf.rawTable("GDEF")),
             )
         }
     }
@@ -105,14 +105,20 @@ internal class EmbeddedFace(
     fun advanceRaw(gid: Int): Int = ttf.advanceWidth(gid)
 
     /** GPOS mark-to-base attachment offset (font units) placing [mark] on [base], or null. */
-    fun markOffset(base: Int, mark: Int): Pair<Double, Double>? = marks?.offset(base, mark)
+    fun markOffset(base: Int, mark: Int, plan: OpenTypeMarks.Plan? = null): Pair<Double, Double>? = marks?.offset(base, mark, plan)
+
+    /** The GPOS mark lookups that a text of [script] and [language] takes (#915), or null for a face without marks. */
+    fun marksPlan(script: String?, language: String?): OpenTypeMarks.Plan? = marks?.plan(script, language)
+
+    /** The mark-to-mark offset of [mark] and the index in [below], nearest first, of the mark it stacks on (#915). */
+    fun markStack(below: IntArray, mark: Int, plan: OpenTypeMarks.Plan?): Pair<Pair<Double, Double>, Int>? = marks?.stackOffset(below, mark, plan)
 
     /** GPOS mark-to-mark offset stacking [mark] on the mark [below] it, or null. */
     fun markStackOffset(below: Int, mark: Int): Pair<Double, Double>? = marks?.stackOffset(below, mark)
 
     /** GPOS mark-to-ligature offset placing [mark] on [component] of [lig], or null. */
-    fun markLigatureOffset(lig: Int, mark: Int, component: Int): Pair<Double, Double>? =
-        marks?.ligatureOffset(lig, mark, component)
+    fun markLigatureOffset(lig: Int, mark: Int, component: Int, plan: OpenTypeMarks.Plan? = null): Pair<Double, Double>? =
+        marks?.ligatureOffset(lig, mark, component, plan)
 
     /** True when the font has Arabic contextual-joining GSUB features. */
     val hasArabicJoining: Boolean get() = gsub?.hasArabicJoining == true

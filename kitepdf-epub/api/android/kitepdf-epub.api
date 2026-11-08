@@ -411,8 +411,8 @@ public final class io/github/yuroyami/kitepdf/epub/KiteShaper {
 	public final fun getDescent ()D
 	public final fun getUnitsPerEm ()I
 	public final fun glyphId (I)I
-	public final fun shape (Ljava/lang/String;Ljava/lang/Boolean;)Lio/github/yuroyami/kitepdf/epub/ShapedLine;
-	public static synthetic fun shape$default (Lio/github/yuroyami/kitepdf/epub/KiteShaper;Ljava/lang/String;Ljava/lang/Boolean;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/ShapedLine;
+	public final fun shape (Ljava/lang/String;Ljava/lang/Boolean;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/ShapedLine;
+	public static synthetic fun shape$default (Lio/github/yuroyami/kitepdf/epub/KiteShaper;Ljava/lang/String;Ljava/lang/Boolean;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/ShapedLine;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/KiteShaper$Companion {

@@ -844,15 +844,28 @@ public final class io/github/yuroyami/kitepdf/core/font/OpenTypeKern$Companion {
 	public final fun from ([B[B)Lio/github/yuroyami/kitepdf/core/font/OpenTypeKern;
 }
 
+public final class io/github/yuroyami/kitepdf/core/font/OpenTypeLanguage {
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/core/font/OpenTypeLanguage;
+	public final fun tagOf (Ljava/lang/String;)Ljava/lang/String;
+}
+
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeMarks {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Companion;
-	public final fun ligatureOffset (III)Lkotlin/Pair;
-	public final fun offset (II)Lkotlin/Pair;
+	public final fun ligatureOffset (IIILio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;)Lkotlin/Pair;
+	public static synthetic fun ligatureOffset$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks;IIILio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;ILjava/lang/Object;)Lkotlin/Pair;
+	public final fun offset (IILio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;)Lkotlin/Pair;
+	public static synthetic fun offset$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks;IILio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;ILjava/lang/Object;)Lkotlin/Pair;
+	public final fun plan (Ljava/lang/String;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;
 	public final fun stackOffset (II)Lkotlin/Pair;
+	public final fun stackOffset ([IILio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;)Lkotlin/Pair;
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Companion {
-	public final fun from ([B)Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks;
+	public final fun from ([B[B)Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks;
+	public static synthetic fun from$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Companion;[B[BILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks;
+}
+
+public final class io/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan {
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/PdfFont {

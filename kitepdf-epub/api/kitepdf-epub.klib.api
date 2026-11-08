@@ -553,7 +553,7 @@ final class io.github.yuroyami.kitepdf.epub/KiteShaper { // io.github.yuroyami.k
         final fun <get-unitsPerEm>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/KiteShaper.unitsPerEm.<get-unitsPerEm>|<get-unitsPerEm>(){}[0]
 
     final fun glyphId(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.epub/KiteShaper.glyphId|glyphId(kotlin.Int){}[0]
-    final fun shape(kotlin/String, kotlin/Boolean? = ...): io.github.yuroyami.kitepdf.epub/ShapedLine // io.github.yuroyami.kitepdf.epub/KiteShaper.shape|shape(kotlin.String;kotlin.Boolean?){}[0]
+    final fun shape(kotlin/String, kotlin/Boolean? = ..., kotlin/String? = ...): io.github.yuroyami.kitepdf.epub/ShapedLine // io.github.yuroyami.kitepdf.epub/KiteShaper.shape|shape(kotlin.String;kotlin.Boolean?;kotlin.String?){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.epub/KiteShaper.Companion|null[0]
         final fun load(kotlin/ByteArray, kotlin/Int = ...): io.github.yuroyami.kitepdf.epub/KiteShaper // io.github.yuroyami.kitepdf.epub/KiteShaper.Companion.load|load(kotlin.ByteArray;kotlin.Int){}[0]

@@ -107,7 +107,7 @@ public fun ContentStreamBuilder.paragraph(
                 val rest = text.substring(consumed + b.start)
                 return PdfParagraph(lines, top - (last.takeIf { !it.isNaN() }?.minus(descent) ?: top), last.takeIf { !it.isNaN() } ?: top, rest)
             }
-            val line = shaper.shape(b.text, rtl)
+            val line = shaper.shape(b.text, rtl, language)
             val lastOfParagraph = li == broken.lastIndex
             val extra = (maxWidth - line.width).coerceAtLeast(0.0)
             val (offset, stretch) = when (align) {
