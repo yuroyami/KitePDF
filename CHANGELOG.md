@@ -545,6 +545,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EpubDocument.isLinear(chapter)` reports a spine item's `linear="no"`, and
   `KiteDocViewState.skipsNonLinearChapters` (off by default) lets next and previous page step over such chapters;
   links, the table of contents and bookmarks still open them (#928).
+- `AwtCanvas` draws through its own copy of the host's `Graphics2D`, so the host's font, colour, stroke, paint
+  and rendering hints are the same after a page as before it (#866).
 
 ## [0.13.0] - 2026-10-09
 

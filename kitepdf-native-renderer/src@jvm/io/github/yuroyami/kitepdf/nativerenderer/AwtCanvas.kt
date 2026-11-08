@@ -70,25 +70,42 @@ import kotlin.math.floor
  * common ones (Normal, SrcOver) are mapped to `AlphaComposite`. The rest
  * (Multiply, Screen, …) require a custom `java.awt.Composite`. We ship a
  * pixel-level [PdfBlendComposite] that implements all 16 modes for fidelity.
+ *
+ * The canvas draws through its own copy of the host's [Graphics2D], taken with `create()` and
+ * taken again at each [beginPage], so the host's font, colour, stroke, paint, rendering hints,
+ * clip and transform are the same after a page as before it (#866).
  */
-public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
+public class AwtCanvas(g: Graphics2D) : KiteCanvas {
+
+    /** The host's Graphics2D, which the canvas never changes. */
+    private val host: Graphics2D = g
+
+    /** The copy of [host] that the page draws through. */
+    private var base: Graphics2D = fresh()
+
+    /** Where the canvas draws now: [base], or the layer of an open group or mask. */
+    private var g: Graphics2D = base
+
+    private fun fresh(): Graphics2D = (host.create() as Graphics2D).apply {
+        setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
+        setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+    }
 
     /** Clips and transparency groups keep separate stacks, so interleaving them cannot restore the wrong state (#138). */
     private val clipStack = ArrayDeque<ClipEntry>()
     private val groupStack = ArrayDeque<GroupFrame>()
     private var openLayers = 0
 
-    init {
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-    }
-
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         // The host owns the Graphics; we don't clear.
         while (groupStack.isNotEmpty()) endTransparencyGroup()
         while (clipStack.isNotEmpty()) popClip()
         openLayers = 0
+        // A new copy for each page, so nothing of the last page's state carries over.
+        base.dispose()
+        base = fresh()
+        g = base
     }
 
     override fun endPage() {

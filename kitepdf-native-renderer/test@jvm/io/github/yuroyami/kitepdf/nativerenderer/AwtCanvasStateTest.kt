@@ -81,4 +81,34 @@ class AwtCanvasStateTest {
             .compose(src.raster, dst.raster, dst.raster)
         assertEquals(0xFF800000.toInt(), dst.getRGB(0, 0))
     }
+
+    @Test
+    fun a_page_leaves_the_hosts_graphics_as_it_found_it() {
+        // A Swing component drew its own text after the page in the page's font, colour and dashes (#866).
+        val img = BufferedImage(300, 300, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.font = java.awt.Font("Dialog", java.awt.Font.PLAIN, 12)
+        g.color = java.awt.Color.MAGENTA
+        g.stroke = java.awt.BasicStroke(1f)
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_OFF)
+        val font = g.font
+        val transform = g.transform
+        val pdf = io.github.yuroyami.kitepdf.writer.PdfBuilder().page(width = 600.0, height = 600.0) {
+            text(io.github.yuroyami.kitepdf.writer.StandardFont.Helvetica, 48.0, 50.0, 300.0, "Hello")
+        }.build()
+        val page = io.github.yuroyami.kitepdf.PdfDocument.open(pdf).pages[0]
+        val canvas = AwtCanvas(g)
+        page.renderTo(canvas, KiteMatrix(0.5, 0.0, 0.0, -0.5, 0.0, 300.0))
+        canvas.strokePath(
+            KitePath.Builder().apply { moveTo(0.0, 0.0); lineTo(100.0, 100.0) }.build(), KiteMatrix.IDENTITY,
+            io.github.yuroyami.kitepdf.core.render.RgbColor(1.0, 0.0, 0.0), 6.0, 1.0, KiteBlendMode.Normal, listOf(8.0, 4.0), 0.0, 0, 0, 10.0,
+        )
+        assertEquals(font, g.font)
+        assertEquals(java.awt.Color.MAGENTA, g.color)
+        assertEquals(java.awt.BasicStroke(1f), g.stroke)
+        assertEquals(java.awt.RenderingHints.VALUE_ANTIALIAS_OFF, g.getRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING))
+        assertEquals(transform, g.transform)
+        assertTrue((0 until 300).any { x -> (0 until 300).any { y -> img.getRGB(x, y) ushr 24 != 0 } }, "the page drew into the host's image")
+        g.dispose()
+    }
 }
