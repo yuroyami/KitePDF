@@ -355,10 +355,13 @@ public class PdfEditor internal constructor(
 
     /**
      * Set a button field (`/Btn`) to a named export value, the mechanism behind
-     * checkboxes and radio groups. The field's `/V` becomes the chosen on-state
-     * name; every widget's `/AS` is set to that name when the widget defines it
-     * as an appearance state, or to `/Off` otherwise (so sibling radios in the
-     * group are cleared). Pass `"Off"` to clear the field.
+     * checkboxes and radio groups. [exportValue] is the on-state name of a widget,
+     * or, for a field with `/Opt`, one of [PdfFormField.options], which selects the
+     * kid at its index. The field's `/V` becomes that on-state name; every widget's
+     * `/AS` is set to it when the widget defines it as an appearance state, or to
+     * `/Off` otherwise (so sibling radios in the group are cleared). Pass `"Off"`
+     * to clear the field. A value that names no state throws
+     * [IllegalArgumentException].
      *
      * A widget that ships no appearance for the state gets one drawn for it,
      * from its own `/MK` colours, so a ticked box actually looks ticked.
@@ -378,28 +381,43 @@ public class PdfEditor internal constructor(
             e.second[key] = value
         }
 
-        put(fieldRef, field.fieldDict, "V", PdfName(exportValue))
         // /Ff bit 16: the button is a radio, so its widgets draw round.
         val radio = (field.flags and (1 shl 15)) != 0
         val widgets = buttonWidgets(field)
-        // Each widget's own "on" name: /Opt gives one per kid (12.7.4.2.1),
-        // and a lone widget owns whatever name the caller asked for. Without
-        // either there is no way to tell which radio owns which value, so
-        // those keep whatever appearances the file shipped.
+        // ISO 32000-1, 12.7.4.2.1 and Table 227: with /Opt, the on-state names may be each kid's
+        // index in /Kids, and /Opt holds the export values. Without /Opt or a state of its own
+        // there is no way to tell which radio owns which value, so a lone widget owns the name
+        // that the caller asked for, and the others keep the appearances the file shipped.
         val optNames = field.fieldDict.getArray("Opt", base)?.map {
             (it.resolve(base) as? PdfString)?.asText()
         }
+        val onNames = widgets.mapIndexed { i, (_, wdict) ->
+            appearanceStateNames(wdict).firstOrNull { it != "Off" }
+                ?: if (optNames != null) i.toString() else if (widgets.size == 1) exportValue else null
+        }
+        // The on state that /V and /AS take: a widget's own state name, or the one of the kid that
+        // /Opt puts the export value at (12.7.4.2.3; #695).
+        val target = when {
+            exportValue == "Off" -> "Off"
+            exportValue in onNames -> exportValue
+            optNames != null && exportValue in optNames -> onNames.getOrNull(optNames.indexOf(exportValue))
+            else -> null
+        } ?: throw IllegalArgumentException(
+            "'$exportValue' is no state or /Opt value of button field '${field.fullyQualifiedName}'",
+        )
+        put(fieldRef, field.fieldDict, "V", PdfName(target))
         for ((i, entry) in widgets.withIndex()) {
             val (wref, wdict) = entry
             var states = appearanceStateNames(wdict)
-            val ownName = optNames?.getOrNull(i) ?: if (widgets.size == 1) exportValue else null
+            val ownName = onNames[i]
+            // A synthesized appearance is keyed by the same name that /V and /AS use.
             if (states.isEmpty() && ownName != null && ownName != "Off") {
                 toggleAppearance(wdict, ownName, radio)?.let { ap ->
                     put(wref, wdict, "AP", ap)
                     states = setOf(ownName, "Off")
                 }
             }
-            val asName = if (exportValue in states) exportValue else "Off"
+            val asName = if (target in states) target else "Off"
             put(wref, wdict, "AS", PdfName(asName))
         }
         for ((_, e) in pending) updateObject(e.first, PdfDictionary(e.second))

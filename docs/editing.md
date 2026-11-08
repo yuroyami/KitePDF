@@ -54,7 +54,7 @@ The editor has one method for each type of field:
 | --- | --- |
 | `setTextFieldValue(field, value)` | Text |
 | `setCheckbox(field, checked)` | Check box |
-| `setButtonValue(field, exportValue)` | Radio group. `"Off"` clears the group. |
+| `setButtonValue(field, exportValue)` | Radio group. The value is a button's state name, or one of `field.options` for a group with `/Opt`, which selects the button at that index. `"Off"` clears the group, and a value that names no button throws `IllegalArgumentException`. |
 | `setChoiceValue(field, value)` | Drop-down list and list box |
 
 !!! warning

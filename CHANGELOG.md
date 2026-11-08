@@ -410,6 +410,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An embedded `/Encoding` CMap that extends another through `usecmap` or `/UseCMap` keeps its base: the base
   splits the codes and maps the ones the override leaves out, and gives the writing mode, where every two-byte
   character drew as two wrong glyphs (#653).
+- `setButtonValue` selects the radio button that an `/Opt` export value stands for, by its index name, and
+  refuses a value that names no button with `IllegalArgumentException`, where both turned every button off
+  (#695).
 
 ## [0.13.0] - 2026-10-09
 

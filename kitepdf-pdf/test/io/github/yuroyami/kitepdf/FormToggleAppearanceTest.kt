@@ -107,14 +107,25 @@ class FormToggleAppearanceTest {
         editor.setButtonValue(radio, "Choice1")
         val reopened = KitePDF.open(editor.saveIncremental())
 
-        assertEquals("Choice1", reopened.formField("radio")!!.value)
+        // ISO 32000-1, 12.7.4.2.1: with /Opt, the on states are the kids' indices, and the /Opt
+        // value selects the kid at its index (#695).
+        assertEquals("0", reopened.formField("radio")!!.value)
         val kids = reopened.formField("radio")!!.fieldDict.getArray("Kids", reopened)
         assertNotNull(kids)
         val states = kids.mapNotNull { k ->
             val d = (k as? PdfReference)?.let { reopened.resolve(it) } as? PdfDictionary
             d?.getName("AS")
         }
-        assertEquals(listOf("Choice1", "Off"), states, "only the first widget is on")
+        assertEquals(listOf("0", "Off"), states, "only the first widget is on")
+        // The second /Opt value, and its index name, select the second kid.
+        for (value in listOf("Choice2", "1")) {
+            val again = KitePDF.open(reopened.edit().apply { setButtonValue(reopened.formField("radio")!!, value) }.saveIncremental())
+            val asNames = again.formField("radio")!!.fieldDict.getArray("Kids", again)!!.mapNotNull { k ->
+                ((k as? PdfReference)?.let { again.resolve(it) } as? PdfDictionary)?.getName("AS")
+            }
+            assertEquals(listOf("Off", "1"), asNames, value)
+        }
+        kotlin.test.assertFailsWith<IllegalArgumentException> { reopened.edit().setButtonValue(reopened.formField("radio")!!, "Green") }
     }
 
     @Test
@@ -140,7 +151,8 @@ class FormToggleAppearanceTest {
         val pdf = bareFormPdf().decodeToString().replace("/Opt [(Choice1) (Choice2)] ", "").encodeToByteArray()
         val doc = KitePDF.open(pdf)
         val editor = doc.edit()
-        editor.setButtonValue(doc.formField("radio")!!, "Choice1")
+        // No widget owns "Choice1", so it is refused, and nothing is staged (#695).
+        kotlin.test.assertFailsWith<IllegalArgumentException> { editor.setButtonValue(doc.formField("radio")!!, "Choice1") }
         val reopened = KitePDF.open(editor.saveIncremental())
         val kids = reopened.formField("radio")!!.fieldDict.getArray("Kids", reopened)!!
         val states = kids.mapNotNull { k ->
