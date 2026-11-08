@@ -539,6 +539,55 @@ final class io.github.yuroyami.kitepdf.epub/EpubSettings { // io.github.yuroyami
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.epub/EpubSettings.toString|toString(){}[0]
 }
 
+final class io.github.yuroyami.kitepdf.epub/KiteShaper { // io.github.yuroyami.kitepdf.epub/KiteShaper|null[0]
+    final val ascent // io.github.yuroyami.kitepdf.epub/KiteShaper.ascent|{}ascent[0]
+        final fun <get-ascent>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/KiteShaper.ascent.<get-ascent>|<get-ascent>(){}[0]
+    final val descent // io.github.yuroyami.kitepdf.epub/KiteShaper.descent|{}descent[0]
+        final fun <get-descent>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/KiteShaper.descent.<get-descent>|<get-descent>(){}[0]
+    final val unitsPerEm // io.github.yuroyami.kitepdf.epub/KiteShaper.unitsPerEm|{}unitsPerEm[0]
+        final fun <get-unitsPerEm>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/KiteShaper.unitsPerEm.<get-unitsPerEm>|<get-unitsPerEm>(){}[0]
+
+    final fun glyphId(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.epub/KiteShaper.glyphId|glyphId(kotlin.Int){}[0]
+    final fun shape(kotlin/String, kotlin/Boolean? = ...): io.github.yuroyami.kitepdf.epub/ShapedLine // io.github.yuroyami.kitepdf.epub/KiteShaper.shape|shape(kotlin.String;kotlin.Boolean?){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.epub/KiteShaper.Companion|null[0]
+        final fun load(kotlin/ByteArray, kotlin/Int = ...): io.github.yuroyami.kitepdf.epub/KiteShaper // io.github.yuroyami.kitepdf.epub/KiteShaper.Companion.load|load(kotlin.ByteArray;kotlin.Int){}[0]
+    }
+}
+final class io.github.yuroyami.kitepdf.epub/ShapedGlyph { // io.github.yuroyami.kitepdf.epub/ShapedGlyph|null[0]
+    constructor <init>(kotlin/Int, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Int, kotlin/Int, kotlin/String, kotlin/Boolean) // io.github.yuroyami.kitepdf.epub/ShapedGlyph.<init>|<init>(kotlin.Int;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Int;kotlin.Int;kotlin.String;kotlin.Boolean){}[0]
+
+    final val advance // io.github.yuroyami.kitepdf.epub/ShapedGlyph.advance|{}advance[0]
+        final fun <get-advance>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/ShapedGlyph.advance.<get-advance>|<get-advance>(){}[0]
+    final val gid // io.github.yuroyami.kitepdf.epub/ShapedGlyph.gid|{}gid[0]
+        final fun <get-gid>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/ShapedGlyph.gid.<get-gid>|<get-gid>(){}[0]
+    final val rightToLeft // io.github.yuroyami.kitepdf.epub/ShapedGlyph.rightToLeft|{}rightToLeft[0]
+        final fun <get-rightToLeft>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/ShapedGlyph.rightToLeft.<get-rightToLeft>|<get-rightToLeft>(){}[0]
+    final val text // io.github.yuroyami.kitepdf.epub/ShapedGlyph.text|{}text[0]
+        final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.epub/ShapedGlyph.text.<get-text>|<get-text>(){}[0]
+    final val textEnd // io.github.yuroyami.kitepdf.epub/ShapedGlyph.textEnd|{}textEnd[0]
+        final fun <get-textEnd>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/ShapedGlyph.textEnd.<get-textEnd>|<get-textEnd>(){}[0]
+    final val textStart // io.github.yuroyami.kitepdf.epub/ShapedGlyph.textStart|{}textStart[0]
+        final fun <get-textStart>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/ShapedGlyph.textStart.<get-textStart>|<get-textStart>(){}[0]
+    final val x // io.github.yuroyami.kitepdf.epub/ShapedGlyph.x|{}x[0]
+        final fun <get-x>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/ShapedGlyph.x.<get-x>|<get-x>(){}[0]
+    final val y // io.github.yuroyami.kitepdf.epub/ShapedGlyph.y|{}y[0]
+        final fun <get-y>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/ShapedGlyph.y.<get-y>|<get-y>(){}[0]
+}
+final class io.github.yuroyami.kitepdf.epub/ShapedLine { // io.github.yuroyami.kitepdf.epub/ShapedLine|null[0]
+    constructor <init>(kotlin/String, kotlin.collections/List<io.github.yuroyami.kitepdf.epub/ShapedGlyph>, kotlin/Double, kotlin/Boolean) // io.github.yuroyami.kitepdf.epub/ShapedLine.<init>|<init>(kotlin.String;kotlin.collections.List<io.github.yuroyami.kitepdf.epub.ShapedGlyph>;kotlin.Double;kotlin.Boolean){}[0]
+
+    final val glyphs // io.github.yuroyami.kitepdf.epub/ShapedLine.glyphs|{}glyphs[0]
+        final fun <get-glyphs>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/ShapedGlyph> // io.github.yuroyami.kitepdf.epub/ShapedLine.glyphs.<get-glyphs>|<get-glyphs>(){}[0]
+    final val rightToLeft // io.github.yuroyami.kitepdf.epub/ShapedLine.rightToLeft|{}rightToLeft[0]
+        final fun <get-rightToLeft>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/ShapedLine.rightToLeft.<get-rightToLeft>|<get-rightToLeft>(){}[0]
+    final val text // io.github.yuroyami.kitepdf.epub/ShapedLine.text|{}text[0]
+        final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.epub/ShapedLine.text.<get-text>|<get-text>(){}[0]
+    final val visualText // io.github.yuroyami.kitepdf.epub/ShapedLine.visualText|{}visualText[0]
+        final fun <get-visualText>(): kotlin/String // io.github.yuroyami.kitepdf.epub/ShapedLine.visualText.<get-visualText>|<get-visualText>(){}[0]
+    final val width // io.github.yuroyami.kitepdf.epub/ShapedLine.width|{}width[0]
+        final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/ShapedLine.width.<get-width>|<get-width>(){}[0]
+}
 final class io.github.yuroyami.kitepdf.epub/TableOfContents { // io.github.yuroyami.kitepdf.epub/TableOfContents|null[0]
     final val entries // io.github.yuroyami.kitepdf.epub/TableOfContents.entries|{}entries[0]
         final fun <get-entries>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/TocEntry> // io.github.yuroyami.kitepdf.epub/TableOfContents.entries.<get-entries>|<get-entries>(){}[0]

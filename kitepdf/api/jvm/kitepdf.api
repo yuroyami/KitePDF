@@ -49,3 +49,50 @@ public final class io/github/yuroyami/kitepdf/document/Sources_jvmKt {
 	public static synthetic fun openFile$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 }
 
+public final class io/github/yuroyami/kitepdf/writer/PdfParagraph {
+	public fun <init> (IDDLjava/lang/String;)V
+	public final fun getHeight ()D
+	public final fun getLastBaseline ()D
+	public final fun getLines ()I
+	public final fun getOverflow ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/ShapedFont {
+	public static final field Companion Lio/github/yuroyami/kitepdf/writer/ShapedFont$Companion;
+	public final fun getFont ()Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;
+	public final fun getShaper ()Lio/github/yuroyami/kitepdf/epub/KiteShaper;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/ShapedFont$Companion {
+	public final fun load ([BLjava/lang/String;ZI)Lio/github/yuroyami/kitepdf/writer/ShapedFont;
+	public static synthetic fun load$default (Lio/github/yuroyami/kitepdf/writer/ShapedFont$Companion;[BLjava/lang/String;ZIILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/ShapedFont;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/ShapedTextKt {
+	public static final fun paragraph (Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;Lio/github/yuroyami/kitepdf/writer/ShapedFont;DDDDDLjava/lang/String;Lio/github/yuroyami/kitepdf/writer/TextAlign;DLjava/lang/String;Lio/github/yuroyami/kitepdf/writer/TextDirection;)Lio/github/yuroyami/kitepdf/writer/PdfParagraph;
+	public static synthetic fun paragraph$default (Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;Lio/github/yuroyami/kitepdf/writer/ShapedFont;DDDDDLjava/lang/String;Lio/github/yuroyami/kitepdf/writer/TextAlign;DLjava/lang/String;Lio/github/yuroyami/kitepdf/writer/TextDirection;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfParagraph;
+	public static final fun shapedText (Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;Lio/github/yuroyami/kitepdf/writer/ShapedFont;DDDLjava/lang/String;Lio/github/yuroyami/kitepdf/writer/TextDirection;)D
+	public static synthetic fun shapedText$default (Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;Lio/github/yuroyami/kitepdf/writer/ShapedFont;DDDLjava/lang/String;Lio/github/yuroyami/kitepdf/writer/TextDirection;ILjava/lang/Object;)D
+}
+
+public final class io/github/yuroyami/kitepdf/writer/TextAlign : java/lang/Enum {
+	public static final field Center Lio/github/yuroyami/kitepdf/writer/TextAlign;
+	public static final field End Lio/github/yuroyami/kitepdf/writer/TextAlign;
+	public static final field Justify Lio/github/yuroyami/kitepdf/writer/TextAlign;
+	public static final field Left Lio/github/yuroyami/kitepdf/writer/TextAlign;
+	public static final field Right Lio/github/yuroyami/kitepdf/writer/TextAlign;
+	public static final field Start Lio/github/yuroyami/kitepdf/writer/TextAlign;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/TextAlign;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/writer/TextAlign;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/TextDirection : java/lang/Enum {
+	public static final field Auto Lio/github/yuroyami/kitepdf/writer/TextDirection;
+	public static final field LeftToRight Lio/github/yuroyami/kitepdf/writer/TextDirection;
+	public static final field RightToLeft Lio/github/yuroyami/kitepdf/writer/TextDirection;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/TextDirection;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/writer/TextDirection;
+}
+

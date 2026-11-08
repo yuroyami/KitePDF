@@ -129,13 +129,26 @@ public class EmbeddedFont private constructor(
 internal class EmbeddedFontUsage {
     val usedGids = HashSet<Int>()
 
-    /** First Unicode code point seen for each gid, which drives the `/ToUnicode` map. */
-    val gidToUnicode = HashMap<Int, Int>()
+    /**
+     * The first text seen for each gid, which drives the `/ToUnicode` map: one character, or
+     * every character of a cluster that a shaped glyph stands for, such as a ligature (#945).
+     */
+    val gidToUnicode = HashMap<Int, String>()
 
     fun record(gid: Int, codePoint: Int) {
         usedGids.add(gid)
-        if (codePoint > 0) gidToUnicode.getOrPut(gid) { codePoint }
+        if (codePoint > 0) gidToUnicode.getOrPut(gid) { codePointString(codePoint) }
     }
+
+    /** [gid] drawn for [text]; an empty [text] is a later glyph of a cluster and maps to nothing. */
+    fun record(gid: Int, text: String) {
+        usedGids.add(gid)
+        if (text.isNotEmpty() && text != "\u0000") gidToUnicode.getOrPut(gid) { text }
+    }
+
+    private fun codePointString(cp: Int): String =
+        if (cp < 0x10000) cp.toChar().toString()
+        else charArrayOf((0xD800 + ((cp - 0x10000) ushr 10)).toChar(), (0xDC00 + ((cp - 0x10000) and 0x3FF)).toChar()).concatToString()
 }
 
 /** Per-builder binding of an [EmbeddedFont] to its `/Resources` name and usage sink. */

@@ -37,6 +37,9 @@ public class ContentStreamBuilder internal constructor(
     // standard-14 font is selected (the default single-byte path).
     private var currentEmbedded: EmbeddedBinding? = null
 
+    /** The size of the font that the last `Tf` set, which [showGlyphs] scales a text rise by. */
+    private var currentSize = 0.0
+
     /* ─── Graphics state ─────────────────────────────────────────────────── */
 
     /**
@@ -46,16 +49,19 @@ public class ContentStreamBuilder internal constructor(
      */
     public fun save(): ContentStreamBuilder {
         savedEmbedded.add(currentEmbedded)
+        savedSizes.add(currentSize)
         return op("q")
     }
 
     /** `Q`, back to the font that the matching [save] saw; with no matching save, the font stays. */
     public fun restore(): ContentStreamBuilder {
         if (savedEmbedded.isNotEmpty()) currentEmbedded = savedEmbedded.removeAt(savedEmbedded.lastIndex)
+        if (savedSizes.isNotEmpty()) currentSize = savedSizes.removeAt(savedSizes.lastIndex)
         return op("Q")
     }
 
     private val savedEmbedded = ArrayList<EmbeddedBinding?>()
+    private val savedSizes = ArrayList<Double>()
 
     /** Concatenate [a b c d e f] onto the current transformation matrix (`cm`). */
     public fun transform(a: Double, b: Double, c: Double, d: Double, e: Double, f: Double): ContentStreamBuilder {
@@ -126,6 +132,7 @@ public class ContentStreamBuilder internal constructor(
     public fun endText(): ContentStreamBuilder = op("ET")
     public fun setFont(font: StandardFont, size: Double): ContentStreamBuilder {
         currentEmbedded = null
+        currentSize = size
         name(fontResolver(font)); num(size); return op("Tf")
     }
 
@@ -136,13 +143,94 @@ public class ContentStreamBuilder internal constructor(
      * builder does not shape text: no GSUB substitution, no mark positioning and
      * no bidi reordering, so Arabic letters do not join, marks of Devanagari or
      * Thai do not move into place, and right-to-left text runs left to right.
-     * Scripts without those needs, CJK among them, render as written (#750). The
-     * font is registered with the owning [PdfBuilder] on first use.
+     * Scripts without those needs, CJK among them, render as written (#750). For
+     * the others, [showGlyphs] writes glyphs that a shaper placed, and the
+     * `shapedText` and `paragraph` calls of the `kitepdf` module shape the text
+     * first (#945). The font is registered with the owning [PdfBuilder] on first use.
      */
     public fun setFont(font: EmbeddedFont, size: Double): ContentStreamBuilder {
         val binding = embeddedResolver(font)
         currentEmbedded = binding
+        currentSize = size
         name(binding.resourceName); num(size); return op("Tf")
+    }
+
+    /**
+     * `TJ` in the current embedded font: each glyph of [glyphs] at its own place, for text that
+     * a shaper has already laid out (#945), such as the lines of `KiteShaper` in `kitepdf-epub`
+     * or the `shapedText` and `paragraph` calls of the `kitepdf` module.
+     *
+     * Each [PdfGlyph.x] counts from where the text position stands, and [PdfGlyph.y] from the
+     * baseline, both in thousandths of an em, so the builder writes the moves between glyph
+     * widths as `TJ` adjustments and a glyph off the baseline with `Ts`. The text of each glyph
+     * goes into the font's `/ToUnicode` map. With [actualText], the run is a `/Span` marked-content
+     * sequence whose `/ActualText` is that string (ISO 32000-1, 14.9.4), so text extraction gives
+     * the logical string of a line whose glyph order no reader can undo.
+     *
+     * With [whenAmbiguous], the `/Span` is written only when the `/ToUnicode` map cannot give the
+     * glyphs' text back: when one glyph id stands for two texts, as a Devanagari vowel sign does
+     * in the clusters of two consonants, and the map holds only one of them.
+     *
+     * @throws IllegalStateException when the current font is not an [EmbeddedFont].
+     */
+    public fun showGlyphs(glyphs: List<PdfGlyph>, actualText: String? = null, whenAmbiguous: Boolean = false): ContentStreamBuilder {
+        val emb = currentEmbedded ?: throw IllegalStateException("showGlyphs needs an EmbeddedFont set with setFont")
+        val upem = emb.font.ttf.unitsPerEm.toDouble()
+        val span = actualText != null && (!whenAmbiguous || ambiguous(emb.usage, glyphs))
+        if (span) {
+            name("Span")
+            out.appendAscii("<</ActualText ")
+            PdfObjectWriter.writeObject(PdfString(PdfText.encodeTextString(actualText)), out)
+            out.appendAscii(">> ")
+            op("BDC")
+        }
+        var pen = 0.0
+        var rise = 0.0
+        val run = StringBuilder()
+        var open = false
+        fun flush() {
+            if (!open) return
+            out.appendAscii(run.append("] TJ\n").toString())
+            run.clear(); open = false
+        }
+        for (g in glyphs) {
+            if (g.y != rise) {
+                flush()
+                num(g.y * currentSize / 1000.0); op("Ts")
+                rise = g.y
+            }
+            if (!open) { run.append('['); open = true }
+            val gap = g.x - pen
+            // TJ subtracts its numbers from the pen, in thousandths of an em.
+            if (kotlin.math.abs(gap) > 0.0005) run.append(PdfObjectWriter.formatReal(-gap)).append(' ')
+            run.append('<').append(HEX[(g.gid ushr 12) and 0xF]).append(HEX[(g.gid ushr 8) and 0xF])
+                .append(HEX[(g.gid ushr 4) and 0xF]).append(HEX[g.gid and 0xF]).append("> ")
+            emb.usage.record(g.gid, g.text)
+            // The pen moves by the width the font's /W gives the glyph, rounded as the embedder writes it.
+            pen = g.x + kotlin.math.round(emb.font.ttf.advanceWidth(g.gid) * 1000.0 / upem)
+        }
+        flush()
+        if (rise != 0.0) { num(0.0); op("Ts") }
+        if (span) op("EMC")
+        return this
+    }
+
+    /** Whether a glyph of [glyphs] stands for other text than the map of [usage], or an earlier glyph of the run, gives its id. */
+    private fun ambiguous(usage: EmbeddedFontUsage, glyphs: List<PdfGlyph>): Boolean {
+        val run = HashMap<Int, String>()
+        for (g in glyphs) {
+            val known = usage.gidToUnicode[g.gid] ?: run[g.gid]
+            if (known != null && known != g.text) return true
+            if (g.text.isNotEmpty()) run.getOrPut(g.gid) { g.text }
+        }
+        return false
+    }
+
+    /** As [showGlyphs], in its own text object: [glyphs] in [font] at [size], with the line starting at ([x], [y]). */
+    public fun glyphs(
+        font: EmbeddedFont, size: Double, x: Double, y: Double, glyphs: List<PdfGlyph>, actualText: String? = null, whenAmbiguous: Boolean = false,
+    ): ContentStreamBuilder {
+        beginText(); setFont(font, size); moveText(x, y); showGlyphs(glyphs, actualText, whenAmbiguous); return endText()
     }
     public fun setLeading(leading: Double): ContentStreamBuilder { num(leading); return op("TL") }
     public fun setCharSpacing(spacing: Double): ContentStreamBuilder { num(spacing); return op("Tc") }
@@ -217,6 +305,20 @@ public class ContentStreamBuilder internal constructor(
         }
     }
     private fun op(operator: String): ContentStreamBuilder { out.appendAscii(operator); return nl() }
+    private val HEX = "0123456789ABCDEF"
     private fun sp() { out.append(' '.code.toByte()) }
     private fun nl(): ContentStreamBuilder { out.append('\n'.code.toByte()); return this }
 }
+
+/**
+ * One glyph that [ContentStreamBuilder.showGlyphs] draws: glyph id [gid] of an [EmbeddedFont], at
+ * [x] from the start of the run and [y] above the baseline, both in thousandths of an em, for
+ * the characters [text]. The later glyphs of a cluster, which stand for no character of their
+ * own, have an empty [text].
+ */
+public class PdfGlyph(
+    public val gid: Int,
+    public val x: Double,
+    public val y: Double = 0.0,
+    public val text: String = "",
+)

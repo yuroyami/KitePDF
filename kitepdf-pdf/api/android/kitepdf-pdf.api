@@ -1632,6 +1632,8 @@ public final class io/github/yuroyami/kitepdf/writer/ContentStreamBuilder {
 	public final fun endText ()Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun fill ()Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun fillAndStroke ()Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
+	public final fun glyphs (Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;DDDLjava/util/List;Ljava/lang/String;Z)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
+	public static synthetic fun glyphs$default (Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;DDDLjava/util/List;Ljava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun lineTo (DD)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun moveText (DD)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun moveTo (DD)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
@@ -1652,6 +1654,8 @@ public final class io/github/yuroyami/kitepdf/writer/ContentStreamBuilder {
 	public final fun setStrokeGray (D)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun setStrokeRgb (DDD)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun setWordSpacing (D)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
+	public final fun showGlyphs (Ljava/util/List;Ljava/lang/String;Z)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
+	public static synthetic fun showGlyphs$default (Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;Ljava/util/List;Ljava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun showText (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun stroke ()Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
 	public final fun text (Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;DDDLjava/lang/String;)Lio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;
@@ -1754,6 +1758,15 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun setXmpMetadata (Ljava/lang/String;)V
 	public final fun stampPage (Lio/github/yuroyami/kitepdf/PdfPage;Lkotlin/jvm/functions/Function1;)V
 	public final fun updateObject (Lio/github/yuroyami/kitepdf/core/parser/PdfReference;Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)V
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfGlyph {
+	public fun <init> (IDDLjava/lang/String;)V
+	public synthetic fun <init> (IDDLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getGid ()I
+	public final fun getText ()Ljava/lang/String;
+	public final fun getX ()D
+	public final fun getY ()D
 }
 
 public final class io/github/yuroyami/kitepdf/writer/PdfImage {

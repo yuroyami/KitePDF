@@ -25,6 +25,54 @@ final enum class io.github.yuroyami.kitepdf.document/KiteDocFormat : kotlin/Enum
     final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.document/KiteDocFormat // io.github.yuroyami.kitepdf.document/KiteDocFormat.valueOf|valueOf#static(kotlin.String){}[0]
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.document/KiteDocFormat> // io.github.yuroyami.kitepdf.document/KiteDocFormat.values|values#static(){}[0]
 }
+final enum class io.github.yuroyami.kitepdf.writer/TextAlign : kotlin/Enum<io.github.yuroyami.kitepdf.writer/TextAlign> { // io.github.yuroyami.kitepdf.writer/TextAlign|null[0]
+    enum entry Center // io.github.yuroyami.kitepdf.writer/TextAlign.Center|null[0]
+    enum entry End // io.github.yuroyami.kitepdf.writer/TextAlign.End|null[0]
+    enum entry Justify // io.github.yuroyami.kitepdf.writer/TextAlign.Justify|null[0]
+    enum entry Left // io.github.yuroyami.kitepdf.writer/TextAlign.Left|null[0]
+    enum entry Right // io.github.yuroyami.kitepdf.writer/TextAlign.Right|null[0]
+    enum entry Start // io.github.yuroyami.kitepdf.writer/TextAlign.Start|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.writer/TextAlign.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.writer/TextAlign> // io.github.yuroyami.kitepdf.writer/TextAlign.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.writer/TextAlign // io.github.yuroyami.kitepdf.writer/TextAlign.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.writer/TextAlign> // io.github.yuroyami.kitepdf.writer/TextAlign.values|values#static(){}[0]
+}
+final enum class io.github.yuroyami.kitepdf.writer/TextDirection : kotlin/Enum<io.github.yuroyami.kitepdf.writer/TextDirection> { // io.github.yuroyami.kitepdf.writer/TextDirection|null[0]
+    enum entry Auto // io.github.yuroyami.kitepdf.writer/TextDirection.Auto|null[0]
+    enum entry LeftToRight // io.github.yuroyami.kitepdf.writer/TextDirection.LeftToRight|null[0]
+    enum entry RightToLeft // io.github.yuroyami.kitepdf.writer/TextDirection.RightToLeft|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.writer/TextDirection.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.writer/TextDirection> // io.github.yuroyami.kitepdf.writer/TextDirection.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.writer/TextDirection // io.github.yuroyami.kitepdf.writer/TextDirection.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.writer/TextDirection> // io.github.yuroyami.kitepdf.writer/TextDirection.values|values#static(){}[0]
+}
+
+final class io.github.yuroyami.kitepdf.writer/PdfParagraph { // io.github.yuroyami.kitepdf.writer/PdfParagraph|null[0]
+    constructor <init>(kotlin/Int, kotlin/Double, kotlin/Double, kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfParagraph.<init>|<init>(kotlin.Int;kotlin.Double;kotlin.Double;kotlin.String){}[0]
+
+    final val height // io.github.yuroyami.kitepdf.writer/PdfParagraph.height|{}height[0]
+        final fun <get-height>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfParagraph.height.<get-height>|<get-height>(){}[0]
+    final val lastBaseline // io.github.yuroyami.kitepdf.writer/PdfParagraph.lastBaseline|{}lastBaseline[0]
+        final fun <get-lastBaseline>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfParagraph.lastBaseline.<get-lastBaseline>|<get-lastBaseline>(){}[0]
+    final val lines // io.github.yuroyami.kitepdf.writer/PdfParagraph.lines|{}lines[0]
+        final fun <get-lines>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfParagraph.lines.<get-lines>|<get-lines>(){}[0]
+    final val overflow // io.github.yuroyami.kitepdf.writer/PdfParagraph.overflow|{}overflow[0]
+        final fun <get-overflow>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfParagraph.overflow.<get-overflow>|<get-overflow>(){}[0]
+}
+final class io.github.yuroyami.kitepdf.writer/ShapedFont { // io.github.yuroyami.kitepdf.writer/ShapedFont|null[0]
+    final val font // io.github.yuroyami.kitepdf.writer/ShapedFont.font|{}font[0]
+        final fun <get-font>(): io.github.yuroyami.kitepdf.writer/EmbeddedFont // io.github.yuroyami.kitepdf.writer/ShapedFont.font.<get-font>|<get-font>(){}[0]
+    final val shaper // io.github.yuroyami.kitepdf.writer/ShapedFont.shaper|{}shaper[0]
+        final fun <get-shaper>(): io.github.yuroyami.kitepdf.epub/KiteShaper // io.github.yuroyami.kitepdf.writer/ShapedFont.shaper.<get-shaper>|<get-shaper>(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.writer/ShapedFont.Companion|null[0]
+        final fun load(kotlin/ByteArray, kotlin/String? = ..., kotlin/Boolean = ..., kotlin/Int = ...): io.github.yuroyami.kitepdf.writer/ShapedFont // io.github.yuroyami.kitepdf.writer/ShapedFont.Companion.load|load(kotlin.ByteArray;kotlin.String?;kotlin.Boolean;kotlin.Int){}[0]
+    }
+}
 
 final object io.github.yuroyami.kitepdf.bundle/KitePDFBundle { // io.github.yuroyami.kitepdf.bundle/KitePDFBundle|null[0]
     final const val COORDINATE // io.github.yuroyami.kitepdf.bundle/KitePDFBundle.COORDINATE|{}COORDINATE[0]
@@ -42,6 +90,9 @@ final object io.github.yuroyami.kitepdf.document/KiteDoc { // io.github.yuroyami
 
 final const val io.github.yuroyami.kitepdf.document/DEFAULT_MAX_LOCAL_DOCUMENT_BYTES // io.github.yuroyami.kitepdf.document/DEFAULT_MAX_LOCAL_DOCUMENT_BYTES|{}DEFAULT_MAX_LOCAL_DOCUMENT_BYTES[0]
     final fun <get-DEFAULT_MAX_LOCAL_DOCUMENT_BYTES>(): kotlin/Int // io.github.yuroyami.kitepdf.document/DEFAULT_MAX_LOCAL_DOCUMENT_BYTES.<get-DEFAULT_MAX_LOCAL_DOCUMENT_BYTES>|<get-DEFAULT_MAX_LOCAL_DOCUMENT_BYTES>(){}[0]
+
+final fun (io.github.yuroyami.kitepdf.writer/ContentStreamBuilder).io.github.yuroyami.kitepdf.writer/paragraph(io.github.yuroyami.kitepdf.writer/ShapedFont, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/String, io.github.yuroyami.kitepdf.writer/TextAlign = ..., kotlin/Double = ..., kotlin/String? = ..., io.github.yuroyami.kitepdf.writer/TextDirection = ...): io.github.yuroyami.kitepdf.writer/PdfParagraph // io.github.yuroyami.kitepdf.writer/paragraph|paragraph@io.github.yuroyami.kitepdf.writer.ContentStreamBuilder(io.github.yuroyami.kitepdf.writer.ShapedFont;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.String;io.github.yuroyami.kitepdf.writer.TextAlign;kotlin.Double;kotlin.String?;io.github.yuroyami.kitepdf.writer.TextDirection){}[0]
+final fun (io.github.yuroyami.kitepdf.writer/ContentStreamBuilder).io.github.yuroyami.kitepdf.writer/shapedText(io.github.yuroyami.kitepdf.writer/ShapedFont, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/String, io.github.yuroyami.kitepdf.writer/TextDirection = ...): kotlin/Double // io.github.yuroyami.kitepdf.writer/shapedText|shapedText@io.github.yuroyami.kitepdf.writer.ContentStreamBuilder(io.github.yuroyami.kitepdf.writer.ShapedFont;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.String;io.github.yuroyami.kitepdf.writer.TextDirection){}[0]
 
 // Targets: [native]
 final fun (io.github.yuroyami.kitepdf.document/KiteDoc).io.github.yuroyami.kitepdf.document/openFile(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/openFile|openFile@io.github.yuroyami.kitepdf.document.KiteDoc(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]

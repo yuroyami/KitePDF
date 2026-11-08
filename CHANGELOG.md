@@ -693,6 +693,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `filepos` links, `recindex` images and legacy indents. A book with DRM throws with a message that says so. The
   corpus gains Project Gutenberg's Alice as AZW3, MOBI 6 and the EPUB they were made from, and the Kindle books
   read with the EPUB's text and contents.
+- Shaped text and paragraphs in `PdfBuilder` (#945). In the `kitepdf` module, `ShapedFont`, `shapedText` and
+  `paragraph` shape text as the EPUB layout does before writing it: GSUB with the shaper of each script, Arabic
+  joining, GPOS marks and kerning, and UAX #9 ordering. `paragraph` breaks lines into a box, with hyphenation by
+  language, alignment and line height, and returns the text that did not fit. `ContentStreamBuilder.showGlyphs`
+  and `glyphs` write positioned `PdfGlyph` values with `TJ` and `Ts`. Their text goes into the `/ToUnicode` map,
+  which now holds a whole cluster per glyph, and into an `/ActualText` where the map cannot give it back.
+  `KiteShaper` in `kitepdf-epub` shapes a line in any font, and its glyphs and positions match `hb-shape` for
+  Arabic and Devanagari.
 
 ## [0.13.0] - 2026-10-09
 

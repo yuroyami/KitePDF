@@ -202,7 +202,7 @@ internal object FontEmbedder {
      * A ToUnicode CMap stream body mapping each used gid (which, under
      * Identity-H, equals its content-stream code) to its Unicode value.
      */
-    private fun toUnicodeCMap(gidToUnicode: Map<Int, Int>): ByteArray {
+    private fun toUnicodeCMap(gidToUnicode: Map<Int, String>): ByteArray {
         val sb = StringBuilder(256)
         sb.append("/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n")
         sb.append("/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n")
@@ -233,13 +233,8 @@ internal object FontEmbedder {
     }
 
     /** Append [cp] as UTF-16BE hex, a surrogate pair above the BMP. */
-    private fun utf16Hex(sb: StringBuilder, cp: Int) {
-        if (cp <= 0xFFFF) {
-            hex4(sb, cp)
-        } else {
-            val v = cp - 0x10000
-            hex4(sb, 0xD800 + (v ushr 10))
-            hex4(sb, 0xDC00 + (v and 0x3FF))
-        }
+    /** Append [text] as UTF-16BE hex: its UTF-16 units, surrogate pairs as they are. */
+    private fun utf16Hex(sb: StringBuilder, text: String) {
+        for (c in text) hex4(sb, c.code)
     }
 }

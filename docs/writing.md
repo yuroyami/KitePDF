@@ -168,7 +168,7 @@ val pdf = PdfBuilder()
 - The PDF gets only the glyphs that the document draws. Pass `subset = false` to embed the whole font.
 - The PDF also gets a map from each glyph back to its character, so a reader can copy and search the text.
 - A character that the font does not have draws as the font's missing-glyph shape.
-- The builder maps each character to one glyph. It does not shape text, so Arabic letters do not join and right-to-left text runs left to right.
+- `text` and `showText` map each character to one glyph, in the order of the string. They do not shape text, so Arabic letters do not join and right-to-left text runs left to right. Use `shapedText` or `paragraph` below for such scripts.
 - `load` throws `UnsupportedOperationException` for a font that has only CFF2 outlines.
 
 A TrueType collection (`.ttc`) gives its first font. Pass `faceIndex` for another one. `TrueTypeFont.faceCount(bytes)` tells how many fonts a collection has:
@@ -176,6 +176,37 @@ A TrueType collection (`.ttc`) gives its first font. Pass `faceIndex` for anothe
 ```kotlin
 val mincho = EmbeddedFont.load(ttcBytes, faceIndex = 1)
 ```
+
+### Shaped text and paragraphs
+
+The `kitepdf` module shapes text with the EPUB engine's shaper before the builder writes it. Load the font as a `ShapedFont`, which holds the `EmbeddedFont` and its shaper:
+
+```kotlin
+import io.github.yuroyami.kitepdf.writer.ShapedFont
+import io.github.yuroyami.kitepdf.writer.TextAlign
+import io.github.yuroyami.kitepdf.writer.paragraph
+import io.github.yuroyami.kitepdf.writer.shapedText
+
+val naskh = ShapedFont.load(notoNaskhBytes)
+
+PdfBuilder().page {
+    shapedText(naskh, 24.0, 72.0, 700.0, "سلام")         // one line; returns its width
+    val result = paragraph(
+        naskh, 11.0, x = 72.0, y = 72.0, width = 300.0, height = 600.0,
+        text = article, align = TextAlign.Justify, lineHeight = 1.3, language = "ar",
+    )
+    // result.overflow is the text that did not fit: continue it on the next page.
+}
+```
+
+- Each word runs through the font's GSUB with the shaper of its script: Arabic joining forms, Indic, Khmer, Myanmar and the Universal Shaping Engine. Marks attach by their GPOS anchors, and pairs kern.
+- A line is put in display order by the Unicode bidi algorithm (UAX #9). `direction` sets the paragraph direction; by default it comes from the first strong character.
+- Each glyph maps to the characters it stands for in the font's `/ToUnicode`, so `pdftotext` and KitePDF read the text back in logical order. A line that the map cannot give back gets an `/ActualText`, for example when one glyph id stands for two clusters.
+- `paragraph` breaks lines after spaces, after hyphens and dashes, and around CJK ideographs, and starts a paragraph at each line feed. A word wider than the line breaks at its hyphenation points for `language`, with a hyphen added, or else between its characters.
+- `align` is `Start` (the default), `End`, `Left`, `Right`, `Center` or `Justify`. `Start` and `End` follow the paragraph direction, and `Justify` leaves the last line of each paragraph at its start.
+- The result gives the number of lines, the height they took, the last baseline and the overflow.
+
+For glyphs that another shaper positioned, `showGlyphs(glyphs)` and `glyphs(font, size, x, y, glyphs)` write `PdfGlyph` values: a glyph id, its place in thousandths of an em, and its text. `KiteShaper` in `kitepdf-epub` gives such glyphs for any font.
 
 ## Shapes and colors
 

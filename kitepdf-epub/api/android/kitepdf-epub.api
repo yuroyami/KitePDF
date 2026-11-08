@@ -401,6 +401,21 @@ public final class io/github/yuroyami/kitepdf/epub/EpubTrackKind : java/lang/Enu
 	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/EpubTrackKind;
 }
 
+public final class io/github/yuroyami/kitepdf/epub/KiteShaper {
+	public static final field Companion Lio/github/yuroyami/kitepdf/epub/KiteShaper$Companion;
+	public final fun getAscent ()D
+	public final fun getDescent ()D
+	public final fun getUnitsPerEm ()I
+	public final fun glyphId (I)I
+	public final fun shape (Ljava/lang/String;Ljava/lang/Boolean;)Lio/github/yuroyami/kitepdf/epub/ShapedLine;
+	public static synthetic fun shape$default (Lio/github/yuroyami/kitepdf/epub/KiteShaper;Ljava/lang/String;Ljava/lang/Boolean;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/ShapedLine;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/KiteShaper$Companion {
+	public final fun load ([BI)Lio/github/yuroyami/kitepdf/epub/KiteShaper;
+	public static synthetic fun load$default (Lio/github/yuroyami/kitepdf/epub/KiteShaper$Companion;[BIILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/KiteShaper;
+}
+
 public final class io/github/yuroyami/kitepdf/epub/OpenFileKt {
 	public static final fun openFile (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public static synthetic fun openFile$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
@@ -413,6 +428,27 @@ public final class io/github/yuroyami/kitepdf/epub/ReaderFontFamily : java/lang/
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/ReaderFontFamily;
 	public static fun values ()[Lio/github/yuroyami/kitepdf/epub/ReaderFontFamily;
+}
+
+public final class io/github/yuroyami/kitepdf/epub/ShapedGlyph {
+	public fun <init> (IDDDIILjava/lang/String;Z)V
+	public final fun getAdvance ()D
+	public final fun getGid ()I
+	public final fun getRightToLeft ()Z
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTextEnd ()I
+	public final fun getTextStart ()I
+	public final fun getX ()D
+	public final fun getY ()D
+}
+
+public final class io/github/yuroyami/kitepdf/epub/ShapedLine {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;DZ)V
+	public final fun getGlyphs ()Ljava/util/List;
+	public final fun getRightToLeft ()Z
+	public final fun getText ()Ljava/lang/String;
+	public final fun getVisualText ()Ljava/lang/String;
+	public final fun getWidth ()D
 }
 
 public final class io/github/yuroyami/kitepdf/epub/TableOfContents {

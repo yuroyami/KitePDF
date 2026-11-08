@@ -323,6 +323,7 @@ final class io.github.yuroyami.kitepdf.writer/ContentStreamBuilder { // io.githu
     final fun endText(): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.endText|endText(){}[0]
     final fun fill(): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.fill|fill(){}[0]
     final fun fillAndStroke(): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.fillAndStroke|fillAndStroke(){}[0]
+    final fun glyphs(io.github.yuroyami.kitepdf.writer/EmbeddedFont, kotlin/Double, kotlin/Double, kotlin/Double, kotlin.collections/List<io.github.yuroyami.kitepdf.writer/PdfGlyph>, kotlin/String? = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.glyphs|glyphs(io.github.yuroyami.kitepdf.writer.EmbeddedFont;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.collections.List<io.github.yuroyami.kitepdf.writer.PdfGlyph>;kotlin.String?;kotlin.Boolean){}[0]
     final fun lineTo(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.lineTo|lineTo(kotlin.Double;kotlin.Double){}[0]
     final fun moveText(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.moveText|moveText(kotlin.Double;kotlin.Double){}[0]
     final fun moveTo(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.moveTo|moveTo(kotlin.Double;kotlin.Double){}[0]
@@ -343,6 +344,7 @@ final class io.github.yuroyami.kitepdf.writer/ContentStreamBuilder { // io.githu
     final fun setStrokeGray(kotlin/Double): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.setStrokeGray|setStrokeGray(kotlin.Double){}[0]
     final fun setStrokeRgb(kotlin/Double, kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.setStrokeRgb|setStrokeRgb(kotlin.Double;kotlin.Double;kotlin.Double){}[0]
     final fun setWordSpacing(kotlin/Double): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.setWordSpacing|setWordSpacing(kotlin.Double){}[0]
+    final fun showGlyphs(kotlin.collections/List<io.github.yuroyami.kitepdf.writer/PdfGlyph>, kotlin/String? = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.showGlyphs|showGlyphs(kotlin.collections.List<io.github.yuroyami.kitepdf.writer.PdfGlyph>;kotlin.String?;kotlin.Boolean){}[0]
     final fun showText(kotlin/String): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.showText|showText(kotlin.String){}[0]
     final fun stroke(): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.stroke|stroke(){}[0]
     final fun text(io.github.yuroyami.kitepdf.writer/EmbeddedFont, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/String): io.github.yuroyami.kitepdf.writer/ContentStreamBuilder // io.github.yuroyami.kitepdf.writer/ContentStreamBuilder.text|text(io.github.yuroyami.kitepdf.writer.EmbeddedFont;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.String){}[0]
@@ -423,6 +425,18 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
     final fun updateObject(io.github.yuroyami.kitepdf.core.parser/PdfReference, io.github.yuroyami.kitepdf.core.parser/PdfObject) // io.github.yuroyami.kitepdf.writer/PdfEditor.updateObject|updateObject(io.github.yuroyami.kitepdf.core.parser.PdfReference;io.github.yuroyami.kitepdf.core.parser.PdfObject){}[0]
 }
 
+final class io.github.yuroyami.kitepdf.writer/PdfGlyph { // io.github.yuroyami.kitepdf.writer/PdfGlyph|null[0]
+    constructor <init>(kotlin/Int, kotlin/Double, kotlin/Double = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfGlyph.<init>|<init>(kotlin.Int;kotlin.Double;kotlin.Double;kotlin.String){}[0]
+
+    final val gid // io.github.yuroyami.kitepdf.writer/PdfGlyph.gid|{}gid[0]
+        final fun <get-gid>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfGlyph.gid.<get-gid>|<get-gid>(){}[0]
+    final val text // io.github.yuroyami.kitepdf.writer/PdfGlyph.text|{}text[0]
+        final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfGlyph.text.<get-text>|<get-text>(){}[0]
+    final val x // io.github.yuroyami.kitepdf.writer/PdfGlyph.x|{}x[0]
+        final fun <get-x>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfGlyph.x.<get-x>|<get-x>(){}[0]
+    final val y // io.github.yuroyami.kitepdf.writer/PdfGlyph.y|{}y[0]
+        final fun <get-y>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfGlyph.y.<get-y>|<get-y>(){}[0]
+}
 final class io.github.yuroyami.kitepdf.writer/PdfImage { // io.github.yuroyami.kitepdf.writer/PdfImage|null[0]
     final object Companion { // io.github.yuroyami.kitepdf.writer/PdfImage.Companion|null[0]
         final fun gray(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.gray|gray(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
