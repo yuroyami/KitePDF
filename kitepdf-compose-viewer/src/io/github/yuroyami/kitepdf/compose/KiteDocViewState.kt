@@ -518,6 +518,22 @@ public class KiteDocViewState(
     /** Explicitly named alias of [currentPage]; includes chapter placeholders. */
     public val currentSlot: Int get() = currentPage
 
+    /**
+     * The slots whose page is at least partly in the viewport, in order, counted as [currentPage]
+     * counts: the two or three pages a [KiteDocLayout.Continuous] strip shows at once, the pages
+     * of a spread, and both pages while a pager turns (#901). It is snapshot state, so a host
+     * that records which pages a reader saw watches it with `snapshotFlow`; to count only the
+     * pages a reader stopped on, and not every page a fling passes, take it while
+     * [isScrollInProgress] is false:
+     *
+     * ```kotlin
+     * snapshotFlow { if (state.isScrollInProgress) null else state.visiblePages }
+     *     .filterNotNull().collect { pages -> seen += pages }
+     * ```
+     */
+    public val visiblePages: List<Int>
+        get() = adapter?.visibleSlots() ?: listOf(currentPage)
+
     /** [slot] clamped into the strip, so a start page past the end opens at the last page (#262). */
     private fun inStrip(slot: Int): Int = slot.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
 
@@ -2721,6 +2737,9 @@ internal interface KiteScrollAdapter {
     /** True when [slot] shows in the viewport now, and not only as a page composed ahead of it. */
     fun shows(slot: Int): Boolean = slot == currentPage
 
+    /** The slots that are at least partly in the viewport, in order (#901). */
+    fun visibleSlots(): List<Int> = listOf(currentPage)
+
     /** True while a drag, a fling or an animation moves the container, so its page is not settled. */
     val isScrollInProgress: Boolean get() = false
 
@@ -2756,6 +2775,12 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
     override val isScrollInProgress: Boolean get() = listState.isScrollInProgress
 
     override fun shows(slot: Int): Boolean = listState.layoutInfo.visibleItemsInfo.any { it.index == slot }
+
+    // The list lays out items in its content padding and beyond the edge too; only those that reach into the viewport count.
+    override fun visibleSlots(): List<Int> {
+        val info = listState.layoutInfo
+        return info.visibleItemsInfo.filter { it.offset + it.size > info.viewportStartOffset && it.offset < info.viewportEndOffset }.map { it.index }
+    }
 
     /** The length of the leading slot on the scroll axis, or null before the list has measured it. */
     val leadingSlotLength: Int? get() = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == leadingPage }?.size
@@ -2857,6 +2882,9 @@ internal class PagerScrollAdapter(private val pagerState: PagerState) : KiteScro
     override val isTurning: Boolean get() = turns > 0
 
     override fun shows(slot: Int): Boolean = pagerState.layoutInfo.visiblePagesInfo.any { it.index == slot }
+
+    override fun visibleSlots(): List<Int> = pagerState.visibleIndexes()
+
     /** True while a finger drags the pager. A correction then keeps the page offset, so the drag goes on. */
     var dragging: Boolean = false
 
@@ -2927,6 +2955,11 @@ internal class SpreadScrollAdapter(
         return pagerState.layoutInfo.visiblePagesInfo.any { it.index == spread }
     }
 
+    override fun visibleSlots(): List<Int> {
+        val plan = plans.current
+        return pagerState.visibleIndexes().flatMap { spread -> plan.spreads.getOrNull(spread)?.toList().orEmpty() }
+    }
+
     /**
      * The last logically-requested page. Within one spread, +1 must actually
      * advance (0 -> 1 stays on spread 0, the next +1 reaches spread 1), so
@@ -2974,6 +3007,14 @@ internal class SpreadScrollAdapter(
         logical = page
         pagerState.requestScrollToPage(plan.spreadOf(page))
     }
+}
+
+/** The pages of a pager that reach into its viewport, in order, as a page that is turning half in shows. */
+private fun PagerState.visibleIndexes(): List<Int> {
+    val info = layoutInfo
+    // Before its first measure a pager has no pages laid out, and the reader is on its current one.
+    return info.visiblePagesInfo.filter { it.offset + info.pageSize > info.viewportStartOffset && it.offset < info.viewportEndOffset }
+        .map { it.index }.ifEmpty { listOf(currentPage) }
 }
 
 /** Single-page mode: no scrolling at all. */

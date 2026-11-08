@@ -205,6 +205,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun getSelectionBounds ()Landroidx/compose/ui/geometry/Rect;
 	public final fun getSelectionInProgress ()Z
 	public final fun getSkipsNonLinearChapters ()Z
+	public final fun getVisiblePages ()Ljava/util/List;
 	public final fun getZoom ()F
 	public final fun getZoomRange ()Lkotlin/ranges/ClosedFloatingPointRange;
 	public final fun highlightAt-k-4lQ0M (J)Lio/github/yuroyami/kitepdf/compose/KiteHighlight;

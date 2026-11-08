@@ -659,6 +659,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   password or a broken file instead of the app ending (#706).
 - KiteDocViewState.zoomRange is public: the bounds setZoom clamps into after the layout's own rule, as snapshot
   state for a host's zoom slider (#900).
+- KiteDocViewState.visiblePages lists every page at least partly on screen, as snapshot state, for reading
+  progress and read marks (#901).
 
 ## [0.13.0] - 2026-10-09
 

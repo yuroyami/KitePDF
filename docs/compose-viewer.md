@@ -640,6 +640,7 @@ A PDF of more than 200 pages also shows this slot for its first frames, while it
 | `state.currentBookmark()` | A place in the content that stays correct after an EPUB reflow |
 | `state.currentScrollPosition` | The first visible page, with the scroll offset into it in pixels |
 | `state.currentPage` | The slot on screen, for a page indicator |
+| `state.visiblePages` | Every slot at least partly on screen, in order: two or three in a `Continuous` strip, both while a pager turns. Take it while `isScrollInProgress` is false to count only the pages a reader stopped on |
 | `state.knownPageCount` | The number of pages laid out so far |
 | `state.isComplete` | True when the page count is final |
 | `state.scrollTo(location)` and `scrollTo(bookmark)` | Go to a place, after a layout of one chapter |
