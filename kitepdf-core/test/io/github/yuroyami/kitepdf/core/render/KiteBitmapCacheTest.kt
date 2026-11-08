@@ -74,6 +74,27 @@ class KiteBitmapCacheTest {
     }
 
     @Test
+    fun the_owner_hears_of_each_bitmap_the_cache_lets_go_of() {
+        val dropped = ArrayList<Bitmap>()
+        val cache = KiteBitmapCache<Bitmap>(250) { dropped += it }
+        val sampling = imageSampling(64, 64, atItsSize, false)
+        val (a, b, c) = listOf(image(), image(), image())
+        val kept = listOf(a, b).map { cache.getOrPut(it, sampling, { it.bytes }) { Bitmap(100) }!! }
+        assertEquals(emptyList(), dropped)
+        // c pushes out a, the bitmap used least recently.
+        cache.getOrPut(c, sampling, { it.bytes }) { Bitmap(100) }
+        assertEquals(listOf(kept[0]), dropped)
+        // A bitmap too large to keep is the caller's, and the cache says so.
+        val large = cache.getOrPut(image(), sampling, { it.bytes }) { Bitmap(1000) }!!
+        assertEquals(false, cache.holds(large))
+        assertEquals(true, cache.holds(kept[1]))
+        assertEquals(1, dropped.size)
+        cache.clear()
+        assertEquals(3, dropped.size)
+        assertEquals(false, cache.holds(kept[1]))
+    }
+
+    @Test
     fun a_bitmap_larger_than_the_budget_or_a_failed_build_is_not_kept() {
         val cache = KiteBitmapCache<Bitmap>(budgetBytes = 50)
         val image = image()

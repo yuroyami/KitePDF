@@ -48,6 +48,7 @@ import org.jetbrains.skia.PathFillMode
 import org.jetbrains.skia.PathVerb
 import org.jetbrains.skia.Shader
 import org.jetbrains.skia.TextBlob
+import org.jetbrains.skia.impl.Managed
 import org.jetbrains.skia.TextBlobBuilder
 import org.jetbrains.skia.Point
 import org.jetbrains.skia.shaper.FontRun
@@ -91,6 +92,38 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
      * standard faces (#593). A test can take the faces away, as a browser has none.
      */
     internal var hostFace: (FontSpec, FontStyle) -> Boolean = SkiaSystemFonts::hasFace
+
+    /**
+     * The native objects that the draw in progress made: its paints, path effects, fonts, text
+     * blobs, shaders and colour filters. They close when the outermost draw returns, so none
+     * waits for Skiko's cleaner (#881). A Skia paint or blob holds its own reference to what it
+     * uses, so the order of the closes does not matter.
+     */
+    private val made = ArrayList<Managed>()
+    private var drawDepth = 0
+
+    private fun <M : Managed> M.owned(): M { made += this; return this }
+
+    /** [block] with this object, which closes when it returns. */
+    private inline fun <M : Managed, R> M.closing(block: (M) -> R): R {
+        try {
+            return block(this)
+        } finally {
+            close()
+        }
+    }
+
+    private inline fun <R> drawing(block: () -> R): R {
+        drawDepth++
+        try {
+            return block()
+        } finally {
+            if (--drawDepth == 0) {
+                for (m in made) if (!m.isClosed) m.close()
+                made.clear()
+            }
+        }
+    }
 
     /** Count of open transparency groups + soft-mask layers, for endPage cleanup. */
     private var openLayers = 0
@@ -150,17 +183,19 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        val sk = toSkPath(path, ctm).apply {
-            fillMode = if (evenOdd) PathFillMode.EVEN_ODD else PathFillMode.WINDING
+        drawing {
+            val sk = toSkPath(path, ctm).apply {
+                fillMode = if (evenOdd) PathFillMode.EVEN_ODD else PathFillMode.WINDING
+            }
+            val paint = Paint().owned().apply {
+                this.color = color.toArgb(alpha)
+                this.mode = PaintMode.FILL
+                this.isAntiAlias = true
+                this.blendMode = paintBlend(blendMode)
+            }
+            canvas.drawPath(sk, paint)
+            sk.close()
         }
-        val paint = Paint().apply {
-            this.color = color.toArgb(alpha)
-            this.mode = PaintMode.FILL
-            this.isAntiAlias = true
-            this.blendMode = paintBlend(blendMode)
-        }
-        canvas.drawPath(sk, paint)
-        sk.close()
     }
 
     override fun strokePath(
@@ -169,50 +204,52 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
-        val pen = strokePen(ctm, lineWidth)
-        val sk = toSkPath(path, pen.pathMatrix)
-        val paint = Paint().apply {
-            this.color = color.toArgb(alpha)
-            this.mode = PaintMode.STROKE
-            this.strokeWidth = pen.width.toFloat()
-            this.isAntiAlias = true
-            this.blendMode = paintBlend(blendMode)
-            this.strokeCap = when (lineCap) {
-                1 -> org.jetbrains.skia.PaintStrokeCap.ROUND
-                2 -> org.jetbrains.skia.PaintStrokeCap.SQUARE
-                else -> org.jetbrains.skia.PaintStrokeCap.BUTT
-            }
-            this.strokeJoin = when (lineJoin) {
-                1 -> org.jetbrains.skia.PaintStrokeJoin.ROUND
-                2 -> org.jetbrains.skia.PaintStrokeJoin.BEVEL
-                else -> org.jetbrains.skia.PaintStrokeJoin.MITER
-            }
-            this.strokeMiter = miterLimit.toFloat().coerceAtLeast(1f)
-            // Dashed strokes: dash lengths are in user units, so scale them the
-            // same way as the line width. Skia needs an even-length, positive
-            // interval array.
-            dashArray?.let { da ->
-                val scaled = da.map { (it * pen.dashScale).toFloat().coerceAtLeast(0f) }
-                val intervals = if (scaled.size % 2 == 0) scaled else scaled + scaled
-                if (intervals.isNotEmpty() && intervals.sum() > 0f) {
-                    this.pathEffect = PathEffect.makeDash(intervals.toFloatArray(), (dashPhase * pen.dashScale).toFloat())
+        drawing {
+            val pen = strokePen(ctm, lineWidth)
+            val sk = toSkPath(path, pen.pathMatrix)
+            val paint = Paint().owned().apply {
+                this.color = color.toArgb(alpha)
+                this.mode = PaintMode.STROKE
+                this.strokeWidth = pen.width.toFloat()
+                this.isAntiAlias = true
+                this.blendMode = paintBlend(blendMode)
+                this.strokeCap = when (lineCap) {
+                    1 -> org.jetbrains.skia.PaintStrokeCap.ROUND
+                    2 -> org.jetbrains.skia.PaintStrokeCap.SQUARE
+                    else -> org.jetbrains.skia.PaintStrokeCap.BUTT
+                }
+                this.strokeJoin = when (lineJoin) {
+                    1 -> org.jetbrains.skia.PaintStrokeJoin.ROUND
+                    2 -> org.jetbrains.skia.PaintStrokeJoin.BEVEL
+                    else -> org.jetbrains.skia.PaintStrokeJoin.MITER
+                }
+                this.strokeMiter = miterLimit.toFloat().coerceAtLeast(1f)
+                // Dashed strokes: dash lengths are in user units, so scale them the
+                // same way as the line width. Skia needs an even-length, positive
+                // interval array.
+                dashArray?.let { da ->
+                    val scaled = da.map { (it * pen.dashScale).toFloat().coerceAtLeast(0f) }
+                    val intervals = if (scaled.size % 2 == 0) scaled else scaled + scaled
+                    if (intervals.isNotEmpty() && intervals.sum() > 0f) {
+                        this.pathEffect = PathEffect.makeDash(intervals.toFloatArray(), (dashPhase * pen.dashScale).toFloat()).owned()
+                    }
                 }
             }
-        }
-        val m = pen.strokeMatrix
-        if (m == null) {
-            canvas.drawPath(sk, paint)
-        } else {
-            // Skia strokes in local space under the matrix, which draws the elliptical pen.
-            canvas.save()
-            try {
-                canvas.concat(pdfMatrixToSkia(m))
+            val m = pen.strokeMatrix
+            if (m == null) {
                 canvas.drawPath(sk, paint)
-            } finally {
-                canvas.restore()
+            } else {
+                // Skia strokes in local space under the matrix, which draws the elliptical pen.
+                canvas.save()
+                try {
+                    canvas.concat(pdfMatrixToSkia(m))
+                    canvas.drawPath(sk, paint)
+                } finally {
+                    canvas.restore()
+                }
             }
+            sk.close()
         }
-        sk.close()
     }
 
     override fun drawGlyphs(
@@ -226,40 +263,42 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         alpha: Double,
         blendMode: KiteBlendMode,
     ) {
-        if (glyphs.isEmpty()) return
-        if (!hasOutlines) {
-            // A family the host has no face of draws from the bundled face the layout measured
-            // it with. Another face at those advances drew with uneven gaps (#593).
-            val bundled = if (hostFace(fontSpec, styleOf(fontSpec))) null else standardFaceGlyphs(glyphs, fontSpec)
-            if (bundled != null) {
-                drawGlyphs(bundled, fontSize, 1000, true, fontSpec, textToDevice, color, alpha, blendMode)
-            } else {
-                drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+        drawing {
+            if (glyphs.isEmpty()) return
+            if (!hasOutlines) {
+                // A family the host has no face of draws from the bundled face the layout measured
+                // it with. Another face at those advances drew with uneven gaps (#593).
+                val bundled = if (hostFace(fontSpec, styleOf(fontSpec))) null else standardFaceGlyphs(glyphs, fontSpec)
+                if (bundled != null) {
+                    drawGlyphs(bundled, fontSize, 1000, true, fontSpec, textToDevice, color, alpha, blendMode)
+                } else {
+                    drawTextViaSystemFont(glyphs, fontSize, fontSpec, textToDevice, color, alpha, blendMode)
+                }
+                return
             }
-            return
-        }
 
-        val unitScale = fontSize / unitsPerEm  // glyph outlines: font units → text space
-        val advanceScale = fontSize / 1000.0   // advances are 1/1000 em, not font units
-        val argb = color.toArgb(alpha)
-        val paint = Paint().apply {
-            this.color = argb
-            mode = PaintMode.FILL
-            isAntiAlias = true
-            this.blendMode = paintBlend(blendMode)
-        }
-        var penX = 0.0
-        for (glyph in glyphs) {
-            val outline = glyph.outline
-            if (outline != null && !outline.isEmpty()) {
-                val glyphMatrix = textToDevice
-                    .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
-                    .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                val sk = toSkPath(outline, glyphMatrix).apply { fillMode = PathFillMode.WINDING }
-                canvas.drawPath(sk, paint)
-                sk.close()
+            val unitScale = fontSize / unitsPerEm  // glyph outlines: font units → text space
+            val advanceScale = fontSize / 1000.0   // advances are 1/1000 em, not font units
+            val argb = color.toArgb(alpha)
+            val paint = Paint().owned().apply {
+                this.color = argb
+                mode = PaintMode.FILL
+                isAntiAlias = true
+                this.blendMode = paintBlend(blendMode)
             }
-            penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
+            var penX = 0.0
+            for (glyph in glyphs) {
+                val outline = glyph.outline
+                if (outline != null && !outline.isEmpty()) {
+                    val glyphMatrix = textToDevice
+                        .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                        .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
+                    val sk = toSkPath(outline, glyphMatrix).apply { fillMode = PathFillMode.WINDING }
+                    canvas.drawPath(sk, paint)
+                    sk.close()
+                }
+                penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
+            }
         }
     }
 
@@ -282,7 +321,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         val rotationDeg = (kotlin.math.atan2(textMatrix.b, textMatrix.a) * 180.0 / kotlin.math.PI).toFloat()
 
         val argb = color.toArgb(alpha)
-        val paint = Paint().apply {
+        val paint = Paint().owned().apply {
             this.color = argb
             mode = PaintMode.FILL
             isAntiAlias = true
@@ -291,7 +330,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         // A null typeface would draw nothing at all, silently, so skip the run
         // instead and leave the warning trail a blank page never gives.
         val typeface = systemTypeface(fontSpec) ?: return
-        val skFont = Font(typeface, renderedSize)
+        val skFont = Font(typeface, renderedSize).owned()
         val advanceScale = renderedSize / 1000.0
         canvas.save()
         try {
@@ -304,7 +343,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                     drawShapedPart(part, skFont, paint, fontSpec)
                     continue
                 }
-                val run = placedRun(part.glyphs, skFont, advanceScale, sy, fontSpec) ?: continue
+                val run = placedRun(part.glyphs, skFont, advanceScale, sy, fontSpec)?.owned() ?: continue
                 canvas.drawTextBlob(run, part.x.toFloat(), 0f, paint)
             }
         } finally {
@@ -332,7 +371,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         } finally {
             scripts.close()
         }
-        val blob = handler.builder.build() ?: return
+        val blob = handler.builder.owned().build()?.owned() ?: return
         canvas.save()
         try {
             canvas.translate(part.x.toFloat(), 0f)
@@ -362,7 +401,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
             val face = when {
                 current.getUTF32Glyph(cp) != 0.toShort() || Bidi.classify(cp) == Bidi.BN -> current
                 font.getUTF32Glyph(cp) != 0.toShort() -> font
-                else -> SkiaSystemFonts.fallback(spec, style, cp)?.let { Font(it, font.size) } ?: current
+                else -> SkiaSystemFonts.fallback(spec, style, cp)?.let { Font(it, font.size).owned() } ?: current
             }
             if (face !== current) {
                 if (i > 0) runs += FontRun(i, current)
@@ -432,7 +471,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
             xs[k] = x.toFloat()
         }
         if (fonts == null) return TextBlob.makeFromPosH(ids, xs, 0f, font)
-        val builder = TextBlobBuilder()
+        val builder = TextBlobBuilder().owned()
         var start = 0
         for (k in 1..n) {
             if (k < n && fonts[k] === fonts[start]) continue
@@ -454,7 +493,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         return Array(ids.size) { k ->
             if (ids[k] != 0.toShort()) return@Array font
             val fallback = faces.getOrPut(codePoints[k]) {
-                SkiaSystemFonts.fallback(spec, style, codePoints[k])?.let { Font(it, font.size) }
+                SkiaSystemFonts.fallback(spec, style, codePoints[k])?.let { Font(it, font.size).owned() }
             } ?: return@Array font
             val id = fallback.getUTF32Glyphs(intArrayOf(codePoints[k]))[0]
             if (id == 0.toShort()) return@Array font
@@ -469,19 +508,21 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
      * embedded outlines in, at 1000 units per em with y up (#85).
      */
     override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? {
-        val typeface = systemTypeface(fontSpec) ?: return null
-        val font = Font(typeface, 1000f)
-        val codePoints = text.codePointArray()
-        val ids = font.getUTF32Glyphs(codePoints)
-        val advances = font.getWidths(ids)
-        val fonts = fallbackFonts(font, codePoints, ids, advances, fontSpec)
-        val b = KitePath.Builder()
-        var penX = 0.0
-        for (k in ids.indices) {
-            (fonts?.get(k) ?: font).getPath(ids[k])?.let { appendFlipped(b, it, penX) }
-            penX += advances[k]
+        return drawing {
+            val typeface = systemTypeface(fontSpec) ?: return null
+            val font = Font(typeface, 1000f).owned()
+            val codePoints = text.codePointArray()
+            val ids = font.getUTF32Glyphs(codePoints)
+            val advances = font.getWidths(ids)
+            val fonts = fallbackFonts(font, codePoints, ids, advances, fontSpec)
+            val b = KitePath.Builder()
+            var penX = 0.0
+            for (k in ids.indices) {
+                (fonts?.get(k) ?: font).getPath(ids[k])?.let { appendFlipped(b, it, penX) }
+                penX += advances[k]
+            }
+            return b.build()
         }
-        return b.build()
     }
 
     /** The Unicode code points of this string, a surrogate pair read as one. */
@@ -531,102 +572,104 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         alpha: Double,
         blendMode: KiteBlendMode,
     ) {
-        if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
-        val stops = shading.sampleStops() ?: return
+        drawing {
+            if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
+            val stops = shading.sampleStops() ?: return
 
-        // PDF /Extend [start end] controls whether the shading keeps painting
-        // past t<0 (start) and t>1 (end) with the terminal colours. Skia's
-        // gradient tile mode is a single flag covering both ends:
-        //   CLAMP → both ends extend with the terminal colour (t outside [0,1]).
-        //   DECAL → nothing is painted outside [0,1] (transparent).
-        // We can express both-extend and neither-extend exactly. A one-sided
-        // extend can't be captured by a single tile mode, so we approximate:
-        // give the extending side its colour by adding a transparent stop just
-        // past the non-extending end (so that end fades out) and keep CLAMP.
-        // CLAMP then holds the extending end's colour and the injected
-        // transparent stop suppresses the other end.
-        val (extendStart, extendEnd) = when (shading) {
-            is KiteShading.Axial -> shading.extendStart to shading.extendEnd
-            is KiteShading.Radial -> shading.extendStart to shading.extendEnd
-            is KiteShading.Unsupported -> return
-            else -> return // complex shading types already handled by paintComplexShading
-        }
-
-        val offsets = ArrayList<Float>(stops.offsets.size + 2)
-        val colors = ArrayList<Color4f>(stops.colors.size + 2)
-        val tileMode: FilterTileMode = if (!extendStart && !extendEnd) {
-            FilterTileMode.DECAL
-        } else {
-            FilterTileMode.CLAMP
-        }
-        // For a one-sided extend under CLAMP, inject a fully-transparent stop
-        // just outside the non-extending end so CLAMP holds transparency there
-        // instead of the terminal colour. Both-extend / both-decal need no pad.
-        if (tileMode == FilterTileMode.CLAMP && !extendStart && extendEnd) {
-            offsets += -0.0001f
-            colors += Color4f(0f, 0f, 0f, 0f)
-        }
-        for (i in stops.offsets.indices) {
-            offsets += stops.offsets[i].toFloat()
-            colors += Color4f(stops.colors[i].toArgb(alpha))
-        }
-        if (tileMode == FilterTileMode.CLAMP && extendStart && !extendEnd) {
-            offsets += 1.0001f
-            colors += Color4f(0f, 0f, 0f, 0f)
-        }
-
-        // skiko 0.148 moved gradient colours/positions into Gradient(Gradient.Colors(...)),
-        // taking Color4f[] (+ sRGB colour space by default).
-        val gradient = Gradient(
-            Gradient.Colors(
-                colors.toTypedArray(),
-                offsets.toFloatArray(),
-                tileMode,
-            ),
-        )
-
-        // The gradient is built in shading space and the CTM maps it as a whole, so a
-        // non-uniform or skewed CTM turns circles into ellipses and tilts the bands
-        // (ISO 32000-1, 8.7.4.5.3 and 8.7.4.5.4). A CTM without an inverse paints nothing.
-        val det = ctm.a * ctm.d - ctm.b * ctm.c
-        if (det == 0.0 || !det.isFinite()) return
-        val toDevice = pdfMatrixToSkia(ctm)
-        val shader: Shader = when (shading) {
-            is KiteShading.Axial -> {
-                val c = shading.coords
-                Shader.makeLinearGradient(
-                    c[0].toFloat(), c[1].toFloat(),
-                    c[2].toFloat(), c[3].toFloat(),
-                    gradient, toDevice,
-                )
+            // PDF /Extend [start end] controls whether the shading keeps painting
+            // past t<0 (start) and t>1 (end) with the terminal colours. Skia's
+            // gradient tile mode is a single flag covering both ends:
+            //   CLAMP → both ends extend with the terminal colour (t outside [0,1]).
+            //   DECAL → nothing is painted outside [0,1] (transparent).
+            // We can express both-extend and neither-extend exactly. A one-sided
+            // extend can't be captured by a single tile mode, so we approximate:
+            // give the extending side its colour by adding a transparent stop just
+            // past the non-extending end (so that end fades out) and keep CLAMP.
+            // CLAMP then holds the extending end's colour and the injected
+            // transparent stop suppresses the other end.
+            val (extendStart, extendEnd) = when (shading) {
+                is KiteShading.Axial -> shading.extendStart to shading.extendEnd
+                is KiteShading.Radial -> shading.extendStart to shading.extendEnd
+                is KiteShading.Unsupported -> return
+                else -> return // complex shading types already handled by paintComplexShading
             }
-            is KiteShading.Radial -> {
-                // True PDF two-circle radial via a two-point conical gradient.
-                // The outer radius is at least a tenth of a device pixel.
-                val c = shading.coords
-                val minRadius = 0.1 / kotlin.math.sqrt(kotlin.math.abs(det))
-                Shader.makeTwoPointConicalGradient(
-                    c[0].toFloat(), c[1].toFloat(), c[2].coerceAtLeast(0.0).toFloat(),
-                    c[3].toFloat(), c[4].toFloat(), c[5].coerceAtLeast(minRadius).toFloat(),
-                    gradient, toDevice,
-                )
-            }
-            is KiteShading.Unsupported -> return
-        }
 
-        val paint = Paint().apply {
-            this.shader = shader
-            this.mode = PaintMode.FILL
-            this.isAntiAlias = true
-            this.blendMode = paintBlend(blendMode)
-        }
-        if (clipPath != null) {
-            val sk = toSkPath(clipPath, ctm).apply { fillMode = PathFillMode.WINDING }
-            canvas.drawPath(sk, paint)
-            sk.close()
-        } else {
-            // `sh` operator over the whole device area: paint a huge rect.
-            canvas.drawPaint(paint)
+            val offsets = ArrayList<Float>(stops.offsets.size + 2)
+            val colors = ArrayList<Color4f>(stops.colors.size + 2)
+            val tileMode: FilterTileMode = if (!extendStart && !extendEnd) {
+                FilterTileMode.DECAL
+            } else {
+                FilterTileMode.CLAMP
+            }
+            // For a one-sided extend under CLAMP, inject a fully-transparent stop
+            // just outside the non-extending end so CLAMP holds transparency there
+            // instead of the terminal colour. Both-extend / both-decal need no pad.
+            if (tileMode == FilterTileMode.CLAMP && !extendStart && extendEnd) {
+                offsets += -0.0001f
+                colors += Color4f(0f, 0f, 0f, 0f)
+            }
+            for (i in stops.offsets.indices) {
+                offsets += stops.offsets[i].toFloat()
+                colors += Color4f(stops.colors[i].toArgb(alpha))
+            }
+            if (tileMode == FilterTileMode.CLAMP && extendStart && !extendEnd) {
+                offsets += 1.0001f
+                colors += Color4f(0f, 0f, 0f, 0f)
+            }
+
+            // skiko 0.148 moved gradient colours/positions into Gradient(Gradient.Colors(...)),
+            // taking Color4f[] (+ sRGB colour space by default).
+            val gradient = Gradient(
+                Gradient.Colors(
+                    colors.toTypedArray(),
+                    offsets.toFloatArray(),
+                    tileMode,
+                ),
+            )
+
+            // The gradient is built in shading space and the CTM maps it as a whole, so a
+            // non-uniform or skewed CTM turns circles into ellipses and tilts the bands
+            // (ISO 32000-1, 8.7.4.5.3 and 8.7.4.5.4). A CTM without an inverse paints nothing.
+            val det = ctm.a * ctm.d - ctm.b * ctm.c
+            if (det == 0.0 || !det.isFinite()) return
+            val toDevice = pdfMatrixToSkia(ctm)
+            val shader: Shader = when (shading) {
+                is KiteShading.Axial -> {
+                    val c = shading.coords
+                    Shader.makeLinearGradient(
+                        c[0].toFloat(), c[1].toFloat(),
+                        c[2].toFloat(), c[3].toFloat(),
+                        gradient, toDevice,
+                    )
+                }
+                is KiteShading.Radial -> {
+                    // True PDF two-circle radial via a two-point conical gradient.
+                    // The outer radius is at least a tenth of a device pixel.
+                    val c = shading.coords
+                    val minRadius = 0.1 / kotlin.math.sqrt(kotlin.math.abs(det))
+                    Shader.makeTwoPointConicalGradient(
+                        c[0].toFloat(), c[1].toFloat(), c[2].coerceAtLeast(0.0).toFloat(),
+                        c[3].toFloat(), c[4].toFloat(), c[5].coerceAtLeast(minRadius).toFloat(),
+                        gradient, toDevice,
+                    )
+                }
+                is KiteShading.Unsupported -> return
+            }.owned()
+
+            val paint = Paint().owned().apply {
+                this.shader = shader
+                this.mode = PaintMode.FILL
+                this.isAntiAlias = true
+                this.blendMode = paintBlend(blendMode)
+            }
+            if (clipPath != null) {
+                val sk = toSkPath(clipPath, ctm).apply { fillMode = PathFillMode.WINDING }
+                canvas.drawPath(sk, paint)
+                sk.close()
+            } else {
+                // `sh` operator over the whole device area: paint a huge rect.
+                canvas.drawPaint(paint)
+            }
         }
     }
 
@@ -660,47 +703,51 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
-        // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
-        val m = canvas.localToDeviceAsMatrix33.makeConcat(pdfMatrixToSkia(ctm)).mat
-        // The edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
-        val device = gridFitImage(
-            KiteMatrix(m[0].toDouble(), m[3].toDouble(), m[1].toDouble(), m[4].toDouble(), m[2].toDouble(), m[5].toDouble()),
-        )
-        val sampling = imageSampling(image.width, image.height, device, image.interpolate)
-        // Only a RAW image draws; every other kind is a placeholder on every canvas (#184).
-        val sk = images.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { imageFor(image, sampling) }
-        if (sk == null) {
-            drawPlaceholder(ctm)
-            return
+        drawing {
+            // One sampling policy on every canvas (#122, #123), read from the whole transform to device pixels.
+            val m = canvas.localToDeviceAsMatrix33.makeConcat(pdfMatrixToSkia(ctm)).mat
+            // The edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
+            val device = gridFitImage(
+                KiteMatrix(m[0].toDouble(), m[3].toDouble(), m[1].toDouble(), m[4].toDouble(), m[2].toDouble(), m[5].toDouble()),
+            )
+            val sampling = imageSampling(image.width, image.height, device, image.interpolate)
+            // Only a RAW image draws; every other kind is a placeholder on every canvas (#184).
+            val sk = images.getOrPut(image, sampling, { it.width.toLong() * it.height * 4 }) { imageFor(image, sampling) }
+            if (sk == null) {
+                drawPlaceholder(ctm)
+                return
+            }
+            // PDF image space is the unit square (0,0)-(1,1) before the CTM; the
+            // CTM maps that square to device coords. Below we lay the bitmap into
+            // that unit square (upright) and let the concatenated CTM place it.
+            canvas.save()
+            openLayers++
+            canvas.setMatrix(pdfMatrixToSkia(device))
+            // Map the bitmap onto the PDF image unit square [0,1]². The bitmap's
+            // row 0 is its top edge (v=1), last row is v=0. So translate up by 1
+            // then flip Y (negative Y scale) to land the image upright inside the
+            // unit square, matching AwtCanvas' documented mapping. The earlier
+            // translate(0,-1)+positive-Y scale both mis-placed and flipped it.
+            val paint = Paint().owned().apply {
+                this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() }
+                this.blendMode = paintBlend(blendMode)
+            }
+            val mode = if (sampling.smooth) SamplingMode.LINEAR else SamplingMode.DEFAULT
+            canvas.save()
+            canvas.translate(0f, 1f)
+            canvas.scale(1f / sk.width, -1f / sk.height)
+            val bounds = Rect.makeWH(sk.width.toFloat(), sk.height.toFloat())
+            canvas.drawImageRect(sk, bounds, bounds, mode, paint, false)
+            canvas.restore()
+            canvas.restore()
+            openLayers--
+            // An image too large to keep is this draw's alone.
+            if (!images.holds(sk)) sk.close()
         }
-        // PDF image space is the unit square (0,0)-(1,1) before the CTM; the
-        // CTM maps that square to device coords. Below we lay the bitmap into
-        // that unit square (upright) and let the concatenated CTM place it.
-        canvas.save()
-        openLayers++
-        canvas.setMatrix(pdfMatrixToSkia(device))
-        // Map the bitmap onto the PDF image unit square [0,1]². The bitmap's
-        // row 0 is its top edge (v=1), last row is v=0. So translate up by 1
-        // then flip Y (negative Y scale) to land the image upright inside the
-        // unit square, matching AwtCanvas' documented mapping. The earlier
-        // translate(0,-1)+positive-Y scale both mis-placed and flipped it.
-        val paint = Paint().apply {
-            this.alpha = alpha.toFloat().coerceIn(0f, 1f).let { (it * 255).toInt() }
-            this.blendMode = paintBlend(blendMode)
-        }
-        val mode = if (sampling.smooth) SamplingMode.LINEAR else SamplingMode.DEFAULT
-        canvas.save()
-        canvas.translate(0f, 1f)
-        canvas.scale(1f / sk.width, -1f / sk.height)
-        val bounds = Rect.makeWH(sk.width.toFloat(), sk.height.toFloat())
-        canvas.drawImageRect(sk, bounds, bounds, mode, paint, false)
-        canvas.restore()
-        canvas.restore()
-        openLayers--
     }
 
     /** Bitmaps built from images, so that an image drawn many times converts once (#117). */
-    private val images = KiteBitmapCache<Image>()
+    private val images = KiteBitmapCache<Image>(KiteBitmapCache.DEFAULT_BUDGET_BYTES) { it.close() }
 
     /** The image as a Skia image, averaged down when [sampling] shrinks it. Only a RAW image draws (#184). */
     private fun imageFor(image: KiteImageData, sampling: KiteImageSampling): Image? = try {
@@ -729,8 +776,8 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         }.snapshot()
         canvas.save()
         canvas.concat(pdfMatrixToSkia(ctm))
-        canvas.drawPath(sk, Paint().apply { color = 0xFFE0E0E0.toInt() })
-        canvas.drawPath(sk, Paint().apply {
+        canvas.drawPath(sk, Paint().owned().apply { color = 0xFFE0E0E0.toInt() })
+        canvas.drawPath(sk, Paint().owned().apply {
             color = 0xFF888888.toInt(); mode = PaintMode.STROKE; strokeWidth = 0.01f
         })
         canvas.restore()
@@ -753,14 +800,15 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         val layered = isolated || knockout || nested || alpha < 1.0 || blendMode != KiteBlendMode.Normal
         groups.addLast(Group(layered, knockout))
         if (!layered) return
-        val paint = Paint().apply {
-            this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
-            this.blendMode = blendMode.toSkia()
-        }
-        if (!isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal) {
-            canvas.saveLayer(SkCanvas.SaveLayerRec(null, paint, null, null, SkCanvas.SaveLayerFlags(SkCanvas.SaveLayerFlagsSet.InitWithPrevious)))
-        } else {
-            canvas.saveLayer(null, paint)
+        // The layer keeps its own copy of the paint.
+        Paint().closing { paint ->
+            paint.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
+            paint.blendMode = blendMode.toSkia()
+            if (!isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal) {
+                canvas.saveLayer(SkCanvas.SaveLayerRec(null, paint, null, null, SkCanvas.SaveLayerFlags(SkCanvas.SaveLayerFlagsSet.InitWithPrevious)))
+            } else {
+                canvas.saveLayer(null, paint)
+            }
         }
         openLayers++
         layers++
@@ -807,7 +855,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     ) {
         // Outer layer captures the content. Inner layer paints the mask
         // group on top with DstIn so the mask's alpha clips the content.
-        canvas.saveLayer(null, Paint())
+        Paint().closing { canvas.saveLayer(null, it) }
         openLayers++
         layers++
         // The content and the mask composite as usual, also inside a knockout group.
@@ -827,10 +875,12 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
             // and the CSS weights for an SVG mask (#799, #821).
             // The /TR table then maps the alpha, also where the group paints nothing.
             val table = transfer?.let { org.jetbrains.skia.ColorFilter.makeTableARGB(it.toByteArray(), null, null, null) }
+            var luminance: org.jetbrains.skia.ColorFilter? = null
+            var composed: org.jetbrains.skia.ColorFilter? = null
             val maskPaint = Paint().apply {
                 blendMode = SkiaBlendMode.DST_IN
                 colorFilter = if (!kind.readsColor) table else {
-                    val luminance = org.jetbrains.skia.ColorFilter.makeMatrix(
+                    val lum = org.jetbrains.skia.ColorFilter.makeMatrix(
                         org.jetbrains.skia.ColorMatrix(
                             0f, 0f, 0f, 0f, 0f,
                             0f, 0f, 0f, 0f, 0f,
@@ -838,10 +888,13 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                             kind.red.toFloat(), kind.green.toFloat(), kind.blue.toFloat(), 0f, 0f,
                         ),
                     )
-                    if (table != null) org.jetbrains.skia.ColorFilter.makeComposed(table, luminance) else luminance
+                    luminance = lum
+                    if (table != null) org.jetbrains.skia.ColorFilter.makeComposed(table, lum).also { composed = it } else lum
                 }
             }
             canvas.saveLayer(null, maskPaint)
+            // The layer keeps its own copy of the paint and its filter.
+            maskPaint.close(); composed?.close(); luminance?.close(); table?.close()
             openLayers++
             layers++
             try {
@@ -935,7 +988,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                     require(initial.width == width && initial.height == height) { "the initial raster has another size" }
                     val start = Image.makeRaster(info, bgraOf(initial.pixels), width * 4)
                     try {
-                        offscreen.drawImage(start, 0f, 0f, Paint().apply { blendMode = SkiaBlendMode.SRC })
+                        Paint().closing { offscreen.drawImage(start, 0f, 0f, it.apply { blendMode = SkiaBlendMode.SRC }) }
                     } finally {
                         start.close()
                     }
@@ -996,6 +1049,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
             } finally {
                 target.restore()
                 image.close()
+                paint.close()
             }
         }
     }

@@ -763,6 +763,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   own property, so a script can no longer forge `target` or `defaultPrevented`. `dispatchEvent` of an event that
   is already being dispatched throws an `InvalidStateError`, and a window's load event names the document as its
   target (#876).
+- `SkiaCanvas` closes the native paints, path effects, fonts, text blobs, shaders and colour filters of each draw
+  when the draw returns, and the images its bitmap cache drops, instead of leaving them to Skiko's cleaner.
+  `KiteBitmapCache` takes an `onDrop` callback for the bitmaps it lets go of, and `holds` tells whether it kept
+  one (#881).
 
 ## [0.13.0] - 2026-10-09
 

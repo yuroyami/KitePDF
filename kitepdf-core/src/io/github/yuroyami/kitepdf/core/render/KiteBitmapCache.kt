@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.core.render
 
 import io.github.yuroyami.kitepdf.core.KiteLock
 import io.github.yuroyami.kitepdf.core.withLock
+import kotlin.jvm.JvmOverloads
 
 /**
  * Platform bitmaps that a canvas built from images, so that an image drawn many
@@ -14,10 +15,21 @@ import io.github.yuroyami.kitepdf.core.withLock
  * larger than the whole budget is not kept. A nonpositive budget disables retention.
  * Entries retain only opaque identities and bitmaps, never source image buffers.
  * Map operations are synchronized; conversions and size callbacks run outside the lock.
+ *
+ * [onDrop], when given, runs for each bitmap the cache lets go of: one it evicts, one [clear]
+ * releases, and one built by a concurrent miss that lost to another. An owner whose bitmaps are
+ * native objects closes them there, as a canvas that draws them alone may (#881). It runs
+ * outside the lock. A bitmap that [getOrPut] returned without keeping, which [holds] tells, is
+ * the caller's to release.
  */
 public class KiteBitmapCache<T : Any>(
-    private val budgetBytes: Long = DEFAULT_BUDGET_BYTES,
+    private val budgetBytes: Long,
+    private val onDrop: ((T) -> Unit)?,
 ) {
+    /** A cache of [budgetBytes] that releases nothing itself. */
+    @JvmOverloads
+    public constructor(budgetBytes: Long = DEFAULT_BUDGET_BYTES) : this(budgetBytes, null)
+
     private data class Key(val identity: KiteImageIdentity, val shrinkX: Int, val shrinkY: Int, val width: Int, val height: Int)
 
     private class Entry<T>(val bitmap: T, val bytes: Long)
@@ -37,12 +49,18 @@ public class KiteBitmapCache<T : Any>(
      * a recorded page or another caller may still be drawing a returned bitmap.
      */
     public fun clear() {
-        lock.withLock {
+        val dropped = lock.withLock {
+            val held = if (onDrop == null) emptyList() else entries.values.map { it.bitmap }
             entries.clear()
             bytes = 0L
             generation = Any()
+            held
         }
+        dropped.forEach { onDrop?.invoke(it) }
     }
+
+    /** Whether the cache keeps [bitmap], by identity: one it does not keep is its caller's to release. */
+    public fun holds(bitmap: T): Boolean = lock.withLock { entries.values.any { it.bitmap === bitmap } }
 
     /**
      * The bitmap for [image] drawn with [sampling]. On a miss, [build] makes it and
@@ -62,23 +80,29 @@ public class KiteBitmapCache<T : Any>(
         }
         val bitmap = build() ?: return null
         val size = sizeOf(bitmap)
-        return lock.withLock {
+        var dropped: MutableList<T>? = null
+        val result = lock.withLock {
             if (generation !== started) return@withLock bitmap
             entries.remove(key)?.let { entry ->
                 entries[key] = entry
+                if (entry.bitmap !== bitmap) (dropped ?: ArrayList<T>().also { dropped = it }) += bitmap
                 return@withLock entry.bitmap
             }
             if (budgetBytes <= 0L || size <= 0L || size > budgetBytes) return@withLock bitmap
             // Subtract before adding: both the budget and a valid reported size may be Long.MAX_VALUE.
             val oldest = entries.values.iterator()
             while (bytes > budgetBytes - size && oldest.hasNext()) {
-                bytes -= oldest.next().bytes
+                val gone = oldest.next()
+                bytes -= gone.bytes
                 oldest.remove()
+                if (onDrop != null) (dropped ?: ArrayList<T>().also { dropped = it }) += gone.bitmap
             }
             entries[key] = Entry(bitmap, size)
             bytes += size
             bitmap
         }
+        if (onDrop != null) dropped?.forEach(onDrop)
+        return result
     }
 
     public companion object {

@@ -1602,9 +1602,11 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteBitmapCache {
 	public fun <init> ()V
 	public fun <init> (J)V
 	public synthetic fun <init> (JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (JLkotlin/jvm/functions/Function1;)V
 	public final fun clear ()V
 	public final fun getHeldBytes ()J
 	public final fun getOrPut (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteImageSampling;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;)Ljava/lang/Object;
+	public final fun holds (Ljava/lang/Object;)Z
 }
 
 public final class io/github/yuroyami/kitepdf/core/render/KiteBitmapCache$Companion {

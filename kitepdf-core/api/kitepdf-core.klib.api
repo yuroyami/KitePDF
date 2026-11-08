@@ -293,12 +293,14 @@ abstract interface io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroy
 
 final class <#A: kotlin/Any> io.github.yuroyami.kitepdf.core.render/KiteBitmapCache { // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache|null[0]
     constructor <init>(kotlin/Long = ...) // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.<init>|<init>(kotlin.Long){}[0]
+    constructor <init>(kotlin/Long, kotlin/Function1<#A, kotlin/Unit>?) // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.<init>|<init>(kotlin.Long;kotlin.Function1<1:0,kotlin.Unit>?){}[0]
 
     final val heldBytes // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.heldBytes|{}heldBytes[0]
         final fun <get-heldBytes>(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.heldBytes.<get-heldBytes>|<get-heldBytes>(){}[0]
 
     final fun clear() // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.clear|clear(){}[0]
     final fun getOrPut(io.github.yuroyami.kitepdf.core.render/KiteImageData, io.github.yuroyami.kitepdf.core.render/KiteImageSampling, kotlin/Function1<#A, kotlin/Long>, kotlin/Function0<#A?>): #A? // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.getOrPut|getOrPut(io.github.yuroyami.kitepdf.core.render.KiteImageData;io.github.yuroyami.kitepdf.core.render.KiteImageSampling;kotlin.Function1<1:0,kotlin.Long>;kotlin.Function0<1:0?>){}[0]
+    final fun holds(#A): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.holds|holds(1:0){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.Companion|null[0]
         final const val DEFAULT_BUDGET_BYTES // io.github.yuroyami.kitepdf.core.render/KiteBitmapCache.Companion.DEFAULT_BUDGET_BYTES|{}DEFAULT_BUDGET_BYTES[0]
