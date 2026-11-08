@@ -888,6 +888,60 @@ public class PdfEditor internal constructor(
 
     /* ─── Redaction ──────────────────────────────────────────────────────── */
 
+    /**
+     * Takes the images [dropped] out of the resource dictionaries that [pageRef] (whose dictionary
+     * before the rewrite was [pageDict]) shared or inherited: its own indirect `/Resources` and the
+     * `/Resources` of its `/Pages` ancestors (ISO 32000-1, 7.7.3.4), once no other page draws them,
+     * so the rewrite does not keep image data that nothing draws (#1010). A page that names one of
+     * them and holds a form XObject or a pattern, which could draw it unnamed in its content,
+     * counts as drawing it.
+     */
+    private fun unnameUndrawnImages(pageRef: PdfReference, pageDict: PdfDictionary, dropped: Set<PdfReference>) {
+        if (dropped.isEmpty()) return
+        val stillDrawn = HashSet<PdfReference>()
+        for (other in base.pages) {
+            val otherRef = other.reference ?: continue
+            if (otherRef == pageRef) continue
+            val res = runCatching { effectiveResources(otherRef, other) }.getOrNull() ?: continue
+            val xobjects = runCatching { res.getDict("XObject", effective) }.getOrNull() ?: continue
+            val named = xobjects.map.filterValues { it is PdfReference && it in dropped }
+            if (named.isEmpty()) continue
+            val indirect = xobjects.map.values.any { v ->
+                (runCatching { v.resolve(effective) }.getOrNull() as? PdfStream)?.dict?.getName("Subtype") == "Form"
+            } || runCatching { res.getDict("Pattern", effective) }.getOrNull()?.map?.isNotEmpty() == true
+            val drawn = if (indirect) named.keys else {
+                val ops = runCatching { ContentStreamParser.parse(effectiveContentBytes(otherRef)) }.getOrDefault(emptyList())
+                ops.filter { it.operator == "Do" }.mapNotNull { (it.operands.firstOrNull() as? PdfName)?.value }.toSet().intersect(named.keys)
+            }
+            for (name in drawn) (named[name] as? PdfReference)?.let(stillDrawn::add)
+        }
+        val gone = dropped - stillDrawn
+        if (gone.isEmpty()) return
+
+        fun pruned(resources: PdfDictionary): PdfDictionary? {
+            val xobjects = runCatching { resources.getDict("XObject", effective) }.getOrNull() ?: return null
+            val kept = xobjects.map.filterValues { !(it is PdfReference && it in gone) }
+            if (kept.size == xobjects.map.size) return null
+            return withEntry(resources, "XObject", PdfDictionary(LinkedHashMap(kept)))
+        }
+        // The page's own resources, when another object holds them.
+        (pageDict["Resources"] as? PdfReference)?.let { r ->
+            (effectiveObject(r.objectNumber) as? PdfDictionary)?.let(::pruned)?.let { updateObject(r, it) }
+        }
+        // The /Pages ancestors, whose resources every page below them inherits.
+        var parent = pageDict["Parent"] as? PdfReference
+        val seen = HashSet<Long>()
+        while (parent != null && seen.add(parent.objectNumber)) {
+            val node = effectiveObject(parent.objectNumber) as? PdfDictionary ?: break
+            when (val res = node["Resources"]) {
+                is PdfReference -> (effectiveObject(res.objectNumber) as? PdfDictionary)?.let(::pruned)?.let { updateObject(res, it) }
+                is PdfDictionary -> pruned(res)?.let { updateObject(parent!!, withEntry(node, "Resources", it)) }
+                else -> {}
+            }
+            parent = node["Parent"] as? PdfReference
+        }
+    }
+
     /** Redact a single rectangular region of [page] (see [redactRegions]). */
     public fun redactRegion(page: PdfPage, rectangle: KiteRectangle): Unit = redactRegions(page, listOf(rectangle))
 
@@ -1029,11 +1083,16 @@ public class PdfEditor internal constructor(
         newPage.getDict("Resources", effective)?.let { res ->
             withoutUnshownFonts(res, finalOps, keepAll = lendsFonts(res))?.let { if (it !== res) newPage = withEntry(newPage, "Resources", it) }
         }
+        // The images whose Do went, which a shared or inherited resource dictionary still names (#1010).
+        val droppedImages = (engine.droppedImageNames - engine.survivingImageNames).mapNotNull { name ->
+            pageResources?.getDict("XObject", effective)?.get(name) as? PdfReference
+        }.toSet()
         val droppedAnnots = ArrayList<PdfReference>()
         newPage = pruneIntersectingAnnots(newPage, regions, droppedAnnots)
         // Stage the page first: what follows reads effective objects, and a widget's
         // field is only reachable through the /Annots this call just rewrote.
         updateObject(ref, newPage)
+        unnameUndrawnImages(ref, pageDict, droppedImages)
         // Set before the field detach, which raises on a malformed /Parent chain: the
         // page is already rewritten, so a caller that catches must still be refused an
         // incremental save (it would leave the original bytes in the file).
