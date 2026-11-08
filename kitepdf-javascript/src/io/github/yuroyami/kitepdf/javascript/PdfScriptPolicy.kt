@@ -32,6 +32,13 @@ public class PdfScriptPolicy(
     public val instructionBudget: Int = 0,
     /** Called every second or so while a script is still running, so a viewer can offer to stop it. */
     public val onStillRunning: ((elapsedMillis: Long) -> Boolean)? = null,
+    /**
+     * The most memory the document's engine may allocate, in bytes. Past it an allocation fails
+     * and the script that asked gets an error. The memory is native, so a JVM or Android heap limit
+     * does not count it (#958). [LONG_RUNNING] keeps [KiteJsScriptEngine.MEMORY_LIMIT] for a
+     * compiled program's heap.
+     */
+    public val memoryLimitBytes: Long = KiteJsScriptEngine.SCRIPT_MEMORY_LIMIT,
 ) {
 
     /** A policy that runs nothing, for a viewer that has not been told to trust the file. */
@@ -40,7 +47,8 @@ public class PdfScriptPolicy(
         public val DENY: PdfScriptPolicy = PdfScriptPolicy(enabled = false)
 
         /** For a document that legitimately runs for minutes, such as a program embedded in a page. */
-        public val LONG_RUNNING: PdfScriptPolicy = PdfScriptPolicy(budgetMillis = 0, instructionBudget = 0)
+        public val LONG_RUNNING: PdfScriptPolicy =
+            PdfScriptPolicy(budgetMillis = 0, instructionBudget = 0, memoryLimitBytes = KiteJsScriptEngine.MEMORY_LIMIT)
     }
 }
 

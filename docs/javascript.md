@@ -229,6 +229,8 @@ The `suspend` event methods, such as `runAction`, `keystroke`, `pumpTimers` and 
 
 `close()` can be called on any thread, also on the one that a callback waits for, such as the UI thread that shows an `onAlert` dialog. While a call of the runner is running, `close()` returns at once: the running script stops at its next check, and the engine closes when the call ends. Otherwise it waits at most a second for the engine to close. A script that sits in one long built-in call holds its thread until the call returns, and `close()` does not wait for it.
 
+Each engine may allocate at most `memoryLimitBytes` of its policy, `PdfScriptPolicy` or `EpubScriptPolicy`: 64 MiB by default, and 512 MiB under `PdfScriptPolicy.LONG_RUNNING` for a compiled program's heap. Past it the allocation fails and the script gets an error. A book has an engine for each live chapter and each scripted frame, at most eight chapters at a time, so its scripts hold about eight times the limit at most. The memory is native, so a JVM or Android heap limit does not count it.
+
 `PdfFormState` can be read and written from two threads, because the scripts write it and the viewer reads it.
 
 On JS and Wasm, the engine is a WebAssembly module that loads before its first use. Call `prepare()` on the runner once, and wait for it before the first script, as `KiteDocView` does. A script that runs before then fails with a message that tells you so. On the other targets, `prepare()` returns at once.

@@ -33,6 +33,13 @@ public class EpubScriptPolicy(
      * never asks the clock. Zero means the clock is the only limit.
      */
     public val instructionBudget: Int = 0,
+    /**
+     * The most memory each engine of the book may allocate, in bytes: one engine for each live
+     * chapter and each of its scripted frames. A book thus holds about
+     * [EpubScriptRunner.LIVE_CHAPTERS] times this at most. The memory is native, so a JVM or
+     * Android heap limit does not count it (#958).
+     */
+    public val memoryLimitBytes: Long = KiteJsScriptEngine.SCRIPT_MEMORY_LIMIT,
 ) {
     public companion object {
         /** Scripts never run. */
@@ -223,6 +230,7 @@ public class EpubScriptRunner(
                     clock = clock,
                     sealBuiltins = false,
                     maxStackBytes = thread.stackBytes,
+                    memoryLimitBytes = policy.memoryLimitBytes,
                 )
             })
         },

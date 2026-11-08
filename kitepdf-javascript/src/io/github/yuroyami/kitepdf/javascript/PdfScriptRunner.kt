@@ -272,6 +272,7 @@ public class PdfScriptRunner(
                 deadline = { deadlinePassed() },
                 clock = clock,
                 maxStackBytes = scriptThread.value.stackBytes,
+                memoryLimitBytes = policy.memoryLimitBytes,
             )
         } catch (failure: Throwable) {
             // A native library that does not load throws an Error, UnsatisfiedLinkError, not an

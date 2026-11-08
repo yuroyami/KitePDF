@@ -7,7 +7,7 @@
 
 // Library unique name: <io.github.yuroyami:kitepdf-javascript>
 final class io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy { // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy|null[0]
-    constructor <init>(kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.<init>|<init>(kotlin.Boolean;kotlin.Long;kotlin.Int){}[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Int = ..., kotlin/Long = ...) // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.<init>|<init>(kotlin.Boolean;kotlin.Long;kotlin.Int;kotlin.Long){}[0]
 
     final val budgetMillis // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.budgetMillis|{}budgetMillis[0]
         final fun <get-budgetMillis>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.budgetMillis.<get-budgetMillis>|<get-budgetMillis>(){}[0]
@@ -15,6 +15,8 @@ final class io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy { // io.githu
         final fun <get-enabled>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.enabled.<get-enabled>|<get-enabled>(){}[0]
     final val instructionBudget // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.instructionBudget|{}instructionBudget[0]
         final fun <get-instructionBudget>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.instructionBudget.<get-instructionBudget>|<get-instructionBudget>(){}[0]
+    final val memoryLimitBytes // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.memoryLimitBytes|{}memoryLimitBytes[0]
+        final fun <get-memoryLimitBytes>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.memoryLimitBytes.<get-memoryLimitBytes>|<get-memoryLimitBytes>(){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.Companion|null[0]
         final val DENY // io.github.yuroyami.kitepdf.javascript/EpubScriptPolicy.Companion.DENY|{}DENY[0]
@@ -49,7 +51,7 @@ final class io.github.yuroyami.kitepdf.javascript/EpubScriptRunner : io.github.y
 }
 
 final class io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine : io.github.yuroyami.kitepdf.core.script/KiteScriptEngine { // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine|null[0]
-    constructor <init>(kotlin/Int = ..., kotlin/Function0<kotlin/Boolean>? = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Boolean = ..., kotlin/Long = ...) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.<init>|<init>(kotlin.Int;kotlin.Function0<kotlin.Boolean>?;kotlin.Function0<kotlin.Long>?;kotlin.Boolean;kotlin.Long){}[0]
+    constructor <init>(kotlin/Int = ..., kotlin/Function0<kotlin/Boolean>? = ..., kotlin/Function0<kotlin/Long>? = ..., kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Long = ...) // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.<init>|<init>(kotlin.Int;kotlin.Function0<kotlin.Boolean>?;kotlin.Function0<kotlin.Long>?;kotlin.Boolean;kotlin.Long;kotlin.Long){}[0]
 
     final val instructionBudget // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.instructionBudget|{}instructionBudget[0]
         final fun <get-instructionBudget>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.instructionBudget.<get-instructionBudget>|<get-instructionBudget>(){}[0]
@@ -67,6 +69,8 @@ final class io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine : io.github
             final fun <get-DEFAULT_STACK_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.DEFAULT_STACK_BYTES.<get-DEFAULT_STACK_BYTES>|<get-DEFAULT_STACK_BYTES>(){}[0]
         final const val MEMORY_LIMIT // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.MEMORY_LIMIT|{}MEMORY_LIMIT[0]
             final fun <get-MEMORY_LIMIT>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.MEMORY_LIMIT.<get-MEMORY_LIMIT>|<get-MEMORY_LIMIT>(){}[0]
+        final const val SCRIPT_MEMORY_LIMIT // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.SCRIPT_MEMORY_LIMIT|{}SCRIPT_MEMORY_LIMIT[0]
+            final fun <get-SCRIPT_MEMORY_LIMIT>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.SCRIPT_MEMORY_LIMIT.<get-SCRIPT_MEMORY_LIMIT>|<get-SCRIPT_MEMORY_LIMIT>(){}[0]
 
         final val isLoaded // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.isLoaded|{}isLoaded[0]
             final fun <get-isLoaded>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/KiteJsScriptEngine.Companion.isLoaded.<get-isLoaded>|<get-isLoaded>(){}[0]
@@ -87,7 +91,7 @@ final class io.github.yuroyami.kitepdf.javascript/PdfScriptAlert { // io.github.
 }
 
 final class io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy { // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy|null[0]
-    constructor <init>(kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Int = ..., kotlin/Function1<kotlin/Long, kotlin/Boolean>? = ...) // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.<init>|<init>(kotlin.Boolean;kotlin.Long;kotlin.Long;kotlin.Int;kotlin.Function1<kotlin.Long,kotlin.Boolean>?){}[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Int = ..., kotlin/Function1<kotlin/Long, kotlin/Boolean>? = ..., kotlin/Long = ...) // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.<init>|<init>(kotlin.Boolean;kotlin.Long;kotlin.Long;kotlin.Int;kotlin.Function1<kotlin.Long,kotlin.Boolean>?;kotlin.Long){}[0]
 
     final val budgetMillis // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.budgetMillis|{}budgetMillis[0]
         final fun <get-budgetMillis>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.budgetMillis.<get-budgetMillis>|<get-budgetMillis>(){}[0]
@@ -97,6 +101,8 @@ final class io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy { // io.github
         final fun <get-enabled>(): kotlin/Boolean // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.enabled.<get-enabled>|<get-enabled>(){}[0]
     final val instructionBudget // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.instructionBudget|{}instructionBudget[0]
         final fun <get-instructionBudget>(): kotlin/Int // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.instructionBudget.<get-instructionBudget>|<get-instructionBudget>(){}[0]
+    final val memoryLimitBytes // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.memoryLimitBytes|{}memoryLimitBytes[0]
+        final fun <get-memoryLimitBytes>(): kotlin/Long // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.memoryLimitBytes.<get-memoryLimitBytes>|<get-memoryLimitBytes>(){}[0]
     final val onStillRunning // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.onStillRunning|{}onStillRunning[0]
         final fun <get-onStillRunning>(): kotlin/Function1<kotlin/Long, kotlin/Boolean>? // io.github.yuroyami.kitepdf.javascript/PdfScriptPolicy.onStillRunning.<get-onStillRunning>|<get-onStillRunning>(){}[0]
 

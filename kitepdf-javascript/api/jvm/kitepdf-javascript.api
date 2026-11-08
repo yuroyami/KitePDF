@@ -1,11 +1,12 @@
 public final class io/github/yuroyami/kitepdf/javascript/EpubScriptPolicy {
 	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/EpubScriptPolicy$Companion;
 	public fun <init> ()V
-	public fun <init> (ZJI)V
-	public synthetic fun <init> (ZJIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZJIJ)V
+	public synthetic fun <init> (ZJIJILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getBudgetMillis ()J
 	public final fun getEnabled ()Z
 	public final fun getInstructionBudget ()I
+	public final fun getMemoryLimitBytes ()J
 }
 
 public final class io/github/yuroyami/kitepdf/javascript/EpubScriptPolicy$Companion {
@@ -38,9 +39,10 @@ public final class io/github/yuroyami/kitepdf/javascript/KiteJsScriptEngine : io
 	public static final field DEFAULT_INSTRUCTION_BUDGET I
 	public static final field DEFAULT_STACK_BYTES J
 	public static final field MEMORY_LIMIT J
+	public static final field SCRIPT_MEMORY_LIMIT J
 	public fun <init> ()V
-	public fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZJ)V
-	public synthetic fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZJJ)V
+	public synthetic fun <init> (ILkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ZJJILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun close ()V
 	public fun defineFunction (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public fun defineValue (Ljava/lang/String;Ljava/lang/Object;)V
@@ -64,12 +66,13 @@ public final class io/github/yuroyami/kitepdf/javascript/PdfScriptAlert {
 public final class io/github/yuroyami/kitepdf/javascript/PdfScriptPolicy {
 	public static final field Companion Lio/github/yuroyami/kitepdf/javascript/PdfScriptPolicy$Companion;
 	public fun <init> ()V
-	public fun <init> (ZJJILkotlin/jvm/functions/Function1;)V
-	public synthetic fun <init> (ZJJILkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZJJILkotlin/jvm/functions/Function1;J)V
+	public synthetic fun <init> (ZJJILkotlin/jvm/functions/Function1;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getBudgetMillis ()J
 	public final fun getDocumentBudgetMillis ()J
 	public final fun getEnabled ()Z
 	public final fun getInstructionBudget ()I
+	public final fun getMemoryLimitBytes ()J
 	public final fun getOnStillRunning ()Lkotlin/jvm/functions/Function1;
 }
 

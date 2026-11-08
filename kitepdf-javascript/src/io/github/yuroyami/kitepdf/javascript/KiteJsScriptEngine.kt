@@ -50,6 +50,11 @@ public class KiteJsScriptEngine(
      * WebAssembly the browser's stack sets a lower cap.
      */
     maxStackBytes: Long = DEFAULT_STACK_BYTES,
+    /**
+     * The most memory this engine may allocate, in bytes. Past it an allocation fails and the
+     * call throws. The runners pass their policy's limit (#958).
+     */
+    memoryLimitBytes: Long = MEMORY_LIMIT,
 ) : KiteScriptEngine {
 
     private val js = KiteJs(ENGINE) {
@@ -58,7 +63,7 @@ public class KiteJsScriptEngine(
         deadline?.let { interruptWhen = it }
         clock?.let { source -> this.clock = { source().toDouble() } }
         // A document cannot take the app's memory: past the limit its allocation fails and the call throws.
-        memoryLimit = MEMORY_LIMIT
+        memoryLimit = memoryLimitBytes
         maxStackSize = maxStackBytes
     }
 
@@ -210,8 +215,15 @@ public class KiteJsScriptEngine(
         /** Enough for any form script, small enough that a runaway loop stops within about a second. */
         public const val DEFAULT_INSTRUCTION_BUDGET: Int = 1_000_000
 
-        /** The most memory one engine may allocate, in bytes: room for a compiled program's heap, and no more. */
+        /** The most memory one engine may allocate by default, in bytes: room for a compiled program's heap, and no more. */
         public const val MEMORY_LIMIT: Long = 512L shl 20
+
+        /**
+         * The memory limit of a document's or a chapter's engine under the default policies: enough
+         * for the scripts of a form or a chapter, so that the eight live chapters of a book hold a
+         * few hundred MiB at most, not gigabytes (#958).
+         */
+        public const val SCRIPT_MEMORY_LIMIT: Long = 64L shl 20
 
         /** What [maxStackBytes] is unless a caller says otherwise. */
         public const val DEFAULT_STACK_BYTES: Long = 256L shl 10

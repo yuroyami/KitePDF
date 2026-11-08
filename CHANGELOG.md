@@ -809,6 +809,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the field's scripts (#879).
 - A large document script that runs many times in one engine runs from one compiled copy, instead of loading a
   new one each run until some 6,000 runs filled the engine's memory limit (#837).
+- `PdfScriptPolicy` and `EpubScriptPolicy` have a `memoryLimitBytes`, 64 MiB by default and 512 MiB under
+  `PdfScriptPolicy.LONG_RUNNING`, and `KiteJsScriptEngine` takes the limit too. A book's live chapters thus hold
+  a few hundred MiB of engine memory at most, not gigabytes (#958).
 
 ## [0.13.0] - 2026-10-09
 
