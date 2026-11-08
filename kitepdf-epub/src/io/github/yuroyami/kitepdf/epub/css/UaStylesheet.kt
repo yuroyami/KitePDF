@@ -32,8 +32,11 @@ internal object UaStylesheet {
         code,kbd,samp,tt{font-family:monospace}
         col{display:table-column}
         colgroup{display:table-column-group}
+        datalist{display:none}
         dd{display:block;margin:0 0 0 40px}
         del,s,strike{text-decoration:line-through}
+        dialog{display:none}
+        dialog[open]{display:block}
         div{display:block}
         dl{display:block;margin:1em 0}
         dt{display:block;font-weight:bold}
@@ -51,6 +54,8 @@ internal object UaStylesheet {
         ins,u{text-decoration:underline}
         li{display:list-item}
         mark{background-color:yellow}
+        noembed{display:none}
+        noframes{display:none}
         ol{display:block;list-style-type:decimal;margin:1em 0;padding:0 0 0 30pt}
         p{display:block;margin:1em 0}
         pre{display:block;font-family:monospace;margin:1em 0;white-space:pre}
@@ -68,6 +73,7 @@ internal object UaStylesheet {
         td{display:table-cell;padding:1px}
         tfoot{display:table-footer-group}
         th{display:table-cell;font-weight:bold;padding:1px;text-align:center}
+        template{display:none}
         thead{display:table-header-group}
         title{display:none}
         tr{display:table-row}

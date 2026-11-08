@@ -270,6 +270,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   space as `pre` does (#846).
 - A tab in preformatted text advances to the next tab stop, every `tab-size` spaces (8 by default), where it was
   one space wide. `tab-size` is read as a count of spaces or a length (#847).
+- The content of `template`, `noembed`, `noframes`, `datalist` and a `dialog` without `open` no longer shows on
+  an EPUB page or in its text, as the HTML Standard's rendering section hides them (#931).
 
 ## [0.13.0] - 2026-10-09
 
