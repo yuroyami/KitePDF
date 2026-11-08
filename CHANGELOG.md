@@ -511,6 +511,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as one `bfrange` per character no longer walks every range for every glyph (#797).
 - Every canvas weighs a PDF luminosity soft mask by 0.30 R + 0.59 G + 0.11 B, the Skia canvas included, and an
   SVG `mask` by the CSS luminance weights through the new `SoftMask.Kind.CssLuminance` (#799, #821).
+- A one- or three-component JPEG 2000 image keeps the `/ColorSpace` its dictionary names (Indexed, Separation,
+  CalGray, ICC), as ISO 32000-1 Table 89 asks, and an Indexed one decodes in full (#808).
 
 ## [0.13.0] - 2026-10-09
 

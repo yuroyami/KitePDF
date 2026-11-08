@@ -101,6 +101,60 @@ class KiteImageDataTest {
         assertEquals(0xFF, rgba[5].toInt() and 0xFF) // pixel1 green G
     }
 
+    /** An 8 x 8 lossless raw codestream, OpenJPEG through Pillow 12.3: index 0 on the left half, 1 on the right. */
+    private val jpxIndices = hexBytes(
+        "ff4fff510029000000000008000000080000000000000000000000080000000800000000000000000001070101ff52000c00000001" +
+            "000304040001ff5c000d4040484850484850484850ff640025000143726561746564206279204f70656e4a5045472076657273696f" +
+            "6e20322e352e34ff90000a0000000000180001ff93cfb40409c01080038080ffd9",
+    )
+
+    /** An 8 x 8 lossless JP2 with a greyscale colr box, every sample 128. */
+    private val jp2Grey128 = hexBytes(
+        "0000000c6a5020200d0a870a00000014667479706a703220000000006a7032200000002d6a703268000000166968647200000008000000" +
+            "080001070700000000000f636f6c72010000000000110000008d6a703263ff4fff510029000000000008000000080000000000000000" +
+            "000000080000000800000000000000000001070101ff52000c00000001000304040001ff5c000d4040484850484850484850ff640025" +
+            "000143726561746564206279204f70656e4a5045472076657273696f6e20322e352e34ff90000a0000000000120001ff9380808080ffd9",
+    )
+
+    private fun jpxImage(bytes: ByteArray, colorSpace: PdfObject) = PdfStream(
+        dict = PdfDictionary(linkedMapOf(
+            "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+            "Width" to PdfInt(8), "Height" to PdfInt(8), "BitsPerComponent" to PdfInt(8),
+            "ColorSpace" to colorSpace, "Filter" to PdfName("JPXDecode"), "Length" to PdfInt(bytes.size.toLong()),
+        )),
+        rawBytes = bytes,
+    )
+
+    private fun ByteArray.rgbAt(pixel: Int) =
+        ((this[pixel * 4].toInt() and 0xFF) shl 16) or ((this[pixel * 4 + 1].toInt() and 0xFF) shl 8) or (this[pixel * 4 + 2].toInt() and 0xFF)
+
+    @Test
+    fun a_jpx_image_reads_its_samples_in_the_space_its_dictionary_names() {
+        // ISO 32000-1, 8.9.5.2, Table 89: the /ColorSpace of a JPXDecode image overrides the data's own (#808).
+        val indexed = PdfArray(listOf(
+            PdfName("Indexed"), PdfName("DeviceRGB"), PdfInt(1),
+            io.github.yuroyami.kitepdf.core.parser.PdfString(byteArrayOf(0xFF.toByte(), 0, 0, 0, 0, 0xFF.toByte())),
+        ))
+        val palette = KiteImageData.from(jpxImage(jpxIndices, indexed), refs = { null }).toRgbaBytes()!!
+        assertEquals(0xFF0000, palette.rgbAt(0), "index 0 is red")
+        assertEquals(0x0000FF, palette.rgbAt(7), "index 1 is blue")
+
+        // A spot colour whose tint runs from white to red: tint 128 is a pale red, not grey.
+        val tint = PdfDictionary(linkedMapOf(
+            "FunctionType" to PdfInt(2), "Domain" to PdfArray(listOf(PdfInt(0), PdfInt(1))),
+            "C0" to PdfArray(listOf(PdfInt(1), PdfInt(1), PdfInt(1))), "C1" to PdfArray(listOf(PdfInt(1), PdfInt(0), PdfInt(0))),
+            "N" to PdfInt(1),
+        ))
+        val spot = PdfArray(listOf(PdfName("Separation"), PdfName("Spot"), PdfName("DeviceRGB"), tint))
+        val pale = KiteImageData.from(jpxImage(jp2Grey128, spot), refs = { null }).toRgbaBytes()!!.rgbAt(27)
+        assertEquals(0xFF, pale shr 16, "red stays full: ${pale.toString(16)}")
+        assertTrue((pale and 0xFF) in 0x7D..0x81, "green and blue fall to half: ${pale.toString(16)}")
+
+        // A grey image stays grey.
+        val grey = KiteImageData.from(jpxImage(jp2Grey128, PdfName("DeviceGray")), refs = { null }).toRgbaBytes()!!.rgbAt(0)
+        assertEquals(0x808080, grey)
+    }
+
     @Test
     fun image_mask_paints_fill_color_where_sample_is_zero() {
         // 8×1 /ImageMask, one byte 0b10101010: MSB(bit0)=1→transparent, bit1=0→paint.

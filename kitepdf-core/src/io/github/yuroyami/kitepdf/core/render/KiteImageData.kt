@@ -417,13 +417,32 @@ public class KiteImageData internal constructor(
                 Kind.JPEG2000 -> {
                     // Same prefix-filter requirement as JPEG above (D-5).
                     val terminal = terminalBytesOf(stream)
+                    // ISO 32000-1, 8.9.5.2, Table 89: a /ColorSpace in the dictionary overrides the space
+                    // in the data, and the samples are read in it. The decoder returns one or three
+                    // components as stored unless the file converts them, so those keep the declared
+                    // space when the counts match (#808). /Decode is ignored for JPX (7.4.9, #72).
+                    val declared = if (isMask) null else resolvedCs
+                    val declaredComps = if (declared is KiteColorSpace.Indexed) 1 else declared?.componentCount ?: 0
+                    val asStored = declared != null && (declaredComps == 1 || declaredComps == 3) && jpxStoresSamples(terminal.bytes)
+                    fun keeps(decodedSpace: String): Boolean =
+                        asStored && declaredComps == (if (decodedSpace == "DeviceRGB") 3 else 1)
+                    fun spaceOf(decodedSpace: String): KiteColorSpace? = when {
+                        keeps(decodedSpace) -> declared
+                        decodedSpace == "DeviceRGB" -> KiteColorSpace.DeviceRGB
+                        else -> KiteColorSpace.DeviceGray
+                    }
                     // The image keeps its encoded data and decodes at the size it draws (#381), unless
-                    // a mask, a colour key or its own opacity channel needs the samples now.
-                    val lazy = if (alpha == null && colorKey == null && !isMask) KiteImageSamples.jpx(terminal.bytes) else null
+                    // a mask, a colour key or its own opacity channel needs the samples now. A palette
+                    // needs exact indices, which a reduced decode averages, so it decodes in full.
+                    val lazy = if (alpha == null && colorKey == null && !isMask && declared !is KiteColorSpace.Indexed) {
+                        KiteImageSamples.jpx(terminal.bytes)
+                    } else {
+                        null
+                    }
                     val raw = if (lazy != null) null else runCatching { JpxDecoder.decode(terminal.bytes) }.getOrNull()
                     if (lazy != null) KiteImageData(
-                        lazy.width, lazy.height, 8, lazy.colorSpace, Kind.RAW, encodedBytes = ByteArray(0),
-                        resolvedColorSpace = if (lazy.colorSpace == "DeviceRGB") KiteColorSpace.DeviceRGB else KiteColorSpace.DeviceGray,
+                        lazy.width, lazy.height, 8, if (keeps(lazy.colorSpace)) cs else lazy.colorSpace, Kind.RAW, encodedBytes = ByteArray(0),
+                        resolvedColorSpace = spaceOf(lazy.colorSpace),
                         maskFill = fillColor, samples = lazy,
                     ) else if (raw != null) {
                         val smaskRaw = dict["SMaskInData"]
@@ -431,15 +450,13 @@ public class KiteImageData internal constructor(
                             ?.value?.toInt() ?: 0
                         val useAlpha = smaskInData != 0 && raw.alpha != null
                         KiteImageData(
-                            raw.width, raw.height, 8, raw.colorSpace, Kind.RAW,
+                            raw.width, raw.height, 8, if (keeps(raw.colorSpace)) cs else raw.colorSpace, Kind.RAW,
                             encodedBytes = ByteArray(0), pixelBytes = raw.pixelBytes,
                             softMaskAlpha = if (useAlpha) raw.alpha else alpha,
                             softMaskWidth = if (useAlpha) raw.width else smW,
                             softMaskHeight = if (useAlpha) raw.height else smH,
                             softMaskMatte = if (useAlpha) null else matte,
-                            resolvedColorSpace = if (isMask) null else {
-                                if (raw.colorSpace == "DeviceRGB") KiteColorSpace.DeviceRGB else KiteColorSpace.DeviceGray
-                            },
+                            resolvedColorSpace = if (isMask) null else spaceOf(raw.colorSpace),
                             isImageMask = isMask, maskFill = fillColor, colorKeyMask = colorKey,
                         )
                     } else KiteImageData(
