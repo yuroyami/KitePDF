@@ -17,8 +17,9 @@ import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
  * kept verbatim (their biased references stay valid), as do all FontDicts. For a
  * CJK CFF the charstrings dominate, so this is the bulk of the size win without
  * the complexity (and risk) of renumbering subrs. The deprecated `seac`-via-
- * `endchar` accent composition is not followed, so a glyph built that way would
- * lose its components. CID-keyed fonts don't use it.
+ * A glyph that the `seac` form of `endchar` builds from a base and an accent is
+ * written from its outline as a plain charstring, since the CID-keyed result
+ * has no glyph names to find the components by (#902).
  */
 public object CffSubsetter {
 
@@ -51,7 +52,12 @@ public object CffSubsetter {
         val nameIndex = writeIndex(listOf("KiteSubset".encodeToByteArray()))
         val stringIndex = writeIndex(listOf("Adobe".encodeToByteArray(), "Identity".encodeToByteArray()))
         val gsubrIndex = writeIndex(cff.globalSubrs)
-        val charStringsIndex = writeIndex(List(n) { cff.charStrings.getOrElse(oldGids[it]) { ByteArray(0) } })
+        // A glyph that seac builds from a base and an accent finds them by name, which a CID-keyed
+        // font has none of, so it is written from its outline instead, components and all (#902).
+        val charStringsIndex = writeIndex(List(n) { i ->
+            val old = oldGids[i]
+            if (cff.composedBySeac(old)) Cff2Converter.charString(cff.outline(old)) else cff.charStrings.getOrElse(old) { ByteArray(0) }
+        })
 
         // Charset format 0: CID for new gid 1..n-1 is the original gid.
         val charset = ByteArrayBuilder(1 + 2 * n).apply {

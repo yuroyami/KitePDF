@@ -131,6 +131,25 @@ public class CffFont private constructor(
      * found through the charset. The parts draw without a `seac` of their own, so a glyph that names
      * itself ends. No CFF font supplied this, so an accented letter drew nothing (#649).
      */
+    /**
+     * Whether glyph [glyphId] is built from a base and an accent by the `seac` form of `endchar`
+     * (Adobe Technical Note 5177, Appendix C), which finds them by glyph name, so a CID-keyed copy
+     * of the charstring draws nothing (#902).
+     */
+    internal fun composedBySeac(glyphId: Int): Boolean {
+        val cs = charStrings.getOrNull(glyphId)?.takeIf { it.isNotEmpty() } ?: return false
+        if (isCff2) return false
+        val fd = if (fdSelect.isNotEmpty()) fdSelect.getOrElse(glyphId) { 0 } else 0
+        var found = false
+        runCatching {
+            CharstringInterpreter(
+                cs, localSubrsPerFd.getOrNull(fd) ?: emptyList(), globalSubrs, defaultWidthX, nominalWidthX,
+                seacRenderer = { _, _, _, _, _ -> found = true },
+            ).interpret()
+        }
+        return found
+    }
+
     private fun seac(baseCode: Int, accentCode: Int, adx: Double, ady: Double, into: KitePath.Builder) {
         fun part(code: Int): KitePath? {
             val name = Encodings.standardEncoding.getOrNull(code and 0xFF) ?: return null

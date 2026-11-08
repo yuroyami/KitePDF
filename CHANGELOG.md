@@ -733,6 +733,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   own function. The renderer paints under it through the canvas raster step and maps the result, so fills,
   strokes, text, images and shadings are all mapped, as Poppler maps them. `ExtGState.transfer`,
   `GraphicsState.transfer` and `KiteTransfer` hold it.
+- An accented letter that an OpenType CFF font builds with `seac` keeps its base and its accent in a PDF that the
+  writer embeds the font in, whole or subset (#902). The subsetter writes such a glyph from its outline, since
+  the CID-keyed font it makes has no glyph names for `seac` to find the components by. Poppler drew nothing for
+  it before.
 
 ## [0.13.0] - 2026-10-09
 
