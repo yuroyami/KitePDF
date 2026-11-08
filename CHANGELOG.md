@@ -624,6 +624,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under its own number, so a font, page or field changed that way is no longer hidden (#1003).
 - A signature's change report now sees an annotation taken off a page or put on one, a direct annotation added,
   and a form field removed from the form, which no longer pass as no change (#1004).
+- A signature's change report now files a change to what a page draws with as page content, even where an
+  appearance stream also reaches it, so page content shared with an appearance can no longer be replaced as a
+  permitted change (#1005).
 
 ## [0.13.0] - 2026-10-09
 

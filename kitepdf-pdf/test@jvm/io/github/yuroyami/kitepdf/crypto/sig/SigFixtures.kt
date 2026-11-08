@@ -285,10 +285,16 @@ internal object SigFixtures {
         val annotation: String? = null,
         /** Whether the page's `/Annots` lists [annotation]. */
         val listAnnotation: Boolean = true,
+        /** More entries of the text field's dictionary. */
+        val textFieldEntries: String = "",
+        /** More objects the signed file holds, numbered from [Numbers.extra] on. */
+        val extra: List<String> = emptyList(),
+        /** The page's content stream. */
+        val content: String = "0 0 1 rg 20 20 50 50 re f",
     )
 
     /** The object numbers of a [signedPdf], for revisions that change them. */
-    class Numbers(val content: Int, val textField: Int, val next: Int, val annotation: Int = next) {
+    class Numbers(val content: Int, val textField: Int, val next: Int, val annotation: Int = next, val extra: Int = next) {
         val catalog = 1
         val page = 3
         val signatureField = 4
@@ -300,7 +306,8 @@ internal object SigFixtures {
         val dss = o.dssCerts.size + o.dssCrls.size + o.dssOcsps.size
         val content = if (dss > 0) 7 + dss else 6
         val annotation = content + if (o.textField != null) 2 else 1
-        return Numbers(content = content, textField = content + 1, next = annotation + if (o.annotation != null) 1 else 0, annotation = annotation)
+        val extra = annotation + if (o.annotation != null) 1 else 0
+        return Numbers(content = content, textField = content + 1, next = extra + o.extra.size, annotation = annotation, extra = extra)
     }
 
     /**
@@ -341,9 +348,10 @@ internal object SigFixtures {
             add("<< /Certs [${refs(o.dssCerts)}] /CRLs [${refs(o.dssCrls)}] /OCSPs [${refs(o.dssOcsps)}] >>")
             for (der in dss) objects += "<< /Length ${der.size} >>\nstream\n".toByteArray(Charsets.ISO_8859_1) + der + "\nendstream".toByteArray(Charsets.ISO_8859_1)
         }
-        add(stream("0 0 1 rg 20 20 50 50 re f"))
-        if (o.textField != null) add("<< /Type /Annot /Subtype /Widget /FT /Tx /T (Name) /Rect [20 150 180 170] /F 4 /P 3 0 R /V (${o.textField}) >>")
+        add(stream(o.content))
+        if (o.textField != null) add("<< /Type /Annot /Subtype /Widget /FT /Tx /T (Name) /Rect [20 150 180 170] /F 4 /P 3 0 R /V (${o.textField}) ${o.textFieldEntries}>>")
         if (o.annotation != null) add(o.annotation)
+        o.extra.forEach(::add)
         val out = java.io.ByteArrayOutputStream()
         out.write("%PDF-1.7\n%\u00E2\u00E3\u00CF\u00D3\n".toByteArray(Charsets.ISO_8859_1))
         val offsets = ArrayList<Int>()

@@ -40,7 +40,7 @@ internal object RevisionChanges {
         }
     }
 
-    private enum class Role { CATALOG, PAGE, PAGE_TREE, ANNOTS, ANNOTATION, ANNOTATION_LOOK, FIELD, WIDGET, WIDGET_LOOK, FIELDS, FORM, SIGNATURE, TIMESTAMP, STORE, INFO, METADATA }
+    private enum class Role { CATALOG, PAGE, PAGE_TREE, PAGE_CONTENT, ANNOTS, ANNOTATION, ANNOTATION_LOOK, FIELD, WIDGET, WIDGET_LOOK, FIELDS, FORM, SIGNATURE, TIMESTAMP, STORE, INFO, METADATA }
 
     /** What an object is: its role, what a reader calls it, and the field it belongs to, if any. */
     private class Place(val role: Role, val subject: String, val field: String? = null)
@@ -214,7 +214,7 @@ internal object RevisionChanges {
                 }
                 if (allowed) null else PdfRevisionChange.Kind.Other to place.subject
             }
-            Role.PAGE_TREE, Role.INFO, Role.METADATA -> PdfRevisionChange.Kind.Other to place.subject
+            Role.PAGE_TREE, Role.PAGE_CONTENT, Role.INFO, Role.METADATA -> PdfRevisionChange.Kind.Other to place.subject
         }
     }
 
@@ -249,6 +249,10 @@ internal object RevisionChanges {
         mark(doc.trailer["Info"], Place(Role.INFO, "the document information"))
         mark(catalog["Metadata"], Place(Role.METADATA, "the document metadata"))
         catalog["DSS"]?.let { reach(doc, it, Place(Role.STORE, "the document security store"), out) }
+
+        // What a page draws with is page content, also where an appearance reaches it too, so the
+        // pages' content and resources are marked before any appearance can claim them (#1005).
+        markPageContent(doc, catalog["Pages"], out)
 
         val form = catalog["AcroForm"]
         mark(form, Place(Role.FORM, "the form"))
@@ -317,6 +321,30 @@ internal object RevisionChanges {
         }
         walkPages(catalog["Pages"], 0)
         return out
+    }
+
+    /**
+     * Marks the content streams and the resources of each page, its own or inherited, and all
+     * they reach, as page content (ISO 32000-1, 7.7.3.3 and 7.7.3.4).
+     */
+    private fun markPageContent(doc: PdfDocument, pages: PdfObject?, out: HashMap<Long, Place>) {
+        var pageNumber = 0
+        val entered = HashSet<PdfReference>()
+        fun walk(node: PdfObject?, depth: Int) {
+            if (node == null || depth > MAX_DEPTH) return
+            if (node is PdfReference && !entered.add(node)) return
+            val dict = node.resolve(doc) as? PdfDictionary ?: return
+            val kids = dict.getArray("Kids", doc)
+            if (kids == null) {
+                val place = Place(Role.PAGE_CONTENT, "the content of page ${++pageNumber}")
+                dict["Contents"]?.let { reach(doc, it, place, out) }
+                dict["Resources"]?.let { reach(doc, it, place, out) }
+            } else {
+                dict["Resources"]?.let { reach(doc, it, Place(Role.PAGE_CONTENT, "the resources of the page tree"), out) }
+                for (kid in kids) walk(kid, depth + 1)
+            }
+        }
+        walk(pages, 0)
     }
 
     /** Marks every object that [start] reaches as [place], except back links to a page or a parent. */

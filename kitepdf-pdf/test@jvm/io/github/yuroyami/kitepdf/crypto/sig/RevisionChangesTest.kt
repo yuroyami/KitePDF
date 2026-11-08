@@ -406,4 +406,25 @@ class RevisionChangesTest {
         assertEquals("the direct annotations of page 1", change.subject)
         assertFalse(result.areChangesPermitted)
     }
+
+    @Test
+    fun pageContentThatAnAppearanceAlsoNamesIsPageContent() {
+        // ISO 32000-1, 12.8.2.2: what the page draws is page content, which no level lets change (#1005).
+        val pay = "BT /F1 18 Tf 20 30 Td (PAY 100 EUR) Tj ET"
+        // An empty appearance that names the page content in its resources without drawing it.
+        fun look(content: Int) = "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Resources << /XObject << /X $content 0 R >> >> /Length 0 >>\nstream\n\nendstream"
+        val base = SigFixtures.numbers(PdfOptions())
+        val withField = SigFixtures.numbers(PdfOptions(textField = "before"))
+        for (o in listOf(
+            PdfOptions(content = pay, annotation = "<< /Type /Annot /Subtype /Square /Rect [10 10 80 80] /P 3 0 R /AP << /N ${base.content + 2} 0 R >> >>", extra = listOf(look(base.content))),
+            PdfOptions(certification = 2, content = pay, textField = "before", textFieldEntries = "/AP << /N ${withField.next} 0 R >> ", extra = listOf(look(withField.content))),
+        )) {
+            val n = SigFixtures.numbers(o)
+            val result = check(SigFixtures.update(signed(o), mapOf(n.content to SigFixtures.stream(pay.replace("100", "900")))))
+            val change = result.changes!!.single()
+            assertEquals(Kind.Other, change.kind, change.subject)
+            assertEquals("the content of page 1", change.subject)
+            assertFalse(result.areChangesPermitted)
+        }
+    }
 }
