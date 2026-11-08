@@ -87,6 +87,20 @@ internal class EmbeddedFace(
 
     val unitsPerEm: Int get() = ttf.unitsPerEm
 
+    /**
+     * The font's ascent and descent from `hhea`, in ems, or null when the table gives none that a
+     * line could use: the half-leading of CSS 2.1, 10.8.1 splits around them (#852).
+     */
+    val ascentEm: Double? by lazy { metricsEm()?.first }
+    val descentEm: Double? by lazy { metricsEm()?.second }
+
+    private fun metricsEm(): Pair<Double, Double>? {
+        val upem = ttf.unitsPerEm.takeIf { it > 0 } ?: return null
+        val a = ttf.hhea.ascent.toDouble() / upem
+        val d = -ttf.hhea.descent.toDouble() / upem
+        return if (a > 0.0 && d >= 0.0 && a + d in 0.5..3.0) a to d else null
+    }
+
     /** Raw advance of [gid] in font design units (unitsPerEm), for mark math. */
     fun advanceRaw(gid: Int): Int = ttf.advanceWidth(gid)
 

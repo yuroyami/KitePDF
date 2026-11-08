@@ -1857,8 +1857,16 @@ internal class BoxLayout(
             val marksOver = marked.filter { marksOver(it) }.maxOfOrNull { it.fontSize * EMPHASIS_SIZE * 0.8 } ?: 0.0
             val marksUnder = marked.filter { !marksOver(it) }.maxOfOrNull { it.fontSize * EMPHASIS_SIZE } ?: 0.0
             val rubyExtra = rubyBaseFs * RUBY_SIZE * 0.8 + marksOver
-            var lineHeight = (style.lineHeightPt ?: maxFs * 1.4) * lineHeightScale + rubyExtra + marksUnder
-            var ascent = maxFs * 0.8 + rubyExtra
+            val textHeight = (style.lineHeightPt ?: maxFs * 1.4) * lineHeightScale
+            // CSS 2.1, 10.8.1: the text's ascent A and descent D, from its face or 0.8 and 0.2 em,
+            // and the leading L = line-height - (A + D) split in two around them, so the baseline
+            // sits at L/2 + A below the top of the line box (#852).
+            val textCells = cells.filter { it.fontSize > 0.0 && it.imageWidth == 0.0 && it.imageHeight == 0.0 && it.math == null }
+            val a = textCells.maxOfOrNull { (it.face?.ascentEm ?: DEFAULT_ASCENT) * it.fontSize } ?: (maxFs * DEFAULT_ASCENT)
+            val d = textCells.maxOfOrNull { (it.face?.descentEm ?: DEFAULT_DESCENT) * it.fontSize } ?: (maxFs * DEFAULT_DESCENT)
+            var lineHeight = textHeight + rubyExtra + marksUnder
+            // A vertical column centres its glyphs on the central baseline, and keeps its own placement.
+            var ascent = (if (vertical) maxFs * DEFAULT_ASCENT else (textHeight - (a + d)) / 2 + a) + rubyExtra
             // An inline image grows the line: its bottom sits on the baseline,
             // so the ascent must cover the image height (descent unchanged).
             val imgH = cells.maxOfOrNull { if (vertical) it.imageWidth else it.imageHeight } ?: 0.0
@@ -3203,6 +3211,10 @@ internal class BoxLayout(
     private companion object {
         /** How much a shrink-to-fit width takes past its measure, so rounding does not wrap its last word (#851). */
         const val SHRINK_SLACK = 0.01
+
+        /** The ascent and descent of text whose face gives none, in ems (#852). */
+        const val DEFAULT_ASCENT = 0.8
+        const val DEFAULT_DESCENT = 0.2
 
         /** A width no line of text reaches, to measure text that does not wrap (#33). */
         const val FLEX_UNBOUNDED = 1.0e6

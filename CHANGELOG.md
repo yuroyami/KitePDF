@@ -567,6 +567,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alignment, and a reader font family leaves `pre`, `code`, `kbd`, `samp` and `tt` monospace (#855).
 - A floated block without a width takes its shrink-to-fit width instead of half the column, so a drop cap or a
   short side note sits next to the text (#851).
+- A line's leading splits in two around its text, half above and half below, with the ascent and descent of the
+  text's face (`hhea`) or 0.8 and 0.2 em, so a large `line-height` no longer leaves the text at the top of its
+  line (#852).
 
 ## [0.13.0] - 2026-10-09
 
