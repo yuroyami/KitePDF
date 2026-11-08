@@ -396,7 +396,8 @@ internal class PdfScriptHost(
     /**
      * The code of the oldest timer due at [now] whose id is not in [ran], and that timer moves on to
      * its next round, or null when none is due. A pump takes them one at a time, so the timers it
-     * does not reach in its slice stay due, in order, for the next pump (#959).
+     * does not reach in its slice stay due, in order, for the next pump (#959), and a timer that an
+     * earlier one of the pump cleared is no longer here to take (HTML, 8.6; #867).
      */
     fun takeDue(now: Long, ran: MutableSet<Int>): String? {
         val timer = timers.values.filter { it.dueAt <= now && it.id !in ran }.minByOrNull { it.dueAt } ?: return null
@@ -404,16 +405,6 @@ internal class PdfScriptHost(
         if (timer.repeats) timer.dueAt = now + timer.period else timers.remove(timer.id)
         hasTimers = timers.isNotEmpty()
         return timer.code
-    }
-
-    /** The timers due at [now], oldest first, and the queue is updated for the next round. */
-    fun dueTimers(now: Long): List<String> {
-        val due = timers.values.filter { it.dueAt <= now }.sortedBy { it.dueAt }
-        for (timer in due) {
-            if (timer.repeats) timer.dueAt = now + timer.period else timers.remove(timer.id)
-        }
-        hasTimers = timers.isNotEmpty()
-        return due.map { it.code }
     }
 
     /** When the next timer is due, or null when none is waiting. */

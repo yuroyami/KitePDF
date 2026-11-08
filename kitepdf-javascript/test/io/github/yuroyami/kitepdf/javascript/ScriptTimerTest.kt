@@ -54,6 +54,22 @@ class ScriptTimerTest {
     }
 
     @Test
+    fun a_timer_that_an_earlier_timer_of_the_pump_clears_does_not_run(): TestResult = scriptTest {
+        // The HTML Standard, 8.6: a timer runs only while it is still set (#867).
+        var now = 0L
+        PdfScriptRunner(PdfDocument.open(pdf()), clock = { now }).use { runner ->
+            runner.run(script(
+                "var second = null; getField('a').value = 'start';" +
+                    "app.setTimeOut(\"app.clearTimeOut(second); getField('a').value = 'first'\", 10);" +
+                    "second = app.setTimeOut(\"getField('a').value = 'second'\", 10);",
+            ))
+            now = 100
+            runner.pumpTimers(now)
+            assertEquals("first", runner.formState.value("a"))
+        }
+    }
+
+    @Test
     fun a_timer_set_after_an_idle_while_waits_its_full_delay(): TestResult = scriptTest {
         var now = 0L
         PdfScriptRunner(PdfDocument.open(pdf()), clock = { now }).use { runner ->
