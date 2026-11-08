@@ -246,7 +246,7 @@ public class SvgImage private constructor(
         val group = groupAlpha < 1.0 || blend != KiteBlendMode.Normal ||
             (container && styleOrAttr(el, "isolation")?.trim()?.lowercase() == "isolate")
         val clip = clipPathOf(el, ctm, paint)
-        if (clip != null) canvas.pushClip(clip, KiteMatrix.IDENTITY, evenOdd = false)
+        if (clip != null) canvas.pushClip(clip.path, KiteMatrix.IDENTITY, evenOdd = clip.evenOdd)
         if (group) {
             canvas.beginTransparencyGroup(
                 KiteRectangle(0.0, 0.0, width, height), parent.viewport,
@@ -641,7 +641,10 @@ public class SvgImage private constructor(
     }
 
     /** The clip path an element's `clip-path="url(#id)"` names, already in device space. */
-    private fun clipPathOf(el: KiteXmlNode.Element, ctm: KiteMatrix, paint: Paint): KitePath? {
+    /** A clip path's region: [path] under [evenOdd] or the nonzero rule. */
+    private class ClipRegion(val path: KitePath, val evenOdd: Boolean)
+
+    private fun clipPathOf(el: KiteXmlNode.Element, ctm: KiteMatrix, paint: Paint): ClipRegion? {
         val id = urlRef(styleOrAttr(el, "clip-path")) ?: return null
         val def = byId[id] ?: return null
         if (def.tag.lowercase() != "clippath") return null
@@ -649,29 +652,30 @@ public class SvgImage private constructor(
         // bounds (SVG 1.1, 14.3.5, #174). With no area there is nothing to show.
         var clipCtm = ctm
         if ((def.attrs["clipPathUnits"] ?: def.attrs["clippathunits"])?.trim() == "objectBoundingBox") {
-            val b = boundsOfElement(el, paint, 0) ?: return KitePath(emptyList())
+            val b = boundsOfElement(el, paint, 0) ?: return ClipRegion(KitePath(emptyList()), false)
             clipCtm = compose(ctm, KiteMatrix(b[2] - b[0], 0.0, 0.0, b[3] - b[1], b[0], b[1]))
         }
+        // The clip path's own transform maps its coordinate system (SVG 1.1, 14.3.5; CSS Masking 1,
+        // 6.1), inside the bounding box units, before each child's (#727).
+        styleOrAttr(def, "transform")?.let { clipCtm = compose(clipCtm, parseTransform(it)) }
         // This adds a user-space transform, not a viewport. Percentages inside
         // clip content still use the viewport's extent (SVG 2, 8.11, #177).
         val clipPaint = clipPaintOf(def, paint)
-        val b = KitePath.Builder()
+        // CSS Masking 1, 6.1 and 6.2: each child is a region under its own clip-rule, an inherited
+        // property, and the clip path is the union of the regions (#731).
+        val defRule = styleOrAttr(def, "clip-rule")
+        val regions = ArrayList<ClipRegion>()
         for (c in def.children) {
             if (c !is KiteXmlNode.Element) continue
             val m = compose(clipCtm, styleOrAttr(c, "transform")?.let { parseTransform(it) } ?: KiteMatrix.IDENTITY)
-            for (part in clipShapesOf(c, m, resolvePaint(c, clipPaint))) {
-                for (seg in part.segments) when (seg) {
-                    is KitePath.Segment.MoveTo -> b.moveTo(seg.x, seg.y)
-                    is KitePath.Segment.LineTo -> b.lineTo(seg.x, seg.y)
-                    is KitePath.Segment.CurveTo -> b.curveTo(seg.x1, seg.y1, seg.x2, seg.y2, seg.x3, seg.y3)
-                    is KitePath.Segment.QuadTo -> b.quadTo(seg.x1, seg.y1, seg.x2, seg.y2)
-                    KitePath.Segment.Close -> b.close()
-                }
-            }
+            val evenOdd = (styleOrAttr(c, "clip-rule") ?: defRule)?.trim()?.lowercase() == "evenodd"
+            for (part in clipShapesOf(c, m, resolvePaint(c, clipPaint))) regions += ClipRegion(part, evenOdd)
         }
         // A clip path that yields no geometry clips everything away rather than
         // nothing, so content can never flood past a clip it was given (#175).
-        return b.build()
+        if (regions.isEmpty()) return ClipRegion(KitePath(emptyList()), false)
+        if (regions.size == 1) return regions[0]
+        return ClipRegion(ClipUnion.of(regions.map { it.path to it.evenOdd }), evenOdd = false)
     }
 
     /**

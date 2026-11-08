@@ -460,6 +460,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteZoomSpec` refuses an infinite `minZoom` or `maxZoom`, `KiteRenderSpec.Rasterized` an infinite `quality` or
   a negative `cacheBudgetBytes`, and `KiteRenderSpec.Vectorized` an infinite `hairlineWidthPx`, with
   `IllegalArgumentException`. An infinite zoom bound left the viewer at an infinite zoom (#667).
+- An SVG `<clipPath>` applies its own `transform`, and is the union of its children, each under its own `clip-
+  rule`: an even-odd child keeps its hole, and two children wound in opposite directions no longer cancel where
+  they overlap (#727, #731).
 
 ## [0.13.0] - 2026-10-09
 
