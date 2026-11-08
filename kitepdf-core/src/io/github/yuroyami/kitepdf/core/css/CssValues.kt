@@ -16,12 +16,34 @@ import io.github.yuroyami.kitepdf.core.render.RgbColor
  */
 public object CssValues {
 
-    /** Parse a CSS `<length>`/`<percentage>` to points, or null if not a length. */
-    public fun length(raw: String, fontSizePt: Double, rootPt: Double, refPt: Double): Double? {
+    /**
+     * Parse a CSS `<length>`/`<percentage>` to points, or null if not a length. `vw` and `vh`
+     * resolve against [refPt] here; [length] with a viewport resolves them as CSS asks.
+     */
+    public fun length(raw: String, fontSizePt: Double, rootPt: Double, refPt: Double): Double? =
+        length(raw, fontSizePt, rootPt, refPt, refPt, refPt)
+
+    /**
+     * [length], with the viewport units against a viewport of [viewportWidthPt] by
+     * [viewportHeightPt], whatever the property: `1vw` is 1% of its width, `1vh` 1% of its
+     * height, and `vmin` and `vmax` the smaller and larger of the two (CSS Values and Units 4,
+     * 6.1.2; #849).
+     */
+    public fun length(
+        raw: String,
+        fontSizePt: Double,
+        rootPt: Double,
+        refPt: Double,
+        viewportWidthPt: Double,
+        viewportHeightPt: Double,
+    ): Double? {
         val s = raw.trim().lowercase()
         if (s.isEmpty()) return null
         fun numOf(suffix: String) = s.removeSuffix(suffix).trim().toDoubleOrNull()
         return when {
+            // Before "in", which "vmin" ends with.
+            s.endsWith("vmin") -> numOf("vmin")?.let { it / 100.0 * minOf(viewportWidthPt, viewportHeightPt) }
+            s.endsWith("vmax") -> numOf("vmax")?.let { it / 100.0 * maxOf(viewportWidthPt, viewportHeightPt) }
             s.endsWith("px") -> numOf("px")?.let { it * 0.75 }
             s.endsWith("pt") -> numOf("pt")
             s.endsWith("rem") -> numOf("rem")?.let { it * rootPt }
@@ -32,8 +54,8 @@ public object CssValues {
             s.endsWith("in") -> numOf("in")?.let { it * 72.0 }
             s.endsWith("cm") -> numOf("cm")?.let { it * 28.3465 }
             s.endsWith("mm") -> numOf("mm")?.let { it * 2.83465 }
-            s.endsWith("vw") -> numOf("vw")?.let { it / 100.0 * refPt }
-            s.endsWith("vh") -> numOf("vh")?.let { it / 100.0 * refPt }
+            s.endsWith("vw") -> numOf("vw")?.let { it / 100.0 * viewportWidthPt }
+            s.endsWith("vh") -> numOf("vh")?.let { it / 100.0 * viewportHeightPt }
             s.endsWith("%") -> numOf("%")?.let { it / 100.0 * refPt }
             s == "0" -> 0.0
             else -> null // unitless non-zero is not a valid length here

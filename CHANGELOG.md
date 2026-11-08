@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   100 (#960).
 - `KiteXml.tokenizeHtml`, the token stream of a document served as `text/html`, whose numeric character references follow
   HTML's rules (#871).
+- `CssValues.length` with a viewport width and height, which `vw`, `vh`, `vmin` and `vmax` resolve against (#849).
 
 ### Changed
 
@@ -302,6 +303,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An `@media` block, and a `link`, `style` or `@import` with a media list, applies only when its query matches a
   screen of the page's size: `print`, `speech` and unknown types such as `amzn-kf8` no longer restyle the page,
   and `width`, `height`, `orientation` and `prefers-color-scheme` are read (#841).
+- `vw` and `vh` measure the page's content area whatever the property, and `vmin` and `vmax` are read, where
+  `font-size: 10vw` was a tenth of the parent's font size (#849).
 
 ## [0.13.0] - 2026-10-09
 

@@ -3002,6 +3002,7 @@ final object io.github.yuroyami.kitepdf.core.css/CssValues { // io.github.yuroya
     final fun color(kotlin/String): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.core.css/CssValues.color|color(kotlin.String){}[0]
     final fun fontSizeKeyword(kotlin/String, kotlin/Double, kotlin/Double): kotlin/Double? // io.github.yuroyami.kitepdf.core.css/CssValues.fontSizeKeyword|fontSizeKeyword(kotlin.String;kotlin.Double;kotlin.Double){}[0]
     final fun length(kotlin/String, kotlin/Double, kotlin/Double, kotlin/Double): kotlin/Double? // io.github.yuroyami.kitepdf.core.css/CssValues.length|length(kotlin.String;kotlin.Double;kotlin.Double;kotlin.Double){}[0]
+    final fun length(kotlin/String, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double): kotlin/Double? // io.github.yuroyami.kitepdf.core.css/CssValues.length|length(kotlin.String;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double){}[0]
 }
 
 final object io.github.yuroyami.kitepdf.core.filters/Ascii85Filter : io.github.yuroyami.kitepdf.core.filters/PdfFilter { // io.github.yuroyami.kitepdf.core.filters/Ascii85Filter|null[0]

@@ -417,6 +417,7 @@ public final class io/github/yuroyami/kitepdf/core/css/CssValues {
 	public final fun color (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/render/RgbColor;
 	public final fun fontSizeKeyword (Ljava/lang/String;DD)Ljava/lang/Double;
 	public final fun length (Ljava/lang/String;DDD)Ljava/lang/Double;
+	public final fun length (Ljava/lang/String;DDDDD)Ljava/lang/Double;
 }
 
 public final class io/github/yuroyami/kitepdf/core/filters/Ascii85Filter : io/github/yuroyami/kitepdf/core/filters/PdfFilter {

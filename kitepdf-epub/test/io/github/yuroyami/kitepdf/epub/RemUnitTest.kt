@@ -55,4 +55,18 @@ class RemUnitTest {
         val span = resolver.compute(el("span"), listOf(p, body, html), ps)
         assertEquals(15.0, span.lineHeightPt!!, 1e-9)
     }
+
+    @Test
+    fun viewportUnitsMeasureThePageWhateverTheProperty() {
+        // CSS Values and Units 4, 6.1.2: 10vw of a 400 pt wide page is 40 pt, even as a font size (#849).
+        val resolver = StyleResolver(
+            CssParser.parse("p { font-size: 10vw; margin-top: 10vh; padding-left: 5vmin; padding-right: 5vmax }", Origin.AUTHOR),
+            12.0, 400.0, refHeightPt = 600.0,
+        )
+        val p = resolver.compute(el("p"), emptyList(), resolver.initial())
+        assertEquals(40.0, p.fontSizePt, 1e-9)
+        assertEquals(60.0, p.marginTopPt, 1e-9)
+        assertEquals(20.0, p.paddingLeftPt, 1e-9)
+        assertEquals(30.0, p.paddingRightPt, 1e-9)
+    }
 }
