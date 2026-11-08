@@ -184,6 +184,19 @@ def main():
     chosen = set(args.module or [])
     pick = lambda modules: [m for m in modules if not chosen or m in chosen]
     failures = []
+    lists = {"js": JS_MODULES, "jsBrowser": JS_BROWSER_MODULES, "wasmJs": WASM_JS_MODULES, "wasmWasi": WASI_MODULES}
+    # A module this script never tests, or a selection that leaves nothing, must not read as a pass (#691).
+    known = set().union(*lists.values())
+    unknown = sorted(chosen - known)
+    if unknown:
+        raise RuntimeError(f"no web tests for {', '.join(unknown)}: the script tests {', '.join(sorted(known))}")
+    plan = [(platform, module) for platform in platforms for module in pick(lists[platform])]
+    if not plan:
+        raise RuntimeError(f"nothing to run: {', '.join(sorted(chosen))} has no tests on {', '.join(platforms)}")
+    for platform in platforms:
+        selected = pick(lists[platform])
+        if selected:
+            print(f"{platform}: {', '.join(selected)}", flush=True)
 
     def attempt(test, module, tool):
         try:
