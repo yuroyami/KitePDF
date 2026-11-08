@@ -40,7 +40,7 @@
 
 ## Why KitePDF
 
-KitePDF is a single engine written in Kotlin from the parser up. It doesn't rely on any platform PDF library, web view, JNI or native binary, which is why it behaves identically across Android, iOS, the desktop JVM, macOS, Linux, Windows and the web.
+KitePDF is a single engine written in Kotlin from the parser up. Its parser, layout and text engine are the same common Kotlin on Android, iOS, the desktop JVM, macOS, Linux, Windows and the web, with no platform PDF engine or web view. The pixels depend on the canvas a page draws on, as [How the renderers draw](https://yuroyami.github.io/KitePDF/rendering/#how-the-renderers-draw) explains, and three optional artifacts load native code: `kitepdf-javascript` (QuickJS), `kitepdf-skia-renderer` (Skiko) and `kitepdf-media` (FFmpeg).
 
 That means the logic lives in `commonMain` instead of being handed off to a different engine on each platform through expect/actual, which in many cases leads to inconsistent behavior.
 
@@ -105,19 +105,23 @@ A server or a command-line tool that only turns PDF pages into images, with no C
 ```kotlin
 commonMain.dependencies {
     implementation("io.github.yuroyami:kitepdf-pdf:0.13.0")
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")   // or kitepdf-skia-renderer
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")   // or kitepdf-skia-renderer, with its Skia runtime (see below)
 }
 ```
 
 ### What else you need
 
 > [!WARNING]
-> Two artifacts need something extra (without it, the build or the download fails).
+> Some artifacts need something extra (without it, the build, the download or the first render fails).
 
 | If you add | You also need |
 | --- | --- |
 | `kitepdf-net` | A Ktor client engine (such as `io.ktor:ktor-client-cio:3.6.0`) |
 | `kitepdf-skia-renderer` on Android | One more repository (`maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`) |
+| `kitepdf-skia-renderer` on the JVM without Compose | The Skia runtime of each system that runs the app, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.153.0` ([Skia on every platform](https://yuroyami.github.io/KitePDF/rendering/)) |
+
+> [!NOTE]
+> `kitepdf-compose-viewer` and `kitepdf-media` are built on Compose Multiplatform 1.13.0-alpha02, a pre-release, and depend on it. An app on an older Compose release that adds them gets 1.13.0-alpha02 in its build.
 
 > [!TIP]
 > On iOS, `kitepdf-media` needs a few linker flags plus two privacy manifest entries ([KitePlayer's install guide](https://github.com/yuroyami/KitePlayer#install) lists them). A missing manifest entry doesn't break the build (Apple only flags it during app review).

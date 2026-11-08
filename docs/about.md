@@ -13,9 +13,10 @@ KitePDF has one engine for every platform:
 - The only other platform code opens a document from a file or from a platform type, such as an Android `Uri`.
 - The engine uses no JNI, no platform PDF engine and no web view.
 
-Two optional artifacts use native code:
+Three optional artifacts use native code:
 
 - `kitepdf-javascript` runs scripts with QuickJS, through KiteJS.
+- `kitepdf-skia-renderer` draws with Skia, through Skiko, which loads a native library on the JVM and Android.
 - `kitepdf-media` plays audio and video with FFmpeg, through KitePlayer.
 
 The Compose viewer draws each page into a `DrawScope`. So the pages scroll, zoom and animate like any other composable.

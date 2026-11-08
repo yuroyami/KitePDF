@@ -1,8 +1,8 @@
 site_name: KitePDF
 site_url: https://yuroyami.github.io/KitePDF/
 site_description: >-
-  Read, view, edit and create PDFs from Kotlin Multiplatform. One pure-Kotlin
-  engine, every platform: no JNI, no platform PDF engine, no native binary.
+  Read, view, edit and create PDFs from Kotlin Multiplatform. One common-Kotlin
+  engine on every platform, with no platform PDF engine and no web view.
 site_author: yuroyami
 copyright: Copyright &copy; 2026 yuroyami, Apache-2.0
 

@@ -66,7 +66,7 @@ import kotlin.time.Duration
  * into a [LayoutBox] tree; [BoxLayout] resolves the box model (margins, borders,
  * padding, width, inline line breaking with justification) into document-space
  * geometry; [Paginator] slices it into pages; and [EpubPage] paints backgrounds,
- * borders, text and images. See EPUB_ROAD_TO_PERFECTION.md.
+ * borders, text and images.
  */
 public class EpubDocument internal constructor(
     private val parsed: ParsedEpub,

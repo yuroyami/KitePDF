@@ -71,7 +71,7 @@ When a change moves a score on purpose, run the test again with `-Dkitepdf.diff.
 - **Public PDFs** come from the manifest of the corpus. To add your own documents, put `.pdf` files in `corpus/pdf/` at the repo root, or set `-Dkitepdf.corpus` to another folder. The harness looks in subfolders too, in the order of the relative paths. Two files with the same name get different names in the report. A file that the manifest does not list stays local, and the manifest does not license it.
 - **Page selection.** By default, the harness selects up to six evenly spaced pages of each document, with the first and the last page. A limit of one selects page 0. To select every page, add `-Dkitepdf.diff.allpages=true`. The report gives the selected pages and the page count of each document, apart from the pages that the oracle scored.
 
-The EPUB sweep (`--tests '*EpubDifferentialTest*'`) renders every page that KitePDF makes, and checks the page count of each book against a recorded count. When the harness finds `mutool`, the sweep also compares page 0 with MuPDF. That score is for information only, because the two engines can reflow a book differently. The [corpus guide](../corpus/README.md) lists the public books with their rights.
+The EPUB sweep (`--include-classes='*EpubDifferentialTest*'`) renders every page that KitePDF makes, and checks the page count of each book against a recorded count. When the harness finds `mutool`, the sweep also compares page 0 with MuPDF. That score is for information only, because the two engines can reflow a book differently. The [corpus guide](../corpus/README.md) lists the public books with their rights.
 
 ## The oracle
 
@@ -84,7 +84,7 @@ The harness looks for `mutool` in this order:
 
 The `mupdf-master/` folder is a read-only reference. Its third-party submodules are empty, so do not try to build it there. Without `mutool`, the harness still renders every page with KitePDF and writes the report without scores.
 
-A score is only as steady as the `mutool` that made it. A `mutool` built without color management converts CMYK with plain arithmetic, so `0 1 1 0 k` comes out as pure red (255, 0, 0). A build with color management gives about (237, 28, 36). So one page can score two or three times higher with one build than with the other. CI uses MuPDF 1.27.2, built with `XCFLAGS=-DFZ_ENABLE_ICC=1`, as the `build` job of `.github/workflows/ci.yml` shows. Compare scores only between runs that used the same `mutool`, and record its version.
+A score is only as steady as the `mutool` that made it. A `mutool` built without color management converts CMYK with plain arithmetic, so `0 1 1 0 k` comes out as pure red (255, 0, 0). A build with color management gives about (237, 28, 36). So one page can score two or three times higher with one build than with the other. CI uses MuPDF 1.27.2, built with `XCFLAGS=-DFZ_ENABLE_ICC=1`, as the `jvm` job of `.github/workflows/ci.yml` shows. Compare scores only between runs that used the same `mutool`, and record its version.
 
 ## The parity check (PDFium)
 

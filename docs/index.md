@@ -29,7 +29,7 @@ val fresh = PdfBuilder()
 
 ## Why KitePDF
 
-KitePDF is a single engine written in Kotlin from the parser up. It doesn't rely on any platform PDF library, web view, JNI or native binary, which is why it behaves identically across Android, iOS, the desktop JVM, macOS, Linux, Windows and the web.
+KitePDF is a single engine written in Kotlin from the parser up. Its parser, layout and text engine are the same common Kotlin on Android, iOS, the desktop JVM, macOS, Linux, Windows and the web, with no platform PDF engine or web view. The pixels depend on the canvas a page draws on, as [How the renderers draw](rendering.md#how-the-renderers-draw) explains, and three optional artifacts load native code: `kitepdf-javascript` (QuickJS), `kitepdf-skia-renderer` (Skiko) and `kitepdf-media` (FFmpeg).
 
 That means the logic lives in `commonMain` instead of being handed off to a different engine on each platform through expect/actual, which in many cases leads to inconsistent behavior.
 

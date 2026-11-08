@@ -23,7 +23,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfString
  * Builds the object graph (catalog → page tree → pages, each with an inlined
  * `/Resources` and a content stream), then serializes a complete file: header,
  * objects, a classic xref table, and a trailer. Page content is drawn with
- * [ContentStreamBuilder]; text uses the standard-14 fonts (no embedding).
+ * [ContentStreamBuilder]; text uses a standard 14 font, or an [EmbeddedFont] that the
+ * builder embeds, subset or whole.
  *
  * Content streams are FlateDecode-compressed by default (see [build]).
  */

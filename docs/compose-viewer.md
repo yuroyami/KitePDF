@@ -4,6 +4,9 @@
 
 ## Installation
 
+!!! note
+    The viewer is built on Compose Multiplatform 1.13.0-alpha02, a pre-release, and depends on it, as `kitepdf-media` does. An app on an older Compose release that adds it gets 1.13.0-alpha02 in its build.
+
 === "Kotlin Multiplatform"
 
     ```kotlin
