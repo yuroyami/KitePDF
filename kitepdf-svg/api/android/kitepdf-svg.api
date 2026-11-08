@@ -50,6 +50,7 @@ public final class io/github/yuroyami/kitepdf/svg/SvgImage$Companion {
 
 public final class io/github/yuroyami/kitepdf/svg/SvgPage : io/github/yuroyami/kitepdf/core/KitePage {
 	public fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public fun getAnimations ()Ljava/util/List;
 	public fun getDisplayHeight ()D
 	public fun getDisplayWidth ()D
 	public fun getDrawsHostFontText ()Ljava/lang/Boolean;

@@ -309,6 +309,9 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
     final val visiblePages // io.github.yuroyami.kitepdf.compose/KiteDocViewState.visiblePages|{}visiblePages[0]
         final fun <get-visiblePages>(): kotlin.collections/List<kotlin/Int> // io.github.yuroyami.kitepdf.compose/KiteDocViewState.visiblePages.<get-visiblePages>|<get-visiblePages>(){}[0]
 
+    final var animateImages // io.github.yuroyami.kitepdf.compose/KiteDocViewState.animateImages|{}animateImages[0]
+        final fun <get-animateImages>(): kotlin/Boolean? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.animateImages.<get-animateImages>|<get-animateImages>(){}[0]
+        final fun <set-animateImages>(kotlin/Boolean?) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.animateImages.<set-animateImages>|<set-animateImages>(kotlin.Boolean?){}[0]
     final var focusedField // io.github.yuroyami.kitepdf.compose/KiteDocViewState.focusedField|{}focusedField[0]
         final fun <get-focusedField>(): kotlin/String? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.focusedField.<get-focusedField>|<get-focusedField>(){}[0]
     final var highlights // io.github.yuroyami.kitepdf.compose/KiteDocViewState.highlights|{}highlights[0]

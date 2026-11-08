@@ -47,6 +47,26 @@ public class CbzPage internal constructor(
 
     override fun displayToDeviceBase(): KiteMatrix = KiteMatrix.IDENTITY
 
+    /** The animation of an animated scan, known once the page drew (#939). It outlives the decoded-scan cache. */
+    @kotlin.concurrent.Volatile
+    private var animation: io.github.yuroyami.kitepdf.core.render.KiteImageAnimation? = null
+
+    @kotlin.concurrent.Volatile
+    private var probed = false
+
+    /** The scan's animation: read from the entry's header the first time, unless a render found it first. */
+    override val animations: List<io.github.yuroyami.kitepdf.core.render.KiteImageAnimation>
+        get() {
+            if (!probed) {
+                probed = true
+                if (animation == null) {
+                    val found = readEntry()?.let { io.github.yuroyami.kitepdf.core.render.KiteImageAnimation.probe(it) }
+                    if (animation == null) animation = found
+                }
+            }
+            return animation?.let(::listOf) ?: emptyList()
+        }
+
     override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix): Unit = render(canvas, deviceCtm, null)
 
     /** [renderTo] that stops between reading the entry and decoding it once [cancellation] reads true. */
@@ -64,6 +84,8 @@ public class CbzPage internal constructor(
             bytes?.let { KiteImageData.fromEncodedImage(it) }?.withIdentity(imageIdentity)
                 ?.also { decoded?.put(entryName, it) }
         }
+        // A scan decoded again keeps the animation a player already holds.
+        if (animation == null) animation = image?.animation
         if (image == null) {
             // A page that cannot decode shows a grey sheet rather than nothing (#129).
             val sheet = KitePath.Builder().apply { rectangle(0.0, 0.0, displayWidth, displayHeight) }.build()
@@ -74,7 +96,8 @@ public class CbzPage internal constructor(
             val ctm = deviceCtm.concat(
                 KiteMatrix(displayWidth, 0.0, 0.0, -displayHeight, 0.0, displayHeight)
             )
-            canvas.drawImage(image, ctm)
+            // An animated scan draws the frame its player is on (#939).
+            canvas.drawImage(animation?.currentFrame() ?: image, ctm)
         }
         canvas.endPage()
     }

@@ -708,6 +708,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and chapters. When the text changed, `locate` finds it again by its quote and context, or returns null instead
   of moving to other words. `KiteHighlight(range)` and `KiteDocViewState.textRangeOf(selection)` use them in the
   viewer. `KiteTextLine.sourceOffsets` gives the chapter offset of each character of a page of a book.
+- Animated GIF, APNG and WebP images play in the viewer (#939). `KiteImageData.animation` carries a
+  `KiteImageAnimation` for an image whose header names several frames, and `KitePage.animations` lists those of
+  an EPUB or CBZ page. The viewer decodes their frames off the main thread within a budget and plays them while
+  the page is in the viewport. A loop count stops on the last frame. `KiteDocViewState.animateImages` turns
+  playback on or off, and by default it follows the platform reduced-motion setting. Renders outside the viewer
+  keep the first frame.
 
 ## [0.13.0] - 2026-10-09
 

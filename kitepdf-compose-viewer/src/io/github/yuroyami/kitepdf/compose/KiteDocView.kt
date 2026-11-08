@@ -112,6 +112,10 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import androidx.compose.runtime.withFrameMillis
+import io.github.yuroyami.kitepdf.core.render.KiteImageAnimation
 import kotlinx.coroutines.launch
 
 /**
@@ -266,7 +270,10 @@ public fun KiteDocView(
     val scriptScope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
     val scriptLane = remember { newScriptLane() }
+    // The platform's reduced-motion setting, which animated images follow unless the host says (#939).
+    val reducedMotion = platformPrefersReducedMotion()
     SideEffect {
+        state.platformReducedMotion = reducedMotion
         state.replaceScripts(scripts)
         state.epubScripts = epubScripts
         state.scriptScope = scriptScope
@@ -1033,8 +1040,11 @@ private fun PageSlotContent(
             role = Role.Image
         }
     val pageOverlay = LocalKitePageOverlay.current
-    // Remote pictures of the page's chapter that landed since it painted (#38).
-    val contentVersion = state.contentVersionOf(page)
+    // Animated images play while the page shows (#939).
+    if (state.playsAnimations) AnimatedImages(state, page, pageIndex)
+    // Remote pictures of the page's chapter that landed since it painted (#38), and the frames
+    // its animated images are on (#939).
+    val contentVersion = state.contentVersionOf(page) + state.animationVersionOf(page)
     Box(modifier) {
         when (renderSpec) {
             is KiteRenderSpec.Rasterized -> KitePageRaster(
@@ -1060,6 +1070,53 @@ private fun PageSlotContent(
         if (pageOverlay != null) PageOverlay(page, pageIndex, pageOverlay, Modifier.fillMaxSize())
     }
 }
+
+/**
+ * Plays the animated images of [page] while its slot is in the viewport (#939). It decodes their
+ * frames off the main thread, within [KiteImageAnimation.DEFAULT_MAX_BYTES] each, and moves them
+ * on the frame clock, so the page draws again only when a frame changes. A page that leaves the
+ * viewport goes back to its first frames and starts again when it shows, and one whose images
+ * played all their loops stays on their last frames. The frames are dropped when the slot goes.
+ */
+@Composable
+private fun AnimatedImages(state: KiteDocViewState, page: KitePage, pageIndex: Int) {
+    LaunchedEffect(state, page) {
+        // A page whose content is out of memory waits for the render that brings it back, and never brings it back itself.
+        while (!page.isContentLoaded) {
+            kotlinx.coroutines.delay(CONTENT_POLL_MS)
+            backOnComposeThread()
+        }
+        val animations = withContext(Dispatchers.Default) { runCatching { page.animations.filter { it.prepare() } }.getOrDefault(emptyList()) }
+        backOnComposeThread()
+        if (animations.isEmpty()) return@LaunchedEffect
+        try {
+            while (true) {
+                snapshotFlow { pageIndex in state.visiblePages }.first { it }
+                val start = withFrameMillis { it }
+                var elapsed = 0L
+                while (pageIndex in state.visiblePages) {
+                    var changed = false
+                    for (a in animations) {
+                        val frame = a.frameAt(elapsed)
+                        if (frame != a.frameIndex) { a.frameIndex = frame; changed = true }
+                    }
+                    if (changed) state.showAnimationFrames(page, animations)
+                    // Every loop played: the last frames stay until the slot goes.
+                    if (animations.all { it.isFinished(elapsed) }) awaitCancellation()
+                    elapsed = withFrameMillis { it } - start
+                }
+                for (a in animations) a.frameIndex = 0
+                state.showAnimationFrames(page, animations)
+            }
+        } finally {
+            for (a in animations) a.release()
+            state.forgetAnimationFrames(page)
+        }
+    }
+}
+
+/** How often a page waits to see its content back in memory before it plays its animated images (#939). */
+private const val CONTENT_POLL_MS = 250L
 
 /* ── snap pager ───────────────────────────────────────────────────────────── */
 

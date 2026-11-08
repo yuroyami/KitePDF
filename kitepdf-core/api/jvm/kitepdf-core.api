@@ -244,6 +244,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteOutlineItem {
 
 public abstract interface class io/github/yuroyami/kitepdf/core/KitePage {
 	public abstract fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public fun getAnimations ()Ljava/util/List;
 	public abstract fun getDisplayHeight ()D
 	public abstract fun getDisplayWidth ()D
 	public fun getDrawsHostFontText ()Ljava/lang/Boolean;
@@ -258,6 +259,7 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KitePage {
 }
 
 public final class io/github/yuroyami/kitepdf/core/KitePage$DefaultImpls {
+	public static fun getAnimations (Lio/github/yuroyami/kitepdf/core/KitePage;)Ljava/util/List;
 	public static fun getDrawsHostFontText (Lio/github/yuroyami/kitepdf/core/KitePage;)Ljava/lang/Boolean;
 	public static fun getHyperlinks (Lio/github/yuroyami/kitepdf/core/KitePage;)Ljava/util/List;
 	public static fun isContentLoaded (Lio/github/yuroyami/kitepdf/core/KitePage;)Z
@@ -1784,8 +1786,32 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteGradientSpread : j
 	public static fun values ()[Lio/github/yuroyami/kitepdf/core/render/KiteGradientSpread;
 }
 
+public final class io/github/yuroyami/kitepdf/core/render/KiteImageAnimation {
+	public static final field Companion Lio/github/yuroyami/kitepdf/core/render/KiteImageAnimation$Companion;
+	public static final field DEFAULT_MAX_BYTES J
+	public final fun currentFrame ()Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
+	public final fun frameAt (J)I
+	public final fun getFrameBytes ()J
+	public final fun getFrameCount ()I
+	public final fun getFrameDelays ()[I
+	public final fun getFrameIndex ()I
+	public final fun getLoopCount ()J
+	public final fun isFinished (J)Z
+	public final fun isPrepared ()Z
+	public final fun prepare (J)Z
+	public static synthetic fun prepare$default (Lio/github/yuroyami/kitepdf/core/render/KiteImageAnimation;JILjava/lang/Object;)Z
+	public final fun release ()V
+	public final fun setFrameIndex (I)V
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/KiteImageAnimation$Companion {
+	public final fun probe ([BZ)Lio/github/yuroyami/kitepdf/core/render/KiteImageAnimation;
+	public static synthetic fun probe$default (Lio/github/yuroyami/kitepdf/core/render/KiteImageAnimation$Companion;[BZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteImageAnimation;
+}
+
 public final class io/github/yuroyami/kitepdf/core/render/KiteImageData {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/render/KiteImageData$Companion;
+	public final fun getAnimation ()Lio/github/yuroyami/kitepdf/core/render/KiteImageAnimation;
 	public final fun getBitsPerComponent ()I
 	public final fun getColorKeyMask ()[I
 	public final fun getColorSpace ()Ljava/lang/String;

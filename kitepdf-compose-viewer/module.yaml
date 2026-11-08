@@ -36,6 +36,8 @@ dependencies:
 test-dependencies@jvm:
   - //kitepdf-difftest
   - //kitepdf-javascript
+  # A comic page that is an animated WebP plays in the viewer (#939).
+  - //kitepdf-cbz
   - $libs.skiko.awt.runtime.macos.arm64
   - $libs.skiko.awt.runtime.macos.x64
   - $libs.skiko.awt.runtime.linux.x64

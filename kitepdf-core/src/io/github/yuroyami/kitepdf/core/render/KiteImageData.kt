@@ -137,6 +137,14 @@ public class KiteImageData internal constructor(
         private set
 
     /**
+     * The frames of an animated GIF, APNG, WebP, AVIF or JPEG XL, or null for a still image (#939).
+     * The image is the first frame; a player moves [KiteImageAnimation.frameIndex], and a book or a
+     * comic page then draws [KiteImageAnimation.currentFrame] in its place.
+     */
+    public var animation: KiteImageAnimation? = null
+        internal set
+
+    /**
      * A shallow view carrying [identity] for a platform bitmap cache. Reconstructed images
      * of one immutable resource can share a bitmap without the cache retaining their source
      * samples. This copies no pixel arrays and changes no rendering behaviour (#371).
@@ -244,6 +252,7 @@ public class KiteImageData internal constructor(
     ).also {
         it.bitmapIdentity = identity
         it.independentSoftMask = independentSoftMask
+        it.animation = animation
     }
 
     public enum class Kind {
@@ -509,8 +518,10 @@ public class KiteImageData internal constructor(
          */
         public fun fromEncodedImage(bytes: ByteArray, applyOrientation: Boolean): KiteImageData? {
             return when (ImageFormat.sniff(bytes)) {
-                ImageFormat.PNG, ImageFormat.GIF, ImageFormat.BMP, ImageFormat.JP2,
-                ImageFormat.WEBP, ImageFormat.TIFF, ImageFormat.AVIF, ImageFormat.JXL ->
+                ImageFormat.PNG, ImageFormat.GIF, ImageFormat.WEBP, ImageFormat.AVIF, ImageFormat.JXL ->
+                    runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
+                        ?.also { it.animation = KiteImageAnimation.of(bytes, applyOrientation) }
+                ImageFormat.BMP, ImageFormat.JP2, ImageFormat.TIFF ->
                     runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
                 ImageFormat.JPEG -> {
                     runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.let { return it.toKiteImageData() }

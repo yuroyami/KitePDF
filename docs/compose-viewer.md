@@ -829,6 +829,18 @@ fun ReaderWithBack(state: KiteDocViewState) {
 
 A bookmark stays correct after a reflow, so the button also works in a book whose font size changed in between.
 
+## Animated images
+
+An animated GIF, APNG or WebP in a book, and a comic page that is one, plays while its page is in the viewport. The viewer decodes the frames off the main thread, up to 64 MiB of RGBA for each image, and draws the page again only when a frame changes, from bitmaps it already drew when a loop comes round. A page that leaves the viewport goes back to its first frame, and one whose image played all its loops stays on the last frame.
+
+```kotlin
+state.animateImages = false   // every image shows its first frame
+state.animateImages = true    // they play, whatever the platform says
+state.animateImages = null    // the default: they play unless the platform asks for less motion
+```
+
+The default follows the platform's setting for reduced motion: "Remove animations" on Android, Reduce Motion on iOS and macOS, and `prefers-reduced-motion` in a browser. A page rendered outside the viewer, as a thumbnail or by `KitePageRasterizer`, shows the first frame. `KitePage.animations` lists the animated images of a page, and `KiteImageAnimation` gives their frames to a player of your own.
+
 ## Scripts
 
 The viewer runs no script of a document unless you give it a handler. `kitepdf-javascript` has a handler for each format: `PdfScriptRunner` for the `scripts` parameter and `EpubScriptRunner` for `epubScripts`. [Scripts in the Compose viewer](javascript.md#scripts-in-the-compose-viewer) shows how to set them up, how a form behaves while its scripts run, and what a script can do.

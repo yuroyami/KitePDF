@@ -261,6 +261,8 @@ abstract interface io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroy
         open fun <get-drawsHostFontText>(): kotlin/Boolean? // io.github.yuroyami.kitepdf.core/KitePage.drawsHostFontText.<get-drawsHostFontText>|<get-drawsHostFontText>(){}[0]
     open val hyperlinks // io.github.yuroyami.kitepdf.core/KitePage.hyperlinks|{}hyperlinks[0]
         open fun <get-hyperlinks>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteLink> // io.github.yuroyami.kitepdf.core/KitePage.hyperlinks.<get-hyperlinks>|<get-hyperlinks>(){}[0]
+    open val animations // io.github.yuroyami.kitepdf.core/KitePage.animations|{}animations[0]
+        open fun <get-animations>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteImageAnimation> // io.github.yuroyami.kitepdf.core/KitePage.animations.<get-animations>|<get-animations>(){}[0]
     open val isContentLoaded // io.github.yuroyami.kitepdf.core/KitePage.isContentLoaded|{}isContentLoaded[0]
         open fun <get-isContentLoaded>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KitePage.isContentLoaded.<get-isContentLoaded>|<get-isContentLoaded>(){}[0]
 
@@ -1207,7 +1209,37 @@ final class io.github.yuroyami.kitepdf.core.render/IccProfile { // io.github.yur
     }
 }
 
+final class io.github.yuroyami.kitepdf.core.render/KiteImageAnimation { // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation|null[0]
+    final val frameBytes // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameBytes|{}frameBytes[0]
+        final fun <get-frameBytes>(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameBytes.<get-frameBytes>|<get-frameBytes>(){}[0]
+    final val frameCount // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameCount|{}frameCount[0]
+        final fun <get-frameCount>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameCount.<get-frameCount>|<get-frameCount>(){}[0]
+    final val frameDelays // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameDelays|{}frameDelays[0]
+        final fun <get-frameDelays>(): kotlin/IntArray? // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameDelays.<get-frameDelays>|<get-frameDelays>(){}[0]
+    final var frameIndex // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex|{}frameIndex[0]
+        final fun <get-frameIndex>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex.<get-frameIndex>|<get-frameIndex>(){}[0]
+        final fun <set-frameIndex>(kotlin/Int) // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex.<set-frameIndex>|<set-frameIndex>(kotlin.Int){}[0]
+    final val isPrepared // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.isPrepared|{}isPrepared[0]
+        final fun <get-isPrepared>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.isPrepared.<get-isPrepared>|<get-isPrepared>(){}[0]
+    final val loopCount // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.loopCount|{}loopCount[0]
+        final fun <get-loopCount>(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.loopCount.<get-loopCount>|<get-loopCount>(){}[0]
+
+    final fun currentFrame(): io.github.yuroyami.kitepdf.core.render/KiteImageData? // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.currentFrame|currentFrame(){}[0]
+    final fun frameAt(kotlin/Long): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameAt|frameAt(kotlin.Long){}[0]
+    final fun isFinished(kotlin/Long): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.isFinished|isFinished(kotlin.Long){}[0]
+    final fun prepare(kotlin/Long = ...): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.prepare|prepare(kotlin.Long){}[0]
+    final fun release() // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.release|release(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.Companion|null[0]
+        final const val DEFAULT_MAX_BYTES // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.Companion.DEFAULT_MAX_BYTES|{}DEFAULT_MAX_BYTES[0]
+            final fun <get-DEFAULT_MAX_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.Companion.DEFAULT_MAX_BYTES.<get-DEFAULT_MAX_BYTES>|<get-DEFAULT_MAX_BYTES>(){}[0]
+
+        final fun probe(kotlin/ByteArray, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.render/KiteImageAnimation? // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.Companion.probe|probe(kotlin.ByteArray;kotlin.Boolean){}[0]
+    }
+}
 final class io.github.yuroyami.kitepdf.core.render/KiteImageData { // io.github.yuroyami.kitepdf.core.render/KiteImageData|null[0]
+    final var animation // io.github.yuroyami.kitepdf.core.render/KiteImageData.animation|{}animation[0]
+        final fun <get-animation>(): io.github.yuroyami.kitepdf.core.render/KiteImageAnimation? // io.github.yuroyami.kitepdf.core.render/KiteImageData.animation.<get-animation>|<get-animation>(){}[0]
     final val bitsPerComponent // io.github.yuroyami.kitepdf.core.render/KiteImageData.bitsPerComponent|{}bitsPerComponent[0]
         final fun <get-bitsPerComponent>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.bitsPerComponent.<get-bitsPerComponent>|<get-bitsPerComponent>(){}[0]
     final val colorKeyMask // io.github.yuroyami.kitepdf.core.render/KiteImageData.colorKeyMask|{}colorKeyMask[0]

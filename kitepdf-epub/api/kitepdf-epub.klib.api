@@ -426,6 +426,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
         final fun <get-embeds>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubEmbed> // io.github.yuroyami.kitepdf.epub/EpubPage.embeds.<get-embeds>|<get-embeds>(){}[0]
     final val height // io.github.yuroyami.kitepdf.epub/EpubPage.height|{}height[0]
         final fun <get-height>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubPage.height.<get-height>|<get-height>(){}[0]
+    final val animations // io.github.yuroyami.kitepdf.epub/EpubPage.animations|{}animations[0]
+        final fun <get-animations>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteImageAnimation> // io.github.yuroyami.kitepdf.epub/EpubPage.animations.<get-animations>|<get-animations>(){}[0]
     final val isContentLoaded // io.github.yuroyami.kitepdf.epub/EpubPage.isContentLoaded|{}isContentLoaded[0]
         final fun <get-isContentLoaded>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubPage.isContentLoaded.<get-isContentLoaded>|<get-isContentLoaded>(){}[0]
     final val links // io.github.yuroyami.kitepdf.epub/EpubPage.links|{}links[0]

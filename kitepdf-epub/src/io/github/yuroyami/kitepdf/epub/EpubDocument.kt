@@ -2876,7 +2876,9 @@ public class EpubPage internal constructor(
                 else svg.render(canvas, deviceCtm.concat(m), svgLoader(baseDir))
             } else if (image != null) {
                 val m = KiteMatrix(dw, 0.0, 0.0, dh, x, y)
-                canvas.drawImage(if (smooth) image else image.withInterpolate(false), deviceCtm.concat(m))
+                // An animated image draws the frame its player is on (#939).
+                val shown = image.animation?.currentFrame() ?: image
+                canvas.drawImage(if (smooth) shown else shown.withInterpolate(false), deviceCtm.concat(m))
             }
         } finally {
             if (cover) canvas.popClip()
@@ -3414,6 +3416,20 @@ public class EpubPage internal constructor(
      * page shows the poster or the placeholder of.
      */
     public val media: List<EpubMedia> get() = buildMedia(laidOut())
+
+    /**
+     * The animated images of this page, block and inline, each once (#939). Empty while the page's
+     * content is out of memory: reading them never lays a dropped chapter out again.
+     */
+    override val animations: List<io.github.yuroyami.kitepdf.core.render.KiteImageAnimation>
+        get() {
+            if (!isContentLoaded) return emptyList()
+            val page = laidOut()
+            val out = LinkedHashSet<io.github.yuroyami.kitepdf.core.render.KiteImageAnimation>()
+            for (box in page.images) box.image?.animation?.let(out::add)
+            for (line in page.lines) for (im in line.images) im.image?.animation?.let(out::add)
+            return out.toList()
+        }
 
     private fun buildMedia(page: PageRender): List<EpubMedia> = page.images.mapNotNull { box ->
         val info = box.media ?: return@mapNotNull null

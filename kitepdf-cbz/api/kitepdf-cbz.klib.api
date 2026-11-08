@@ -48,6 +48,8 @@ final class io.github.yuroyami.kitepdf.cbz/CbzMetadata { // io.github.yuroyami.k
 }
 
 final class io.github.yuroyami.kitepdf.cbz/CbzPage : io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroyami.kitepdf.cbz/CbzPage|null[0]
+    final val animations // io.github.yuroyami.kitepdf.cbz/CbzPage.animations|{}animations[0]
+        final fun <get-animations>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteImageAnimation> // io.github.yuroyami.kitepdf.cbz/CbzPage.animations.<get-animations>|<get-animations>(){}[0]
     final val displayHeight // io.github.yuroyami.kitepdf.cbz/CbzPage.displayHeight|{}displayHeight[0]
         final fun <get-displayHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.cbz/CbzPage.displayHeight.<get-displayHeight>|<get-displayHeight>(){}[0]
     final val displayWidth // io.github.yuroyami.kitepdf.cbz/CbzPage.displayWidth|{}displayWidth[0]

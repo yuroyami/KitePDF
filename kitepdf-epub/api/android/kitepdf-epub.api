@@ -241,6 +241,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubOverlayClip {
 
 public final class io/github/yuroyami/kitepdf/epub/EpubPage : io/github/yuroyami/kitepdf/core/KitePage {
 	public fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
+	public fun getAnimations ()Ljava/util/List;
 	public final fun getChapter ()I
 	public final fun getChapterVersion ()I
 	public fun getDisplayHeight ()D

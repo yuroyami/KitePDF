@@ -946,6 +946,7 @@ public final class io/github/yuroyami/kitepdf/PdfPage : io/github/yuroyami/kitep
 	public fun displayToDeviceBase ()Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 	public final fun extractText ()Ljava/lang/String;
 	public final fun formFieldAt (DD)Lio/github/yuroyami/kitepdf/PdfFormField;
+	public fun getAnimations ()Ljava/util/List;
 	public final fun getAnnotationReferences ()Ljava/util/List;
 	public final fun getAnnotations ()Ljava/util/List;
 	public final fun getArtBox ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;

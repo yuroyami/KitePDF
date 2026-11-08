@@ -191,6 +191,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun displayRectToViewport (ILio/github/yuroyami/kitepdf/core/KiteRectangle;)Landroidx/compose/ui/geometry/Rect;
 	public final fun dropCaches (Z)V
 	public static synthetic fun dropCaches$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;ZILjava/lang/Object;)V
+	public final fun getAnimateImages ()Ljava/lang/Boolean;
 	public final fun getCurrentLocation ()Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun getCurrentPage ()I
 	public final fun getCurrentScrollPosition ()Lio/github/yuroyami/kitepdf/compose/KiteScrollPosition;
@@ -233,6 +234,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public static synthetic fun scrollTo$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;Lio/github/yuroyami/kitepdf/core/KiteLocation;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun scrollToPage (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun scrollToSlot (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun setAnimateImages (Ljava/lang/Boolean;)V
 	public final fun setHighlights (Ljava/util/List;)V
 	public final fun setLayerVisible (Ljava/lang/String;Z)V
 	public final fun setLayers (Lio/github/yuroyami/kitepdf/PdfOptionalContent;)V

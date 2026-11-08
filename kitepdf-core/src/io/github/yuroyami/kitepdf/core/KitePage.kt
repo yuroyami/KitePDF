@@ -68,6 +68,13 @@ public interface KitePage {
     public fun loadContent() {}
 
     /**
+     * The animated images this page draws, each still on its first frame until a player moves it
+     * (#939): an animated GIF, APNG or WebP of a book or a comic. Empty for a page without one,
+     * and by default. A page answers once it has laid out or drawn, so read it after a render.
+     */
+    public val animations: List<io.github.yuroyami.kitepdf.core.render.KiteImageAnimation> get() = emptyList()
+
+    /**
      * Structured text for extraction / search / selection, in display space
      * (see [KiteStructuredText] for the coordinate convention), or `null`
      * when the handler does not expose it. Both handlers implement this:

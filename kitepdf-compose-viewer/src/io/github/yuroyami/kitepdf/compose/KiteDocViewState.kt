@@ -1170,6 +1170,42 @@ public class KiteDocViewState(
         return fonts + layerRevision + ((page as? EpubPage)?.let { it.remoteVersion + it.chapterVersion } ?: 0)
     }
 
+    /**
+     * Whether animated GIF, APNG and WebP images of a book or a comic play while their page is on
+     * screen (#939). Null, the default, follows the platform's reduced-motion setting: they play
+     * unless the reader asked for less motion. False shows each image's first frame, as a render
+     * outside the viewer does; true plays them whatever the platform says.
+     */
+    public var animateImages: Boolean? by mutableStateOf(null)
+
+    /** What [KiteDocView] read of the platform's reduced-motion setting, written during composition. */
+    internal var platformReducedMotion: Boolean by mutableStateOf(false)
+
+    /** Whether the pages play their animated images now: [animateImages], or the platform's setting. */
+    internal val playsAnimations: Boolean get() = animateImages ?: !platformReducedMotion
+
+    /** The frames each page's animated images show, as a number that changes with any of them (#939). */
+    private val animationFrames = mutableStateMapOf<KitePage, Int>()
+
+    /** Records the frames [animations] of [page] are on, so the page draws again, and finds a bitmap of them it drew before. */
+    internal fun showAnimationFrames(page: KitePage, animations: List<io.github.yuroyami.kitepdf.core.render.KiteImageAnimation>) {
+        var signature = 0
+        for (a in animations) signature = signature * 31 + a.frameIndex
+        if (signature == 0) animationFrames.remove(page) else animationFrames[page] = signature
+    }
+
+    /** Forgets the frames of [page], whose animations stopped. */
+    internal fun forgetAnimationFrames(page: KitePage) {
+        animationFrames.remove(page)
+    }
+
+    /**
+     * What the frames of [page]'s animated images add to [contentVersionOf] for its slot: 0 on the
+     * first frames, so a still page and a page outside the viewer find the same bitmap. The same
+     * frames give the same number, so a loop draws from bitmaps it drew before (#939).
+     */
+    internal fun animationVersionOf(page: KitePage): Int = (animationFrames[page] ?: 0) * ANIMATION_VERSION_STEP
+
     /** Counts the layer changes, so each page draws again and no bitmap of the old states is found (#938). */
     private var layerRevision by mutableIntStateOf(0)
 
@@ -3173,3 +3209,6 @@ internal class FixedPageAdapter(private val pageIndex: Int) : KiteScrollAdapter 
     override suspend fun scrollToPage(page: Int) = Unit
     override suspend fun animateScrollToPage(page: Int) = Unit
 }
+
+/** Spaces the frame numbers of [KiteDocViewState.animationVersionOf] away from the small counts of [KiteDocViewState.contentVersionOf]. */
+private const val ANIMATION_VERSION_STEP = 1_000_003
