@@ -57,4 +57,18 @@ class ContentStreamParserTest {
     fun a_malformed_array_drops_only_its_own_operator() {
         assertEquals(listOf(op("m", 1, 2), op("l", 3, 4)), parse("1 2 m [1 2 >> 3 4 l"))
     }
+
+    @Test
+    fun an_operator_keeps_a_bounded_number_of_operands() {
+        // Five million operands before one n held 134 MB in one operation (#977).
+        val ops = parse("0 ".repeat(1_000_000) + "n 1 0 0 1 72 720 cm")
+        assertEquals(listOf("n", "cm"), ops.map { it.operator })
+        assertEquals(64, ops[0].operands.size)
+        assertEquals(op("cm", 1, 0, 0, 1, 72, 720), ops[1])
+        // The operands an operator reads are the last ones, and they are kept.
+        val scn = parse("9 ".repeat(100) + "0.1 0.2 0.3 0.4 scn").single()
+        assertEquals(PdfReal(0.4), scn.operands.last())
+        // The cache counts what the operands hold.
+        kotlin.test.assertTrue(ContentStreamParser.retainedBytes(ops) > 64 * 20)
+    }
 }

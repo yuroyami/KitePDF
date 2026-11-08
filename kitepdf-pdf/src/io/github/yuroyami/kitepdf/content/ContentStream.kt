@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.content
 
 import io.github.yuroyami.kitepdf.core.ByteReader
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.Lexer
 import io.github.yuroyami.kitepdf.parser.Parser
@@ -100,18 +101,32 @@ public object ContentStreamParser {
         var total = ops.size * BYTES_PER_OPERATION
         for (op in ops) {
             op.inlineImage?.let { total += it.size }
-            for (operand in op.operands) total += stringBytes(operand)
+            // Every operand counts, a number or a name too, so the cache's budget means what it says:
+            // a 134 MB operation of five million numbers counted as 104 bytes (#977).
+            for (operand in op.operands) total += BYTES_PER_OPERAND + operandBytes(operand)
         }
         return total
     }
 
     private const val BYTES_PER_OPERATION = 104L
 
-    private fun stringBytes(operand: PdfObject): Long = when (operand) {
+    /** A boxed number or name and its slot in the operand list, on the JVM. */
+    private const val BYTES_PER_OPERAND = 28L
+
+    private fun operandBytes(operand: PdfObject): Long = when (operand) {
         is io.github.yuroyami.kitepdf.core.parser.PdfString -> operand.bytes.size.toLong()
-        is PdfArray -> operand.items.sumOf { stringBytes(it) + 16 }
+        is PdfArray -> operand.items.sumOf { operandBytes(it) + BYTES_PER_OPERAND }
+        is PdfDictionary -> operand.map.entries.sumOf { (k, v) -> k.length + 2 * BYTES_PER_OPERAND + operandBytes(v) }
         else -> 0L
     }
+
+    /**
+     * The most operands one operator keeps. ISO 32000-1, Annex A: the operator that takes the most is
+     * `scn` or `SCN` in a DeviceN space, one per colorant (at most 32, Annex C, Table C.1) and a pattern
+     * name. Operators read their operands from the top of the stack, so past this bound the oldest
+     * are dropped, as a lenient parser does; MuPDF reports "stack overflow" for such a stream (#977).
+     */
+    private const val MAX_OPERANDS = 64
 
     /** Resource names determine inline sample counts (ISO 32000-1, 8.9.7). */
     internal fun parse(bytes: ByteArray, colorSpaces: Map<String, KiteColorSpace>): List<Operation> {
@@ -119,7 +134,8 @@ public object ContentStreamParser {
         val lexer = Lexer(reader)
         val parser = Parser(lexer)
         val ops = mutableListOf<Operation>()
-        val operandStack = mutableListOf<PdfObject>()
+        val operandStack = ArrayDeque<PdfObject>()
+        var overflowWarned = false
 
         while (true) {
             // Record where this iteration starts so a failure can guarantee progress.
@@ -160,7 +176,14 @@ public object ContentStreamParser {
                 else -> {
                     // The parser finishes the operand from this token, so no token is lexed twice.
                     try {
-                        operandStack.add(parser.readOperand(tok))
+                        operandStack.addLast(parser.readOperand(tok))
+                        if (operandStack.size > MAX_OPERANDS) {
+                            operandStack.removeFirst()
+                            if (!overflowWarned) {
+                                overflowWarned = true
+                                kiteWarn { "content: an operator has more than $MAX_OPERANDS operands; the oldest are dropped" }
+                            }
+                        }
                     } catch (_: Exception) {
                         // A malformed operand (e.g. "[ ...unterminated", bad number).
                         // Drop the operands accumulated for this operator and skip

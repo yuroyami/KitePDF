@@ -131,6 +131,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the end of the file, so repair took time quadratic in the file and an 869 KB file blocked `open` for 13 s
   (#966).
 
+- A content stream operator keeps at most 64 operands, the newest, with a warning, and the operation
+  cache counts every operand. Five million numbers before one operator held 134 MB that the cache counted
+  as 104 bytes, so an 11 KB file kept 874 MB after its six pages rendered (#977).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
