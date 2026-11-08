@@ -1959,12 +1959,23 @@ public class EpubPage internal constructor(
      */
     private fun paintFrameBox(canvas: KiteCanvas, ctm: KiteMatrix, box: ImageBox, left: Double, bottom: Double, cancellation: KiteCancellation?): Boolean {
         val info = box.embed ?: return false
+        // A page paints a bounded number of frames in all, not only a bounded depth of them, as
+        // Chromium and WebKit stop adding frames at 1,000: a document that frames another k times,
+        // eight levels down, painted k^7 frames (#987). The count rides on the cancellation.
+        val budget = cancellation as? FrameBudget ?: FrameBudget(cancellation)
+        if (++budget.frames > MAX_FRAMES_PAINTED) return true
         val inner = doc.framePage(chapter, info.href, box.drawWidth, box.drawHeight, frame?.documents ?: setOf(doc.chapterPath(chapter))) ?: return true
         val clip = KitePath.Builder().apply { rectangle(left, bottom, box.drawWidth, box.drawHeight) }.build()
         canvas.pushClip(clip, ctm, evenOdd = false)
-        inner.paintFrame(canvas, ctm.concat(KiteMatrix.translation(left, bottom)), cancellation)
+        inner.paintFrame(canvas, ctm.concat(KiteMatrix.translation(left, bottom)), budget)
         canvas.popClip()
         return true
+    }
+
+    /** The caller's cancellation, and the frames a paint has drawn under it (#987). */
+    private class FrameBudget(private val outer: KiteCancellation?) : KiteCancellation {
+        var frames = 0
+        override fun isCancelled(): Boolean = outer?.isCancelled() == true
     }
 
     /** Whether this page object has the size [width] by [height], so a new layout of its chapter can keep it (#41). */
@@ -3588,6 +3599,9 @@ private const val MAX_FRAME_RENDERS = 16
 
 /** How deep frames nest before the innermost shows nothing, as a browser stops a loop of frames (#528). */
 internal const val MAX_FRAME_DEPTH = 8
+
+/** The most frames one paint of a page draws, at every depth together (#987). */
+private const val MAX_FRAMES_PAINTED = 1000
 
 /** A URL with a scheme, which a frame does not show unless it is a data or blob URL (#528). */
 private val FRAME_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")

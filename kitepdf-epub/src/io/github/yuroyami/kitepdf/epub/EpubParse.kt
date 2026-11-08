@@ -152,7 +152,7 @@ internal class ParsedEpub(
         if (manifestScripted[chapter]) return true
         scriptLock.withLock { scriptFound[chapter] }?.let { return it }
         val path = spinePaths[chapter]
-        val found = runsScripts(chapterText(chapter), dirOf(path), setOf(path))
+        val found = runsScripts(chapterText(chapter), path)
         scriptLock.withLock { scriptFound[chapter] = found }
         return found
     }
@@ -161,22 +161,35 @@ internal class ParsedEpub(
     fun hasOwnScripts(chapter: Int): Boolean = manifestScripted[chapter] || spine(chapter).hasScript
 
     /**
-     * Whether the markup [text] has a `script` element, or an `iframe` or an `object` whose
-     * document in the book is marked `scripted` or runs scripts itself. [seen] holds the documents around it.
+     * Whether the markup [text] of the document at [path] has a `script` element, or an `iframe` or
+     * an `object` whose document in the book is marked `scripted` or runs scripts itself, within
+     * [MAX_FRAME_NESTING] levels. The frames are walked breadth first, and each distinct document is
+     * read once: a list of every path through the frames read the last document once for each path,
+     * k^7 times for k frames a document, so a 3 KB book asked for 10^9 reads (#987).
      */
-    private fun runsScripts(text: String, dir: String, seen: Set<String>): Boolean {
-        val frames = ArrayList<String>()
-        for (token in KiteXml.tokenize(text)) {
-            if (token !is KiteXmlToken.Open) continue
-            val name = token.name.substringAfterLast(':')
-            if (name.equals("script", ignoreCase = true)) return true
-            val src = embeddedSource(name.lowercase(), token.attrs)?.takeIf { !URL_SCHEME.containsMatchIn(it) } ?: continue
-            frames += EpubDocument.resolvePath(dir, src).substringBefore('#')
+    private fun runsScripts(text: String, path: String): Boolean {
+        val visited = HashSet<String>().apply { add(path) }
+        var level = listOf(text to path)
+        var depth = 1
+        while (level.isNotEmpty()) {
+            val next = ArrayList<Pair<String, String>>()
+            for ((markup, at) in level) {
+                val dir = dirOf(at)
+                for (token in KiteXml.tokenize(markup)) {
+                    if (token !is KiteXmlToken.Open) continue
+                    val name = token.name.substringAfterLast(':')
+                    if (name.equals("script", ignoreCase = true)) return true
+                    val src = embeddedSource(name.lowercase(), token.attrs)?.takeIf { !URL_SCHEME.containsMatchIn(it) } ?: continue
+                    val framed = EpubDocument.resolvePath(dir, src).substringBefore('#')
+                    if (depth >= MAX_FRAME_NESTING || !visited.add(framed)) continue
+                    if (itemsByPath[framed]?.hasProperty("scripted") == true) return true
+                    zip.readText(framed)?.let { next.add(it to framed) }
+                }
+            }
+            level = next
+            depth++
         }
-        return frames.any { path ->
-            path !in seen && seen.size < MAX_FRAME_NESTING &&
-                (itemsByPath[path]?.hasProperty("scripted") == true || runsScripts(zip.readText(path) ?: return@any false, dirOf(path), seen + path))
-        }
+        return false
     }
 
     val spineIndices: IntRange get() = spinePaths.indices

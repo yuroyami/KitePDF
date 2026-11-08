@@ -202,4 +202,19 @@ class EmbedTest {
         assertFalse(doc.page(KiteLocation(0, 0)).embeds.single().isWhole)
         assertFalse(doc.page(KiteLocation(0, 1)).embeds.single().isWhole)
     }
+
+    @Test
+    fun frames_that_repeat_one_document_are_read_and_painted_a_bounded_number_of_times() {
+        // Each chapter frames the next one k times: k^7 reads of the last chapter (#987).
+        val k = 12
+        val bodies = (0 until 7).map { n -> (0 until k).joinToString("") { """<iframe src="c${n + 1}.xhtml" width="40" height="20"></iframe>""" } } + "<p>last</p>"
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        val doc = book(bodies)
+        assertFalse(doc.isScripted(0))
+        page(doc).renderTo(RecordingCanvas(), io.github.yuroyami.kitepdf.core.render.KiteMatrix.IDENTITY)
+        assertTrue(start.elapsedNow().inWholeSeconds < 30, "took ${start.elapsedNow()}")
+        // A script at the bottom is still found through the frames.
+        val scripted = book(bodies.dropLast(1) + "<p>last</p><script>x()</script>")
+        assertTrue(scripted.isScripted(0))
+    }
 }

@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it, so a book larger than the heap opens. A 210 MiB book with one large resource failed on a
   192 MB Android heap; it now holds only what its chapters read. Contributed by alvechy in #645.
   The PDF parser and `kitepdf-net` still read one array (#906).
-
 - `KiteXmlNode.Element.indexInParent()`: an element's index among its parent's children, remembered and
   checked on the next call, so the selector matcher's sibling steps cost O(1) (#990).
 
@@ -145,6 +144,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `~` and `+` combinators and the `:nth-` pseudo-classes find an element among its siblings in one
   step, not a scan from the first child. `h1 ~ p` over a chapter of 4,000 paragraphs took 23 seconds to lay
   out, and a crafted chapter of tens of thousands of siblings took hours (#990).
+
+- `isScripted` reads each document that a chapter's frames reach once, breadth first, and a page paints at
+  most 1,000 frames in all, as Chromium and WebKit stop at 1,000. A document that framed the next one k
+  times, eight levels down, was read and painted k^7 times, so a 3 KB book with 20 frames a document asked
+  for 10^9 reads (#987).
 
 ## [0.13.0] - 2026-10-09
 
