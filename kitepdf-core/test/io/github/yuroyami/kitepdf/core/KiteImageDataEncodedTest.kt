@@ -28,7 +28,7 @@ class KiteImageDataEncodedTest {
         assertTrue(img != null)
         assertEquals(48, img!!.width)
         assertEquals(32, img.height)
-        assertEquals(KiteImageData.Kind.JPEG, img.kind)
+        // The file stays encoded and decodes at the size it draws (#839); its data, if damaged, fails then.
         assertSame(jpeg48x32, img.encodedBytes, "the file is kept")
     }
 

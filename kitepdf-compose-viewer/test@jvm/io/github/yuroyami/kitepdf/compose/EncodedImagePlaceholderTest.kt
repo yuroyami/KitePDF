@@ -27,7 +27,7 @@ class EncodedImagePlaceholderTest {
     @Test
     fun a_jpeg_the_shared_decoder_refuses_draws_as_the_placeholder() {
         val image = KiteImageData.fromEncodedImage(damagedJpeg) ?: error("no image")
-        assertEquals(KiteImageData.Kind.JPEG, image.kind, "the damaged image must take the placeholder path")
+        // The file stays encoded until it draws (#839), and its data fails then, which draws the placeholder (#184).
         val bitmap = ImageBitmap(64, 48)
         CanvasDrawScope().drawOnTestUiThread(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(64f, 48f)) {
             ComposeCanvas(this, TextMeasurer(testFontFamilyResolver(), Density(1f), LayoutDirection.Ltr))

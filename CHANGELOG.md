@@ -834,6 +834,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteRasterCanvas` sizes each clip mask, transparency group layer, soft mask layer and raster step by the
   device box it covers, cut to the clip, instead of the whole canvas: a 16 x 16 clip on a 2,048 x 2,048 canvas no
   longer allocates 16 MB (#842).
+- A JPEG or JPEG 2000 file that is an image of its own, a comic page, an EPUB or SVG image or an XPS brush, stays
+  encoded and decodes at the size it draws, as a PDF's does, so a large comic page drawn as a thumbnail no longer
+  allocates hundreds of MB on every draw (#839).
 
 ## [0.13.0] - 2026-10-09
 

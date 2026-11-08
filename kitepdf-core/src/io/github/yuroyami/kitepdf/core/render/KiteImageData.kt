@@ -534,9 +534,12 @@ public class KiteImageData internal constructor(
                 ImageFormat.PNG, ImageFormat.GIF, ImageFormat.WEBP, ImageFormat.AVIF, ImageFormat.JXL ->
                     runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
                         ?.also { it.animation = KiteImageAnimation.of(bytes, applyOrientation) }
-                ImageFormat.BMP, ImageFormat.JP2, ImageFormat.TIFF ->
+                ImageFormat.JP2 -> encodedSamples(bytes, applyOrientation, jpx = true)
+                    ?: runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
+                ImageFormat.BMP, ImageFormat.TIFF ->
                     runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
                 ImageFormat.JPEG -> {
+                    encodedSamples(bytes, applyOrientation, jpx = false)?.let { return it }
                     runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.let { return it.toKiteImageData() }
                     // A damaged or unsupported JPEG stream keeps
                     // its file and draws as a placeholder (#184), at its upright size.
@@ -552,6 +555,27 @@ public class KiteImageData internal constructor(
                 }
                 else -> null
             }
+        }
+
+        /**
+         * A JPEG or JPEG 2000 file kept encoded, which a draw decodes at the size it draws, as a
+         * PDF's are (#381). A comic page drawn as a thumbnail then never holds its full-size
+         * samples, and the small image stays in a cache for the next draw (#839). Null for a file
+         * whose orientation must turn it, which a reduced decode does not, and for one whose
+         * headers name a coding ImageKodec does not decode, which then decodes in full as before.
+         */
+        private fun encodedSamples(bytes: ByteArray, applyOrientation: Boolean, jpx: Boolean): KiteImageData? {
+            if (applyOrientation) {
+                val orientation = runCatching { ImageKodec.probe(bytes).orientation }.getOrNull() ?: return null
+                if (orientation != io.github.yuroyami.imagekodec.Orientation.Normal) return null
+            }
+            val lazy = (if (jpx) KiteImageSamples.jpx(bytes) else KiteImageSamples.jpeg(bytes, gray = false)) ?: return null
+            val gray = lazy.colorSpace == "DeviceGray"
+            return KiteImageData(
+                lazy.width, lazy.height, 8, if (gray) "DeviceGray" else "DeviceRGB", Kind.RAW, encodedBytes = bytes,
+                resolvedColorSpace = if (gray) KiteColorSpace.DeviceGray else KiteColorSpace.DeviceRGB,
+                interpolate = true, samples = lazy,
+            )
         }
 
         /**
