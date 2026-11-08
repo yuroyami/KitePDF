@@ -8,9 +8,11 @@ the Apache License, Version 2.0. See LICENSE.
 Third-party data
 --------------------------------------------------------------------------------
 
-KitePDF is a from-scratch implementation. It contains no third-party source
-code. It does contain reference data that a PDF or EPUB implementation has to
-carry in order to be correct, listed here with where that data comes from.
+KitePDF is written for this project. It carries reference data that a PDF or
+EPUB implementation has to carry in order to be correct, and two pieces of its
+code closely follow other code: PDFium's CMYK conversion (item 8) and
+HarfBuzz's shapers for Indic, USE, Khmer and Myanmar scripts (item 12). Each is
+listed here with where it comes from and its license.
 
 1. Adobe Glyph List (AGL)
    Used in: kitepdf-core .../core/font/GlyphList.kt
@@ -87,6 +89,8 @@ carry in order to be correct, listed here with where that data comes from.
    Used in: kitepdf-core .../core/render/AdobeCmykTable.kt and AdobeCmyk.kt
    The sRGB colours of a 9 by 9 by 9 by 9 grid over C, M, Y and K, and the
    way PDFium steps between grid points, from core/fxge/dib/cfx_cmyk_to_srgb.cpp.
+   AdobeCmyk.kt is a port of PDFium's AdobeCmykToStandardRgb, fixed-point
+   arithmetic included.
    Copyright 2019 The PDFium Authors, original code copyright 2014 Foxit
    Software Inc., under the BSD-style license of PDFium
    (https://pdfium.googlesource.com/pdfium/+/refs/heads/main/LICENSE).
@@ -99,6 +103,42 @@ carry in order to be correct, listed here with where that data comes from.
    https://encoding.spec.whatwg.org/, which TextDecoder decodes through.
    tools/generate_encoding_tables.py packs them as base64 VLQ.
    Copyright WHATWG (Apple, Google, Mozilla, Microsoft), licensed BSD-3-Clause.
+
+10. Unicode Character Database 17
+   Used in: kitepdf-core .../core/text/Bidi.kt; kitepdf-epub .../epub/
+   GeneralCategory.kt, UnicodeScript.kt, ArabicJoining.kt, BidiMirroring.kt,
+   CaseMapping.kt, CombiningClass.kt, Normalizer.kt, FullWidth.kt and
+   script/IdnaData.kt.
+   Tables from DerivedBidiClass.txt, UnicodeData.txt, Scripts.txt,
+   PropertyValueAliases.txt, ArabicShaping.txt, BidiMirroring.txt,
+   IndicSyllabicCategory.txt, IdnaMappingTable.txt and other files of the UCD.
+   Copyright 1991-2025 Unicode, Inc., licensed under the Unicode License v3
+   (https://www.unicode.org/license.txt).
+
+11. CLDR quotation marks
+   Used in: kitepdf-epub .../epub/css/QuoteData.kt
+   The quotation marks of each language, from CLDR 48.2.0.
+   Copyright 1991-2025 Unicode, Inc., licensed under the Unicode License v3.
+
+12. HarfBuzz shapers and their category tables
+   Used in: kitepdf-epub .../epub/IndicShaper.kt, UseShaper.kt,
+   KhmerShaper.kt and MyanmarShaper.kt
+   The shapers follow those of HarfBuzz 14.4, and their category tables are
+   dumped from it (hb_use_get_category and the Indic tables).
+   Copyright the HarfBuzz authors as listed in its COPYING file, licensed under
+   HarfBuzz's Old MIT license (https://github.com/harfbuzz/harfbuzz/blob/main/COPYING).
+
+13. Brotli static dictionary and transforms
+   Used in: kitepdf-epub .../epub/brotli/BrotliData.kt
+   The static dictionary, context lookup table and word transforms of
+   RFC 7932, byte-identical to the reference data in google/brotli.
+   Copyright 2013 Google Inc., licensed MIT.
+
+14. HTML named character references
+   Used in: kitepdf-core .../core/xml/HtmlEntities.kt
+   The 2,125 names of the HTML Standard and the characters they stand for.
+   Copyright WHATWG (Apple, Google, Mozilla, Microsoft), licensed under
+   CC BY 4.0, with the parts in source code under BSD-3-Clause.
 
 --------------------------------------------------------------------------------
 Tools used in development, not distributed

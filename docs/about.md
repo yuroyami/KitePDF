@@ -58,10 +58,13 @@ Read [CONTRIBUTING.md](https://github.com/yuroyami/KitePDF/blob/main/CONTRIBUTIN
 
 KitePDF uses the Apache License 2.0. You can use, change and distribute it in commercial and open-source projects.
 
-KitePDF contains no third-party source code. It bundles third-party data, each under its own license:
+KitePDF bundles third-party data, and two pieces of its code follow other code closely, each under its own license:
 
 - The URW base 35 fonts, which draw the 14 standard fonts, under the SIL Open Font License 1.1.
-- The DeviceCMYK table of PDFium, under the BSD-style license of PDFium.
+- The DeviceCMYK table of PDFium and a port of its conversion routine, under the BSD-style license of PDFium.
+- Shapers that follow HarfBuzz's Indic, USE, Khmer and Myanmar shapers, with its category tables, under HarfBuzz's Old MIT license.
+- Tables of the Unicode Character Database and CLDR, under the Unicode License v3.
+- The Brotli static dictionary, under MIT, and the HTML named character references, under CC BY 4.0.
 - The Adobe Glyph List, under the terms of Adobe.
 - The ZapfDingbats glyph list and the CJK CMaps of Adobe, under BSD-3-Clause.
 - The encoding indexes of the WHATWG Encoding Standard, under BSD-3-Clause.

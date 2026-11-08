@@ -512,9 +512,11 @@ Three app modules start it:
 
 ## License
 
-Apache-2.0. KitePDF contains no third-party source code, but it bundles some third-party
-data (fonts, glyph lists, CMaps, encoding tables and hyphenation patterns), each under its
-own license. [NOTICE](NOTICE) lists every piece with its source.
+Apache-2.0. KitePDF bundles third-party data (fonts, glyph lists, CMaps, encoding tables,
+Unicode and CLDR tables, the Brotli dictionary, HTML entities and hyphenation patterns), and
+two pieces of its code follow other code closely (PDFium's CMYK conversion and HarfBuzz's
+complex-script shapers), each under its own license. [NOTICE](NOTICE) lists every piece with
+its source.
 
 Part of the Kite family: [KiteCore](https://github.com/yuroyami/KiteCore),
 [ImageKodec](https://github.com/yuroyami/ImageKodec),
