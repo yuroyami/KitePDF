@@ -116,6 +116,14 @@ internal class RedactionEngine(
     val formXObjectHits = ArrayList<FormHit>()
 
     /**
+     * Every `gs` that installs a soft mask group whose painted area meets a region, with the
+     * regions mapped into the group's own space and the index of the `gs` in the output. The
+     * group paints in the space current at the `gs` (ISO 32000-1, 11.6.5.2), and no `Do` reaches
+     * it, so the caller redacts it as a form of its own (#631).
+     */
+    val softMaskHits = ArrayList<FormHit>()
+
+    /**
      * Optional per-form `/Matrix` (default identity). Populated by the caller
      * before [run] so the reported [FormHit.formRects] are in the form's space.
      */
@@ -243,8 +251,10 @@ internal class RedactionEngine(
                 // 1, so the pad never drops below the plain lineWidth/2 body pad.
                 "M" -> { gs = gs.copy(miterLimit = num(op, 0)); out.add(op) }
                 "gs" -> {
-                    (op.operands.firstOrNull() as? PdfName)?.value?.let(extGStates::get)?.let { e ->
+                    val name = (op.operands.firstOrNull() as? PdfName)?.value
+                    name?.let(extGStates::get)?.let { e ->
                         gs = gs.copy(lineWidth = e.lineWidth ?: gs.lineWidth, miterLimit = e.miterLimit ?: gs.miterLimit)
+                        (e.softMask as? io.github.yuroyami.kitepdf.core.render.SoftMask.MaskGroup)?.let { mask -> recordSoftMaskHit(name, mask.group, out.size) }
                     }
                     out.add(op)
                 }
@@ -750,6 +760,30 @@ internal class RedactionEngine(
         val bbox = formBBoxes[xobjectName]
         val intersects = inv == null || bbox == null || mapped.any { overlaps(it, bbox) }
         formXObjectHits.add(FormHit(xobjectName, mapped, opIndex, intersects, gs.lineWidth, gs.miterLimit, gs.text))
+    }
+
+    /** Records the soft mask group [group] that the `gs` of [extGStateName] at [opIndex] installs (#631). */
+    private fun recordSoftMaskHit(extGStateName: String, group: io.github.yuroyami.kitepdf.core.parser.PdfStream, opIndex: Int) {
+        val matrix = (group.dict["Matrix"] as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.let { arr ->
+            val v = arr.mapNotNull { (it as? io.github.yuroyami.kitepdf.core.parser.PdfReal)?.value ?: (it as? io.github.yuroyami.kitepdf.core.parser.PdfInt)?.value?.toDouble() }
+            if (v.size == 6) KiteMatrix(v[0], v[1], v[2], v[3], v[4], v[5]) else null
+        } ?: KiteMatrix.IDENTITY
+        val inv = gs.ctm.concat(matrix).invert()
+        val mapped = rectangles.map { r ->
+            if (inv == null) r else {
+                val corners = listOf(
+                    inv.transformPoint(r.left, r.bottom), inv.transformPoint(r.right, r.bottom),
+                    inv.transformPoint(r.left, r.top), inv.transformPoint(r.right, r.top),
+                )
+                KiteRectangle(corners.minOf { it.first }, corners.minOf { it.second }, corners.maxOf { it.first }, corners.maxOf { it.second })
+            }
+        }
+        val bbox = (group.dict["BBox"] as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.let { arr ->
+            val v = arr.mapNotNull { (it as? io.github.yuroyami.kitepdf.core.parser.PdfReal)?.value ?: (it as? io.github.yuroyami.kitepdf.core.parser.PdfInt)?.value?.toDouble() }
+            if (v.size == 4) KiteRectangle(minOf(v[0], v[2]), minOf(v[1], v[3]), maxOf(v[0], v[2]), maxOf(v[1], v[3])) else null
+        }
+        if (inv != null && bbox != null && mapped.none { overlaps(it, bbox) }) return
+        softMaskHits.add(FormHit(extGStateName, mapped, opIndex, true, gs.lineWidth, gs.miterLimit, gs.text))
     }
 
     /** Do two rectangles share area? Touching edges do not count, as in [boxIntersects]. */

@@ -190,6 +190,69 @@ internal fun PdfEditor.recurseIntoForms(
     return result
 }
 
+/** What redacting the soft mask groups of a stream gives: the `gs` operands to repoint, and the ExtGStates to add. */
+internal class SoftMaskRedaction(val renames: Map<Int, Rename>, val additions: Map<String, PdfObject>)
+
+/**
+ * Redacts each soft mask group that [hits] name, a `gs` of an ExtGState in [resources] whose
+ * `/SMask /G` paints into a region, into a copy of its own (ISO 32000-1, 11.6.5.2; #631). The group
+ * is a form that no `Do` reaches, so it is redacted as one, with the regions in its own space. The
+ * original group and ExtGState stay as they are for any other user, and each redacting `gs` gets
+ * an ExtGState whose mask names the copy. A group that cannot be read loses its mask's content: the
+ * copy is an empty group, as the engine removes too much rather than too little.
+ */
+internal fun PdfEditor.redactSoftMasks(resources: PdfDictionary?, hits: List<RedactionEngine.FormHit>): SoftMaskRedaction {
+    if (hits.isEmpty()) return SoftMaskRedaction(emptyMap(), emptyMap())
+    val states = runCatching { resources?.getDict("ExtGState", effective) }.getOrNull() ?: return SoftMaskRedaction(emptyMap(), emptyMap())
+    val used = HashSet(states.keys)
+    val renames = LinkedHashMap<Int, Rename>()
+    val additions = LinkedHashMap<String, PdfObject>()
+    val byKey = HashMap<String, String>()
+    for (hit in hits) {
+        val state = runCatching { states[hit.name]?.resolve(effective) }.getOrNull() as? PdfDictionary ?: continue
+        val mask = runCatching { state["SMask"]?.resolve(effective) }.getOrNull() as? PdfDictionary ?: continue
+        val groupRef = mask["G"] as? PdfReference ?: continue
+        if (groupRef.objectNumber in formDescent) continue
+        val key = "smask:" + formKey(groupRef.objectNumber, hit.formRects, hit.lineWidth, hit.miterLimit, hit.text)
+        val name = byKey.getOrPut(key) {
+            val target = redactedFormCache[key]
+                ?: redactFormXObject(groupRef, hit.formRects, key, claimable = false, hit.lineWidth, hit.miterLimit, hit.text)
+                ?: addObject(PdfStreams.flate(ByteArray(0), extraFrom((effectiveObject(groupRef.objectNumber) as? PdfStream)?.dict ?: PdfDictionary(emptyMap()))))
+            val newMask = withEntry(mask, "G", target)
+            var i = 1
+            while ("${hit.name}R$i" in used) i++
+            "${hit.name}R$i".also { used.add(it); additions[it] = withEntry(state, "SMask", newMask) }
+        }
+        renames[hit.opIndex] = Rename(from = hit.name, to = name)
+    }
+    return SoftMaskRedaction(renames, additions)
+}
+
+/** [ops] with each `gs` that [redaction] repoints naming its redacted ExtGState; no index moves. */
+internal fun PdfEditor.applySoftMaskRedaction(ops: List<Operation>, redaction: SoftMaskRedaction): List<Operation> {
+    if (redaction.renames.isEmpty()) return ops
+    val out = ops.toMutableList()
+    for ((index, rename) in redaction.renames) {
+        val op = out.getOrNull(index) ?: continue
+        if (op.operator != "gs" || (op.operands.firstOrNull() as? PdfName)?.value != rename.from) continue
+        out[index] = Operation("gs", listOf(PdfName(rename.to)))
+    }
+    return out
+}
+
+/**
+ * [resources] with the ExtGStates that [redaction] adds, and without each one it repointed that no
+ * `gs` of [ops] names any more, so its unredacted group is not still reachable from the page.
+ */
+internal fun PdfEditor.withSoftMaskAdditions(resources: PdfDictionary?, redaction: SoftMaskRedaction, ops: List<Operation>): PdfDictionary? {
+    if (redaction.additions.isEmpty() || resources == null) return resources
+    val states = runCatching { resources.getDict("ExtGState", effective) }.getOrNull() ?: PdfDictionary(emptyMap())
+    val stillNamed = ops.filter { it.operator == "gs" }.mapNotNull { (it.operands.firstOrNull() as? PdfName)?.value }.toSet()
+    val replaced = redaction.renames.values.map { it.from }.toSet() - stillNamed
+    val merged = LinkedHashMap(states.map).apply { for (name in replaced) remove(name); putAll(redaction.additions) }
+    return withEntry(resources, "ExtGState", PdfDictionary(merged))
+}
+
 /**
  * Redact [rectangles] (in the form's OWN space) inside the form at [formRef],
  * recursing into any form it invokes in turn.
@@ -261,7 +324,8 @@ internal fun PdfEditor.redactFormXObject(
         val filtered = engine.run(ops)
 
         val nested = recurseIntoForms(formResources, engine.formXObjectHits)
-        val finalOps = applyFormRedaction(filtered, nested)
+        val masks = redactSoftMasks(formResources, engine.softMaskHits)
+        val finalOps = applyFormRedaction(applySoftMaskRedaction(filtered, masks), nested)
         val body = ContentStreamWriter.serialize(finalOps)
 
         // Keep every non-encoding dict entry (/BBox, /Matrix, /Group, /Type,
@@ -271,7 +335,7 @@ internal fun PdfEditor.redactFormXObject(
             stream.dict, engine.droppedImageNames, engine.survivingImageNames,
         )
         newDict = prunePageResourceXObjects(newDict, nested.droppedNames, namesStillDrawn(finalOps))
-        val newResources = withFormAdditions(newDict.getDict("Resources", effective), nested)
+        val newResources = withSoftMaskAdditions(withFormAdditions(newDict.getDict("Resources", effective), nested), masks, finalOps)
         if (newResources != null) newDict = withEntry(newDict, "Resources", newResources)
         updateObject(target, PdfStreams.flate(body, extraFrom(newDict)))
     } catch (e: Throwable) {

@@ -588,6 +588,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is removed as one widened by `w` is (#633).
 - A redacted file attachment takes its file out of the catalog's `/Names /EmbeddedFiles` tree too, so the file no
   longer survives in the saved bytes (#632).
+- Redaction redacts a soft mask group that paints into a region, in a copy of its own that the page's `gs` then
+  names, so text a page draws only through a mask goes with the region (#631).
 
 ## [0.13.0] - 2026-10-09
 

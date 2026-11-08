@@ -263,15 +263,12 @@ Some large shapes stay under the black box, because they hide nothing that the b
 - A path is tested by its segments. So a background rectangle or a page border whose edges are outside every region stays.
 - A shading (`sh`) paints its whole clip. It goes out when the edge of its clip meets a region or the clip is inside a region. A shading that covers the whole page stays.
 
+A soft mask group (`/SMask` in an ExtGState) that paints into a region is redacted too, in a copy of its own that the page's `gs` then names, so the text a mask draws goes with the region.
+
 Redaction removes more than the region in some cases, as it removes too much rather than too little:
 
 - An annotation whose `/Rect` the editor cannot read goes, as the renderer still draws it somewhere.
 - A file attachment in a region takes its file out of the catalog's `/Names /EmbeddedFiles` tree too, so the document loses that attachment.
-
-!!! warning
-    Redaction does not remove the content below. Check for it before you share a redacted file:
-
-    - Content that a soft mask (`/SMask` in an ExtGState) draws.
 
 ### Several calls
 

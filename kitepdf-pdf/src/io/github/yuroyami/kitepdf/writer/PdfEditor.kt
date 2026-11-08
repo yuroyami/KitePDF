@@ -979,7 +979,9 @@ public class PdfEditor internal constructor(
         // operands point at a redacted clone and which leave the stream altogether,
         // so it has to run before the body is serialized.
         val formRedaction = recurseIntoForms(pageResources, engine.formXObjectHits)
-        val finalOps = applyFormRedaction(filtered, formRedaction)
+        // Soft mask groups, which no Do reaches, redact into copies of their own (#631).
+        val maskRedaction = redactSoftMasks(pageResources, engine.softMaskHits)
+        val finalOps = applyFormRedaction(applySoftMaskRedaction(filtered, maskRedaction), formRedaction)
         val body = ContentStreamWriter.serialize(finalOps)
 
         val out = ByteArrayBuilder(body.size + 64)
@@ -1009,7 +1011,7 @@ public class PdfEditor internal constructor(
         // on the leaf dict. Bake the effective resources (plus any form clones) onto
         // the page before pruning so the image XObject entry is actually removed
         // (pruning a missing local /Resources no-ops and the image stream survives).
-        val resourcesWithClones = withFormAdditions(pageResources, formRedaction) ?: pageResources
+        val resourcesWithClones = withSoftMaskAdditions(withFormAdditions(pageResources, formRedaction) ?: pageResources, maskRedaction, finalOps)
         if (resourcesWithClones != null) newPage = withEntry(newPage, "Resources", resourcesWithClones)
         newPage = prunePageResourceXObjects(newPage, engine.droppedImageNames, engine.survivingImageNames)
         newPage = prunePageResourceXObjects(newPage, formRedaction.droppedNames, namesStillDrawn(finalOps))
