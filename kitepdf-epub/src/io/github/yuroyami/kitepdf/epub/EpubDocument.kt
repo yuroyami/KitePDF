@@ -337,8 +337,18 @@ public class EpubDocument internal constructor(
      */
     internal fun replaceChapterTree(chapter: Int, tree: KiteXmlNode.Element, announce: Boolean = true) {
         require(chapter in parsed.spineIndices) { "no chapter $chapter" }
-        parsed.replaceTree(chapter, tree)
-        prepareChapter(chapter)
+        val previous = parsed.scriptedSpine(chapter)
+        try {
+            parsed.replaceTree(chapter, tree)
+            prepareChapter(chapter)
+        } catch (failure: Throwable) {
+            // A tree that does not lay out, as one too deep for the stack, leaves the tree before it
+            // in place, and the caller records the failure: a broken book never stops the reader (#955).
+            if (failure is kotlinx.coroutines.CancellationException) throw failure
+            parsed.restoreTree(chapter, previous)
+            runCatching { prepareChapter(chapter) }
+            throw IllegalStateException("the chapter's new tree did not lay out: ${failure::class.simpleName}: ${failure.message}", failure)
+        }
         if (announce) parsed.announceTreeChange()
     }
 

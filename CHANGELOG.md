@@ -812,6 +812,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PdfScriptPolicy` and `EpubScriptPolicy` have a `memoryLimitBytes`, 64 MiB by default and 512 MiB under
   `PdfScriptPolicy.LONG_RUNNING`, and `KiteJsScriptEngine` takes the limit too. A book's live chapters thus hold
   a few hundred MiB of engine memory at most, not gigabytes (#958).
+- A book's script can read and rewrite a tree it nested tens of thousands of levels deep: the DOM's own walks
+  behind `textContent`, `innerHTML`, `XMLSerializer` and node moves use a stack of their own. A chapter tree that
+  fails to lay out leaves the tree before it in place and is recorded in `failures` (#955).
 
 ## [0.13.0] - 2026-10-09
 

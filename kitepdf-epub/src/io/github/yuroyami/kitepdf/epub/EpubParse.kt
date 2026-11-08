@@ -356,6 +356,16 @@ internal class ParsedEpub(
      * parse lays the chapter out again when it next needs it. [announceTreeChange] tells the
      * viewers, once the caller has the new pages ready.
      */
+    /** What a script made [chapter], or null while it shows its own markup, which [restoreTree] puts back (#955). */
+    fun scriptedSpine(chapter: Int): ParsedSpine? = spineLock.withLock { scriptedSpines[chapter] }
+
+    /** Makes [spine], an earlier [scriptedSpine], what the layout reads for [chapter] again, as after a layout that failed (#955). */
+    fun restoreTree(chapter: Int, spine: ParsedSpine?): Int = spineLock.withLock {
+        scriptedSpines[chapter] = spine
+        revision++
+        ++treeVersions[chapter]
+    }
+
     fun replaceTree(chapter: Int, tree: KiteXmlNode.Element): Int {
         val built = buildSpine(chapter, tree)
         return spineLock.withLock {

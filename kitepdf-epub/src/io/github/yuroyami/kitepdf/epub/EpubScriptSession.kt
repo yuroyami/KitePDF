@@ -597,9 +597,20 @@ public class EpubScriptSession(
          * book's blob URLs: what the tree names stays with it, and what the call revoked goes (#533).
          */
         fun commit() {
-            val tree = if (dom.dirty) dom.snapshot() else null
+            val tree = try {
+                if (dom.dirty) dom.snapshot() else null
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                recordFailure(KiteScriptException("chapter $chapter, layout: ${failure::class.simpleName}: ${failure.message}", failure))
+                null
+            }
             if (tree != null) {
-                if (frame == null) document.replaceChapterTree(chapter, tree) else document.replaceFrameTree(chapter, frame, tree)
+                try {
+                    if (frame == null) document.replaceChapterTree(chapter, tree) else document.replaceFrameTree(chapter, frame, tree)
+                } catch (failure: IllegalStateException) {
+                    // The tree before it stays laid out (#955).
+                    recordFailure(KiteScriptException("chapter $chapter, layout: ${failure.message}", failure))
+                }
             } else if (measured != null) {
                 document.announceTreeChange()
             }

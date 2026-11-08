@@ -245,19 +245,28 @@ internal class ScriptDom(
         relayout: Boolean,
         html: Boolean = this.html,
     ) {
-        val raw = written.remove(el)
-        var inScope = scope
-        // An XML parser names an element by the declarations of its own attributes, and HTML's names
-        // the attributes of an SVG or a MathML element by the element's namespace.
-        if (raw != null && !html) {
-            inScope = declared(raw, scope)
-            attributeLists[el] = xmlAttributes(raw, inScope)
+        // Parents before children, by a loop and a stack of its own, so a script's depth costs no call stack (#955).
+        val stack = ArrayList<Triple<KiteXmlNode.Element, KiteXmlNode.Element?, Map<String, String>>>()
+        stack.add(Triple(el, parent, scope))
+        while (stack.isNotEmpty()) {
+            val (e, above, outer) = stack.removeAt(stack.lastIndex)
+            val raw = written.remove(e)
+            var inScope = outer
+            // An XML parser names an element by the declarations of its own attributes, and HTML's names
+            // the attributes of an SVG or a MathML element by the element's namespace.
+            if (raw != null && !html) {
+                inScope = declared(raw, outer)
+                attributeLists[e] = xmlAttributes(raw, inScope)
+            }
+            val name = parsedName(e, above, html)
+            names[e] = name
+            if (raw != null && html) attributeLists[e] = htmlAttributes(raw, name.namespace)
+            if (raw != null && relayout) e.attrs = layoutAttributes(attributes(e), e.attrs)
+            for (i in e.children.indices.reversed()) {
+                val c = e.children[i]
+                if (c is KiteXmlNode.Element) stack.add(Triple(c, e, inScope))
+            }
         }
-        val name = parsedName(el, parent, html)
-        names[el] = name
-        if (raw != null && html) attributeLists[el] = htmlAttributes(raw, name.namespace)
-        if (raw != null && relayout) el.attrs = layoutAttributes(attributes(el), el.attrs)
-        for (c in el.children) if (c is KiteXmlNode.Element) nameTree(c, el, inScope, relayout, html)
     }
 
     /** [scope] with the prefixes that the `xmlns:` attributes of [raw] declare, and without those they undeclare. */
@@ -487,11 +496,18 @@ internal class ScriptDom(
         is KiteXmlNode.Element -> buildString { appendText(node, this) }
     }
 
+    /** The text under [el] in document order. A loop and a stack of its own walk the tree, so a script's depth costs no call stack (#955). */
     private fun appendText(el: KiteXmlNode.Element, out: StringBuilder) {
-        for (c in el.children) when (c) {
-            is KiteXmlNode.Text -> out.append(c.text)
-            is KiteXmlNode.Comment -> {}
-            is KiteXmlNode.Element -> appendText(c, out)
+        val stack = ArrayList<Iterator<KiteXmlNode>>()
+        stack.add(el.children.toList().iterator())
+        while (stack.isNotEmpty()) {
+            val it = stack.last()
+            if (!it.hasNext()) { stack.removeAt(stack.lastIndex); continue }
+            when (val c = it.next()) {
+                is KiteXmlNode.Text -> out.append(c.text)
+                is KiteXmlNode.Comment -> {}
+                is KiteXmlNode.Element -> stack.add(c.children.toList().iterator())
+            }
         }
     }
 
@@ -778,25 +794,35 @@ internal class ScriptDom(
         else for (c in (node as KiteXmlNode.Element).children) serialize(c, this)
     }
 
+    /** [node] as HTML into [out]. A loop and a stack of its own walk the tree, so a script's depth costs no call stack (#955). */
     private fun serialize(node: KiteXmlNode, out: StringBuilder) {
-        when (node) {
-            is KiteXmlNode.Text -> {
-                val raw = leafParents[node]?.tag in RAW_TEXT
-                out.append(if (raw) node.text else escape(node.text, attribute = false))
+        // Each entry is the children still to write of an open element, and the element to close after them.
+        val stack = ArrayList<Pair<Iterator<KiteXmlNode>, KiteXmlNode.Element?>>()
+        stack.add(listOf(node).iterator() to null)
+        while (stack.isNotEmpty()) {
+            val (it, open) = stack.last()
+            if (!it.hasNext()) {
+                stack.removeAt(stack.lastIndex)
+                if (open != null) out.append("</").append(open.tag).append('>')
+                continue
             }
-            is KiteXmlNode.Comment -> when {
-                // HTML 13.3: an instruction ends at its first >, and a document type gives its name alone.
-                node in instructions -> out.append("<?").append(instructions.getValue(node)).append(' ').append(node.text).append('>')
-                node in doctypes -> out.append("<!DOCTYPE ").append(doctypes.getValue(node).name).append('>')
-                else -> out.append("<!--").append(node.text).append("-->")
-            }
-            is KiteXmlNode.Element -> {
-                out.append('<').append(node.tag)
-                for (a in attributes(node)) out.append(' ').append(serializedName(a)).append("=\"").append(escape(a.value, attribute = true)).append('"')
-                out.append('>')
-                if (node.tag in VOID) return
-                for (c in node.children) serialize(c, out)
-                out.append("</").append(node.tag).append('>')
+            when (val n = it.next()) {
+                is KiteXmlNode.Text -> {
+                    val raw = leafParents[n]?.tag in RAW_TEXT
+                    out.append(if (raw) n.text else escape(n.text, attribute = false))
+                }
+                is KiteXmlNode.Comment -> when {
+                    // HTML 13.3: an instruction ends at its first >, and a document type gives its name alone.
+                    n in instructions -> out.append("<?").append(instructions.getValue(n)).append(' ').append(n.text).append('>')
+                    n in doctypes -> out.append("<!DOCTYPE ").append(doctypes.getValue(n).name).append('>')
+                    else -> out.append("<!--").append(n.text).append("-->")
+                }
+                is KiteXmlNode.Element -> {
+                    out.append('<').append(n.tag)
+                    for (a in attributes(n)) out.append(' ').append(serializedName(a)).append("=\"").append(escape(a.value, attribute = true)).append('"')
+                    out.append('>')
+                    if (n.tag !in VOID) stack.add(n.children.toList().iterator() to n)
+                }
             }
         }
     }
@@ -874,7 +900,13 @@ internal class ScriptDom(
     /** Sets the parent of [el] and of every element under it, after a move that changed the children lists alone. */
     private fun fixParents(el: KiteXmlNode.Element, parent: KiteXmlNode.Element?) {
         el.parent = parent
-        for (c in el.children) if (c is KiteXmlNode.Element) fixParents(c, el)
+        // A loop and a stack of its own, so a script's depth costs no call stack (#955).
+        val stack = ArrayList<KiteXmlNode.Element>()
+        stack.add(el)
+        while (stack.isNotEmpty()) {
+            val e = stack.removeAt(stack.lastIndex)
+            for (c in e.children) if (c is KiteXmlNode.Element) { c.parent = e; stack.add(c) }
+        }
     }
 
     /**
@@ -897,22 +929,45 @@ internal class ScriptDom(
     private inner class XmlWriter(val out: StringBuilder) {
         var nextPrefix = 1
 
-        fun node(node: KiteXmlNode, context: String?, prefixes: MutableMap<String?, MutableList<String>>) {
-            when (node) {
-                is KiteXmlNode.Text -> if (node in cdataSections) out.append("<![CDATA[").append(node.text).append("]]>") else text(node.text)
-                is KiteXmlNode.Comment -> when {
-                    node in instructions -> out.append("<?").append(instructions.getValue(node)).append(' ').append(node.text).append("?>")
-                    node in doctypes -> doctype(doctypes.getValue(node))
-                    else -> out.append("<!--").append(node.text).append("-->")
+        /** A node still to write, with the namespace it inherits and the prefix map in force. */
+        private inner class Visit(val node: KiteXmlNode, val context: String?, val prefixes: MutableMap<String?, MutableList<String>>)
+
+        /** The end tag of an element whose children have been written. */
+        private inner class Close(val qualified: String)
+
+        /** Writes [start] and what is under it. A loop and a stack of its own walk the tree, so a script's depth costs no call stack (#955). */
+        fun node(start: KiteXmlNode, context: String?, prefixes: MutableMap<String?, MutableList<String>>) {
+            val steps = ArrayList<Any>()
+            steps.add(Visit(start, context, prefixes))
+            while (steps.isNotEmpty()) {
+                val step = steps.removeAt(steps.lastIndex)
+                if (step is Close) {
+                    out.append("</").append(step.qualified).append('>')
+                    continue
                 }
-                is KiteXmlNode.Element ->
-                    if (node === root || node.tag == FRAGMENT || node in documents) {
-                        declarations[node]?.let(out::append)
-                        for (c in node.children) node(c, context, prefixes)
+                step as Visit
+                when (val node = step.node) {
+                    is KiteXmlNode.Text -> if (node in cdataSections) out.append("<![CDATA[").append(node.text).append("]]>") else text(node.text)
+                    is KiteXmlNode.Comment -> when {
+                        node in instructions -> out.append("<?").append(instructions.getValue(node)).append(' ').append(node.text).append("?>")
+                        node in doctypes -> doctype(doctypes.getValue(node))
+                        else -> out.append("<!--").append(node.text).append("-->")
                     }
-                    else element(node, context, prefixes)
+                    is KiteXmlNode.Element ->
+                        if (node === root || node.tag == FRAGMENT || node in documents) {
+                            declarations[node]?.let(out::append)
+                            for (i in node.children.indices.reversed()) steps.add(Visit(node.children[i], step.context, step.prefixes))
+                        } else {
+                            val open = element(node, step.context, step.prefixes) ?: continue
+                            steps.add(Close(open.qualified))
+                            for (i in node.children.indices.reversed()) steps.add(Visit(node.children[i], open.inherited, open.prefixes))
+                        }
+                }
             }
         }
+
+        /** An element whose start tag is written: its name in the end tag, and what its children inherit. */
+        private inner class Opened(val qualified: String, val inherited: String?, val prefixes: MutableMap<String?, MutableList<String>>)
 
         private fun doctype(d: XmlReader.Doctype) {
             out.append("<!DOCTYPE ").append(d.name)
@@ -922,7 +977,8 @@ internal class ScriptDom(
             out.append('>')
         }
 
-        private fun element(el: KiteXmlNode.Element, context: String?, outer: MutableMap<String?, MutableList<String>>) {
+        /** Writes the start tag of [el], or the whole of it when it has no children, which answers null. */
+        private fun element(el: KiteXmlNode.Element, context: String?, outer: MutableMap<String?, MutableList<String>>): Opened? {
             val name = nameOf(el)
             val ns = name.namespace
             val prefixes = HashMap<String?, MutableList<String>>(outer.size + 2).apply { for ((k, v) in outer) put(k, v.toMutableList()) }
@@ -992,11 +1048,10 @@ internal class ScriptDom(
             val children = el.children
             if (children.isEmpty() && (ns != XHTML_NS || name.localName in VOID)) {
                 out.append(if (ns == XHTML_NS) " />" else "/>")
-                return
+                return null
             }
             out.append('>')
-            for (c in children) node(c, inherited, prefixes)
-            out.append("</").append(qualified).append('>')
+            return Opened(qualified, inherited, prefixes)
         }
 
         /** The prefix [prefixes] holds for [ns]: [preferred] when it is one of them, else the last. */
@@ -1159,15 +1214,25 @@ internal class ScriptDom(
 
     /** Records the attributes of [el] and of the elements under it as a parse that keeps their names writes them. */
     private fun recordWritten(el: KiteXmlNode.Element) {
-        written[el] = el.attrs
-        for (c in el.children) if (c is KiteXmlNode.Element) recordWritten(c)
+        // A loop and a stack of its own, so a script's depth costs no call stack (#955).
+        val stack = ArrayList<KiteXmlNode.Element>()
+        stack.add(el)
+        while (stack.isNotEmpty()) {
+            val e = stack.removeAt(stack.lastIndex)
+            written[e] = e.attrs
+            for (c in e.children) if (c is KiteXmlNode.Element) stack.add(c)
+        }
     }
 
     /** Records the parent of every text node and comment under [node], which the parser does not keep. */
     private fun registerTexts(node: KiteXmlNode) {
         if (node !is KiteXmlNode.Element) return
-        for (c in node.children) {
-            if (c is KiteXmlNode.Element) registerTexts(c) else leafParents[c] = node
+        // A loop and a stack of its own, so a script's depth costs no call stack (#955).
+        val stack = ArrayList<KiteXmlNode.Element>()
+        stack.add(node)
+        while (stack.isNotEmpty()) {
+            val e = stack.removeAt(stack.lastIndex)
+            for (c in e.children) if (c is KiteXmlNode.Element) stack.add(c) else leafParents[c] = e
         }
     }
 

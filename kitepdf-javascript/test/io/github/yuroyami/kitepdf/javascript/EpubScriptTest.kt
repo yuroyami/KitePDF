@@ -1150,4 +1150,24 @@ class EpubScriptTest {
         assertTrue("deep" in text, text)
         assertTrue("deeper" in text, text)
     }
+
+    @Test
+    fun a_script_reads_and_rewrites_a_tree_it_nested_deeply(): TestResult = scriptTest {
+        // The DOM's own walks used the call stack once per level, so reading innerHTML or textContent
+        // of a 30,000-level tree failed inside the engine call (#955).
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Markup.</p><script>document.body.innerHTML = '<div>'.repeat(30000) + 'deep' + '</div>'.repeat(30000);
+                var html = document.body.innerHTML, text = document.body.textContent;
+                document.body.innerHTML = html;
+                console.log(html.length + ' ' + text + ' ' + document.body.textContent);</script>""",
+        )
+        val r = runner(book, console = console)
+        r.chapterOpened(0)
+        assertTrue(r.failures.none { "StackOverflow" in it.message.orEmpty() }, "${r.failures.map { it.message }}")
+        // An XHTML chapter writes XML, whose first element also declares its namespace.
+        val (length, text, again) = console.single { it.startsWith("log: ") }.removePrefix("log: ").split(' ')
+        assertTrue(length.toInt() >= "<div>".length * 30000 + "</div>".length * 30000 + 4, length)
+        assertEquals("deep" to "deep", text to again)
+    }
 }
