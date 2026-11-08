@@ -478,6 +478,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a book, a character followed by a variation selector draws the glyph the font's cmap format 14 subtable maps
   the pair to, so ideographic variation sequences keep their variant forms. `TrueTypeFont.glyphIdForVariation`
   and `TtfCMap.variationGlyphIdFor` look a pair up (#914).
+- Search takes `KiteSearchOptions`: `wholeWord` keeps only matches with no letter or digit beside them, and
+  `ignoreDiacritics` folds the text and the needle by canonical decomposition without their non-spacing marks, so
+  "resume" finds "résumé" in precomposed and decomposed form. `KiteStructuredText.search`, `EpubDocument.search`,
+  `PdfPage.search` and `PdfDocument.search` each have an overload that takes it (#943).
 
 ## [0.13.0] - 2026-10-09
 

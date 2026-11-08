@@ -147,7 +147,12 @@ for (hit in doc.search("invoice")) {
 
 // The hits on one page, with case
 val hits = doc.pages[0].search("Total", ignoreCase = false)
+
+// Whole words only, and "resume" finds "résumé"
+val words = doc.search("resume", KiteSearchOptions(wholeWord = true, ignoreDiacritics = true))
 ```
+
+`KiteSearchOptions` takes `ignoreCase` (true by default), `wholeWord` and `ignoreDiacritics`. A whole word has no letter or digit just before or after it; in a script written without spaces, such as Chinese or Thai, the option changes nothing. Ignoring diacritics folds the page text and the needle by canonical decomposition and drops the non-spacing marks, the Arabic harakat and Hebrew points among them, as pdf.js does. `EpubDocument.search` takes the same options.
 
 A hit has one rectangle (`quads`) for each line that it touches, in display space. A match can go across a line break inside a block, where the break counts as one space. After a hyphen at the end of a line, the break counts as nothing and the hyphen drops out. A match never goes from one block into the next.
 

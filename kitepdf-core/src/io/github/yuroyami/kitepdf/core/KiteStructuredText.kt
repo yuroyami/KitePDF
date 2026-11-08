@@ -30,7 +30,7 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
      * @param pageIndex stamped onto each hit (the model itself is page-local).
      */
     public fun search(needle: String, ignoreCase: Boolean = true, pageIndex: Int = -1): List<KiteSearchHit> =
-        search(needle, ignoreCase, pageIndex, location = null)
+        search(needle, KiteSearchOptions(ignoreCase = ignoreCase), pageIndex, location = null)
 
     /**
      * [search] with an explicit page [location] in the current layout. The caller owns
@@ -43,9 +43,21 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
         ignoreCase: Boolean = true,
         pageIndex: Int = -1,
         location: KiteLocation?,
+    ): List<KiteSearchHit> = search(needle, KiteSearchOptions(ignoreCase = ignoreCase), pageIndex, location)
+
+    /**
+     * [search] by [options]: case, whole words and diacritics (#943). Hits keep the quads of the
+     * page's own characters, marks a fold dropped included.
+     */
+    public fun search(
+        needle: String,
+        options: KiteSearchOptions,
+        pageIndex: Int = -1,
+        location: KiteLocation? = null,
     ): List<KiteSearchHit> {
         if (needle.isEmpty()) return emptyList()
-        val needle = expandLigatures(needle)
+        val needle = expandLigatures(needle).let { if (options.ignoreDiacritics) foldDiacritics(it, null) else it }
+        if (needle.isEmpty()) return emptyList()
         val hits = ArrayList<KiteSearchHit>()
         for (block in blocks) {
             // Concatenate the block's lines; chars map back to (line, char) for quads.
@@ -80,18 +92,65 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
                 }
             }
             val text = sb.toString()
+            // With diacritics ignored the match runs on the folded text, and [origin] takes each of its
+            // characters back to the text's own.
+            val origin: IntArray?
+            val haystack = if (options.ignoreDiacritics) {
+                val map = ArrayList<Int>(text.length)
+                foldDiacritics(text, map).also { origin = map.toIntArray() }
+            } else {
+                origin = null
+                text
+            }
             var from = 0
-            while (from + needle.length <= text.length) {
-                if (!text.regionMatches(from, needle, 0, needle.length, ignoreCase)) { from++; continue }
-                val entries = (from until from + needle.length)
+            while (from + needle.length <= haystack.length) {
+                if (!haystack.regionMatches(from, needle, 0, needle.length, options.ignoreCase)) { from++; continue }
+                val start = origin?.get(from) ?: from
+                var end = (origin?.get(from + needle.length - 1) ?: (from + needle.length - 1)) + 1
+                // The marks the fold dropped after the last character belong to it.
+                if (origin != null) while (end < text.length && DiacriticFolding.isMark(text[end])) end++
+                if (options.wholeWord && !atWordBoundaries(text, start, end, needle)) { from++; continue }
+                val entries = (start until end)
                     .filter { refLine[it] >= 0 } // joiner spaces carry no geometry
                     .map { refLine[it] to refChar[it] }
-                hits.add(KiteSearchHit(pageIndex, lineQuads(block, entries), text.substring(from, from + needle.length), location))
+                hits.add(KiteSearchHit(pageIndex, lineQuads(block, entries), text.substring(start, end), location))
                 from += needle.length
             }
         }
         return hits
     }
+
+    /**
+     * [text] with each precomposed letter as its base and the non-spacing marks dropped: the
+     * canonical decomposition with category Mn removed, as pdf.js folds diacritics. [origin] gets the
+     * index in [text] of each character of the result.
+     */
+    private fun foldDiacritics(text: String, origin: MutableList<Int>?): String {
+        val sb = StringBuilder(text.length)
+        for ((i, c) in text.withIndex()) {
+            if (DiacriticFolding.isMark(c)) continue
+            sb.append(DiacriticFolding.base(c))
+            origin?.add(i)
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Whether the match of [needle] over [start] until [end] of [text] has no letter or digit just
+     * outside it. A side where the needle ends in a script written without spaces, as Chinese,
+     * Japanese and Thai are, has no boundary to find, so it always counts.
+     */
+    private fun atWordBoundaries(text: String, start: Int, end: Int, needle: String): Boolean {
+        fun wordChar(c: Char) = c.isLetterOrDigit() || DiacriticFolding.isMark(c)
+        val before = start == 0 || !wordChar(text[start - 1]) || unspaced(needle.first())
+        val after = end >= text.length || !wordChar(text[end]) || unspaced(needle.last())
+        return before && after
+    }
+
+    /** CJK, kana, Thai, Lao, Myanmar and Khmer, and any character outside the BMP. Korean, which spaces its words, is not. */
+    private fun unspaced(c: Char): Boolean = c.code in 0x2E80..0x9FFF ||
+        c.code in 0xF900..0xFAFF || c.code in 0xFF66..0xFF9F || c.code in 0x0E00..0x0EFF || c.code in 0x1000..0x109F ||
+        c.code in 0x1780..0x17FF || c.isSurrogate()
 
     /* ─── Selection support ───────────────────────────────────────── */
 
@@ -345,6 +404,25 @@ public class KiteCaret(
  * [KiteStructuredText.search] keeps the caller's supplied index, or -1 when unknown.
  * Located consumers use [location] when present, even if the old index is stale.
  */
+/**
+ * How a search matches its needle (#943). The defaults are the search's own: case ignored, any
+ * position, diacritics counted.
+ *
+ * @property wholeWord a match counts only when no letter or digit sits just before or after it, so
+ *   "art" finds "art," but not "start". A side of the needle in a script written without spaces,
+ *   Chinese, Japanese, Thai, Lao, Myanmar or Khmer, needs no boundary: there the option changes
+ *   nothing.
+ * @property ignoreDiacritics the text and the needle are both folded by canonical decomposition with
+ *   the non-spacing marks removed, as pdf.js folds them, so "resume" finds "résumé" whether the page
+ *   stores é precomposed or as e and U+0301. Every mark of category Mn goes, the Arabic harakat and
+ *   the Hebrew points among them; letters that decompose to nothing, such as ø and ł, stay.
+ */
+public data class KiteSearchOptions(
+    val ignoreCase: Boolean = true,
+    val wholeWord: Boolean = false,
+    val ignoreDiacritics: Boolean = false,
+)
+
 public class KiteSearchHit(
     public val pageIndex: Int,
     public val quads: List<KiteRectangle>,

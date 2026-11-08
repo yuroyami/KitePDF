@@ -2151,6 +2151,25 @@ final class io.github.yuroyami.kitepdf.core/KiteSearchHit { // io.github.yuroyam
         final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteSearchHit.text.<get-text>|<get-text>(){}[0]
 }
 
+final class io.github.yuroyami.kitepdf.core/KiteSearchOptions { // io.github.yuroyami.kitepdf.core/KiteSearchOptions|null[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.core/KiteSearchOptions.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
+
+    final val ignoreCase // io.github.yuroyami.kitepdf.core/KiteSearchOptions.ignoreCase|{}ignoreCase[0]
+        final fun <get-ignoreCase>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteSearchOptions.ignoreCase.<get-ignoreCase>|<get-ignoreCase>(){}[0]
+    final val ignoreDiacritics // io.github.yuroyami.kitepdf.core/KiteSearchOptions.ignoreDiacritics|{}ignoreDiacritics[0]
+        final fun <get-ignoreDiacritics>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteSearchOptions.ignoreDiacritics.<get-ignoreDiacritics>|<get-ignoreDiacritics>(){}[0]
+    final val wholeWord // io.github.yuroyami.kitepdf.core/KiteSearchOptions.wholeWord|{}wholeWord[0]
+        final fun <get-wholeWord>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteSearchOptions.wholeWord.<get-wholeWord>|<get-wholeWord>(){}[0]
+
+    final fun component1(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteSearchOptions.component1|component1(){}[0]
+    final fun component2(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteSearchOptions.component2|component2(){}[0]
+    final fun component3(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteSearchOptions.component3|component3(){}[0]
+    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core/KiteSearchOptions // io.github.yuroyami.kitepdf.core/KiteSearchOptions.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteSearchOptions.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteSearchOptions.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteSearchOptions.toString|toString(){}[0]
+}
+
 final class io.github.yuroyami.kitepdf.core/KiteStructuredText { // io.github.yuroyami.kitepdf.core/KiteStructuredText|null[0]
     constructor <init>(kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteTextBlock>) // io.github.yuroyami.kitepdf.core/KiteStructuredText.<init>|<init>(kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteTextBlock>){}[0]
 
@@ -2165,6 +2184,7 @@ final class io.github.yuroyami.kitepdf.core/KiteStructuredText { // io.github.yu
     final fun charIndexAt(kotlin/Double, kotlin/Double): kotlin/Int? // io.github.yuroyami.kitepdf.core/KiteStructuredText.charIndexAt|charIndexAt(kotlin.Double;kotlin.Double){}[0]
     final fun copyText(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.copyText|copyText(kotlin.Int;kotlin.Int){}[0]
     final fun quadsFor(kotlin/Int, kotlin/Int): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle> // io.github.yuroyami.kitepdf.core/KiteStructuredText.quadsFor|quadsFor(kotlin.Int;kotlin.Int){}[0]
+    final fun search(kotlin/String, io.github.yuroyami.kitepdf.core/KiteSearchOptions, kotlin/Int = ..., io.github.yuroyami.kitepdf.core/KiteLocation? = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;io.github.yuroyami.kitepdf.core.KiteSearchOptions;kotlin.Int;io.github.yuroyami.kitepdf.core.KiteLocation?){}[0]
     final fun search(kotlin/String, kotlin/Boolean = ..., kotlin/Int = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;kotlin.Boolean;kotlin.Int){}[0]
     final fun search(kotlin/String, kotlin/Boolean = ..., kotlin/Int = ..., io.github.yuroyami.kitepdf.core/KiteLocation?): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;kotlin.Boolean;kotlin.Int;io.github.yuroyami.kitepdf.core.KiteLocation?){}[0]
     final fun textRange(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.textRange|textRange(kotlin.Int;kotlin.Int){}[0]

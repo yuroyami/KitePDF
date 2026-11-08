@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.text
 
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteSearchOptions
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
@@ -36,3 +37,11 @@ public fun PdfPage.search(needle: String, ignoreCase: Boolean = true): List<PdfS
  */
 public fun PdfDocument.search(needle: String, ignoreCase: Boolean = true): Sequence<PdfSearchHit> =
     pages.asSequence().flatMap { it.search(needle, ignoreCase) }
+
+/** [search] by [options]: case, whole words and diacritics (#943). */
+public fun PdfPage.search(needle: String, options: KiteSearchOptions): List<PdfSearchHit> =
+    textContent().search(needle, options, pageIndex = index, location = KiteLocation(0, index))
+
+/** [search] across the document by [options]. */
+public fun PdfDocument.search(needle: String, options: KiteSearchOptions): Sequence<PdfSearchHit> =
+    pages.asSequence().flatMap { it.search(needle, options) }

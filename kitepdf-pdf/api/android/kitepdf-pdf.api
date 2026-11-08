@@ -1583,7 +1583,9 @@ public final class io/github/yuroyami/kitepdf/text/TextExtractor {
 }
 
 public final class io/github/yuroyami/kitepdf/text/TextSearchKt {
+	public static final fun search (Lio/github/yuroyami/kitepdf/PdfDocument;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteSearchOptions;)Lkotlin/sequences/Sequence;
 	public static final fun search (Lio/github/yuroyami/kitepdf/PdfDocument;Ljava/lang/String;Z)Lkotlin/sequences/Sequence;
+	public static final fun search (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteSearchOptions;)Ljava/util/List;
 	public static final fun search (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/lang/String;Z)Ljava/util/List;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/PdfDocument;Ljava/lang/String;ZILjava/lang/Object;)Lkotlin/sequences/Sequence;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/lang/String;ZILjava/lang/Object;)Ljava/util/List;

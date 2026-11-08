@@ -223,6 +223,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun renditionOf(kotlin/Int): io.github.yuroyami.kitepdf.epub/EpubRendition // io.github.yuroyami.kitepdf.epub/EpubDocument.renditionOf|renditionOf(kotlin.Int){}[0]
     final fun resource(kotlin/String): kotlin/ByteArray? // io.github.yuroyami.kitepdf.epub/EpubDocument.resource|resource(kotlin.String){}[0]
     final fun resourceType(kotlin/String): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubDocument.resourceType|resourceType(kotlin.String){}[0]
+    final fun search(kotlin/String, io.github.yuroyami.kitepdf.core/KiteSearchOptions): kotlin.sequences/Sequence<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.epub/EpubDocument.search|search(kotlin.String;io.github.yuroyami.kitepdf.core.KiteSearchOptions){}[0]
     final fun search(kotlin/String, kotlin/Boolean = ...): kotlin.sequences/Sequence<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.epub/EpubDocument.search|search(kotlin.String;kotlin.Boolean){}[0]
     final fun setFragment(kotlin/Int, kotlin/String) // io.github.yuroyami.kitepdf.epub/EpubDocument.setFragment|setFragment(kotlin.Int;kotlin.String){}[0]
     final fun topOf(io.github.yuroyami.kitepdf.core/KiteBookmark): kotlin/Double? // io.github.yuroyami.kitepdf.epub/EpubDocument.topOf|topOf(io.github.yuroyami.kitepdf.core.KiteBookmark){}[0]

@@ -43,6 +43,7 @@ import io.github.yuroyami.kitepdf.core.KiteMetadata
 import io.github.yuroyami.kitepdf.core.KiteOutlineItem
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteSearchOptions
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.KiteTextBlock
 import io.github.yuroyami.kitepdf.core.KiteTextLine
@@ -1373,10 +1374,14 @@ public class EpubDocument internal constructor(
      * Each hit carries its chapter/page location in this layout and its global
      * page index. Iterating the sequence prepares the whole book, as [pages] does.
      */
-    public fun search(needle: String, ignoreCase: Boolean = true): Sequence<KiteSearchHit> = sequence {
+    public fun search(needle: String, ignoreCase: Boolean = true): Sequence<KiteSearchHit> =
+        search(needle, KiteSearchOptions(ignoreCase = ignoreCase))
+
+    /** [search] by [options]: case, whole words and diacritics, as [KiteStructuredText.search] takes them (#943). */
+    public fun search(needle: String, options: KiteSearchOptions): Sequence<KiteSearchHit> = sequence {
         if (needle.isEmpty()) return@sequence
         for ((i, page) in pages.withIndex()) {
-            yieldAll(page.textContent().search(needle, ignoreCase, pageIndex = i, location = page.location))
+            yieldAll(page.textContent().search(needle, options, pageIndex = i, location = page.location))
         }
     }
 

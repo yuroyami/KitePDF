@@ -48,6 +48,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public final fun renditionOf (I)Lio/github/yuroyami/kitepdf/epub/EpubRendition;
 	public final fun resource (Ljava/lang/String;)[B
 	public final fun resourceType (Ljava/lang/String;)Ljava/lang/String;
+	public final fun search (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteSearchOptions;)Lkotlin/sequences/Sequence;
 	public final fun search (Ljava/lang/String;Z)Lkotlin/sequences/Sequence;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Ljava/lang/String;ZILjava/lang/Object;)Lkotlin/sequences/Sequence;
 	public final fun setFragment (ILjava/lang/String;)V
