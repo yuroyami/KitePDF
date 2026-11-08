@@ -226,6 +226,40 @@ class FormScriptTest {
     }
 
     @Test
+    fun the_page_draws_the_formatted_text_and_formats_only_what_changed(): TestResult = scriptTest {
+        // ISO 32000-1, 12.6.3, Table 196: the F action decides the text a field displays (#758).
+        val counting = "globalThis.runs = \\(globalThis.runs || 0\\) + 1; AFNumber_Format\\(2, 0, 0, 0, '\\$', true\\)"
+        val doc = PdfDocument.open(invoicePdf(format = counting))
+        PdfScriptRunner(doc).use { runner ->
+            fun runs(): String {
+                runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript(
+                    "this.getField('digits').value = String(globalThis.runs);", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap()),
+                ))
+                return runner.formState.value("digits").orEmpty()
+            }
+            fun drawn(): String {
+                val canvas = io.github.yuroyami.kitepdf.core.render.RecordingCanvas()
+                doc.pages[0].renderAnnotationsTo(canvas, io.github.yuroyami.kitepdf.core.render.KiteMatrix.IDENTITY, runner.formState)
+                return canvas.calls.filterIsInstance<io.github.yuroyami.kitepdf.core.render.RecordingCanvas.Call.Glyphs>().joinToString(" ") { it.text }
+            }
+            runner.setFieldValue("a", "1200")
+            runner.setFieldValue("b", "34.5")
+            assertEquals("1234.5", runner.formState.value("total"))
+            assertEquals("${'$'}1,234.50", runner.formState.formattedValue("total"))
+            assertTrue("${'$'}1,234.50" in drawn(), drawn())
+            assertEquals("2", runs(), "one format run for each change of the total")
+            // A commit that leaves the total as it was formats nothing.
+            runner.setFieldValue("digits", "7")
+            assertEquals("2", runs())
+            // With the caret, the field shows the value the reader edits; without it, the format again.
+            runner.focus("total", 0)
+            assertTrue("1234.5" in drawn() && "${'$'}1,234.50" !in drawn(), drawn())
+            runner.blur("total", 0)
+            assertTrue("${'$'}1,234.50" in drawn(), drawn())
+        }
+    }
+
+    @Test
     fun a_keystroke_script_can_refuse_what_is_typed(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->

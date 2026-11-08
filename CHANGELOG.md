@@ -504,6 +504,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AFNumber_Format` negative style 1 writes no minus sign and turns the text red, as PDFium, MuPDF and pdf.js do.
   A script's `field.textColor` now lives in `PdfFormState.textColor` / `setTextColor`, and the live widget
   appearance draws the text in it (#766).
+- A field with a format script shows the formatted text (`$1,234.50`) in the viewer and keeps its value raw;
+  `PdfFormState.formattedValue` holds it. A commit now runs only the format scripts of fields whose value changed
+  (#758).
 
 ## [0.13.0] - 2026-10-09
 

@@ -800,6 +800,7 @@ public final class io/github/yuroyami/kitepdf/PdfFormState {
 	public final fun cancelChoiceTransaction (Ljava/lang/String;I)Z
 	public final fun choiceSelection (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfChoiceSelection;
 	public final fun fieldRevision (Ljava/lang/String;)I
+	public final fun formattedValue (Ljava/lang/String;)Ljava/lang/String;
 	public final fun getChangedFields ()Ljava/util/Set;
 	public final fun getRevision ()I
 	public final fun isChanged (Ljava/lang/String;)Z
@@ -813,6 +814,7 @@ public final class io/github/yuroyami/kitepdf/PdfFormState {
 	public static synthetic fun resetForm$default (Lio/github/yuroyami/kitepdf/PdfFormState;Ljava/util/Collection;ZILjava/lang/Object;)V
 	public final fun setChoiceSelection (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;)Z
 	public final fun setChoiceSelection (Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfChoiceSelection;I)Z
+	public final fun setFormattedValue (Ljava/lang/String;Ljava/lang/String;)V
 	public final fun setHidden (Ljava/lang/String;Z)V
 	public final fun setReadOnly (Ljava/lang/String;Z)V
 	public final fun setTextColor (Ljava/lang/String;Ljava/util/List;)V

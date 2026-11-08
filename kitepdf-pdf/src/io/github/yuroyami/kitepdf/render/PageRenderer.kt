@@ -533,10 +533,12 @@ public class PageRenderer(
         if (annot.subtype != Subtype.Widget) return null
         val name = io.github.yuroyami.kitepdf.PdfFormField.qualifiedNameOf(annot.raw, resolver) ?: return null
         val color = state.textColor(name)
-        if (!state.isChanged(name) && color == null) return null
+        // What the format script made of the value is what the field shows (ISO 32000-1, 12.6.3; #758).
+        val shown = state.formattedValue(name)
+        if (!state.isChanged(name) && color == null && shown == null) return null
         if (state.isChanged(name)) choiceAppearance(annot, state.choiceSelection(name))?.let { return it }
         return io.github.yuroyami.kitepdf.writer.FieldAppearance.synthesize(
-            annot.raw, annot.rect.width, annot.rect.height, resolver, valueOverride = state.value(name) ?: "",
+            annot.raw, annot.rect.width, annot.rect.height, resolver, valueOverride = shown ?: state.value(name) ?: "",
             textColor = color,
         )
     }

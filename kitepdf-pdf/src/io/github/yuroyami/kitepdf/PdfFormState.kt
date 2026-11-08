@@ -37,6 +37,7 @@ public class PdfFormState(private val document: PdfDocument) {
     private val hidden = HashMap<String, Boolean>()
     private val readOnly = HashMap<String, Boolean>()
     private val textColors = HashMap<String, List<Double>>()
+    private val formatted = HashMap<String, String>()
     private val listeners = ArrayList<(Change) -> Unit>()
 
     /**
@@ -68,6 +69,7 @@ public class PdfFormState(private val document: PdfDocument) {
             copy.hidden.putAll(hidden)
             copy.readOnly.putAll(readOnly)
             copy.textColors.putAll(textColors)
+            copy.formatted.putAll(formatted)
             copy.changes = changes
         }
     }
@@ -200,7 +202,12 @@ public class PdfFormState(private val document: PdfDocument) {
             return
         }
         val changed = lock.withLock {
-            if (values[fieldName] == value) false else { values[fieldName] = value; changed(fieldName); true }
+            if (values[fieldName] == value) false else {
+                values[fieldName] = value
+                formatted.remove(fieldName)
+                changed(fieldName)
+                true
+            }
         }
         if (changed) publish(Change(fieldName, value))
     }
@@ -210,7 +217,8 @@ public class PdfFormState(private val document: PdfDocument) {
         if (document.formField(fieldName) == null) return
         val removed = lock.withLock {
             choices.remove(fieldName)
-            if (values.remove(fieldName) == null) {
+            val dropped = formatted.remove(fieldName) != null
+            if (values.remove(fieldName) == null && !dropped) {
                 invalidate(fieldName)
                 false
             } else { changed(fieldName); true }
@@ -223,13 +231,14 @@ public class PdfFormState(private val document: PdfDocument) {
         val allNames = document.formFields.map { it.fullyQualifiedName }
         val touched = lock.withLock {
             for (name in allNames) invalidate(name)
-            if (values.isEmpty() && hidden.isEmpty() && readOnly.isEmpty() && textColors.isEmpty()) return
-            val names = values.keys + hidden.keys + readOnly.keys + textColors.keys
+            if (values.isEmpty() && hidden.isEmpty() && readOnly.isEmpty() && textColors.isEmpty() && formatted.isEmpty()) return
+            val names = values.keys + hidden.keys + readOnly.keys + textColors.keys + formatted.keys
             values.clear()
             choices.clear()
             hidden.clear()
             readOnly.clear()
             textColors.clear()
+            formatted.clear()
             changes++
             names
         }
@@ -338,6 +347,27 @@ public class PdfFormState(private val document: PdfDocument) {
         val changed = lock.withLock {
             if (textColors[fieldName] == color) false else {
                 if (color == null) textColors.remove(fieldName) else textColors[fieldName] = color
+                changed(fieldName)
+                true
+            }
+        }
+        if (changed) publish(Change(fieldName, this.value(fieldName) ?: "", flagsOnly = true).also { it.typedChoice = choiceSelection(fieldName) })
+    }
+
+    /**
+     * The text the field's format script made of its value, which the page draws in place of the
+     * value, or null when the value is drawn as it is. The value itself stays as the reader typed it,
+     * so a calculation still reads a number (ISO 32000-1, 12.6.3, Table 196, the F action; #758).
+     * A new value drops it until the format script runs again.
+     */
+    public fun formattedValue(fieldName: String): String? = lock.withLock { formatted[fieldName] }
+
+    /** Draws [text] in place of the field's value, or the value itself again when [text] is null. */
+    public fun setFormattedValue(fieldName: String, text: String?) {
+        if (document.formField(fieldName) == null) return
+        val changed = lock.withLock {
+            if (formatted[fieldName] == text) false else {
+                if (text == null) formatted.remove(fieldName) else formatted[fieldName] = text
                 changed(fieldName)
                 true
             }

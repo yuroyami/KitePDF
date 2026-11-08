@@ -569,7 +569,7 @@ public class PdfScriptRunner(
         if (!formState.setChoiceSelection(fieldName, candidate, revision)) return false
         if (policy.enabled) {
             calculateAll()
-            formatAll()
+            formatAll(committed = fieldName)
         }
         return true
     }
@@ -667,11 +667,19 @@ public class PdfScriptRunner(
     /** Runs a widget's mouse up script, which is how an on-screen button reports a release. */
     override suspend fun mouseUp(fieldName: String): Unit = widgetEvent(fieldName, "MouseUp") { it.mouseUp }
 
-    /** Runs a widget's focus script. */
-    override suspend fun focus(fieldName: String): Unit = widgetEvent(fieldName, "Focus") { it.focus }
+    /**
+     * Runs a widget's focus script. The field then shows its value as it is, not its formatted text,
+     * because the reader edits the value (#758).
+     */
+    override suspend fun focus(fieldName: String): Unit =
+        widgetEvent(fieldName, "Focus", then = { formState.setFormattedValue(fieldName, null) }) { it.focus }
 
-    /** Runs a widget's blur script, which a viewer fires when the field loses the caret. */
-    override suspend fun blur(fieldName: String): Unit = widgetEvent(fieldName, "Blur") { it.blur }
+    /**
+     * Runs a widget's blur script, which a viewer fires when the field loses the caret. The field then
+     * shows its formatted text again, even when the reader changed nothing (#758).
+     */
+    override suspend fun blur(fieldName: String): Unit =
+        widgetEvent(fieldName, "Blur", then = { storeFormatted(fieldName) }) { it.blur }
 
     /** Runs the mouse down script of one widget of the field, such as one button of a radio group. */
     override suspend fun mouseDown(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "MouseDown", widgetIndex) { it.mouseDown }
@@ -680,10 +688,12 @@ public class PdfScriptRunner(
     override suspend fun mouseUp(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "MouseUp", widgetIndex) { it.mouseUp }
 
     /** Runs the focus script of one widget of the field. */
-    override suspend fun focus(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "Focus", widgetIndex) { it.focus }
+    override suspend fun focus(fieldName: String, widgetIndex: Int): Unit =
+        widgetEvent(fieldName, "Focus", widgetIndex, then = { formState.setFormattedValue(fieldName, null) }) { it.focus }
 
     /** Runs the blur script of one widget of the field. */
-    override suspend fun blur(fieldName: String, widgetIndex: Int): Unit = widgetEvent(fieldName, "Blur", widgetIndex) { it.blur }
+    override suspend fun blur(fieldName: String, widgetIndex: Int): Unit =
+        widgetEvent(fieldName, "Blur", widgetIndex, then = { storeFormatted(fieldName) }) { it.blur }
 
     /**
      * Performs one action of a widget's `/A` chain. A script runs as the field's mouse up event,
@@ -714,6 +724,7 @@ public class PdfScriptRunner(
         fieldName: String,
         eventName: String,
         widgetIndex: Int? = null,
+        then: suspend () -> Unit = {},
         select: (io.github.yuroyami.kitepdf.PdfWidgetActions) -> PdfAction?,
     ): Unit = pausingCall {
         ensureEngine()
@@ -721,6 +732,7 @@ public class PdfScriptRunner(
         val actions = if (widgetIndex == null) field?.additionalActions else field?.widgets?.getOrNull(widgetIndex)?.additionalActions
         val action = actions?.let(select) as? PdfAction.JavaScript
         if (action != null) fieldEvent(fieldName, eventName, action)
+        then()
     }
 
     /** Runs [action] as the [eventName] event of the field. Call it on the script thread. */
@@ -882,11 +894,31 @@ public class PdfScriptRunner(
     }
 
     /** Puts every field's shown text through its format script, after a calculation round. */
-    private suspend fun formatAll() {
+    /**
+     * Runs the format script of each field whose shown text is out of date, and keeps the text, which
+     * the page draws in place of the value (ISO 32000-1, 12.6.3, Table 196; #758). A field whose value
+     * did not change keeps the text it had, so a commit does not run every format script of the form.
+     * A choice field keeps no shown text; its script runs only when [committed] is that field.
+     */
+    private suspend fun formatAll(committed: String? = null) {
         for (field in document.formFields) {
             if (field.additionalActions?.format == null) continue
-            formatOnThread(field.fullyQualifiedName)
+            val name = field.fullyQualifiedName
+            if (field.type == PdfFormField.FieldType.Choice) {
+                if (name == committed) formatOnThread(name)
+                continue
+            }
+            if (formState.formattedValue(name) == null) storeFormatted(name)
         }
+    }
+
+    /** Formats one text field and keeps the result as what it shows. */
+    private suspend fun storeFormatted(fieldName: String) {
+        val field = document.formField(fieldName) ?: return
+        if (field.type == PdfFormField.FieldType.Choice || field.additionalActions?.format == null) return
+        val text = formatOnThread(fieldName)
+        // Only a script that ran can stand in for the value.
+        if (policy.enabled) formState.setFormattedValue(fieldName, text)
     }
 
     private fun keystrokeScript(fieldName: String): String? =

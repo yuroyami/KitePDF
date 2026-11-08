@@ -28,11 +28,11 @@ PdfScriptRunner(doc, onAlert = { alert -> showDialog(alert.message); 1 }).use { 
     // What the form's own script worked out
     runner.formState.value("total")
     // What the field shows, such as "$1,200.00"
-    runner.formattedValue("total")
+    runner.formState.formattedValue("total")
 }
 ```
 
-The values go into `runner.formState`, a `PdfFormState`, and the file does not change. The viewer draws from that state. To write the values to a file, see [Save the values to a file](editing.md#save-the-values-to-a-file).
+The values go into `runner.formState`, a `PdfFormState`, and the file does not change. The viewer draws from that state. A field with a format script shows the text that the script made, and keeps its value as typed, so a calculation still reads a number. `formState.formattedValue` holds that text; it is null for a field that shows its value as it is. `runner.formattedValue` runs the format script again and returns what it makes. To write the values to a file, see [Save the values to a file](editing.md#save-the-values-to-a-file).
 
 `runner.run(action)` runs one `PdfAction.JavaScript`, such as the action of a link that the reader tapped.
 
@@ -157,7 +157,7 @@ With a handler, a tap on a form field does what it does in a desktop viewer:
 
 - A push button runs its press and release scripts.
 - A check box or a radio button changes the value of the form.
-- A text field takes the cursor and opens the keyboard. Each character that the reader types goes through the keystroke script of the field first, so a field for digits refuses a letter. When the reader leaves the field, the viewer runs validate, then calculate, then format.
+- A text field takes the cursor and opens the keyboard. Each character that the reader types goes through the keystroke script of the field first, so a field for digits refuses a letter. When the reader leaves the field, the viewer runs validate, then calculate, then format, and the field shows the formatted text. While the field has the cursor, it shows the value the reader edits.
 
 The viewer shows a typed character at once. When the keystroke script refuses it, the field goes back to its earlier text.
 
