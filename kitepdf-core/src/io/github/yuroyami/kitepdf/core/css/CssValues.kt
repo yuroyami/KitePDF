@@ -84,6 +84,8 @@ public object CssValues {
         "large" -> mediumPt * 1.2
         "x-large" -> mediumPt * 1.5
         "xx-large" -> mediumPt * 2.0
+        // CSS Fonts 4, 2.5: the keyword HTML's font size 7 maps to.
+        "xxx-large" -> mediumPt * 3.0
         "smaller" -> parentPt * 0.833
         "larger" -> parentPt * 1.2
         else -> null

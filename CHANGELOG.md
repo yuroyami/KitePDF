@@ -558,6 +558,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with `+`, `-`, `*`, `/` and nesting; `CssValues.number` reads a number that one of them gives (#930).
 - A book's CSS counters work: `counter-reset`, `counter-increment` and `counter-set` run in document order with
   CSS scoping, and `counter()` and `counters()` in `content` print them in the predefined counter styles (#934).
+- The EPUB cascade maps the HTML presentational attributes of older books: `align` on blocks, table parts, images
+  and `hr`, `bgcolor`, `font` colour, face and size, `width` and `height` on table parts and `hr`, and `center`
+  is a centred block (#843).
 
 ## [0.13.0] - 2026-10-09
 

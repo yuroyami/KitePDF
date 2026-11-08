@@ -28,6 +28,7 @@ internal object UaStylesheet {
         blockquote{display:block;margin:1em 40px}
         body{display:block;margin:1em}
         caption,figcaption{display:block;text-align:center}
+        center{display:block;text-align:center}
         cite,dfn,em,i,var{font-style:italic}
         code,kbd,samp,tt{font-family:monospace}
         col{display:table-column}

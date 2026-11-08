@@ -119,10 +119,53 @@ internal class StyleResolver(
                 offer("border-$side-style", "solid", w)
             }
         }
+        // HTML, 15 (Rendering): the presentational attributes of older books, below every author rule (#843).
+        fun attr(name: String) = el.attrs[name]?.trim()?.takeIf { it.isNotEmpty() }
+        fun dimension(v: String): String? {
+            val t = v.trim()
+            val n = t.removeSuffix("%").trim().toDoubleOrNull()?.takeIf { it >= 0.0 && it.isFinite() } ?: return null
+            return if (t.endsWith("%")) "$n%" else "${n}px"
+        }
+        val align = attr("align")?.lowercase()
+        when (el.tag) {
+            // 15.3.3: align on div, p and the headings is text-align.
+            "div", "p", "h1", "h2", "h3", "h4", "h5", "h6", "caption", "legend", "td", "th", "tr", "thead", "tbody", "tfoot" ->
+                when (align) {
+                    "left", "right", "center", "justify" -> offer("text-align", align, w)
+                    "middle" -> offer("text-align", "center", w)
+                }
+            // 15.4.3: an image aligned left or right floats there.
+            "img", "object", "embed", "iframe" -> if (align == "left" || align == "right") offer("float", align, w)
+            // 15.3.11: a rule's width and its alignment through its margins.
+            "hr" -> {
+                attr("width")?.let(::dimension)?.let { offer("width", it, w) }
+                when (align) {
+                    "left" -> { offer("margin-left", "0", w); offer("margin-right", "auto", w) }
+                    "right" -> { offer("margin-left", "auto", w); offer("margin-right", "0", w) }
+                    "center" -> { offer("margin-left", "auto", w); offer("margin-right", "auto", w) }
+                }
+            }
+            // 15.3.4: the font element.
+            "font" -> {
+                attr("color")?.let { offer("color", it, w) }
+                attr("face")?.let { offer("font-family", it, w) }
+                attr("size")?.let(::fontSizeHint)?.let { offer("font-size", it, w) }
+            }
+        }
+        if (el.tag in BGCOLOR_TAGS) attr("bgcolor")?.let { offer("background-color", it, w) }
+        if (el.tag in SIZED_TABLE_TAGS) {
+            attr("width")?.let(::dimension)?.let { offer("width", it, w) }
+            attr("height")?.let(::dimension)?.let { offer("height", it, w) }
+        }
         when (el.tag) {
             "table" -> {
                 el.attrs["border"]?.toDoubleOrNull()?.takeIf { it > 0 }?.let { borderAll("${it}px") }
                 el.attrs["cellspacing"]?.toDoubleOrNull()?.let { offer("border-spacing", "${it}px", w) }
+                // 15.3.8: a centred table takes auto margins, and one aligned left or right floats.
+                when (align) {
+                    "center" -> { offer("margin-left", "auto", w); offer("margin-right", "auto", w) }
+                    "left", "right" -> offer("float", align, w)
+                }
             }
             "td", "th" -> {
                 val table = ancestors.firstOrNull { it.tag == "table" }
@@ -1535,7 +1578,27 @@ internal class StyleResolver(
         }
     }
 
+    /**
+     * A `font[size]` value as a `font-size` (HTML, 15.3.4): 1 to 7, or a step from 3 with a sign,
+     * each to the keyword of its size; anything else gives nothing.
+     */
+    private fun fontSizeHint(v: String): String? {
+        val t = v.trim()
+        val n = t.toIntOrNull() ?: return null
+        val size = (if (t.startsWith("+") || t.startsWith("-")) 3 + n else n).coerceIn(1, 7)
+        return FONT_SIZES[size - 1]
+    }
+
     private companion object {
+        /** The elements whose `bgcolor` is their background colour (HTML, 15.3.8 and 15.3.1). */
+        val BGCOLOR_TAGS = setOf("body", "table", "thead", "tbody", "tfoot", "tr", "td", "th")
+
+        /** The table elements whose `width` and `height` are their sizes (HTML, 15.3.8). */
+        val SIZED_TABLE_TAGS = setOf("table", "td", "th", "col")
+
+        /** The sizes of `font[size]` 1 to 7 (HTML, 15.3.4). */
+        val FONT_SIZES = listOf("x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large")
+
         /** The properties an SVG reads from a style sheet, as `SvgStyles` in kitepdf-svg lists them. */
         val SVG_PROPERTIES = setOf(
             "color", "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity",
