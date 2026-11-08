@@ -63,7 +63,8 @@ internal object HtmlParser {
         val root = KiteXmlNode.Element("#root", emptyMap())
         val stack = OpenElements().apply { add(root) }
         var warned = false
-        val tokens = KiteXml.tokenize(xhtml, keepComments, keepNames).let { if (html) placeDocument(it) else it }
+        val tokens = (if (html) KiteXml.tokenizeHtml(xhtml, keepComments, keepNames) else KiteXml.tokenize(xhtml, keepComments, keepNames))
+            .let { if (html) placeDocument(it) else it }
 
         for (t in tokens) when (t) {
             is KiteXmlToken.Open -> {

@@ -222,7 +222,7 @@ public object TextEncoding {
     private const val HEAD = 1024
 
     /** Windows-1252's 0x80..0x9F, the only range where it differs from Latin-1. */
-    private val CP1252_HIGH = charArrayOf(
+    internal val CP1252_HIGH = charArrayOf(
         '\u20AC', '\u0081', '\u201A', '\u0192', '\u201E', '\u2026', '\u2020', '\u2021',
         '\u02C6', '\u2030', '\u0160', '\u2039', '\u0152', '\u008D', '\u017D', '\u008F',
         '\u0090', '\u2018', '\u2019', '\u201C', '\u201D', '\u2022', '\u2013', '\u2014',

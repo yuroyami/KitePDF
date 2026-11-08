@@ -2651,6 +2651,8 @@ public final class io/github/yuroyami/kitepdf/core/xml/KiteXml {
 	public static synthetic fun parse$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/xml/KiteXmlNode$Element;
 	public final fun tokenize (Ljava/lang/String;ZZ)Ljava/util/List;
 	public static synthetic fun tokenize$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;ZZILjava/lang/Object;)Ljava/util/List;
+	public final fun tokenizeHtml (Ljava/lang/String;ZZ)Ljava/util/List;
+	public static synthetic fun tokenizeHtml$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;ZZILjava/lang/Object;)Ljava/util/List;
 	public final fun wellFormednessErrors (Ljava/lang/String;I)Ljava/util/List;
 	public static synthetic fun wellFormednessErrors$default (Lio/github/yuroyami/kitepdf/core/xml/KiteXml;Ljava/lang/String;IILjava/lang/Object;)Ljava/util/List;
 }

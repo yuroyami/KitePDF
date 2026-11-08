@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checked on the next call, so the selector matcher's sibling steps cost O(1) (#990).
 - `PdfScriptRunner.droppedFailures`: how many failures `failures` no longer holds, since it keeps the last
   100 (#960).
+- `KiteXml.tokenizeHtml`, the token stream of a document served as `text/html`, whose numeric character references follow
+  HTML's rules (#871).
 
 ### Changed
 
@@ -294,6 +296,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gave up (#880).
 - A style sheet imported twice by sheets that form no cycle takes its place in the cascade at each import, where
   every import after the first expanded to nothing (#884).
+- A numeric character reference in a `text/html` chapter follows HTML's rules: `&#150;` is an en dash through
+  windows-1252, and `&#0;`, a surrogate or a number past U+10FFFF is U+FFFD. XHTML chapters keep XML's rules
+  (#871).
 
 ## [0.13.0] - 2026-10-09
 

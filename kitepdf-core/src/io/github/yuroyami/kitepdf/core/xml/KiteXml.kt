@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.core.xml
 
+import io.github.yuroyami.kitepdf.core.text.TextEncoding
+
 /**
  * A tiny, forgiving XML reader: enough for EPUB's container.xml and OPF, for
  * (X)HTML content, and for SVG.
@@ -53,7 +55,18 @@ public object KiteXml {
      * tokenizer has it, for a caller that names attributes as a DOM does. Tag names
      * lose their prefix and case either way.
      */
-    public fun tokenize(xml: String, keepComments: Boolean = false, keepNames: Boolean = false): List<KiteXmlToken> {
+    public fun tokenize(xml: String, keepComments: Boolean = false, keepNames: Boolean = false): List<KiteXmlToken> =
+        tokenize(xml, keepComments, keepNames, html = false)
+
+    /**
+     * [tokenize] for a document served as `text/html`: a numeric character reference follows
+     * HTML's rules, so one to 0x80..0x9F maps through windows-1252 and one to 0, a surrogate or
+     * past U+10FFFF is U+FFFD (HTML, 13.2.5.80; #871). An XHTML document keeps XML's rules.
+     */
+    public fun tokenizeHtml(xml: String, keepComments: Boolean = false, keepNames: Boolean = false): List<KiteXmlToken> =
+        tokenize(xml, keepComments, keepNames, html = true)
+
+    private fun tokenize(xml: String, keepComments: Boolean, keepNames: Boolean, html: Boolean): List<KiteXmlToken> {
         val out = ArrayList<KiteXmlToken>()
         var i = 0
         val n = xml.length
@@ -95,7 +108,7 @@ public object KiteXml {
                     else -> {
                         val end = tagEnd(xml, i + 1)
                         if (end < 0) { i = n } else {
-                            val token = parseTag(xml.substring(i + 1, end), keepNames, declared)
+                            val token = parseTag(xml.substring(i + 1, end), keepNames, declared, html)
                             if (token != null) {
                                 out.add(token)
                                 // Only an element that closes is read raw, so one left open does not take the rest as text.
@@ -117,7 +130,7 @@ public object KiteXml {
                     while (end < n && !opensInRawText(xml, end, rawText)) end = xml.indexOf('<', end + 1).let { if (it < 0) n else it }
                 }
                 val raw = xml.substring(i, end)
-                if (raw.isNotEmpty()) out.add(KiteXmlToken.Text(decodeEntities(raw, declared)))
+                if (raw.isNotEmpty()) out.add(KiteXmlToken.Text(decodeEntities(raw, declared, html = html)))
                 i = end
             }
         }
@@ -172,7 +185,7 @@ public object KiteXml {
         return xml.indexOf('>', from)
     }
 
-    private fun parseTag(body: String, keepNames: Boolean, declared: DeclaredEntities?): KiteXmlToken? {
+    private fun parseTag(body: String, keepNames: Boolean, declared: DeclaredEntities?, html: Boolean): KiteXmlToken? {
         val t = body.trim()
         if (t.isEmpty()) return null
         if (t.startsWith("/")) return KiteXmlToken.Close(localName(t.substring(1).trim()))
@@ -180,11 +193,11 @@ public object KiteXml {
         val core = if (selfClose) t.dropLast(1).trim() else t
         val sp = core.indexOfFirst { it == ' ' || it == '\t' || it == '\n' || it == '\r' }
         val name = localName(if (sp < 0) core else core.substring(0, sp))
-        val attrs = if (sp < 0) emptyMap() else parseAttrs(core.substring(sp + 1), keepNames, declared)
+        val attrs = if (sp < 0) emptyMap() else parseAttrs(core.substring(sp + 1), keepNames, declared, html)
         return KiteXmlToken.Open(name, attrs, selfClose)
     }
 
-    private fun parseAttrs(s: String, keepNames: Boolean, declared: DeclaredEntities?): Map<String, String> {
+    private fun parseAttrs(s: String, keepNames: Boolean, declared: DeclaredEntities?, html: Boolean): Map<String, String> {
         val attrs = LinkedHashMap<String, String>()
         var i = 0
         val n = s.length
@@ -205,12 +218,12 @@ public object KiteXml {
                     val q = s[i]; i++
                     val vStart = i
                     while (i < n && s[i] != q) i++
-                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i), declared)
+                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i), declared, html = html)
                     if (i < n) i++
                 } else {
                     val vStart = i
                     while (i < n && !s[i].isWhitespace()) i++
-                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i), declared)
+                    if (keep) attrs[key] = decodeEntities(s.substring(vStart, i), declared, html = html)
                 }
             } else if (keep) {
                 attrs[key] = ""
@@ -230,7 +243,7 @@ public object KiteXml {
      * declares takes its replacement text, before HTML's table (#571). A name that ends in no
      * semicolon, or that no table has, stays as text. [depth] counts the entities being expanded.
      */
-    private fun decodeEntities(s: String, declared: DeclaredEntities? = null, depth: Int = 0): String {
+    private fun decodeEntities(s: String, declared: DeclaredEntities? = null, depth: Int = 0, html: Boolean = false): String {
         if ('&' !in s) return s
         val sb = StringBuilder(s.length)
         var i = 0
@@ -247,9 +260,9 @@ public object KiteXml {
                         ent == "quot" -> "\""
                         ent == "apos" -> "'"
                         ent.startsWith("#x") || ent.startsWith("#X") ->
-                            ent.substring(2).toIntOrNull(16)?.let { cp -> charsFor(cp) }
+                            numeric(ent.substring(2), 16, html)
                         ent.startsWith("#") ->
-                            ent.substring(1).toIntOrNull()?.let { cp -> charsFor(cp) }
+                            numeric(ent.substring(1), 10, html)
                         else -> declared?.expand(ent, depth) ?: HtmlEntities.lookup(ent)
                     }
                     if (rep != null) { sb.append(rep); i = semi + 1; continue }
@@ -373,6 +386,20 @@ public object KiteXml {
 
     /** How many characters the entities of one document may expand to, counted at each level of nesting. */
     private const val EXPANSION_BUDGET = 1_000_000
+
+    /** The text of a numeric reference of [digits] in [radix], by XML's rules, or HTML's for [html]. */
+    private fun numeric(digits: String, radix: Int, html: Boolean): String? {
+        if (!html) return digits.toIntOrNull(radix)?.let { cp -> charsFor(cp) }
+        if (digits.isEmpty() || digits.any { it.digitToIntOrNull(radix) == null }) return null
+        // A number too long for an Int is past U+10FFFF, which HTML reads as U+FFFD.
+        val significant = digits.trimStart('0').ifEmpty { "0" }
+        val cp = if (significant.length > 8) Int.MAX_VALUE else significant.toLong(radix).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        return when {
+            cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF -> "\uFFFD"
+            cp in 0x80..0x9F -> TextEncoding.CP1252_HIGH[cp - 0x80].toString()
+            else -> charsFor(cp)
+        }
+    }
 
     private fun charsFor(cp: Int): String =
         if (cp in 0..0x10FFFF) buildString { appendCodePointCompat(cp) } else ""
