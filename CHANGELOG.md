@@ -170,6 +170,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   30,000 levels deep threw `StackOverflowError` past the guard, from a scope with no parent and no handler,
   which ends an Android app (#956).
 
+- A book's `localStorage` and `sessionStorage` each hold up to 5 Mi UTF-16 code units of keys and values, and
+  `setItem` throws `QuotaExceededError` past that, as the HTML Standard asks. A chapter script that stored in
+  a loop filled the host's heap within its five-second budget (#957).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

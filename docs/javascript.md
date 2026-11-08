@@ -388,7 +388,7 @@ When a script changes its chapter, the chapter lays out again from the changed t
 | Streams | Streams Standard | Readable, writable and transform streams, both queuing strategies, `TextEncoderStream` and `TextDecoderStream`. A stream in a `transfer` list moves. |
 | `URL.createObjectURL` | File API | A `blob:` URL of the book's origin. Images, style sheets, `@import` and fonts load from it. A revoked URL keeps what the chapter already shows. |
 | `DOMParser`, `XMLSerializer` | HTML Standard, DOM Parsing and Serialization | HTML for `text/html`, XML for the four XML types. XML that is not well-formed gives a document with one `parsererror` element. The scripts of a parsed document do not run. |
-| `localStorage`, `sessionStorage` | HTML Standard | In memory, for the book |
+| `localStorage`, `sessionStorage` | HTML Standard | In memory, for the book, up to 5 Mi UTF-16 code units of keys and values each; past that `setItem` throws `QuotaExceededError` |
 
 `navigator.epubReadingSystem.hasFeature` answers true for `dom-manipulation`, `layout-changes`, `spine-scripting` and `mouse-events`, false for `touch-events` and `keyboard-events`, and undefined for a feature that it does not know.
 

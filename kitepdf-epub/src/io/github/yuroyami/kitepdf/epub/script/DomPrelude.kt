@@ -2075,7 +2075,11 @@ function storageKind(s) {
   return k;
 }
 function storageGet(kind, key) { var v = K.storage(kind, 'get', key, null); return v == null ? null : v; }
-function storageSet(kind, key, value) { K.storage(kind, 'set', key, value); }
+function storageSet(kind, key, value) {
+  if (K.storage(kind, 'set', key, value) == 'quota') {
+    throw new QuotaExceededError("Failed to execute 'setItem' on 'Storage': Setting the value of '" + key + "' exceeded the quota.");
+  }
+}
 function storageRemove(kind, key) { K.storage(kind, 'remove', key, null); }
 function storageLength(kind) { return +K.storage(kind, 'length', null, null); }
 function storageKey(kind, i) { var v = K.storage(kind, 'key', String(i), null); return v == null ? null : v; }

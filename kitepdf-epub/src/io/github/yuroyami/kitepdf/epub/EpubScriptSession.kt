@@ -142,6 +142,9 @@ public class EpubScriptSession(
     /** `localStorage` and `sessionStorage`, one each for the whole book. */
     private val stores = mapOf("local" to LinkedHashMap<String, String>(), "session" to LinkedHashMap<String, String>())
 
+    /** The UTF-16 code units of the keys and values of each store, against [STORAGE_QUOTA] (#957). */
+    private val storeSizes = HashMap<String, Long>()
+
     private val failureList = ArrayList<KiteScriptException>()
 
     @kotlin.concurrent.Volatile
@@ -1034,9 +1037,23 @@ public class EpubScriptSession(
         val store = stores[kind] ?: return null
         return when (op) {
             "get" -> store[key]
-            "set" -> { if (key != null && value != null) store[key] = value; null }
-            "remove" -> { store.remove(key); null }
-            "clear" -> { store.clear(); null }
+            "set" -> {
+                if (key == null || value == null) return null
+                // HTML, Web storage: setItem throws QuotaExceededError past the quota, which the
+                // prelude raises for this answer. The pairs live on the host's heap, outside the
+                // engine's memory limit, so a chapter that stored in a loop filled it (#957).
+                val used = storeSizes[kind] ?: 0L
+                val after = used - (store[key]?.let { key.length + it.length } ?: 0) + key.length + value.length
+                if (after > STORAGE_QUOTA) return "quota"
+                store[key] = value
+                storeSizes[kind] = after
+                null
+            }
+            "remove" -> {
+                store.remove(key)?.let { old -> storeSizes[kind] = (storeSizes[kind] ?: 0L) - key!!.length - old.length }
+                null
+            }
+            "clear" -> { store.clear(); storeSizes[kind] = 0L; null }
             "key" -> key?.toIntOrNull()?.let { store.keys.elementAtOrNull(it) }
             "length" -> store.size
             else -> null
@@ -1046,6 +1063,13 @@ public class EpubScriptSession(
     public companion object {
         /** How many failures [failures] keeps. */
         public const val MAX_FAILURES: Int = 100
+
+        /**
+         * The UTF-16 code units the keys and values of one storage area may hold, about the 5 MB a
+         * browser allows an origin (HTML, Web storage, "user agents should limit the total amount of
+         * space allowed for storage areas") (#957).
+         */
+        private const val STORAGE_QUOTA = 5L * 1024 * 1024
 
         /** CSS pixels are 0.75 points, the unit of the layout and of display space. */
         private const val PT_PER_PX = 0.75

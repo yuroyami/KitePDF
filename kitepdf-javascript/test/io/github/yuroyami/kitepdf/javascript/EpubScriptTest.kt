@@ -1105,4 +1105,19 @@ class EpubScriptTest {
             })();
         """.trimIndent()
     }
+
+    @Test
+    fun storage_past_its_quota_throws_quota_exceeded_error(): TestResult = scriptTest {
+        // The stores had no limit, so a chapter that stored in a loop filled the host's heap (#957).
+        val console = ArrayList<String>()
+        val book = ScriptBooks.chapter(
+            """<p>Markup.</p><script>var big = 'x'.repeat(1 << 20), stored = 0, error = null;
+                try { for (var i = 0; i < 300; i++) { localStorage.setItem('k' + i, big); stored++; } } catch (e) { error = e.name; }
+                sessionStorage.setItem('s', 'v');
+                console.log(stored + ' ' + error + ' ' + sessionStorage.getItem('s'));</script>""",
+        )
+        runner(book, console = console).chapterOpened(0)
+        val logged = console.single { it.startsWith("log: ") }.removePrefix("log: ")
+        assertEquals("4 QuotaExceededError v", logged)
+    }
 }
