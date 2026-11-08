@@ -131,8 +131,11 @@ public class KiteRasterCanvas(
         for (glyph in glyphs) {
             val outline = if (hasOutlines) glyph.outline else if (glyph.text.isBlank()) null else hostGlyphOutline(glyph.text, fontSpec)
             if (outline != null && !outline.isEmpty()) {
+                // A host-font glyph draws at the pen, as on every canvas (KiteCanvas.drawGlyphs, #904).
+                val dx = if (hasOutlines) glyph.xOffset * unitScale else 0.0
+                val dy = if (hasOutlines) glyph.yOffset * unitScale else 0.0
                 val m = textToDevice
-                    .concat(KiteMatrix.translation(pen + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
+                    .concat(KiteMatrix.translation(pen + dx, dy))
                     .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                 scan.add(outline, m)
                 any = true

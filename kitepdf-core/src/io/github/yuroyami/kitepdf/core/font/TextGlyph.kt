@@ -31,7 +31,8 @@ public data class TextGlyph(
     /**
      * Positioning offset in font design units (GPOS mark attachment), applied to
      * this glyph's origin without affecting the pen advance. Scaled by the same
-     * `fontSize/unitsPerEm` as the outline. Zero for normal glyphs.
+     * `fontSize/unitsPerEm` as the outline. Zero for normal glyphs. A canvas reads it
+     * for a glyph with an [outline] only; a host-font glyph draws at the pen (#904).
      */
     val xOffset: Double = 0.0,
     val yOffset: Double = 0.0,

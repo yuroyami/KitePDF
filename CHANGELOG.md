@@ -786,6 +786,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - At deep zoom on a large view with `quality` above 1, the tiles cover the whole view: the cap on tiles per page
   is 128, and a cap that still cuts leaves out the tiles farthest from the middle instead of the bottom rows
   (#898).
+- `KiteCanvas.drawGlyphs` now says that a glyph of a host-font run draws at the pen and its `xOffset` and
+  `yOffset` are not read, and `CoreGraphicsCanvas` and `KiteRasterCanvas` stop applying them there, as the other
+  canvases already did (#904).
 
 ## [0.13.0] - 2026-10-09
 

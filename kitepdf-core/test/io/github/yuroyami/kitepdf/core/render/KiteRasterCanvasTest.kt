@@ -197,6 +197,18 @@ class KiteRasterCanvasTest {
     }
 
     @Test
+    fun a_host_font_glyph_draws_at_the_pen_whatever_its_offsets() {
+        // Every canvas draws a glyph of a host-font run at the pen; the offsets move outlines only (#904).
+        val square = rect(0.0, 0.0, 500.0, 500.0)
+        val c = KiteRasterCanvas(40, 20, hostOutlines = { _, _ -> square })
+        val moved = TextGlyph(0, 1, -1, "a", 600.0, null, false, xOffset = 400.0, yOffset = 300.0)
+        c.drawGlyphs(listOf(moved), 20.0, 1000, hasOutlines = false, FontSpec.SansSerif, KiteMatrix(1.0, 0.0, 0.0, -1.0, 2.0, 15.0), blue)
+        val r = c.toRaster()
+        assertEquals(255, r.alpha(3, 14), "the glyph's corner at the pen")
+        assertEquals(0, r.alpha(13, 10), "nothing 8 pixels right, where the offset would put it")
+    }
+
+    @Test
     fun a_raster_step_reads_the_backdrop_and_draws_back() {
         val c = KiteRasterCanvas(10, 10)
         c.fillPath(rect(0.0, 0.0, 10.0, 10.0), KiteMatrix.IDENTITY, red, evenOdd = false)

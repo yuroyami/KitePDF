@@ -115,6 +115,11 @@ public interface KiteCanvas {
      * [TextGlyph.text] through a host typeface chosen from [fontSpec]. The pen
      * still advances by the document's numbers above, not by the host face's
      * own metrics (ISO 32000-1, 9.4.4).
+     *
+     * [TextGlyph.xOffset] and [TextGlyph.yOffset] move the outline of a glyph of an
+     * embedded font. A glyph of a host-font run draws at the pen on every canvas and its
+     * offsets are not read: a caller that needs one in another place moves the run's
+     * origin, as the EPUB layout does for an upright glyph (#508, #904).
      */
     public fun drawGlyphs(
         glyphs: List<TextGlyph>,

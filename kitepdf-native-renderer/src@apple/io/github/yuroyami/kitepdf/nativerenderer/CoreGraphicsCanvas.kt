@@ -344,11 +344,8 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
                 var x = part.x
                 for (glyph in part.glyphs) {
                     val text = glyph.text
-                    if (text.isNotBlank()) {
-                        val gx = x + glyph.xOffset * advanceScale
-                        val gy = glyph.yOffset * advanceScale
-                        if (!fillFaceGlyph(font, text, gx, gy, em)) drawHostLine(text, font, language, gx, gy, em, null)
-                    }
+                    // A host-font glyph draws at the pen: its offsets are for outlines (KiteCanvas.drawGlyphs, #904).
+                    if (text.isNotBlank() && !fillFaceGlyph(font, text, x, 0.0, em)) drawHostLine(text, font, language, x, 0.0, em, null)
                     x += glyph.advanceWidth * advanceScale
                 }
             }
