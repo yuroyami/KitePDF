@@ -742,6 +742,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lookup flag now counts: a mark that `MarkAttachmentType`, `UseMarkFilteringSet` or `IgnoreMarks` leaves out is
   not placed by the lookup, and a mark-to-mark lookup stacks on the nearest mark it does not pass over.
   `OpenTypeMarks.plan` and `OpenTypeLanguage` are new, and `KiteShaper.shape` takes a language.
+- Two reading themes whose colour functions share a hash code no longer share their recoloured line-art bitmaps
+  (#844). A theme keys its images by the colours its function gives a set of greys and hues, not by the hash code
+  of the function.
 
 ## [0.13.0] - 2026-10-09
 

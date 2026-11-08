@@ -50,8 +50,22 @@ public class ReaderTheme(
     public fun wrap(canvas: KiteCanvas): KiteCanvas =
         if (mapColor === Light.mapColor) canvas else ThemedCanvas(canvas, mapColor, images, key)
 
-    /** A key of this theme for the images it recolours, so two themes never share a bitmap. */
-    private val key: String get() = "$background:${mapColor.hashCode()}"
+    /**
+     * A key of this theme for the images it recolours, so two themes share a bitmap only when they
+     * colour alike (#844). A hash code is no identity, and a reference to the function would keep it
+     * alive in every cache, so the key is what the function does: the colours it gives a ramp of
+     * greys and a set of hues, which are the colours of line art.
+     */
+    private val key: String by lazy {
+        buildString {
+            append(background.r).append(',').append(background.g).append(',').append(background.b)
+            for (c in KEY_SAMPLES) {
+                val m = runCatching { mapColor(c) }.getOrNull()
+                append(':')
+                if (m == null) append('-') else append(m.r).append(',').append(m.g).append(',').append(m.b)
+            }
+        }
+    }
 
     override fun equals(other: Any?): Boolean =
         this === other ||
@@ -250,4 +264,17 @@ internal class ThemedCanvas(
     // The step paints through this canvas, so its content takes the theme too.
     override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean =
         inner.rasterStep(region, ctm, step)
+}
+
+/** The colours whose images under a theme's colour function make its key: 33 greys, and six hues and their halves at four levels. */
+private val KEY_SAMPLES: List<RgbColor> = buildList {
+    for (i in 0..32) add(RgbColor.gray(i / 32.0))
+    for (l in listOf(0.25, 0.5, 0.75, 1.0)) {
+        val h = l / 2
+        addAll(listOf(
+            RgbColor(l, 0.0, 0.0), RgbColor(0.0, l, 0.0), RgbColor(0.0, 0.0, l),
+            RgbColor(l, l, 0.0), RgbColor(0.0, l, l), RgbColor(l, 0.0, l),
+            RgbColor(l, h, 0.0), RgbColor(0.0, l, h), RgbColor(h, 0.0, l),
+        ))
+    }
 }
