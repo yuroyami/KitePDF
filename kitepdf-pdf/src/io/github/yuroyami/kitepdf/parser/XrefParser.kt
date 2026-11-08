@@ -137,6 +137,10 @@ internal class XrefParser(private val reader: ByteReader) {
             ?: throw PdfFormatException("Xref stream missing /W")
         val fieldWidths = w.map { (it as PdfInt).value.toInt() }
         if (fieldWidths.size != 3) throw PdfFormatException("/W must have 3 entries")
+        // ISO 32000-1, 7.5.8.2, Table 17: each width is a count of bytes, and no field wider than
+        // a Long holds a value. A negative width made the row size negative, the bounds check
+        // never fired, and /Index [0 N] made N entries from an empty stream (#969).
+        if (fieldWidths.any { it !in 0..8 }) throw PdfFormatException("Xref stream /W $fieldWidths")
         val size = dict.getInt("Size")
             ?: throw PdfFormatException("Xref stream missing /Size")
         val index: List<Long> = dict.getArray("Index")?.map { (it as PdfInt).value }
@@ -150,10 +154,15 @@ internal class XrefParser(private val reader: ByteReader) {
         val entries = HashMap<Long, XrefEntry>()
         var cursor = 0
         var sub = 0
-        while (sub < index.size) {
+        while (sub + 1 < index.size) {
             val first = index[sub]
-            val count = index[sub + 1].toInt()
+            val declared = index[sub + 1]
             sub += 2
+            if (first < 0 || declared < 0) throw PdfFormatException("Xref stream /Index pair $first $declared")
+            // Each entry is one row of the stream, so a count past the rows left is damage.
+            val rowsLeft = (decoded.size - cursor) / rowSize
+            if (declared > rowsLeft) throw PdfFormatException("Xref stream truncated at row ${first + rowsLeft}")
+            val count = declared.toInt()
             for (i in 0 until count) {
                 if (cursor + rowSize > decoded.size) {
                     throw PdfFormatException("Xref stream truncated at row ${first + i}")

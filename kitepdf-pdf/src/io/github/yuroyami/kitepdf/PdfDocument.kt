@@ -916,6 +916,10 @@ public class PdfDocument private constructor(
             ?: throw PdfFormatException("ObjStm $objStreamRef missing /First")
 
         val decoded = FilterChain.decode(stream)
+        // Each header pair takes at least four bytes, two integers and two separators (ISO
+        // 32000-1, 7.5.7), so /N past a quarter of the stream is damage. IntArray(n) came first
+        // and a 600-byte file with /N 300000000 allocated 3.4 GB before the header ran out (#968).
+        if (n < 0 || n > decoded.size / 4) throw PdfFormatException("ObjStm $objStreamRef /N $n for ${decoded.size} bytes")
 
         // Parse the header (N pairs of integers) from the decoded bytes. The
         // pair's object number is validated but not stored. The member's
@@ -936,8 +940,15 @@ public class PdfDocument private constructor(
         val out = HashMap<Int, PdfObject>(n)
         val objReader = ByteReader(decoded)
         for (i in 0 until n) {
-            objReader.seek(first + offsets[i])
-            out[i] = Parser(Lexer(objReader)).readObject()
+            // Each member has its own offset (7.5.7), so one that points past the stream or does
+            // not parse says nothing about the others: it resolves to null, as an in-file object
+            // that does not parse does, and the rest of the stream still resolves (#804).
+            try {
+                objReader.seek(first + offsets[i])
+                out[i] = Parser(Lexer(objReader)).readObject()
+            } catch (e: PdfFormatException) {
+                kiteWarn { "ObjStm $objStreamRef: member $i cannot be read: ${e.message}" }
+            }
         }
         return out
     }

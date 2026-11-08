@@ -83,6 +83,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hundred bytes sized a table of `hival + 1` colours at the `cs` operator, which asked for gigabytes or
   wrapped negative and threw out of the render (#970).
 
+- One member of an object stream that points past the stream or does not parse resolves to null, and the
+  other members still resolve. A bad font member made the catalog and the page tree in the same stream
+  unreadable, so the file did not open (#804).
+- An object stream's `/N` is checked against the decoded stream before anything is sized by it, so a
+  600-byte file with `/N 300000000` no longer allocates 3.4 GB (#968). A cross-reference stream refuses a
+  `/W` width outside 0 to 8 and an `/Index` count past the rows it holds: `/W [0 0 -1]` made the row size
+  negative, and `/Index [0 N]` then made N entries from no data (#969).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

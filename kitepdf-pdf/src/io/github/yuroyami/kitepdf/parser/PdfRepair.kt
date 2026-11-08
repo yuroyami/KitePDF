@@ -141,8 +141,10 @@ internal object PdfRepair {
         val stream = Parser(Lexer(r)).readIndirectObject().value as? PdfStream ?: return emptyList()
         val n = stream.dict.getInt("N")?.toInt() ?: return emptyList()
         val decoded = FilterChain.decode(stream)
+        // A header pair takes at least four bytes, so /N past that only sized the list (#968).
+        if (n < 0) return emptyList()
         val header = Lexer(ByteReader(decoded))
-        val out = ArrayList<Pair<Int, Long>>(n)
+        val out = ArrayList<Pair<Int, Long>>(minOf(n, decoded.size / 4))
         for (i in 0 until n) {
             val objNum = (header.nextToken() as? Token.Integer)?.value ?: break
             (header.nextToken() as? Token.Integer) ?: break  // offset within stream (unused here)
