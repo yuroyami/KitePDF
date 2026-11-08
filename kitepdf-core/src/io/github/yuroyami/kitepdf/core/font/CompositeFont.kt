@@ -106,7 +106,6 @@ internal class CompositeFont(
 
     /** Decode the full byte run to unicode via ToUnicode CMap (preferred) or [textOf]. */
     fun decode(bytes: ByteArray): String {
-        toUnicode?.let { return it.decodeAll(bytes) }
         // A code without any text shows one replacement character.
         return buildString {
             for (u in codeUnits(bytes)) append(textOf(bytes, u.byteOffset, u.byteCount, u.cid).ifEmpty { "\uFFFD" })
@@ -120,7 +119,15 @@ internal class CompositeFont(
      * that collection's UCS2 CMap (#309). Empty when none of them applies.
      */
     fun textOf(bytes: ByteArray, offset: Int, count: Int, cid: Int): String {
-        toUnicode?.let { return it.decodeAll(bytes.copyOfRange(offset, offset + count)) }
+        // ISO 32000-1, 9.10.3: the ToUnicode CMap maps the codes of the font's encoding, which the
+        // encoding has already split, so the code is looked up whole. Split again by a ToUnicode
+        // codespace of one byte, <0041> read as U+FFFD and A (#651).
+        toUnicode?.let { cmap ->
+            var code = 0
+            for (k in offset until offset + count) code = (code shl 8) or (bytes[k].toInt() and 0xFF)
+            cmap.textFor(code)?.let { return it }
+            return cmap.decodeAll(bytes.copyOfRange(offset, offset + count))
+        }
         if (unicodeKeyed) {
             return CharArray(count / 2) { i ->
                 (((bytes[offset + 2 * i].toInt() and 0xFF) shl 8) or (bytes[offset + 2 * i + 1].toInt() and 0xFF)).toChar()

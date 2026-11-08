@@ -400,6 +400,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a negative entry strokes solid, where the canvases drew such lines three different ways (#770).
 - A `/CIDToGIDMap` stream that does not decode reads as `/Identity`, and an Indexed lookup stream that does not
   decode reads as empty, each with a warning, where either failed the whole page (#646, #647).
+- A Type 0 font whose ToUnicode CMap declares a one-byte codespace, or none, reads each code of its encoding
+  whole, where `<0041>` came out as U+FFFD and `A` (#651).
 
 ## [0.13.0] - 2026-10-09
 

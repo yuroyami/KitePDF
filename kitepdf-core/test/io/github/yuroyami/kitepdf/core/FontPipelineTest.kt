@@ -56,6 +56,27 @@ class FontPipelineTest {
     }
 
     @Test
+    fun a_tounicode_with_a_one_byte_codespace_maps_whole_two_byte_codes() {
+        // ISO 32000-1, 9.10.3: the codes are the encoding's; <0041> read as U+FFFD then A (#651).
+        for (codespace in listOf("1 begincodespacerange <00> <FF> endcodespacerange", "")) {
+            val resolver = MapResolver()
+            resolver.put(99, PdfDictionary(linkedMapOf(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("CIDFontType2"), "BaseFont" to PdfName("X"),
+                "CIDToGIDMap" to PdfName("Identity"),
+            )))
+            val cmap = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap $codespace " +
+                "2 beginbfchar <0041> <0041> <0042> <0042> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end"
+            resolver.put(98, io.github.yuroyami.kitepdf.core.parser.PdfStream(PdfDictionary(linkedMapOf()), cmap.encodeToByteArray()))
+            val font = PdfFont.from(PdfDictionary(linkedMapOf(
+                "Type" to PdfName("Font"), "Subtype" to PdfName("Type0"), "BaseFont" to PdfName("X"),
+                "Encoding" to PdfName("Identity-H"), "DescendantFonts" to PdfArray(listOf(PdfReference(99, 0))),
+                "ToUnicode" to PdfReference(98, 0),
+            )), resolver)
+            assertEquals("AB", font.decode(byteArrayOf(0x00, 0x41, 0x00, 0x42)), "codespace '$codespace'")
+        }
+    }
+
+    @Test
     fun composite_type0_with_identity_h_pairs_bytes() {
         val resolver = MapResolver()
         // Descendant CIDFontType2 with /CIDToGIDMap /Identity and /DW 500.
