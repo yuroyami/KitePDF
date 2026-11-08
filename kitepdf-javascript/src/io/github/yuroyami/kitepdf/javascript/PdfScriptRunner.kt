@@ -111,6 +111,10 @@ public class PdfScriptRunner(
     /** Runs [block] on the thread the engine belongs to, and waits for it. A script in it never pauses. */
     private fun <T> onScriptThread(block: suspend () -> T): T {
         check(!closed) { "the script runner is closed" }
+        // On the web a suspend method's script can be paused, and the engine refuses every call
+        // until it ends. A blocking call cannot wait there on the one thread, so it refuses at once,
+        // before it moves a clock, records a failure or stores a value past a field's scripts (#879).
+        check(pausedRuns == 0) { PAUSED_MESSAGE }
         val counted = { counted { withPausing(false) { runNow(block) } } }
         return if (engineSource != null) counted() else scriptThread.value.call(counted)
     }
@@ -837,7 +841,16 @@ public class PdfScriptRunner(
         }
         evaluationDepth++
         return try {
-            if (pausing) engine.evaluatePausing(source, name) else engine.evaluate(source, name)
+            if (pausing) {
+                pausedRuns++
+                try {
+                    engine.evaluatePausing(source, name)
+                } finally {
+                    pausedRuns--
+                }
+            } else {
+                engine.evaluate(source, name)
+            }
         } catch (e: KiteScriptException) {
             recordFailure(e)
             null
@@ -846,6 +859,10 @@ public class PdfScriptRunner(
             if (outermost) documentSpent += (now() - documentEventStartedAt).coerceAtLeast(0)
         }
     }
+
+    /** How many evaluations that may pause are running, during which a blocking call refuses (#879). */
+    @kotlin.concurrent.Volatile
+    private var pausedRuns = 0
 
     /** How many evaluations are running, one inside another (#962). */
     private var evaluationDepth = 0
@@ -1015,6 +1032,9 @@ public class PdfScriptRunner(
         }
     }
 }
+
+/** What a blocking method of a runner says when it is called while a script is paused (#879). */
+internal const val PAUSED_MESSAGE = "a script is paused; call the suspend method or wait for it"
 
 /** How long close() waits for a running script to let the engine close, before it leaves the close queued (#996). */
 internal const val CLOSE_WAIT_MILLIS = 1_000L

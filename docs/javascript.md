@@ -238,7 +238,7 @@ A browser page has one thread, so a long script would stop the page from drawing
 - On the web, a script that one of them runs pauses about every 16 ms, so the page can draw and run its timers.
 - A call that comes while a script is paused waits until that script ends.
 - The engine pauses only on a runtime with WebAssembly stack switching: Chrome 137 and newer, and Node 25 and newer. On other runtimes, the script runs to its end in one go.
-- The other methods, such as `run` and `setFieldValue`, never pause.
+- The other methods, such as `run` and `setFieldValue`, never pause. While a script is paused they cannot run either, so they throw an `IllegalStateException` that says a script is paused, and change nothing. Call the `suspend` method instead, which waits its turn, or call them once the paused script has ended.
 - The budget of a script counts the pauses too, so it measures how long the reader waits.
 
 ## Other engines

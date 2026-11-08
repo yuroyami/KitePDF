@@ -804,6 +804,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `suspend` event methods of `PdfScriptRunner` and `EpubScriptRunner` suspend their caller instead of
   blocking its thread, and they are cancellable: cancelling the caller stops the script at its next check, and
   nothing it would have written after lands (#865).
+- On the web, a blocking method of `PdfScriptRunner` such as `run` or `setFieldValue`, called while a script is
+  paused, throws an `IllegalStateException` that says so, instead of recording a failure and storing a value past
+  the field's scripts (#879).
 
 ## [0.13.0] - 2026-10-09
 
