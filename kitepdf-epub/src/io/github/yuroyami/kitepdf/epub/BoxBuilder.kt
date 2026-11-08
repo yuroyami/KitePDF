@@ -984,6 +984,10 @@ internal class BoxBuilder(
         private var runs = ArrayList<InlineRun>()
         private var pendingSpace = false
         private var pendingSpaceRun: InlineRun? = null
+        // Whether the pending white space holds a segment break, and the character before it,
+        // for the segment break rules of CSS Text 3, 4.1.3 (#834).
+        private var pendingBreak = false
+        private var lastCp = 0
         private var backgroundColor: CssBackground? = null
 
         fun beginBackground(color: CssBackground?): CssBackground? {
@@ -1060,11 +1064,14 @@ internal class BoxBuilder(
             val r = runs; runs = ArrayList(); reset(); return r
         }
 
-        fun reset() { runs = ArrayList(); pendingSpace = false; pendingSpaceRun = null; blockHasContent = false; lastWasBreak = false }
+        fun reset() {
+            runs = ArrayList(); pendingSpace = false; pendingSpaceRun = null; blockHasContent = false; lastWasBreak = false
+            pendingBreak = false; lastCp = 0
+        }
 
         fun addBreak() {
             runs.add(InlineRun("", fontSizePt = 0.0, hardBreak = true))
-            pendingSpace = false; lastWasBreak = true
+            pendingSpace = false; lastWasBreak = true; lastCp = 0
         }
 
         /** A `<math>` element: one U+FFFC run carrying the formula (#32). */
@@ -1072,7 +1079,7 @@ internal class BoxBuilder(
             if (pendingSpace && blockHasContent && !lastWasBreak) {
                 runs.add(pendingSpaceRun ?: makeRun(" ", style))
             }
-            pendingSpace = false; lastWasBreak = false; blockHasContent = true
+            pendingSpace = false; lastWasBreak = false; blockHasContent = true; lastCp = 0
             runs.add(makeRun("\uFFFC", style).copy(math = math))
         }
 
@@ -1086,7 +1093,7 @@ internal class BoxBuilder(
             if (pendingSpace && blockHasContent && !lastWasBreak) {
                 runs.add(pendingSpaceRun ?: makeRun(" ", style))
             }
-            pendingSpace = false; lastWasBreak = false; blockHasContent = true
+            pendingSpace = false; lastWasBreak = false; blockHasContent = true; lastCp = 0
             runs.add(
                 makeRun("￼", style).copy(
                     imageSrc = src, imageSvg = svg, imageCssW = cssW, imageCssH = cssH, imageAlt = alt, imageObjectFit = objectFit,
@@ -1110,9 +1117,14 @@ internal class BoxBuilder(
                 val cp = codePointAt(raw, at)
                 at += charCount(cp)
                 if (collapsible(cp)) {
-                    if (!pendingSpace) pendingSpaceRun = makeRun(" ", style)
+                    if (!pendingSpace) { pendingSpaceRun = makeRun(" ", style); pendingBreak = false }
                     pendingSpace = true
+                    if (cp == '\n'.code || cp == '\r'.code) pendingBreak = true
                 } else {
+                    // CSS Text 3, 4.1.3: a segment break between two East Asian wide characters,
+                    // neither Hangul, goes away instead of becoming a space (#834).
+                    if (pendingSpace && pendingBreak && eastAsianNoSpace(lastCp) && eastAsianNoSpace(cp)) pendingSpace = false
+                    lastCp = cp
                     // Word boundary BEFORE consuming pendingSpace: capitalize needs it,
                     // and it must survive across appendText calls (runs split mid-word).
                     val boundary = pendingSpace || !blockHasContent || lastWasBreak
@@ -1177,6 +1189,13 @@ internal class BoxBuilder(
             if (pending && !atLineStart) sb.append(' ')
             return sb.toString()
         }
+
+        /** East Asian Width F, W or H and not Hangul: the characters a segment break vanishes between (CSS Text 3, 4.1.3). */
+        private fun eastAsianNoSpace(cp: Int): Boolean =
+            (FontMetrics.isWide(cp) || cp in 0xFF61..0xFFDC || cp in 0xFFE8..0xFFEE) && !hangul(cp)
+
+        private fun hangul(cp: Int): Boolean =
+            cp in 0x1100..0x11FF || cp in 0x3130..0x318F || cp in 0xA960..0xA97F || cp in 0xAC00..0xD7FF || cp in 0xFFA0..0xFFDC
 
         /** Transform preserved-whitespace text: word boundaries follow whitespace. */
         private fun transformPre(raw: String, tt: TextTransform, wide: Boolean): String {
