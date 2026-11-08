@@ -274,7 +274,14 @@ public class PdfFont private constructor(
                 // (non-symbolic); 2) raw code (symbolic (1,0)/(3,1)); 3) (3,0)
                 // symbol range 0xF000+code; 4) last resort: treat the code AS
                 // the glyph index, which subset fonts (e.g. Nitro/MS Office) rely on.
-                var g = ttf.glyphIdForCodePoint(resolveByteToUnicode(code))
+                // A (1,0) subtable is keyed by Mac OS Roman codes: a nonsymbolic font maps the
+                // code's glyph name to its Mac code first (ISO 32000-1, 9.6.6.4; #677).
+                val symbolic = (flags and FLAG_SYMBOLIC) != 0 && (flags and FLAG_NONSYMBOLIC) == 0
+                var g = if (ttf.cmap.isMacRoman && !symbolic) {
+                    glyphNameForByte[code and 0xFF]?.let { macRomanCodeOf(it) }?.let { ttf.glyphIdForCodePoint(it) } ?: 0
+                } else {
+                    ttf.glyphIdForCodePoint(resolveByteToUnicode(code))
+                }
                 if (g == 0) g = ttf.glyphIdForCodePoint(code and 0xFF)
                 if (g == 0) g = ttf.glyphIdForCodePoint(0xF000 or (code and 0xFF))
                 if (g == 0 && (code and 0xFF) in 1 until ttf.numGlyphs) g = code and 0xFF
@@ -468,6 +475,13 @@ public class PdfFont private constructor(
         private const val FLAG_SYMBOLIC = 1 shl 2
         /** /Flags bit 6 (value 32): non-symbolic. */
         private const val FLAG_NONSYMBOLIC = 1 shl 5
+
+        /** Glyph name to its code in Mac OS Roman, for a (1,0) cmap subtable (ISO 32000-1, Annex D; #677). */
+        private val MAC_ROMAN_CODES: Map<String, Int> by lazy {
+            HashMap<String, Int>().also { m -> Encodings.macRomanEncoding.forEachIndexed { code, name -> if (name != null) m.getOrPut(name) { code } } }
+        }
+
+        private fun macRomanCodeOf(glyphName: String): Int? = MAC_ROMAN_CODES[glyphName]
 
         private fun resolveEncoding(
             dict: PdfDictionary,

@@ -317,6 +317,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advances by it instead of 0 (#655).
 - A CFF font with the predefined Expert or ExpertSubset charset names its glyphs in that charset's order, where
   it took the ISOAdobe names and its old-style figures and small capitals drew nothing (#818).
+- A simple TrueType font whose only cmap is the Macintosh (1,0) subtable finds its glyphs through Mac OS Roman
+  codes, so WinAnsi `é` no longer draws as `È`, and a symbolic font with a (3,0) and a (1,0) subtable uses the
+  (3,0) one (#677).
 
 ## [0.13.0] - 2026-10-09
 

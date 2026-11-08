@@ -14,9 +14,16 @@ import io.github.yuroyami.kitepdf.core.PdfFormatException
  * Glyph index 0 is the special `.notdef` glyph. We return it for any
  * unmapped codepoint so callers always get something drawable.
  */
-public class TtfCMap private constructor(private val subtable: Subtable) {
+public class TtfCMap private constructor(private val subtable: Subtable, private val macRoman: Boolean = false) {
 
     public fun glyphIdFor(codePoint: Int): Int = subtable.glyphId(codePoint)
+
+    /**
+     * Whether the subtable in use is the Macintosh (1,0) one, which is keyed by Mac OS Roman
+     * codes rather than Unicode, so a glyph name must go through that encoding first
+     * (ISO 32000-1, 9.6.6.4; #677).
+     */
+    internal val isMacRoman: Boolean get() = macRoman
 
     public companion object {
         /** A cmap that maps every code point to `.notdef`: for CID-keyed fonts that ship no `cmap`. */
@@ -61,7 +68,8 @@ public class TtfCMap private constructor(private val subtable: Subtable) {
                     // (3,0) symbol subtables map into the private-use F000..F0FF
                     // range; wrap so callers can still pass a bare 0x20..0xFF code.
                     return TtfCMap(
-                        if (rec.platform == 3 && rec.encoding == 0) SymbolSubtable(sub) else sub
+                        if (rec.platform == 3 && rec.encoding == 0) SymbolSubtable(sub) else sub,
+                        macRoman = rec.platform == 1 && rec.encoding == 0,
                     )
                 }
             }
@@ -77,8 +85,10 @@ public class TtfCMap private constructor(private val subtable: Subtable) {
             0 to 2 -> 5
             0 to 1 -> 6
             0 to 0 -> 7
-            1 to 0 -> 8
-            else -> 9
+            // ISO 32000-1, 9.6.6.4: a symbolic font takes its (3,0) subtable before a (1,0) one (#677).
+            3 to 0 -> 8
+            1 to 0 -> 9
+            else -> 10
         }
 
         private fun parseSubtable(reader: TtfReader, base: Int, format: Int): Subtable = when (format) {

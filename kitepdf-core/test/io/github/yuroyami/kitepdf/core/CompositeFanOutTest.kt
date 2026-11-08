@@ -42,6 +42,36 @@ class CompositeFanOutTest {
     }
 
     @Test
+    fun aMacRomanCmapIsReadThroughMacRomanCodes() {
+        // ISO 32000-1, 9.6.6.4: with only a (1,0) subtable, WinAnsi é goes name -> Mac code 0x8E (#677).
+        val ids = ByteArray(256).also { it[0x65] = 1; it[0x8E] = 2; it[0xE9] = 3 }
+        val cmap = u16(0) + u16(1) + u16(1) + u16(0) + u32(12) + u16(0) + u16(262) + u16(0) + ids
+        val program = fanOutFont(levels = 2, extra = listOf("cmap" to cmap))
+        val refs = io.github.yuroyami.kitepdf.core.parser.IndirectResolver { null }
+        fun font(flags: Int, encoding: String?) = io.github.yuroyami.kitepdf.core.font.PdfFont.from(
+            io.github.yuroyami.kitepdf.core.parser.PdfDictionary(
+                linkedMapOf(
+                    "Type" to io.github.yuroyami.kitepdf.core.parser.PdfName("Font"),
+                    "Subtype" to io.github.yuroyami.kitepdf.core.parser.PdfName("TrueType"),
+                    "BaseFont" to io.github.yuroyami.kitepdf.core.parser.PdfName("Mac"),
+                    "FontDescriptor" to io.github.yuroyami.kitepdf.core.parser.PdfDictionary(
+                        linkedMapOf(
+                            "Flags" to io.github.yuroyami.kitepdf.core.parser.PdfInt(flags.toLong()),
+                            "FontFile2" to io.github.yuroyami.kitepdf.core.parser.PdfStream(io.github.yuroyami.kitepdf.core.parser.PdfDictionary(linkedMapOf()), program),
+                        ),
+                    ),
+                ) + (if (encoding != null) mapOf("Encoding" to io.github.yuroyami.kitepdf.core.parser.PdfName(encoding)) else emptyMap()),
+            ),
+            refs,
+        )
+        val nonsymbolic = font(32, "WinAnsiEncoding")
+        assertEquals(1, nonsymbolic.glyphIdForByte(0x65))
+        assertEquals(2, nonsymbolic.glyphIdForByte(0xE9), "eacute is Mac 0x8E, not the Egrave of slot 0xE9")
+        // A symbolic font looks the code up as it is.
+        assertEquals(3, font(4, null).glyphIdForByte(0xE9))
+    }
+
+    @Test
     fun aScaledComponentOffsetGoesThroughTheScale() {
         // Glyph 1 is the square of glyph 2 at a scale of 0.5 and an offset of (1000, 0) (#816).
         fun minX(flags: Int): Int {
