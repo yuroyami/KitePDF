@@ -116,7 +116,7 @@ public class PdfSignature internal constructor(
                 reason = text("Reason"),
                 location = text("Location"),
                 contactInfo = text("ContactInfo"),
-                signingTime = (dict["M"]?.resolve(document) as? PdfString)?.asAsciiOrNull()?.let(PdfDate::parse),
+                signingTime = (dict["M"]?.resolve(document) as? PdfString)?.asText()?.let(PdfDate::parse),
                 byteRange = dict.getArray("ByteRange", document)?.mapNotNull { (it.resolve(document) as? PdfInt)?.value }.orEmpty(),
                 // A DocMDP reference without /P means level 2.
                 certificationLevel = if (docMdp) ((params("DocMDP")?.get("P") as? PdfInt)?.value?.toInt() ?: 2).coerceIn(1, 3) else null,

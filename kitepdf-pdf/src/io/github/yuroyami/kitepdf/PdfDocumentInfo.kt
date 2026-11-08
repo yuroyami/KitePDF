@@ -41,7 +41,7 @@ public data class PdfDocumentInfo(
         internal fun parse(dict: PdfDictionary): PdfDocumentInfo {
             fun text(key: String): String? = (dict[key] as? PdfString)?.asText()
             fun date(key: String): PdfDate? =
-                (dict[key] as? PdfString)?.asAsciiOrNull()?.let(PdfDate::parse)
+                (dict[key] as? PdfString)?.asText()?.let(PdfDate::parse)
 
             val trapped = when ((dict["Trapped"] as? PdfName)?.value) {
                 "True" -> Trapped.True

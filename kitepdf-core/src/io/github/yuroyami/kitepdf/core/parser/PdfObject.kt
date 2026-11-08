@@ -68,8 +68,18 @@ public data class PdfString(val bytes: ByteArray) : PdfObject() {
             }
             return sb.toString()
         }
+        // ISO 32000-2, 7.9.2.2.1: EF BB BF starts a UTF-8 text string, and a string with no byte
+        // order mark is PDFDocEncoding (Annex D.3), not Latin-1 (#690).
+        if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
+            return bytes.decodeToString(3, bytes.size)
+        }
+        val table = io.github.yuroyami.kitepdf.core.font.Encodings.pdfDocToUnicode
         val sb = StringBuilder(bytes.size)
-        for (b in bytes) sb.append((b.toInt() and 0xFF).toChar())
+        for (b in bytes) {
+            val code = b.toInt() and 0xFF
+            val cp = table.getOrElse(code) { 0 }
+            sb.append(if (cp != 0) cp.toChar() else code.toChar())
+        }
         return sb.toString()
     }
 

@@ -324,6 +324,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads back as written in every reader, KitePDF included, where it read `cafØ` (#668).
 - The writer encodes standard-font text through WinAnsiEncoding, so curly quotes, dashes and the euro sign draw
   instead of `?`, a C1 control is no longer passed through, and `stringWidth` measures what is drawn (#670).
+- A text string without a byte order mark reads as PDFDocEncoding, so a title's em dash, euro sign, curly quotes
+  and `fi` ligature come back as themselves instead of C1 controls; a UTF-8 mark is recognised, and a date stored
+  as a UTF-16 text string is read (#690).
 
 ## [0.13.0] - 2026-10-09
 
