@@ -394,6 +394,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it kept the fonts, colour spaces and graphics states of the first page that drew it (#767).
 - When a soft mask's content or mask callback, or a raster step's content, throws, `KiteRasterCanvas` drops the
   layer it opened and stays usable, where every later paint went into the lost layer (#765).
+- A stencil mask drawn while the fill colour is a pattern paints the pattern through the mask, where it painted
+  flat black (#780).
+- The renderer applies one dash rule before every canvas: a negative phase wraps into the pattern, and an array
+  with a negative entry strokes solid, where the canvases drew such lines three different ways (#770).
 
 ## [0.13.0] - 2026-10-09
 

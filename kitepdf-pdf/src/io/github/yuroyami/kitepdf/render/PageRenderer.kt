@@ -1718,6 +1718,24 @@ public class PageRenderer(
         }
     }
 
+    /**
+     * The dash array a canvas strokes [s] with: ISO 32000-1, 8.4.3.6 asks for entries that are
+     * nonnegative and not all zero, so an array with a negative or non-finite entry is solid, as
+     * the pure-Kotlin stroker drew it, where AWT and Skia drew nothing (#770).
+     */
+    private fun dashOf(s: GraphicsState): List<Double>? =
+        s.dashArray?.takeIf { d -> d.isNotEmpty() && d.all { it >= 0.0 && it.isFinite() } && d.any { it > 0.0 } }
+
+    /** The dash phase of [s] wrapped into one period of its pattern, so a negative one is the same distance back on every canvas (#770). */
+    private fun dashPhaseOf(s: GraphicsState): Double {
+        val d = dashOf(s) ?: return 0.0
+        val period = d.sum() * (if (d.size % 2 == 1) 2 else 1)
+        val phase = s.dashPhase.takeIf { it.isFinite() } ?: return 0.0
+        if (!(period > 0.0) || !period.isFinite()) return 0.0
+        val wrapped = phase % period
+        return if (wrapped < 0.0) wrapped + period else wrapped
+    }
+
     private fun paintStroke(path: KitePath.Builder, state: GraphicsStack) {
         if (path.isEmpty()) return
         val s = state.current
@@ -1735,7 +1753,7 @@ public class PageRenderer(
                         canvas.strokePath(
                             built, s.ctm, s.strokeColor, s.lineWidth,
                             alpha = s.strokeAlpha, blendMode = s.blendMode,
-                            dashArray = s.dashArray, dashPhase = s.dashPhase,
+                            dashArray = dashOf(s), dashPhase = dashPhaseOf(s),
                             lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
                         )
                     }
@@ -1785,7 +1803,7 @@ public class PageRenderer(
         // Curves flatten to a quarter of a device pixel. The Frobenius norm bounds the largest scale of the CTM.
         val scale = kotlin.math.sqrt(ctm.a * ctm.a + ctm.b * ctm.b + ctm.c * ctm.c + ctm.d * ctm.d)
         val outline = path.strokeOutline(
-            width, s.lineCap, s.lineJoin, s.miterLimit, s.dashArray, s.dashPhase, tolerance = 0.25 / scale,
+            width, s.lineCap, s.lineJoin, s.miterLimit, dashOf(s), dashPhaseOf(s), tolerance = 0.25 / scale,
         )
         if (outline.isEmpty()) return
         when (pat) {
@@ -2132,6 +2150,10 @@ public class PageRenderer(
      * delegates with `by` sends the other overload past itself (#290).
      */
     private fun paintImage(image: KiteImageData, s: GraphicsState) {
+        if (image.isImageMask && s.fillPattern != null) {
+            paintStencilPattern(image, s)
+            return
+        }
         val paint = {
             if (s.blendMode == KiteBlendMode.Normal) {
                 canvas.drawImage(image, s.ctm, s.fillAlpha)
@@ -2141,6 +2163,28 @@ public class PageRenderer(
         }
         if (canvas !is KnockoutCanvas && Overprint.image(canvas, image, s, outputIntent?.space, paint)) return
         paint()
+    }
+
+    /**
+     * A stencil mask painted while the fill colour is a pattern: the mask gates the pattern, which
+     * paints through it (ISO 32000-1, 8.9.6.2 and 8.7.3.1), as MuPDF clips to the mask and shows
+     * the pattern. It painted the flat default colour of the Pattern space, black (#780).
+     */
+    private fun paintStencilPattern(image: KiteImageData, s: GraphicsState) {
+        val pat = s.fillPattern
+        if (pat !is KitePattern.Shading && pat !is KitePattern.Tiling) return // unsupported: paint nothing, as a path does
+        val unit = KitePath.Builder().apply { rectangle(0.0, 0.0, 1.0, 1.0) }.build()
+        canvas.applySoftMask(
+            SoftMask.Kind.Alpha, io.github.yuroyami.kitepdf.core.KiteRectangle(0.0, 0.0, 1.0, 1.0), s.ctm,
+            render = {
+                when (pat) {
+                    is KitePattern.Shading -> paintShadingPattern(pat, unit, s, evenOdd = false, stroke = false)
+                    is KitePattern.Tiling -> renderTilingPattern(pat, unit, s, false, s.fillAlpha, s.fillColor)
+                    else -> {}
+                }
+            },
+            renderMask = { mask -> mask.drawImage(image, s.ctm, 1.0) },
+        )
     }
 
     /** The page crop box in the space [maskCtm] maps to the device, for a mask box that cannot be read. */
@@ -2543,7 +2587,7 @@ public class PageRenderer(
                         canvas.strokePath(
                             userPath, s.ctm, s.strokeColor, s.lineWidth,
                             alpha = s.strokeAlpha, blendMode = s.blendMode,
-                            dashArray = s.dashArray, dashPhase = s.dashPhase,
+                            dashArray = dashOf(s), dashPhase = dashPhaseOf(s),
                             lineCap = s.lineCap, lineJoin = s.lineJoin, miterLimit = s.miterLimit,
                         )
                     }

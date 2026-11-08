@@ -181,6 +181,57 @@ class StreamScopeTest {
     }
 
     @Test
+    fun a_stencil_mask_paints_the_pattern_fill_through_it() {
+        // ISO 32000-1, 8.9.6.2 and 8.7.3.1: the mask gates the pattern; it painted flat black (#780).
+        val pdf = TestPdf.build(listOf(
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R " +
+                "/Resources << /Pattern << /P0 6 0 R >> /XObject << /Im0 5 0 R >> >> >>",
+            TestPdf.stream("/Pattern cs /P0 scn q 200 0 0 200 0 0 cm /Im0 Do Q"),
+            TestPdf.stream("\u0000", "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ImageMask true /BitsPerComponent 1"),
+            "<< /PatternType 2 /Shading << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 200 0] " +
+                "/Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> >>",
+        ))
+        val doc = PdfDocument.open(pdf)
+        val calls = ArrayList<String>()
+        val rc = RecordingCanvas()
+        val canvas = object : io.github.yuroyami.kitepdf.core.render.KiteCanvas by rc {
+            override fun applySoftMask(
+                kind: io.github.yuroyami.kitepdf.core.render.SoftMask.Kind, maskBBox: io.github.yuroyami.kitepdf.core.KiteRectangle,
+                maskCtm: KiteMatrix, render: () -> Unit, renderMask: (io.github.yuroyami.kitepdf.core.render.KiteCanvas) -> Unit,
+            ) {
+                calls += "mask"
+                val inner = RecordingCanvas()
+                renderMask(inner)
+                if (inner.calls.any { it is RecordingCanvas.Call.Image }) calls += "stencil"
+                render()
+            }
+            override fun drawImage(image: io.github.yuroyami.kitepdf.core.render.KiteImageData, ctm: KiteMatrix, alpha: Double) {
+                calls += "image"
+            }
+        }
+        PageRenderer(canvas, doc).render(doc.pages[0], KiteMatrix.IDENTITY)
+        assertEquals(listOf("mask", "stencil"), calls.take(2), "$calls")
+        kotlin.test.assertFalse("image" in calls, "the stencil is not painted flat")
+    }
+
+    @Test
+    fun one_dash_rule_reaches_every_canvas() {
+        // ISO 32000-1, 8.4.3.6: a negative phase wraps into the period; a negative entry is no dash (#770).
+        fun stroke(dash: String): RecordingCanvas.Call.Stroke {
+            val doc = PdfDocument.open(TestPdf.onePage("$dash 0 0 m 100 0 l S"))
+            val canvas = RecordingCanvas()
+            PageRenderer(canvas, doc).render(doc.pages[0], KiteMatrix.IDENTITY)
+            return canvas.calls.filterIsInstance<RecordingCanvas.Call.Stroke>().single()
+        }
+        assertEquals(7.0, stroke("[6 3] -2 d").dashPhase, 1e-9)
+        assertEquals(listOf(6.0, 3.0), stroke("[6 3] -2 d").dashArray)
+        assertEquals(null, stroke("[-6 3] 0 d").dashArray)
+        assertEquals(4.0, stroke("[5] 14 d").dashPhase, 1e-9, "an odd array repeats, so the period is 10")
+    }
+
+    @Test
     fun marked_content_nesting_is_capped() {
         val content = "/X BMC ".repeat(10_000) + "0 0 1 rg 0 0 10 10 re f " + "EMC ".repeat(10_000) + "0 1 0 rg 20 20 10 10 re f"
         val doc = PdfDocument.open(TestPdf.onePage(content))
