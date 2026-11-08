@@ -247,6 +247,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#918). The `full-path` of `container.xml` is percent-decoded as the book's other URLs are, so a package
   document whose name has a space opens (#868).
 
+- A document that declares ISO-8859-15 decodes as ISO-8859-15, where it read as windows-1252 and `œ` came out
+  as `½` and `€` as `¤` (#878).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

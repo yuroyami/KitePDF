@@ -28,7 +28,7 @@ public object TextEncoding {
         bomOf(bytes)?.let { return it }
         utf16WithoutBom(bytes)?.let { return it }
         return when (val declared = canonical(declaredName(bytes) ?: hint)) {
-            UTF_16LE, UTF_16BE, CP1252 -> declared
+            UTF_16LE, UTF_16BE, CP1252, ISO_8859_15 -> declared
             else -> if (isValidUtf8(bytes)) UTF_8 else CP1252
         }
     }
@@ -41,6 +41,7 @@ public object TextEncoding {
             UTF_16LE -> decodeUtf16(bytes, if (bom != null) 2 else 0, littleEndian = true)
             UTF_16BE -> decodeUtf16(bytes, if (bom != null) 2 else 0, littleEndian = false)
             CP1252 -> decode1252(bytes)
+            ISO_8859_15 -> decodeLatin9(bytes)
             else -> bytes.decodeToString(if (enc == UTF_8 && bom != null) 3 else 0, bytes.size)
         }
     }
@@ -140,7 +141,10 @@ public object TextEncoding {
 
     private fun canonical(name: String?): String? = when (name?.trim()?.trim('"', '\'')?.lowercase()) {
         null, "" -> null
-        "utf-8", "utf8", "us-ascii", "ascii", "iso-8859-15" -> UTF_8
+        "utf-8", "utf8", "us-ascii", "ascii" -> UTF_8
+        // WHATWG Encoding, 5.2: ISO-8859-15 is an encoding of its own. Read as UTF-8 and then as
+        // windows-1252, its eight differing bytes came out wrong, so œ read as ½ and € as ¤ (#878).
+        "iso-8859-15", "iso8859-15", "iso_8859-15", "latin9", "latin-9", "l9", "csisolatin9", "iso885915" -> ISO_8859_15
         "utf-16", "utf-16le", "utf16", "utf16le", "unicode" -> UTF_16LE
         "utf-16be", "utf16be" -> UTF_16BE
         "windows-1252", "cp1252", "cp-1252", "iso-8859-1", "iso8859-1", "latin1", "latin-1" -> CP1252
@@ -165,6 +169,20 @@ public object TextEncoding {
         for (i in b.indices) {
             val v = b[i].toInt() and 0xFF
             chars[i] = if (v in 0x80..0x9F) CP1252_HIGH[v - 0x80] else v.toChar()
+        }
+        return chars.concatToString()
+    }
+
+    /** ISO-8859-15: ISO-8859-1 with eight code points changed, the euro sign among them. */
+    private fun decodeLatin9(b: ByteArray): String {
+        val chars = CharArray(b.size)
+        for (i in b.indices) {
+            val v = b[i].toInt() and 0xFF
+            chars[i] = when (v) {
+                0xA4 -> '\u20AC'; 0xA6 -> '\u0160'; 0xA8 -> '\u0161'; 0xB4 -> '\u017D'
+                0xB8 -> '\u017E'; 0xBC -> '\u0152'; 0xBD -> '\u0153'; 0xBE -> '\u0178'
+                else -> v.toChar()
+            }
         }
         return chars.concatToString()
     }
@@ -197,6 +215,7 @@ public object TextEncoding {
     }
 
     private const val UTF_8 = "UTF-8"
+    private const val ISO_8859_15 = "ISO-8859-15"
     private const val UTF_16LE = "UTF-16LE"
     private const val UTF_16BE = "UTF-16BE"
     private const val CP1252 = "windows-1252"

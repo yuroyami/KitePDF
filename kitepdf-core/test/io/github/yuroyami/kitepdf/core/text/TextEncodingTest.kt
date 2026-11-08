@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.core.text
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** Sniffing rules for books whose bytes are not the UTF-8 everyone assumes. */
 class TextEncodingTest {
@@ -102,5 +103,14 @@ class TextEncodingTest {
     @Test
     fun an_empty_input_is_empty_text() {
         assertEquals("", TextEncoding.decode(ByteArray(0)))
+    }
+
+    @Test
+    fun a_latin9_document_decodes_as_latin9() {
+        // cœur 5 € ŠšŽžŒŸ in ISO-8859-15 read as c½ur 5 ¤ ¦¨´¸¼¾ (#878).
+        val head = "<?xml version=\"1.0\" encoding=\"ISO-8859-15\"?><p>c".encodeToByteArray()
+        val body = bytes(0xBD) + "ur 5 ".encodeToByteArray() + bytes(0xA4, 0x20, 0xA6, 0xA8, 0xB4, 0xB8, 0xBC, 0xBE) + "</p>".encodeToByteArray()
+        assertEquals("ISO-8859-15", TextEncoding.sniff(head + body))
+        assertTrue(TextEncoding.decode(head + body).endsWith("<p>c\u0153ur 5 \u20AC \u0160\u0161\u017D\u017E\u0152\u0178</p>"))
     }
 }
