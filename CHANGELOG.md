@@ -398,6 +398,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flat black (#780).
 - The renderer applies one dash rule before every canvas: a negative phase wraps into the pattern, and an array
   with a negative entry strokes solid, where the canvases drew such lines three different ways (#770).
+- A `/CIDToGIDMap` stream that does not decode reads as `/Identity`, and an Indexed lookup stream that does not
+  decode reads as empty, each with a warning, where either failed the whole page (#646, #647).
 
 ## [0.13.0] - 2026-10-09
 

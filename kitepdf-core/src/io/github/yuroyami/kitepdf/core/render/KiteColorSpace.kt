@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.core.render
 
+import io.github.yuroyami.kitepdf.core.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -9,7 +11,6 @@ import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
-import io.github.yuroyami.kitepdf.core.filters.FilterChain
 import kotlin.math.pow
 
 /**
@@ -465,7 +466,12 @@ public sealed class KiteColorSpace {
             }) ?: 0
             val lookup = when (val lookupObj = arr.getOrNull(3)?.resolve(refs)) {
                 is PdfString -> lookupObj.bytes
-                is PdfStream -> FilterChain.decode(lookupObj)
+                // A lookup that does not decode reads as empty, so the indices draw as the base
+                // space's zero colour and the page goes on (#647).
+                is PdfStream -> runCatching { FilterChain.decode(lookupObj) }.getOrElse {
+                    kiteWarn { "colour: an Indexed lookup stream does not decode (${it.message}); it reads as empty" }
+                    ByteArray(0)
+                }
                 else -> ByteArray(0)
             }
             return Indexed(base, hival, lookup)

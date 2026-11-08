@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.core.font
 
 import io.github.yuroyami.kitepdf.core.filters.FilterChain
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -235,7 +236,12 @@ internal class CidToGidMap private constructor(
     companion object {
         fun from(obj: Any?): CidToGidMap = when (obj) {
             is PdfName -> if (obj.value == "Identity") CidToGidMap(null) else CidToGidMap(null)
-            is PdfStream -> CidToGidMap(parseStream(obj))
+            // A map that does not decode degrades to /Identity, the default (ISO 32000-1, 9.7.4.2,
+            // Table 117), so the font and the page still draw (#646).
+            is PdfStream -> runCatching { CidToGidMap(parseStream(obj)) }.getOrElse {
+                kiteWarn { "font: /CIDToGIDMap does not decode (${it.message}); using /Identity" }
+                CidToGidMap(null)
+            }
             null -> CidToGidMap(null)
             else -> CidToGidMap(null)
         }
