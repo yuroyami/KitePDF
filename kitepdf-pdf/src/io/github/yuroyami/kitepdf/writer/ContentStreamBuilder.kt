@@ -131,9 +131,13 @@ public class ContentStreamBuilder internal constructor(
 
     /**
      * Select an embedded custom [font] at [size]. Subsequent [showText] calls
-     * encode their text as Identity-H 2-byte glyph codes for this font, so any
-     * Unicode the font covers (CJK included) renders. The font is registered
-     * with the owning [PdfBuilder] on first use.
+     * encode their text as Identity-H 2-byte glyph codes for this font, one glyph
+     * per character through the font's `cmap`, in the order of the string. The
+     * builder does not shape text: no GSUB substitution, no mark positioning and
+     * no bidi reordering, so Arabic letters do not join, marks of Devanagari or
+     * Thai do not move into place, and right-to-left text runs left to right.
+     * Scripts without those needs, CJK among them, render as written (#750). The
+     * font is registered with the owning [PdfBuilder] on first use.
      */
     public fun setFont(font: EmbeddedFont, size: Double): ContentStreamBuilder {
         val binding = embeddedResolver(font)
@@ -145,6 +149,8 @@ public class ContentStreamBuilder internal constructor(
     public fun setWordSpacing(spacing: Double): ContentStreamBuilder { num(spacing); return op("Tw") }
     public fun moveText(tx: Double, ty: Double): ContentStreamBuilder { num(tx); num(ty); return op("Td") }
     public fun nextLine(): ContentStreamBuilder = op("T*")
+
+    /** `Tj` in the current font: WinAnsi bytes for a standard font, one glyph a character for an embedded one, unshaped (see [setFont]). */
     public fun showText(text: String): ContentStreamBuilder {
         val emb = currentEmbedded
         if (emb != null) embeddedString(emb, text) else string(text)
@@ -159,7 +165,7 @@ public class ContentStreamBuilder internal constructor(
         beginText(); setFont(font, size); moveText(x, y); showText(text); return endText()
     }
 
-    /** As [text], but with an embedded custom [font] (Identity-H encoded). */
+    /** As [text], but with an embedded custom [font] (Identity-H encoded), with no shaping: see [setFont]. */
     public fun text(font: EmbeddedFont, size: Double, x: Double, y: Double, text: String): ContentStreamBuilder {
         beginText(); setFont(font, size); moveText(x, y); showText(text); return endText()
     }

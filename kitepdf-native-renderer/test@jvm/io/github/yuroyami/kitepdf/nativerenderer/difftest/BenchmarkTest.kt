@@ -37,7 +37,9 @@ class BenchmarkTest {
         assumeTrue("Run with KITEPDF_BENCH=true to enable the performance benchmark.", enabled)
         val md = StringBuilder()
         md.appendLine("# KitePDF performance benchmark").appendLine()
-        md.appendLine("Median of timed iterations after warmup. Lower ms = faster.").appendLine()
+        // bench keeps the fastest run, so the header names that statistic (#699).
+        val scale = (System.getenv("KITEPDF_BENCH_SCALE")?.toIntOrNull() ?: 1).coerceAtLeast(1)
+        md.appendLine("Fastest of the timed runs after warmup (warmups and runs times KITEPDF_BENCH_SCALE = $scale). Lower ms = faster.").appendLine()
 
         benchReadPath(md)
         benchWritePath(md)

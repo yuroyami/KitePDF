@@ -171,7 +171,10 @@ import kotlinx.coroutines.launch
  *   is on. It is the bitmap on screen, not an export: it leaves out the form
  *   widgets when a form layer draws them (a `scripts` handler on a PDF), and it
  *   never fires in [KiteRenderSpec.Vectorized] mode (#431). Cache hits from the
- *   page-bitmap LRU do not re-fire it. To export a page, use
+ *   page-bitmap LRU do not re-fire it. The bitmap is the one the viewer's cache
+ *   keeps and draws, so treat it as read-only: a host that writes into it changes
+ *   the page on screen, and one that recycles it breaks the next frame (#705).
+ *   To export a page, or to get a bitmap of your own, use
  *   [KitePageRasterizer.rasterize] with the form state.
  * @param pagePlaceholder shown in a page's slot until its raster is ready.
  *   Defaults to a plain [KiteDocViewColors.pageBackground] box.
