@@ -818,6 +818,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteDocument` is `AutoCloseable`. `EpubDocument.close()` drops its chapters and, once the last document over
   the book has closed, cancels the remote fetches the book started; `PdfDocument.close()` drops its caches. The
   default `close` does nothing (#887).
+- An EPUB table lays each cell's content out once instead of twice, so a paragraph inside six nested tables is
+  laid out once, not 64 times (#859).
 
 ## [0.13.0] - 2026-10-09
 

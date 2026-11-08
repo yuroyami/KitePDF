@@ -520,7 +520,11 @@ internal class BoxLayout(
         is TableRowBox -> {} // rows are laid out by their table, never as a direct block child
     }
 
+    /** How many times this layout laid a text block out, which a test counts (#859). */
+    internal var textBlockLayouts = 0
+
     private fun layoutTextBlock(box: TextBlockBox, contentLeft: Double, contentW: Double, topY: Double) {
+        textBlockLayouts++
         box.x = contentLeft; box.y = topY; box.borderBoxWidth = contentW
         val lines = layoutInline(box.runs, contentW, contentLeft, topY, box.style, box.marker, box.markerColor)
         lines.forEachIndexed { i, ln -> ln.owner = box; ln.ownerIndex = i }
@@ -1704,11 +1708,13 @@ internal class BoxLayout(
             row.x = tContentLeft; row.y = tContentTop + rowY[r]; row.borderBoxWidth = tableW; row.borderBoxHeight = rowHeight[r]
         }
 
-        // Pass B: place cells at their final y, stretch to their spanned rows,
+        // Pass B: move each cell to its final y, stretch it to its spanned rows,
         // then apply the cell's vertical-align by shifting its CONTENT down
-        // within the stretched box (backgrounds/borders stay full-cell).
+        // within the stretched box (backgrounds/borders stay full-cell). Pass A
+        // laid the cell out at its width already, so it moves as it is: laying it
+        // out again doubled the layout at each level of nested tables (#859).
         for (cell in allCells) {
-            layoutBlock(cell, tContentLeft + colX[cell.gridCol], spanWidth(cell.gridCol, cell.colspan), tContentTop + rowY[cell.gridRow])
+            shiftSubtree(cell, 0.0, rowY[cell.gridRow])
             val natural = cell.borderBoxHeight
             val lastRow = (cell.gridRow + cell.rowspan).coerceAtMost(rowCount)
             cell.borderBoxHeight = (rowY[lastRow] - spacing) - rowY[cell.gridRow]

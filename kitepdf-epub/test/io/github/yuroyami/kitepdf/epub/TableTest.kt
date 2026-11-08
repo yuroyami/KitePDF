@@ -278,4 +278,32 @@ class TableTest {
         val t = firstTable(build("<table><tr>$first</tr><tr><td>y</td></tr></table>"))
         assertEquals(0, t.rows[1].cells[0].gridCol)
     }
+
+    @Test
+    fun the_content_of_nested_tables_is_laid_out_once() {
+        // Each cell was laid out twice, so the paragraph inside six nested tables was laid out 2^6 times (#859).
+        val words = (1..200).joinToString(" ") { "word$it" }
+        val html = "<table><tr><td>".repeat(6) + "<p>$words</p>" + "</td></tr></table>".repeat(6)
+        val root = build(html)
+        val layout = BoxLayout()
+        layout.layout(root, 400.0)
+        assertEquals(1, layout.textBlockLayouts, "the paragraph was laid out ${layout.textBlockLayouts} times")
+        // It still sits inside the innermost cell, below the top of the outermost table.
+        var table: TableBox = firstTable(root)
+        repeat(5) { table = firstTable(table.rows[0].cells[0]) }
+        val cell = table.rows[0].cells[0]
+        assertTrue(cell.borderBoxHeight > 100.0, "the cell holds the paragraph: ${cell.borderBoxHeight}")
+        assertTrue(words.startsWith(cell.text().take(20)), cell.text().take(40))
+    }
+
+    @Test
+    fun a_cell_still_takes_its_row_and_its_vertical_align() {
+        val root = laidOut("<table><tr><td style='vertical-align: bottom'>A</td><td>B<br/>B<br/>B</td></tr></table>")
+        val row = firstTable(root).rows[0]
+        val (a, b) = row.cells
+        assertEquals(b.borderBoxHeight, a.borderBoxHeight, 0.01)
+        assertEquals(a.y, b.y, 0.01)
+        val text = a.children.single() as TextBlockBox
+        assertTrue(text.lines.single().yTop > a.y + a.borderBoxHeight / 2, "the bottom-aligned A sits low in its cell")
+    }
 }
