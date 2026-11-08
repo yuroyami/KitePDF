@@ -132,7 +132,7 @@ public object ContentStreamParser {
     internal fun parse(bytes: ByteArray, colorSpaces: Map<String, KiteColorSpace>): List<Operation> {
         val reader = ByteReader(bytes)
         val lexer = Lexer(reader)
-        val parser = Parser(lexer)
+        val parser = Parser(lexer, keywordsAsNull = false)
         val ops = mutableListOf<Operation>()
         val operandStack = ArrayDeque<PdfObject>()
         var overflowWarned = false
@@ -276,7 +276,7 @@ public object ContentStreamParser {
      */
     private fun lexInlineImageDictUpToId(reader: ByteReader): PdfDictionary {
         val lexer = Lexer(reader)
-        val parser = Parser(lexer)
+        val parser = Parser(lexer, keywordsAsNull = false)
         val entries = LinkedHashMap<String, PdfObject>()
         while (true) {
             val keyTok = lexer.nextToken()

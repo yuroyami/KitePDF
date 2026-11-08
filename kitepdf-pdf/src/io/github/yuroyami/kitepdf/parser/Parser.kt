@@ -40,6 +40,12 @@ internal class Parser(
      * wrong scans on to the next keyword, which repair paid once per stream (#966).
      */
     private val endstreamAfter: ((Int) -> Int)? = null,
+    /**
+     * Whether a keyword that is no value reads as null inside an array or a dictionary (#806). A
+     * content stream turns it off: there such a keyword is an operator after an unterminated array,
+     * and the operator must be found, not swallowed.
+     */
+    private val keywordsAsNull: Boolean = true,
 ) {
 
     public constructor(bytes: ByteArray) : this(Lexer(ByteReader(bytes)))
@@ -147,10 +153,20 @@ internal class Parser(
             if (held > 1) items.add(PdfInt(second))
             held = 0
             if (tok == Token.ArrayClose) break
-            items.add(readObject(tok))
+            items.add(readValue(tok))
         }
         PdfArray(items)
     }
+
+    /**
+     * A value inside an array or a dictionary. A keyword that is no value, such as `/X Unknown`, reads
+     * as null and the rest of the object is kept, as MuPDF keeps it: it threw, and the whole object,
+     * a page or the catalog, was lost (ISO 32000-1, 7.3, #806). The keywords that end an object or a
+     * stream still end the parse.
+     */
+    private fun readValue(tok: Token): PdfObject =
+        if (keywordsAsNull && tok is Token.Keyword && tok.value !in VALUE_KEYWORDS && tok.value !in STRUCTURE_KEYWORDS) PdfNull
+        else readObject(tok)
 
     /**
      * After an integer value, the next token shows whether the value is "N G R".
@@ -166,7 +182,7 @@ internal class Parser(
             val key = tok.value
             val first = lexer.nextToken()
             if (first !is Token.Integer) {
-                entries[key] = readObject(first)
+                entries[key] = readValue(first)
                 tok = lexer.nextToken()
                 continue
             }
@@ -303,6 +319,12 @@ internal class Parser(
 
     private companion object {
         val ENDSTREAM = "endstream".encodeToByteArray()
+
+        /** The keywords that are values (ISO 32000-1, 7.3.2 and 7.3.9). */
+        val VALUE_KEYWORDS = setOf("true", "false", "null")
+
+        /** The keywords that end an object or begin a stream, and an R with no reference before it, as MuPDF refuses it. */
+        val STRUCTURE_KEYWORDS = setOf("obj", "endobj", "stream", "endstream", "xref", "trailer", "startxref", "R")
 
         /** Real documents nest containers single digits deep; MuPDF-style cap. */
         const val MAX_NESTING = 256

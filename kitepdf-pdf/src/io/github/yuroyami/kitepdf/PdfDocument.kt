@@ -1248,13 +1248,20 @@ public class PdfDocument private constructor(
                 startOffset = prev
                 safetyCounter++
             }
+            if (startOffset >= 0 && safetyCounter >= MAX_PREV_HOPS) {
+                kiteWarn { "xref: more than $MAX_PREV_HOPS sections; the older ones are not read" }
+            }
             val trailer = newestTrailer
                 ?: throw PdfFormatException("No xref section yielded a trailer")
             return io.github.yuroyami.kitepdf.parser.XrefAndTrailer(merged, trailer)
         }
 
-        /** Bound on /Prev chain length. The bound is generous; the cycle guard catches the rest. */
-        private const val MAX_PREV_HOPS = 32
+        /**
+         * A backstop on /Prev chain length, far above any real file: the cycle guard ends a loop,
+         * and each section takes bytes of the file. At 32 a long-lived signed form, which adds a
+         * section for each save, signature and timestamp, lost its oldest objects silently (#810).
+         */
+        private const val MAX_PREV_HOPS = 100_000
 
         /** Bound on page-tree recursion depth. The bound guards against adversarial or cyclic /Kids. */
         private const val MAX_PAGE_TREE_DEPTH = 50

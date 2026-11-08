@@ -146,8 +146,9 @@ public class Lexer(public val reader: ByteReader) {
                 return Token.StringLiteral(out.toByteArray(), start)
             }
             if (isWhitespace(b)) continue
-            val nibble = hexDigit(b)
-                ?: throw PdfFormatException("Bad hex digit ${b.toChar()} at ${reader.pos() - 1}")
+            // A byte that is no hex digit reads as 0, as MuPDF reads it, so one bad byte does not
+            // lose the object around it (ISO 32000-1, 7.3.4.3, #806).
+            val nibble = hexDigit(b) ?: 0
             if (pendingHi < 0) {
                 pendingHi = nibble
             } else {
@@ -167,12 +168,16 @@ public class Lexer(public val reader: ByteReader) {
             if (b == -1 || isWhitespace(b) || isDelimiter(b)) break
             reader.readByte()
             if (b == '#'.code) {
-                val h1 = reader.readByte()
-                val h2 = reader.readByte()
-                val n1 = h1.takeIf { it >= 0 }?.let { hexDigit(it) }
-                val n2 = h2.takeIf { it >= 0 }?.let { hexDigit(it) }
-                if (n1 == null || n2 == null) throw PdfFormatException("Bad #XX escape in name at $start")
-                sb.append(((n1 shl 4) or n2).toChar())
+                // 7.3.5: #XX is two hex digits. A # without them stays a literal #, as in MuPDF, and the
+                // bytes after it are read as they are; it threw, and consumed a delimiter (#806).
+                val n1 = reader.peek().takeIf { it >= 0 }?.let { hexDigit(it) }
+                val n2 = reader.peek(1).takeIf { it >= 0 }?.let { hexDigit(it) }
+                if (n1 != null && n2 != null) {
+                    reader.readByte(); reader.readByte()
+                    sb.append(((n1 shl 4) or n2).toChar())
+                } else {
+                    sb.append('#')
+                }
             } else {
                 sb.append(b.toChar())
             }
@@ -193,9 +198,17 @@ public class Lexer(public val reader: ByteReader) {
         var mantissa = 0L
         var significant = 0
         var fraction = 0
-        // First char: maybe sign or dot
-        val first = reader.readByte()
-        sb.append(first.toChar())
+        // Signs first. Extra leading signs are dropped, as MuPDF's lex_number and pdf.js drop them "to
+        // match Adobe's behavior", so `--100` is -100, not the operator `-` and then -100 (#809).
+        var negative = false
+        var first = reader.readByte()
+        while ((first == '-'.code || first == '+'.code) && (reader.peek() == '-'.code || reader.peek() == '+'.code || reader.peek() == '.'.code || reader.peek() in '0'.code..'9'.code)) {
+            if (first == '-'.code) negative = true
+            first = reader.readByte()
+        }
+        if (first == '-'.code) negative = true
+        if (negative) sb.append('-')
+        if (first != '-'.code && first != '+'.code) sb.append(first.toChar())
         if (first == '.'.code) sawDot = true
         if (first in '0'.code..'9'.code) {
             sawDigit = true
@@ -205,6 +218,13 @@ public class Lexer(public val reader: ByteReader) {
         while (true) {
             val b = reader.peek()
             if (b == -1) break
+            if ((b == '-'.code || b == '+'.code) && sawDigit) {
+                // A sign after the first digit ends the value, and the digits that follow it are
+                // skipped, as MuPDF does for the `0.000000000000-5684342` that Google Docs writes.
+                reader.readByte()
+                while (reader.peek().let { it == '.'.code || it in '0'.code..'9'.code }) reader.readByte()
+                break
+            }
             if (b == '.'.code && !sawDot) {
                 sawDot = true
                 sb.append(b.toChar()); reader.readByte()
@@ -218,18 +238,15 @@ public class Lexer(public val reader: ByteReader) {
                 sb.append(b.toChar()); reader.readByte()
             } else break
         }
-        // Reject a lone "+", "-", "." that came from misclassification.
-        if (!sawDigit) {
-            // Treat as keyword instead.
-            return Token.Keyword(keyword(sb), start)
-        }
+        // A lone sign or dot reads as 0, as in MuPDF and pdf.js, so it takes no operator's place (#809).
+        if (!sawDigit) return Token.Integer(0, start)
         return if (sawDot) {
             // A real has no exponent in PDF (7.3.3). With at most 15 significant digits the
             // mantissa and the power of ten are both exact doubles, so one division rounds
             // correctly and gives the same double as a String parse, without allocating (#119).
             val d = if (significant <= MAX_EXACT_DIGITS && fraction < POWERS_OF_TEN.size) {
                 val v = mantissa.toDouble() / POWERS_OF_TEN[fraction]
-                if (first == '-'.code) -v else v
+                if (negative) -v else v
             } else {
                 val text = sb.toString()
                 text.toDoubleOrNull() ?: throw PdfFormatException("Bad real '$text' at $start")
@@ -253,9 +270,10 @@ public class Lexer(public val reader: ByteReader) {
         var v = 0L
         while (i < sb.length) {
             val d = sb[i].code - '0'.code
-            val next = v * 10 + d
-            if (next < v) throw PdfFormatException("Bad integer '$sb' at $start")  // overflow
-            v = next
+            // An integer past a Long holds at its limit: a check after the multiply let some wrap to
+            // an arbitrary value and threw for others (#806). Annex C.2 puts a reader's limit far below.
+            if (v > (Long.MAX_VALUE - d) / 10) return if (neg) Long.MIN_VALUE else Long.MAX_VALUE
+            v = v * 10 + d
             i++
         }
         return if (neg) -v else v

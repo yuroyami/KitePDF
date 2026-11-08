@@ -206,6 +206,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/Crypt` filter passes the data through, and a stream whose crypt filter is `/Identity` is not decrypted
   with the document's default filter, where both lost the stream (#817).
 
+- One malformed token inside a dictionary or an array keeps the object, as MuPDF keeps it: a `#` without two
+  hex digits in a name stays a literal `#`, a hex string byte that is no hex digit reads as 0, a keyword that
+  is no value reads as null, and an integer past a `Long` holds at its limit instead of throwing or wrapping
+  to an arbitrary value. A page dictionary with such a token became a blank page, and a catalog failed `open`
+  (#806). A number with extra leading signs, a sign after its digits, or a lone sign or dot reads as one
+  number, as MuPDF and pdf.js read it, so `--100` and the `0.000000000000-5684342` that Google Docs writes no
+  longer split into an operator and the wrong operands (#809). The cross-reference `/Prev` chain is followed
+  to its end, past the 32 sections at which a long-lived signed form lost its oldest objects silently (#810).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
