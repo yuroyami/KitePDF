@@ -985,14 +985,32 @@ public class PdfEditor internal constructor(
     /** Redact a single rectangular region of [page] (see [redactRegions]). */
     public fun redactRegion(page: PdfPage, rectangle: KiteRectangle): Unit = redactRegions(page, listOf(rectangle))
 
+    /** Redact a single rectangular region of [page], with [images] deciding what an image in it loses (see [redactRegions]). */
+    public fun redactRegion(page: PdfPage, rectangle: KiteRectangle, images: RedactImages): Unit = redactRegions(page, listOf(rectangle), images)
+
+    /** Redact rectangular regions of [page], taking every image a region meets off the page (see the overload with [RedactImages]). */
+    public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>): Unit = redactRegions(page, rectangles, RedactImages.Remove)
+
     /**
      * Redact rectangular regions of [page] (rectangles in page user space).
      *
      * This is **true** redaction: text whose box intersects a region has its
      * bytes REMOVED from the content stream (so it can't be extracted or
      * recovered), surviving text keeps its position, intersecting images are
-     * dropped from the page, and an opaque black box is painted over each
+     * dropped from the page (or, with [RedactImages.Pixels], lose the pixels
+     * under the regions), and an opaque black box is painted over each
      * region. It does not merely paint over still-present content.
+     *
+     * **[images] decides what an image XObject in a region loses.** [RedactImages.Remove]
+     * takes it off the page. [RedactImages.Pixels] keeps it, in a copy whose samples under
+     * the regions (mapped into the image, rounded outward) take the darkest value of its
+     * colour space, written again with `/FlateDecode`; its `/SMask` loses the same pixels,
+     * so no alpha outline survives, and the original goes from the page as a removed image
+     * does. What it cannot blank safely is taken off the page as with `Remove`: an inline
+     * image, a stencil mask, an image with a stencil `/Mask`, a JPEG 2000 or JBIG2 image, a
+     * JPEG of four components, and one whose colour space or data does not read. An image
+     * that another page, or a form drawn outside every region, also draws keeps its original
+     * there.
      *
      * Calls compose: redacting a second region does not undo the first, and a
      * stamp or content edit staged earlier is redacted along with the original
@@ -1046,8 +1064,9 @@ public class PdfEditor internal constructor(
      * everything up to the matching `Q` is clipped by it (8.5.4) and dropping it
      * would let all of that paint over the rest of the page.
      */
-    public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>) {
+    public fun redactRegions(page: PdfPage, rectangles: List<KiteRectangle>, images: RedactImages) {
         if (rectangles.isEmpty()) return
+        redactionImages = images
         // ISO 32000-1, 7.9.5: a rectangle is two opposite corners in EITHER order and
         // the consumer normalises. Read positionally, an inverted one is inside out,
         // so every intersection test below would match nothing and the caller would
@@ -1074,11 +1093,14 @@ public class PdfEditor internal constructor(
         engine.tilingPatternNames = loadTilingPatternNames(pageResources)
         engine.namedPropertyLists = loadPropertyLists(pageResources)
         engine.fontBands = loadFontBands(pageResources)
+        engine.imagePixels = images == RedactImages.Pixels
         val filtered = engine.run(ops)
         // Recurse into every intersecting form XObject first: it decides which `Do`
         // operands point at a redacted clone and which leave the stream altogether,
         // so it has to run before the body is serialized.
         val formRedaction = recurseIntoForms(pageResources, engine.formXObjectHits)
+        // An image drawn into a region under RedactImages.Pixels is repointed at a blanked copy (#926).
+        redactImagePixels(pageResources, engine.imageHits, formRedaction, engine.droppedImageNames)
         // Soft mask groups, which no Do reaches, redact into copies of their own (#631).
         val maskRedaction = redactSoftMasks(pageResources, engine.softMaskHits)
         // A sequence that lost content loses its replacement text, a named list through a copy (#1008).
@@ -1193,6 +1215,9 @@ public class PdfEditor internal constructor(
      * form by object number and share it across invocations.
      */
     internal var redactionPageResources: PdfDictionary? = null
+
+    /** What the current redaction call does to an image that meets a region (#926). */
+    internal var redactionImages: RedactImages = RedactImages.Remove
 
     /**
      * Resolver that sees STAGED objects, not only the ones in the base document.

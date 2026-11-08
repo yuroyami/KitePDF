@@ -1679,7 +1679,9 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun insertPageAt (ILio/github/yuroyami/kitepdf/core/parser/PdfReference;)V
 	public final fun mergeDocument (Lio/github/yuroyami/kitepdf/PdfDocument;)V
 	public final fun redactRegion (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/KiteRectangle;)V
+	public final fun redactRegion (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/writer/RedactImages;)V
 	public final fun redactRegions (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/util/List;)V
+	public final fun redactRegions (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/util/List;Lio/github/yuroyami/kitepdf/writer/RedactImages;)V
 	public final fun removeAllText (Lio/github/yuroyami/kitepdf/PdfPage;)V
 	public final fun removePage (Lio/github/yuroyami/kitepdf/PdfPage;)V
 	public final fun rotatePage (Lio/github/yuroyami/kitepdf/PdfPage;I)V
@@ -1745,6 +1747,14 @@ public final class io/github/yuroyami/kitepdf/writer/PdfStreams {
 	public static synthetic fun flate$default (Lio/github/yuroyami/kitepdf/writer/PdfStreams;[BLjava/util/Map;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/parser/PdfStream;
 	public final fun raw ([BLjava/util/Map;)Lio/github/yuroyami/kitepdf/core/parser/PdfStream;
 	public static synthetic fun raw$default (Lio/github/yuroyami/kitepdf/writer/PdfStreams;[BLjava/util/Map;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/parser/PdfStream;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/RedactImages : java/lang/Enum {
+	public static final field Pixels Lio/github/yuroyami/kitepdf/writer/RedactImages;
+	public static final field Remove Lio/github/yuroyami/kitepdf/writer/RedactImages;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/RedactImages;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/writer/RedactImages;
 }
 
 public final class io/github/yuroyami/kitepdf/writer/StandardFont : java/lang/Enum {

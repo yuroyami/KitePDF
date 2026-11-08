@@ -86,6 +86,18 @@ internal class RedactionEngine(
     val survivingImageNames = LinkedHashSet<String>()
 
     /**
+     * Whether an image XObject that meets a region keeps its `Do` and is recorded in [imageHits],
+     * for the caller to blank the pixels under the regions, instead of losing its `Do` (#926).
+     */
+    var imagePixels: Boolean = false
+
+    /** One `Do` of an image XObject that meets a region, with the regions in the image's unit square (#926). */
+    class ImageHit(val name: String, val opIndex: Int, val unitRects: List<KiteRectangle>)
+
+    /** Every image `Do` that meets a region when [imagePixels] is on. */
+    val imageHits = ArrayList<ImageHit>()
+
+    /**
      * One `Do` invocation of a form XObject, carrying the regions mapped into that
      * form's own space and the index of the `Do` in the FILTERED output stream.
      * The index is what lets the caller repoint this one invocation at a redacted
@@ -825,6 +837,16 @@ internal class RedactionEngine(
     private fun handleDo(op: Operation, out: MutableList<Operation>) {
         val xobjectName = name(op, 0)
         if (xobjectName != null && xobjectName in imageXObjectNames) {
+            if (imageBoxIntersects() && imagePixels) {
+                val unit = unitRects()
+                if (unit != null) {
+                    // The pixels under the regions go, so the sequence around this Do lost content (#1008).
+                    removals++
+                    imageHits.add(ImageHit(xobjectName, out.size, unit))
+                    out.add(op)
+                    return
+                }
+            }
             if (imageBoxIntersects()) {
                 droppedImageNames.add(xobjectName)
                 removals++
@@ -917,6 +939,26 @@ internal class RedactionEngine(
     private fun imageBoxIntersects(): Boolean {
         if (rectangles.isEmpty()) return false
         return boxIntersects(gs.ctm, 0.0, 0.0, 1.0, 1.0)
+    }
+
+    /**
+     * The regions mapped into the unit square of an image drawn under the CTM, each clipped to
+     * the square, or null when the CTM is singular. A region rotated against the image maps to
+     * the box around it, which blanks more pixels, never fewer.
+     */
+    private fun unitRects(): List<KiteRectangle>? {
+        val inv = gs.ctm.invert() ?: return null
+        return rectangles.mapNotNull { r ->
+            val corners = listOf(
+                inv.transformPoint(r.left, r.bottom), inv.transformPoint(r.right, r.bottom),
+                inv.transformPoint(r.left, r.top), inv.transformPoint(r.right, r.top),
+            )
+            val left = corners.minOf { it.first }.coerceAtLeast(0.0)
+            val right = corners.maxOf { it.first }.coerceAtMost(1.0)
+            val bottom = corners.minOf { it.second }.coerceAtLeast(0.0)
+            val top = corners.maxOf { it.second }.coerceAtMost(1.0)
+            if (left < right && bottom < top) KiteRectangle(left, bottom, right, top) else null
+        }
     }
 
     /** Map the box [x0,y0,x1,y1] through [m] and test its AABB against every rect. */

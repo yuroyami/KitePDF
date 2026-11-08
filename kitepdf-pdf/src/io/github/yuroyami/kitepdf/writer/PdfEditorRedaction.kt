@@ -11,6 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.render.ImagePixelRedaction
 import io.github.yuroyami.kitepdf.render.Type3Data
 
 /*
@@ -206,6 +207,68 @@ internal fun PdfEditor.recurseIntoForms(
     return result
 }
 
+/**
+ * Blanks the pixels under the regions of each image that [hits] name, in a copy of the image,
+ * and asks the parent, through [into], to repoint those `Do` operators at the copy (#926). All
+ * the hits of one image in this stream share one copy, blanked under all of them, so an
+ * invocation outside every region keeps drawing the original. An image whose pixels cannot be
+ * blanked safely (see [ImagePixelRedaction.blank]), or one with a stencil `/Mask`, loses those
+ * `Do` operators as with [RedactImages.Remove], and its name goes in [dropped].
+ */
+@OptIn(io.github.yuroyami.kitepdf.core.KiteRawApi::class)
+internal fun PdfEditor.redactImagePixels(
+    resources: PdfDictionary?,
+    hits: List<RedactionEngine.ImageHit>,
+    into: FormRedaction,
+    dropped: MutableSet<String>,
+) {
+    if (hits.isEmpty()) return
+    val xobjects = runCatching { resources?.getDict("XObject", effective) }.getOrNull()
+    val usedNames = HashSet<String>().apply {
+        xobjects?.keys?.let(::addAll)
+        addAll(into.additions.keys)
+    }
+    for ((name, group) in hits.groupBy { it.name }) {
+        val stream = runCatching { xobjects?.get(name)?.resolve(effective) as? PdfStream }.getOrNull()
+        val copy = stream?.let { blankedImage(it, group.flatMap { hit -> hit.unitRects }) }
+        if (copy == null) {
+            for (hit in group) into.drops[hit.opIndex] = name
+            into.droppedNames.add(name)
+            dropped.add(name)
+            continue
+        }
+        var i = 1
+        while ("${name}P$i" in usedNames) i++
+        val newName = "${name}P$i".also { usedNames.add(it) }
+        for (hit in group) into.renames[hit.opIndex] = Rename(from = name, to = newName)
+        into.additions[newName] = copy
+    }
+}
+
+/**
+ * A new image object: [image] with the pixels under [rects] (in its unit square) blanked and
+ * its soft mask blanked the same way, its samples written again with `/FlateDecode`, or null
+ * when that cannot be done safely. A stencil `/Mask` keeps the outline of what it masks, and
+ * is one of those cases.
+ */
+@OptIn(io.github.yuroyami.kitepdf.core.KiteRawApi::class)
+private fun PdfEditor.blankedImage(image: PdfStream, rects: List<KiteRectangle>): PdfReference? {
+    val dict = image.dict
+    if (runCatching { dict["Mask"]?.resolve(effective) }.getOrNull() is PdfStream) return null
+    val samples = ImagePixelRedaction.blank(image, effective, rects) ?: return null
+    val extra = LinkedHashMap(extraFrom(dict))
+    extra["BitsPerComponent"] = PdfInt(samples.bitsPerComponent.toLong())
+    val mask = runCatching { dict["SMask"]?.resolve(effective) }.getOrNull()
+    if (dict["SMask"] != null && mask !is PdfName) {
+        val maskStream = mask as? PdfStream ?: return null
+        val maskSamples = ImagePixelRedaction.blank(maskStream, effective, rects, softMask = true) ?: return null
+        val maskExtra = LinkedHashMap(extraFrom(maskStream.dict))
+        maskExtra["BitsPerComponent"] = PdfInt(maskSamples.bitsPerComponent.toLong())
+        extra["SMask"] = addObject(PdfStreams.flate(maskSamples.bytes, maskExtra))
+    }
+    return addObject(PdfStreams.flate(samples.bytes, extra))
+}
+
 /** What redacting the soft mask groups of a stream gives: the `gs` operands to repoint, and the ExtGStates to add. */
 internal class SoftMaskRedaction(val renames: Map<Int, Rename>, val additions: Map<String, PdfObject>)
 
@@ -374,9 +437,11 @@ internal fun PdfEditor.redactFormXObject(
         engine.tilingPatternNames = loadTilingPatternNames(formResources)
         engine.fontBands = loadFontBands(formResources)
         engine.namedPropertyLists = loadPropertyLists(formResources)
+        engine.imagePixels = redactionImages == RedactImages.Pixels
         val filtered = engine.run(ops)
 
         val nested = recurseIntoForms(formResources, engine.formXObjectHits)
+        redactImagePixels(formResources, engine.imageHits, nested, engine.droppedImageNames)
         val masks = redactSoftMasks(formResources, engine.softMaskHits)
         val (marked, strippedResources) = stripNamedPropertyLists(formResources, engine.namedPropertyStrips, applySoftMaskRedaction(filtered, masks))
         val finalOps = applyFormRedaction(marked, nested)

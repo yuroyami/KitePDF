@@ -1469,6 +1469,18 @@ public final class io/github/yuroyami/kitepdf/core/render/ImageGridFitKt {
 	public static final fun gridFitImage (Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;
 }
 
+public final class io/github/yuroyami/kitepdf/core/render/ImagePixelRedaction {
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/core/render/ImagePixelRedaction;
+	public final fun blank (Lio/github/yuroyami/kitepdf/core/parser/PdfStream;Lio/github/yuroyami/kitepdf/core/parser/IndirectResolver;Ljava/util/List;Z)Lio/github/yuroyami/kitepdf/core/render/ImagePixelRedaction$Samples;
+	public static synthetic fun blank$default (Lio/github/yuroyami/kitepdf/core/render/ImagePixelRedaction;Lio/github/yuroyami/kitepdf/core/parser/PdfStream;Lio/github/yuroyami/kitepdf/core/parser/IndirectResolver;Ljava/util/List;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/ImagePixelRedaction$Samples;
+}
+
+public final class io/github/yuroyami/kitepdf/core/render/ImagePixelRedaction$Samples {
+	public fun <init> ([BI)V
+	public final fun getBitsPerComponent ()I
+	public final fun getBytes ()[B
+}
+
 public final class io/github/yuroyami/kitepdf/core/render/ImageRasterKt {
 	public static final field KITE_DEFAULT_MAX_RASTER_PIXELS J
 	public static final fun toRgbaBytes (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;)[B

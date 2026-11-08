@@ -627,6 +627,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A signature's change report now files a change to what a page draws with as page content, even where an
   appearance stream also reaches it, so page content shared with an appearance can no longer be replaced as a
   permitted change (#1005).
+- redactRegion and redactRegions take RedactImages.Pixels, which keeps an image that a region meets and blanks
+  only the pixels under the region, its soft mask too, so redacting a line of a scanned page no longer removes
+  the scan (#926).
 
 ## [0.13.0] - 2026-10-09
 

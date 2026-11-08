@@ -243,7 +243,7 @@ The rectangles are in points, from the bottom-left corner of the page. The order
 ### What redaction removes
 
 - Text that meets a region. The text after it keeps its place.
-- Images that meet a region, with their data.
+- Images that meet a region, with their data. For a scanned page, which is one image, that removes the page, so pass `RedactImages.Pixels` to `redactRegion` or `redactRegions` to keep the image and blank only the pixels under each region. The copy is written with `/FlateDecode` and its soft mask loses the same pixels. An inline image, a stencil mask, an image with a stencil `/Mask`, a JPEG 2000 or JBIG2 image and a JPEG of four components are removed whole even then.
 - Paths (fills, strokes and curves) whose ink reaches a region, with the width of the pen.
 - Content in a form XObject, in the coordinates of each place that draws the form. When one form draws in several places, each place that needs a different redaction gets its own copy. A place that no region meets keeps the original form.
 - Annotations that meet a region, with their text, appearance, actions and attached files.
