@@ -103,7 +103,11 @@ public class EpubScriptRunner(
     @kotlin.concurrent.Volatile
     private var session: EpubScriptSession? = null
 
-    /** How many calls of this runner the script thread is inside, so its engines stay open while a script runs. */
+    /**
+     * How many calls of this runner the script thread is inside, so its engines stay open while a
+     * script runs. A close on another thread reads it, so it is volatile (#862).
+     */
+    @kotlin.concurrent.Volatile
     private var busy = 0
 
     /** Unloads the chapters when another runner opens an engine on the thread they share. */
@@ -237,7 +241,9 @@ public class EpubScriptRunner(
         val thread = scriptThread.value
         try {
             // A script that never reaches its interrupt check holds the thread, and this caller does not wait for it (#996).
-            thread.callWithin(CLOSE_WAIT_MILLIS) {
+            // A call that is running may wait in a host callback for the very thread that closes, such
+            // as an alert's dialog on the UI thread, so a close then waits for nothing (#862).
+            thread.callWithin(if (busy > 0) 0L else CLOSE_WAIT_MILLIS) {
                 try {
                     session?.close()
                 } finally {

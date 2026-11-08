@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.javascript
 
+import kotlin.concurrent.Volatile
 import io.github.yuroyami.kitepdf.PdfAction
 import io.github.yuroyami.kitepdf.PdfChoiceSelection
 import io.github.yuroyami.kitepdf.PdfDocument
@@ -90,7 +91,11 @@ public class PdfScriptRunner(
     /** True once the document's own scripts ran, which happens once per runner (#365). */
     private var documentOpenRan = false
 
-    /** How many calls of this runner the script thread is inside, so its engine stays open while a script runs. */
+    /**
+     * How many calls of this runner the script thread is inside, so its engine stays open while a
+     * script runs. A close on another thread reads it, so it is volatile (#862).
+     */
+    @Volatile
     private var busy = 0
 
     /** Closes the engine when another runner opens one on the thread they share; the next script opens it again. */
@@ -962,7 +967,9 @@ public class PdfScriptRunner(
             // A script that never reaches its interrupt check, such as one long built-in call, holds
             // the thread: the engine then closes when it returns, and this caller does not wait for
             // it past CLOSE_WAIT_MILLIS, so a host closing on its main thread does not freeze (#996).
-            thread.callWithin(CLOSE_WAIT_MILLIS) {
+            // A call that is running may wait in a host callback for the very thread that closes, such
+            // as an alert's dialog on the UI thread, so a close then waits for nothing (#862).
+            thread.callWithin(if (busy > 0) 0L else CLOSE_WAIT_MILLIS) {
                 try {
                     openEngine?.close()
                 } finally {

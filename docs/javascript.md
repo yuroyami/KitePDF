@@ -225,6 +225,8 @@ The viewer runs the scripts of a chapter when the reader first gets to it:
 
 A runner can be called from any thread. It runs every call on a thread of its own, one at a time and in order, and `close()` stops that thread. The callbacks of the runner run on that thread too. A form script ends in milliseconds, but a document with a program in the open action of a page can work for tens of seconds before it shows anything. Meanwhile, the reader can still scroll and close the document.
 
+`close()` can be called on any thread, also on the one that a callback waits for, such as the UI thread that shows an `onAlert` dialog. While a call of the runner is running, `close()` returns at once: the running script stops at its next check, and the engine closes when the call ends. Otherwise it waits at most a second for the engine to close. A script that sits in one long built-in call holds its thread until the call returns, and `close()` does not wait for it.
+
 `PdfFormState` can be read and written from two threads, because the scripts write it and the viewer reads it.
 
 On JS and Wasm, the engine is a WebAssembly module that loads before its first use. Call `prepare()` on the runner once, and wait for it before the first script, as `KiteDocView` does. A script that runs before then fails with a message that tells you so. On the other targets, `prepare()` returns at once.

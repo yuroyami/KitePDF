@@ -795,6 +795,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PdfScriptRunner.close()` and `EpubScriptRunner.close()` wait at most a second for a running script to let the
   engine close, so a host closing a runner on its main thread no longer freezes when a script sits in one long
   built-in call that the budget cannot interrupt. The engine closes when that call returns (#996).
+- `PdfScriptRunner.close()` and `EpubScriptRunner.close()` return at once while one of their calls is running, so
+  closing a runner on the UI thread while a script's alert or prompt waits for that thread no longer deadlocks.
+  The engine closes when the call ends (#862).
 
 ## [0.13.0] - 2026-10-09
 

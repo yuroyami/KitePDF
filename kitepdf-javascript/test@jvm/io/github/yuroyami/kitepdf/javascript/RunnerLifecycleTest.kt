@@ -75,4 +75,31 @@ class RunnerLifecycleTest {
         // Leave no busy thread behind for the next tests.
         opener.join(300_000)
     }
+
+    @Test
+    fun closing_on_the_thread_a_script_dialog_waits_for_returns_at_once() {
+        // The host answers an alert from its UI thread. A close there, as Compose's onDispose
+        // makes it while the dialog is up, must not wait for the script that waits for the UI (#862).
+        val ui = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val dialogUp = java.util.concurrent.CountDownLatch(1)
+        val closing = java.util.concurrent.CountDownLatch(1)
+        val runner = PdfScriptRunner(PdfDocument.open(pdf("0")), onAlert = {
+            dialogUp.countDown()
+            // The reader answers once the UI thread is in the close, as when the screen turns with the dialog up.
+            closing.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            ui.submit(java.util.concurrent.Callable { 1 }).get()
+        })
+        val script = thread(isDaemon = true, name = "script caller") {
+            runCatching { runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript("app.alert('hi')", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap()))) }
+        }
+        assertTrue(dialogUp.await(10, java.util.concurrent.TimeUnit.SECONDS), "the dialog came up")
+        val started = System.nanoTime()
+        ui.submit { closing.countDown(); Thread.sleep(100); runner.close() }.get(10, java.util.concurrent.TimeUnit.SECONDS)
+        val millis = (System.nanoTime() - started) / 1_000_000
+        assertTrue(millis < 600, "close waited $millis ms for the script")
+        // The UI is free again, so the dialog answers, and the script call ends.
+        script.join(10_000)
+        assertFalse(script.isAlive, "the script call ended")
+        ui.shutdown()
+    }
 }
