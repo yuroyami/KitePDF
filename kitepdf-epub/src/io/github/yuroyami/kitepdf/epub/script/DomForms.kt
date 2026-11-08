@@ -421,7 +421,7 @@ function entryList(form, submitter) {
     }
     var data = newFormData(list);
     var event = new FormDataEvent('formdata', { __proto__: null, bubbles: true, formData: data });
-    event.isTrusted = true;
+    trustEvent(event);
     fireEvent(form, event);
     return listSlice(formDataOf(data).list);
   } finally {
@@ -527,7 +527,7 @@ var SubmitEvent = subEvent(Event, 'SubmitEvent', function (init) {
 function* submitSteps(form, submitter) {
   if (WeakMapHas(constructing, form)) return;
   var event = new SubmitEvent('submit', { __proto__: null, bubbles: true, cancelable: true, submitter: submitter }), r;
-  event.isTrusted = true;
+  trustEvent(event);
   var g = dispatchSteps(form, event);
   while (!(r = GeneratorNext(g)).done) yield;
   if (r.value) entryList(form, submitter);

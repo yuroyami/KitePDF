@@ -59,7 +59,7 @@ function* scriptLoadSteps(load) {
   var code = K.scriptSource(load.id);
   if (code != null) runScriptCode(load.id, code);
   var event = new Event(code != null ? 'load' : 'error');
-  event.isTrusted = true;
+  trustEvent(event);
   for (var g = dispatchSteps(wrap(load.id), event); !GeneratorNext(g).done;) yield;
 }
 /* Evaluates [code], a name and a source, as the script [id] runs it: currentScript is [id] meanwhile. */

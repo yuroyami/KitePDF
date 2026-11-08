@@ -190,7 +190,7 @@ function windowMessage(source, text) {
   var m = messageOf(text);
   queueTask(function* () {
     var e = new MessageEvent('message', { __proto__: null, data: m.value, origin: origin, source: windowProxy(source), ports: m.ports });
-    e.isTrusted = true;
+    trustEvent(e);
     for (var g = dispatchSteps(global, e); !GeneratorNext(g).done;) yield;
   });
 }
@@ -354,7 +354,7 @@ function* frameLoadSteps() {
     if (WeakMapHas(frameLoaded, el)) continue;
     WeakMapSet(frameLoaded, el, true);
     var e = new Event('load');
-    e.isTrusted = true;
+    trustEvent(e);
     for (var g = dispatchSteps(el, e); !GeneratorNext(g).done;) yield;
   }
 }

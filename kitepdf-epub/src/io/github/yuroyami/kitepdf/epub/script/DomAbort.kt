@@ -61,7 +61,7 @@ function* abortStepsOf(signal) {
     run();
   }
   var e = new Event('abort');
-  e.isTrusted = true;
+  trustEvent(e);
   for (var g = dispatchSteps(signal, e); !GeneratorNext(g).done;) yield;
 }
 function signalAbort(signal, reason) { drain(signalAbortSteps(signal, reason)); }

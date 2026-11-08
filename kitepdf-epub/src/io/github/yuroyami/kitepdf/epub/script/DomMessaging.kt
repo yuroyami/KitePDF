@@ -266,7 +266,7 @@ function queuePortTask(port) {
     // A port of a moved stream hands its messages to the stream, not to listeners.
     if (s.handler !== null) { var handle = s.handler; handle(m.value); return; }
     var e = new MessageEvent('message', { __proto__: null, data: m.value, ports: m.ports });
-    e.isTrusted = true;
+    trustEvent(e);
     for (var g = dispatchSteps(port, e); !GeneratorNext(g).done;) yield;
   };
   task.owner = port;
@@ -367,7 +367,7 @@ function postMessage(message) {
   queueTask(function* () {
     if (a.wanted !== null && a.wanted !== origin) return;
     var e = new MessageEvent('message', { __proto__: null, data: r.value, origin: origin, source: global, ports: r.ports });
-    e.isTrusted = true;
+    trustEvent(e);
     for (var g = dispatchSteps(global, e); !GeneratorNext(g).done;) yield;
   });
 }

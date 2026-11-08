@@ -661,7 +661,7 @@ function* imageLoadSteps(load) {
   var ok = r.state === 'available';
   settleDecoders(r, ok);
   var event = new Event(ok ? 'load' : 'error');
-  event.isTrusted = true;
+  trustEvent(event);
   for (var g = dispatchSteps(wrap(load.id), event); !GeneratorNext(g).done;) yield;
 }
 /* Runs every load still waiting, as the window's load event waits for them. */

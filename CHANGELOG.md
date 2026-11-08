@@ -759,6 +759,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads as a file the book does not hold, instead of laying out its ciphertext. When a content document of the
   spine is encrypted this way, `EpubDocument.open` throws an `EpubFormatException` that says the book is
   encrypted (#875).
+- A book's `Event` keeps its state behind the read-only getters of `Event.prototype`, with `isTrusted` as its one
+  own property, so a script can no longer forge `target` or `defaultPrevented`. `dispatchEvent` of an event that
+  is already being dispatched throws an `InvalidStateError`, and a window's load event names the document as its
+  target (#876).
 
 ## [0.13.0] - 2026-10-09
 

@@ -627,42 +627,60 @@ EventTarget.prototype.removeEventListener = function (type, fn, options) {
   removeListener(this, String(type), fn, capture);
 };
 EventTarget.prototype.dispatchEvent = function (event) {
-  if (!isA(event, Event)) throw new TypeError('parameter is not an Event');
-  event.isTrusted = false;
+  if (!isA(event, Event) || !eventMade(event)) throw new TypeError("Failed to execute 'dispatchEvent' on 'EventTarget': parameter 1 is not of type 'Event'.");
+  var s = eventState(event);
+  // DOM Standard, 2.7: an event whose dispatch flag is set, or that was never initialized, throws.
+  if (s.dispatching || !s.initialized) throw new DOMException("Failed to execute 'dispatchEvent' on 'EventTarget': The event is already being dispatched.", 'InvalidStateError');
+  s.isTrusted = false;
   return dispatch(this, event);
 };
 defineInterface(EventTarget, 'EventTarget');
 
-/* An event, of the DOM Standard, 2.2, whose constructor takes its type and then a dictionary. */
-function eventMade(e) { return ObjectHasOwn(e, '__stop'); }
+/* An event, of the DOM Standard, 2.2, whose constructor takes its type and then a dictionary.
+   Its state lives in a weak map that the read-only getters of the prototype read, as for a
+   DOMException, so a script neither sees it among the event's own properties nor writes it.
+   isTrusted is [LegacyUnforgeable], an own accessor of each event and its one own property (#876). */
+var eventStates = new WeakMap();
+function eventMade(e) { return WeakMapHas(eventStates, e); }
+function eventState(e) {
+  var s = WeakMapGet(eventStates, e);
+  if (s === undefined) throw new TypeError('Illegal invocation');
+  return s;
+}
+/* Marks [e] as the reading system's own, an event a script did not make. */
+function trustEvent(e, trusted) { eventState(e).isTrusted = trusted !== false; return e; }
+function isTrustedOf() { return eventState(this).isTrusted; }
 function Event(type, init) {
   needNew(this, Event, 'Event', eventMade);
   needArgs(arguments, 1, "Failed to construct 'Event'");
   init = init || { __proto__: null };
-  this.type = String(type);
-  this.bubbles = !!init.bubbles;
-  this.cancelable = !!init.cancelable;
-  this.composed = !!init.composed;
-  this.defaultPrevented = false;
-  this.target = null;
-  this.currentTarget = null;
-  this.eventPhase = 0;
-  this.isTrusted = false;
-  this.timeStamp = K.now();
-  hidden(this, '__stop', false);
-  hidden(this, '__stopNow', false);
+  WeakMapSet(eventStates, this, {
+    __proto__: null, type: String(type), bubbles: !!init.bubbles, cancelable: !!init.cancelable, composed: !!init.composed,
+    defaultPrevented: false, target: null, currentTarget: null, eventPhase: 0, isTrusted: false, timeStamp: K.now(),
+    stop: false, stopNow: false, dispatching: false, initialized: true,
+  });
+  ObjectDefineProperty(this, 'isTrusted', { __proto__: null, get: isTrustedOf, enumerable: true, configurable: false });
 }
 constants(Event, ['NONE', 'CAPTURING_PHASE', 'AT_TARGET', 'BUBBLING_PHASE'], 0);
-function preventDefaultOf(event) { if (event.cancelable) event.defaultPrevented = true; }
-function initEventOf(event, type, bubbles, cancelable) { event.type = String(type); event.bubbles = !!bubbles; event.cancelable = !!cancelable; }
+function preventDefaultOf(event) { var s = eventState(event); if (s.cancelable) s.defaultPrevented = true; }
+/* initEvent does nothing while the event is dispatched (DOM Standard, 2.2). */
+function initEventOf(event, type, bubbles, cancelable) {
+  var s = eventState(event);
+  if (s.dispatching) return;
+  s.initialized = true; s.stop = false; s.stopNow = false; s.defaultPrevented = false; s.isTrusted = false; s.target = null;
+  s.type = String(type); s.bubbles = !!bubbles; s.cancelable = !!cancelable;
+}
 Event.prototype.preventDefault = function () { preventDefaultOf(this); };
-Event.prototype.stopPropagation = function () { this.__stop = true; };
-Event.prototype.stopImmediatePropagation = function () { this.__stop = true; this.__stopNow = true; };
+Event.prototype.stopPropagation = function () { eventState(this).stop = true; };
+Event.prototype.stopImmediatePropagation = function () { var s = eventState(this); s.stop = true; s.stopNow = true; };
 Event.prototype.initEvent = function (type, bubbles, cancelable) { initEventOf(this, type, bubbles, cancelable); };
-Event.prototype.composedPath = function () { var out = []; for (var t = this.target; t; t = parentTarget(t)) ArrayPush(out, t); return out; };
-def(Event.prototype, 'srcElement', function () { return this.target; });
-def(Event.prototype, 'returnValue', function () { return !this.defaultPrevented; }, function (v) { if (!v) preventDefaultOf(this); });
-def(Event.prototype, 'cancelBubble', function () { return this.__stop; }, function (v) { if (v) this.__stop = true; });
+Event.prototype.composedPath = function () { var out = []; for (var t = eventState(this).target; t; t = parentTarget(t)) ArrayPush(out, t); return out; };
+function eventGetter(name) { def(Event.prototype, name, function () { return eventState(this)[name]; }); }
+eventGetter('type'); eventGetter('target'); eventGetter('currentTarget'); eventGetter('eventPhase'); eventGetter('bubbles');
+eventGetter('cancelable'); eventGetter('defaultPrevented'); eventGetter('composed'); eventGetter('timeStamp');
+def(Event.prototype, 'srcElement', function () { return eventState(this).target; });
+def(Event.prototype, 'returnValue', function () { return !eventState(this).defaultPrevented; }, function (v) { if (!v) preventDefaultOf(this); });
+def(Event.prototype, 'cancelBubble', function () { return eventState(this).stop; }, function (v) { if (v) eventState(this).stop = true; });
 defineInterface(Event, 'Event', null, 1);
 
 /* The interface [name] of an event that inherits from [parent], whose dictionary [fill] reads,
@@ -728,31 +746,40 @@ function parentTarget(t) {
    dispatchEvent or click() runs the same steps at once, as in a browser, where the jobs of its
    listeners wait until the script is done. One generator runs another's steps by a loop over
    GeneratorNext, where yield* would call the next of the generator prototype (#540). */
-function* dispatchSteps(target, event) {
-  event.target = target;
+/* The event's dispatch flag is set while its steps run, and the flags of a stop go once they
+   end (DOM Standard, 2.9). [shownTarget], when given, is the target the event names, as the
+   load event of a window names its document (HTML, 8.4.1, the legacy target override flag). */
+function* dispatchSteps(target, event, shownTarget) {
+  var s = eventState(event);
+  s.dispatching = true;
+  s.target = shownTarget || target;
   var path = [];
   for (var t = target; t; t = parentTarget(t)) ArrayPush(path, t);
-  event.eventPhase = 1;
-  for (var i = path.length - 1; i > 0 && !event.__stop; i--) for (var a = invokeSteps(path[i], event, 1); !GeneratorNext(a).done;) yield;
-  if (!event.__stop) { event.eventPhase = 2; for (var b = invokeSteps(path[0], event, 2); !GeneratorNext(b).done;) yield; }
-  if (event.bubbles) {
-    event.eventPhase = 3;
-    for (var j = 1; j < path.length && !event.__stop; j++) for (var c = invokeSteps(path[j], event, 3); !GeneratorNext(c).done;) yield;
+  s.eventPhase = 1;
+  for (var i = path.length - 1; i > 0 && !s.stop; i--) for (var a = invokeSteps(path[i], event, 1); !GeneratorNext(a).done;) yield;
+  if (!s.stop) { s.eventPhase = 2; for (var b = invokeSteps(path[0], event, 2); !GeneratorNext(b).done;) yield; }
+  if (s.bubbles) {
+    s.eventPhase = 3;
+    for (var j = 1; j < path.length && !s.stop; j++) for (var c = invokeSteps(path[j], event, 3); !GeneratorNext(c).done;) yield;
   }
-  event.eventPhase = 0;
-  event.currentTarget = null;
-  return !event.defaultPrevented;
+  s.eventPhase = 0;
+  s.currentTarget = null;
+  s.dispatching = false;
+  s.stop = false;
+  s.stopNow = false;
+  return !s.defaultPrevented;
 }
 function* invokeSteps(t, event, phase) {
-  event.currentTarget = t;
+  var s = eventState(event);
+  s.currentTarget = t;
   settleTarget(t);
-  var entries = listSlice(listenersOf(t)[event.type] || []);
-  for (var i = 0; i < entries.length && !event.__stopNow; i++) {
+  var entries = listSlice(listenersOf(t)[s.type] || []);
+  for (var i = 0; i < entries.length && !s.stopNow; i++) {
     var l = entries[i];
     if (l.removed) continue;
     if (phase === 1 && !l.capture) continue;
     if (phase === 3 && l.capture) continue;
-    if (l.once) removeListener(t, event.type, l.fn, l.capture);
+    if (l.once) removeListener(t, s.type, l.fn, l.capture);
     if (l.handler !== null) runHandler(t, event); else call(l.fn, t, event);
     yield;
   }
@@ -1564,7 +1591,7 @@ def(FileReader.prototype, 'error', function () { return readerOf(this).error; })
 defineHandlers(FileReader.prototype, ['loadstart', 'progress', 'load', 'abort', 'error', 'loadend']);
 function progressOf(type, s) {
   var e = new ProgressEvent(type, { __proto__: null, lengthComputable: true, loaded: s.loaded, total: s.total });
-  e.isTrusted = true;
+  trustEvent(e);
   return e;
 }
 /* The result of a read: the bytes as the method packages them. */
@@ -1674,7 +1701,7 @@ function* activateSteps(target, click, trusted) {
     }
     undo = function () { setChecked(c, was); for (var j = 0; j < group.length; j++) setChecked(group[j], true); };
   }
-  click.isTrusted = trusted;
+  trustEvent(click, trusted);
   var g = dispatchSteps(target, click), r;
   while (!(r = GeneratorNext(g)).done) yield;
   if (!r.value) { if (undo) undo(); return true; }
@@ -2468,16 +2495,14 @@ function* loadedSteps() {
   for (var h = frameLoadSteps(); !GeneratorNext(h).done;) yield;
   document.__ready = 'complete';
   for (var c = dispatchSteps(document, new Event('readystatechange')); !GeneratorNext(c).done;) yield;
-  var load = new Event('load');
-  load.target = document;
-  for (var d = dispatchSteps(global, load); !GeneratorNext(d).done;) yield;
+  for (var d = dispatchSteps(global, new Event('load'), document); !GeneratorNext(d).done;) yield;
   for (var e = dispatchSteps(global, new Event('pageshow')); !GeneratorNext(e).done;) yield;
 }
 function* tapSteps(id, x, y) {
   var target = wrap(id);
   var init = { __proto__: null, bubbles: true, cancelable: true, composed: true, view: global, detail: 1, clientX: x, clientY: y,
     screenX: x, screenY: y, button: 0, buttons: 1, pointerId: 1, pointerType: 'touch', isPrimary: true };
-  function trusted(e) { e.isTrusted = true; return dispatchSteps(target, e); }
+  function trusted(e) { trustEvent(e); return dispatchSteps(target, e); }
   for (var a = trusted(new PointerEvent('pointerdown', init)); !GeneratorNext(a).done;) yield;
   for (var b = trusted(new MouseEvent('mousedown', init)); !GeneratorNext(b).done;) yield;
   // The tap focuses the control it lands in by the focusing steps, not by a focus() a script may have replaced.
@@ -2497,12 +2522,12 @@ hostEntry('__kite_loaded', function () { return begin(loadedSteps()); });
 function* fragmentSteps(oldURL) {
   var newURL = K.location();
   var pop = new PopStateEvent('popstate', { __proto__: null, state: null });
-  pop.isTrusted = true;
+  trustEvent(pop);
   for (var a = dispatchSteps(global, pop); !GeneratorNext(a).done;) yield;
   if (fragmentOf(oldURL) === fragmentOf(newURL)) return;
   queueTask(function* () {
     var change = new HashChangeEvent('hashchange', { __proto__: null, oldURL: oldURL, newURL: newURL });
-    change.isTrusted = true;
+    trustEvent(change);
     for (var b = dispatchSteps(global, change); !GeneratorNext(b).done;) yield;
   });
 }
