@@ -348,6 +348,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each open figure where it differs from `StrokeStartLineCap` (#747).
 - An XPS colour written as `ContextColor` paints, read by its channel count as gray, RGB or CMYK, where the path,
   stroke or glyph run painted nothing (#743).
+- `util.printf` truncates `%d` and `%x` as Acrobat and PDFium do, writes `%x` unsigned, and prints six decimals
+  for a bare `%f` (#763).
+- `util.printf` with the `,2` or `,3` flag writes a comma as the decimal mark, and `,4` groups with an
+  apostrophe, where `%,2.2f` of 1234.56 gave `1.234.56` (#761).
 
 ## [0.13.0] - 2026-10-09
 

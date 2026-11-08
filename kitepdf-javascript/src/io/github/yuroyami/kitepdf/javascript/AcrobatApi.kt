@@ -152,13 +152,15 @@ internal object AcrobatApi {
         function (whole, sep, flags, width, precision, kind) {
           var arg = args[next++];
           var out;
+          // The Acrobat reference: d and x truncate, and x is unsigned hexadecimal, as PDFium's ToInt32
+          // and swprintf give it; f with no precision prints six decimals, as C does (#763).
           if (kind === 'd') {
-            out = String(Math.round(Number(arg)) || 0);
+            out = String(Math.trunc(Number(arg)) || 0);
           } else if (kind === 'f') {
-            var digits = precision === undefined ? 2 : parseInt(precision, 10);
+            var digits = precision === undefined ? 6 : parseInt(precision, 10);
             out = Number(arg).toFixed(digits);
           } else if (kind === 'x' || kind === 'X') {
-            out = (Math.round(Number(arg)) || 0).toString(16);
+            out = ((Number(arg) | 0) >>> 0).toString(16);
             if (kind === 'X') out = out.toUpperCase();
           } else {
             out = arg === undefined ? '' : String(arg);
@@ -225,16 +227,17 @@ internal object AcrobatApi {
     streamFromString: function (s) { return String(s); },
   };
 
+  // The nDecSep flag of util.printf: 0 comma groups and a period, 1 no groups and a period, 2 period
+  // groups and a comma, 3 no groups and a comma, 4 apostrophe groups and a period (#761).
   function groupThousands(text, separator) {
-    var sep = separator === '1' ? '' : separator === '2' ? '.' : separator === '3' ? '' : ',';
-    if (separator === '2') sep = '.';
-    if (separator === '3' || separator === '1') sep = separator === '1' ? '' : '';
+    var sep = separator === '1' || separator === '3' ? '' : separator === '2' ? '.' : separator === '4' ? "'" : ',';
+    var mark = separator === '2' || separator === '3' ? ',' : '.';
     var sign = '';
     var body = text;
     if (body.charAt(0) === '-' || body.charAt(0) === '+') { sign = body.charAt(0); body = body.substring(1); }
     var dot = body.indexOf('.');
     var whole = dot < 0 ? body : body.substring(0, dot);
-    var rest = dot < 0 ? '' : body.substring(dot);
+    var rest = dot < 0 ? '' : mark + body.substring(dot + 1);
     if (sep !== '') {
       var grouped = '';
       for (var i = 0; i < whole.length; i++) {

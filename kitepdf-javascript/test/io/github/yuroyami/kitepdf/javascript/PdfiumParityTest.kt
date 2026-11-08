@@ -180,4 +180,20 @@ class PdfiumParityTest {
         ).split(",").filter { it.isNotEmpty() }
         assertEquals(emptyList(), missing, "missing helper functions")
     }
+
+    @Test
+    fun printf_truncates_d_and_x_and_prints_six_decimals_for_f(): TestResult = scriptTest {
+        // The Acrobat reference and PDFium's ToInt32 (#763).
+        assertEquals("2|-2|ff|ffffffff|1.500000", eval(
+            "[util.printf('%d', 2.7), util.printf('%d', -2.7), util.printf('%x', 255.9), util.printf('%x', -1), util.printf('%f', 1.5)].join('|')",
+        ))
+    }
+
+    @Test
+    fun printf_separator_styles_set_the_decimal_mark_too(): TestResult = scriptTest {
+        // The nDecSep flag of util.printf (#761).
+        assertEquals("1,234.56|1234.56|1.234,56|1234,56|1'234.56", eval(
+            "[0, 1, 2, 3, 4].map(function (k) { return util.printf('%,' + k + '.2f', 1234.56); }).join('|')",
+        ))
+    }
 }
