@@ -6,7 +6,9 @@ public final class io/github/yuroyami/kitepdf/bundle/KitePDFBundle {
 public final class io/github/yuroyami/kitepdf/document/KiteDoc {
 	public static final field INSTANCE Lio/github/yuroyami/kitepdf/document/KiteDoc;
 	public final fun formatOf ([B)Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
+	public final fun open ([BLio/github/yuroyami/kitepdf/document/KiteDocFormat;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public final fun open ([BLjava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
+	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;[BLio/github/yuroyami/kitepdf/document/KiteDocFormat;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;[BLjava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public final fun openBase64 (Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public static synthetic fun openBase64$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
@@ -19,8 +21,11 @@ public final class io/github/yuroyami/kitepdf/document/KiteDoc {
 public final class io/github/yuroyami/kitepdf/document/KiteDocFormat : java/lang/Enum {
 	public static final field Cbz Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Epub Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
+	public static final field Fb2 Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
+	public static final field Html Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Pdf Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Svg Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
+	public static final field Text Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Xps Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/document/KiteDocFormat;

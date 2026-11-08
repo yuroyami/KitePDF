@@ -86,6 +86,21 @@ A roll (`rendition:layout roll` of EPUB 3.4) is a webtoon or a scroll: a strip o
 
 `KiteDocLayout.forDocument(book)` gives a roll a `Continuous` strip, which shows the pages with no gap, whatever `pageSpacing` says.
 
+### Other book formats
+
+The EPUB engine also lays out books that come as one file. Each opens as an `EpubDocument`:
+
+```kotlin
+val tale = EpubDocument.openFb2(fb2Bytes)                       // FictionBook 2, .fb2 or .fb2.zip
+val page = EpubDocument.openHtml(htmlBytes) { url -> fetch(url) } // relative style sheets and images through the resolver
+val text = EpubDocument.openText(txtBytes, joinLines = true)      // blank lines start paragraphs
+```
+
+- An FB2 book gives its title, authors, language and annotation as metadata, each top-level section a chapter, its section titles the table of contents, its `binary` images, and its notes body, which `a type="note"` links go to.
+- An HTML page is one chapter. Without a resolver, the style sheets and images it names by a relative URL are left out.
+- A text file decodes by its BOM, then as UTF-8, then as windows-1252. A long file splits into chapters, so its first page shows before the rest is laid out.
+- `KiteDoc.open` recognises FB2 and HTML by their bytes. Plain text has no signature: open it with `KiteDoc.open(bytes, KiteDocFormat.Text)`.
+
 ## Rendering pages
 
 `book.pages` is a `List<EpubPage>`, and each page renders through the shared canvas, as a `PdfPage` does:

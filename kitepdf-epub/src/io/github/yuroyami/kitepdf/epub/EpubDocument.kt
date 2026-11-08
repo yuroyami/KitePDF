@@ -1761,6 +1761,43 @@ public class EpubDocument internal constructor(
         public fun open(bytes: ByteArray, settings: EpubSettings): EpubDocument =
             EpubDocument(ParsedEpub.parse(bytes), settings)
 
+        /**
+         * A plain text file as a book (#947): decoded by its BOM, then as UTF-8, then by the
+         * WHATWG fallback (windows-1252), each run of blank lines starting a paragraph. Other line
+         * breaks are kept, or joined into the paragraph with [joinLines]. A long file splits into
+         * chapters at paragraph ends, so the first page shows before the rest is laid out.
+         */
+        public fun openText(bytes: ByteArray, settings: EpubSettings = EpubSettings(), title: String = "Text", joinLines: Boolean = false): EpubDocument =
+            open(io.github.yuroyami.kitepdf.epub.convert.TextBook.convert(bytes, title, joinLines), settings)
+
+        /**
+         * An HTML or XHTML page as a book of one chapter (#947), parsed as a `text/html` chapter of
+         * a book is. Each style sheet, image or font it names by a relative URL comes from
+         * [resources], given the URL as the page writes it; without it they are left out. Scripts
+         * run only when [settings] asks, as for a book.
+         */
+        public fun openHtml(bytes: ByteArray, settings: EpubSettings = EpubSettings(), resources: ((String) -> ByteArray?)? = null): EpubDocument =
+            open(io.github.yuroyami.kitepdf.epub.convert.HtmlBook.convert(bytes, null, resources), settings)
+
+        /**
+         * A FictionBook 2 book (#946), an `.fb2` file or an `.fb2.zip` that holds one, laid out as a
+         * book: its title, authors, language and annotation as metadata, each top-level section
+         * a chapter, the section titles the table of contents, its `binary` images, and the notes
+         * body with the links that go to it.
+         *
+         * @throws EpubFormatException when [bytes] are not an FB2 book.
+         */
+        @Throws(EpubFormatException::class)
+        public fun openFb2(bytes: ByteArray, settings: EpubSettings = EpubSettings()): EpubDocument {
+            val fb2 = if (io.github.yuroyami.kitepdf.epub.convert.Fb2Book.isFb2(bytes)) bytes
+            else io.github.yuroyami.kitepdf.epub.convert.Fb2Book.fromZip(bytes) ?: throw EpubFormatException("not a FictionBook 2 file")
+            return open(io.github.yuroyami.kitepdf.epub.convert.Fb2Book.convert(fb2), settings)
+        }
+
+        /** Whether [bytes] are an FB2 book, or a ZIP that holds one (#946). */
+        public fun isFb2(bytes: ByteArray): Boolean =
+            io.github.yuroyami.kitepdf.epub.convert.Fb2Book.isFb2(bytes) || io.github.yuroyami.kitepdf.epub.convert.Fb2Book.fromZip(bytes) != null
+
         /** [open], but null instead of [EpubFormatException] on a malformed book. */
         public fun openOrNull(bytes: ByteArray, settings: EpubSettings = EpubSettings()): EpubDocument? =
             try { open(bytes, settings) } catch (_: EpubFormatException) { null }

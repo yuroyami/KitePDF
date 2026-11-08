@@ -28,6 +28,12 @@ public enum class KiteDocFormat {
     Svg,
     /** XPS and OpenXPS, whose package structure is defined by ECMA-388 §9. */
     Xps,
+    /** FictionBook 2, an `.fb2` file or a ZIP holding one, laid out as a book (#946). */
+    Fb2,
+    /** An HTML or XHTML page, laid out as a book of one chapter (#947). */
+    Html,
+    /** Plain text, which has no signature, so [KiteDoc.formatOf] never answers it: open it by name (#947). */
+    Text,
 }
 
 /**
@@ -72,12 +78,21 @@ public object KiteDoc {
         looksLikeZip(bytes) -> when {
             looksLikeEpub(bytes) -> KiteDocFormat.Epub
             XpsDocument.isXps(bytes) -> KiteDocFormat.Xps
+            EpubDocument.isFb2(bytes) -> KiteDocFormat.Fb2
             looksLikeCbz(bytes) -> KiteDocFormat.Cbz
             else -> null
         }
         findPdfHeader(bytes) -> KiteDocFormat.Pdf
         SvgImage.isSvg(bytes) -> KiteDocFormat.Svg
+        EpubDocument.isFb2(bytes) -> KiteDocFormat.Fb2
+        looksLikeHtml(bytes) -> KiteDocFormat.Html
         else -> null
+    }
+
+    /** An HTML page: a doctype or an `<html>` element near the start, past a BOM and white space. */
+    private fun looksLikeHtml(bytes: ByteArray): Boolean {
+        val head = bytes.copyOf(minOf(bytes.size, 1024)).decodeToString().trimStart('\uFEFF', ' ', '\t', '\r', '\n').lowercase()
+        return head.startsWith("<!doctype html") || head.startsWith("<html") || (head.startsWith("<?xml") && "<html" in head)
     }
 
     /**
@@ -105,6 +120,9 @@ public object KiteDoc {
         KiteDocFormat.Cbz -> CbzDocument.open(bytes)
         KiteDocFormat.Svg -> SvgDocument.open(bytes)
         KiteDocFormat.Xps -> XpsDocument.open(bytes)
+        KiteDocFormat.Fb2 -> EpubDocument.openFb2(bytes, epubSettings)
+        KiteDocFormat.Html -> EpubDocument.openHtml(bytes, epubSettings)
+        KiteDocFormat.Text -> EpubDocument.openText(bytes, epubSettings)
         // One last try as a damaged PDF, by the String overload, which retries a non-ASCII password
         // as Latin-1. A wrong password stays a KiteWrongPasswordException, as the KDoc promises (#823).
         null -> try {
@@ -116,6 +134,27 @@ public object KiteDoc {
                 "not a readable PDF, EPUB, CBZ, SVG or XPS (${bytes.size} bytes, starting ${headerPreview(bytes)})"
             )
         }
+    }
+
+    /**
+     * Reads [bytes] as [format], for a format that has no signature to sniff, such as
+     * [KiteDocFormat.Text], or to override the sniff (#947).
+     */
+    @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
+    public fun open(
+        bytes: ByteArray,
+        format: KiteDocFormat,
+        password: String = "",
+        epubSettings: EpubSettings = EpubSettings(),
+    ): KiteDocument = when (format) {
+        KiteDocFormat.Pdf -> PdfDocument.open(bytes, password)
+        KiteDocFormat.Epub -> EpubDocument.open(bytes, epubSettings)
+        KiteDocFormat.Cbz -> CbzDocument.open(bytes)
+        KiteDocFormat.Svg -> SvgDocument.open(bytes)
+        KiteDocFormat.Xps -> XpsDocument.open(bytes)
+        KiteDocFormat.Fb2 -> EpubDocument.openFb2(bytes, epubSettings)
+        KiteDocFormat.Html -> EpubDocument.openHtml(bytes, epubSettings)
+        KiteDocFormat.Text -> EpubDocument.openText(bytes, epubSettings)
     }
 
     /** [open], but null instead of an exception on anything unreadable. */

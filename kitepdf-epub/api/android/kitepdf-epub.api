@@ -61,14 +61,21 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubDocument$Companion {
+	public final fun isFb2 ([B)Z
 	public final fun open (Lio/github/yuroyami/kitepdf/core/KiteByteSource;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun open ([BDDDD)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun open ([BLio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BDDDDILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public final fun openFb2 ([BLio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public static synthetic fun openFb2$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BLio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public final fun openHtml ([BLio/github/yuroyami/kitepdf/epub/EpubSettings;Lkotlin/jvm/functions/Function1;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public static synthetic fun openHtml$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BLio/github/yuroyami/kitepdf/epub/EpubSettings;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun openOrNull (Lio/github/yuroyami/kitepdf/core/KiteByteSource;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun openOrNull ([BLio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;Lio/github/yuroyami/kitepdf/core/KiteByteSource;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BLio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public final fun openText ([BLio/github/yuroyami/kitepdf/epub/EpubSettings;Ljava/lang/String;Z)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
+	public static synthetic fun openText$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;[BLio/github/yuroyami/kitepdf/epub/EpubSettings;Ljava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 }
 
 public final class io/github/yuroyami/kitepdf/epub/EpubEmbed {

@@ -46,7 +46,8 @@ class KiteDocTest {
     fun junk_sniffs_as_nothing() {
         assertNull(KiteDoc.formatOf(ByteArray(64) { it.toByte() }))
         assertNull(KiteDoc.formatOf(ByteArray(0)))
-        assertNull(KiteDoc.formatOf("<html><body>hi</body></html>".encodeToByteArray()))
+        // An HTML page is a format of its own since #947.
+        assertEquals(KiteDocFormat.Html, KiteDoc.formatOf("<html><body>hi</body></html>".encodeToByteArray()))
     }
 
     /** Leading junk before %PDF- is legal in the wild and must still sniff. */
