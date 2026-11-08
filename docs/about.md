@@ -47,6 +47,8 @@ The README lists [a few limitations to know about](https://github.com/yuroyami/K
 
 If KitePDF renders a document wrong, [open an issue](https://github.com/yuroyami/KitePDF/issues/new) and attach the document.
 
+If a document hangs KitePDF, runs it out of memory, crashes it, or keeps what a redaction should remove, it is a security problem. Report it privately, as [SECURITY.md](https://github.com/yuroyami/KitePDF/blob/main/SECURITY.md) explains, and do not attach the document to a public issue.
+
 ## Contributing
 
 Read [CONTRIBUTING.md](https://github.com/yuroyami/KitePDF/blob/main/CONTRIBUTING.md) before you open a pull request. It has the rules of the project and the checks to run before each commit.
