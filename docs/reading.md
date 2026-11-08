@@ -360,7 +360,17 @@ for (attachment in doc.attachments) {
 }
 ```
 
-`doc.optionalContent` lists the layers of a document (optional content groups) with their names and their default visibility. KitePDF draws each layer as the default configuration of the file says, and you cannot change that visibility.
+`doc.optionalContent` lists the layers of a document (optional content groups) with their names and their default visibility. `doc.layers` holds the states that rendering and text extraction follow; set it to switch layers:
+
+```kotlin
+val layers = doc.layers ?: return
+doc.layers = layers.withVisible(groupId, true)          // a radio-button group turns its other members off
+doc.layers = layers.withConfiguration("French")         // an alternate configuration of /Configs
+doc.layers = layers.forEvent("Print")                   // the print states, for a print
+doc.layers = null                                       // the file's defaults again
+```
+
+A locked group does not switch. A layer that is off neither draws nor gives text. In the Compose viewer, `state.setLayerVisible(id, visible)` and `state.setLayers(...)` switch layers and draw the pages again.
 
 ## Tagged PDF and reading order
 

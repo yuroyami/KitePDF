@@ -614,6 +614,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun getInfo ()Lio/github/yuroyami/kitepdf/PdfDocumentInfo;
 	public fun getKnownPageCount ()I
 	public final fun getLanguage ()Ljava/lang/String;
+	public final fun getLayers ()Lio/github/yuroyami/kitepdf/PdfOptionalContent;
 	public final fun getMarkInfo ()Lio/github/yuroyami/kitepdf/PdfMarkInfo;
 	public fun getMetadata ()Lio/github/yuroyami/kitepdf/core/KiteMetadata;
 	public final fun getOpenAction ()Lio/github/yuroyami/kitepdf/PdfAction;
@@ -651,6 +652,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun resolveDestination (Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)Lio/github/yuroyami/kitepdf/PdfDestination;
 	public final fun setFontCacheBudgetBytes (J)V
 	public final fun setImageCacheBudgetBytes (J)V
+	public final fun setLayers (Lio/github/yuroyami/kitepdf/PdfOptionalContent;)V
 	public final fun setOperationCacheBudgetBytes (J)V
 	public fun topOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 }
@@ -859,21 +861,31 @@ public final class io/github/yuroyami/kitepdf/PdfMarkInfo$Companion {
 
 public final class io/github/yuroyami/kitepdf/PdfOptionalContent {
 	public static final field Companion Lio/github/yuroyami/kitepdf/PdfOptionalContent$Companion;
-	public fun <init> (Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;)V
+	public fun <init> (Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/util/List;
 	public final fun component2 ()Ljava/util/Set;
 	public final fun component3 ()Ljava/util/Set;
 	public final fun component4 ()Ljava/lang/String;
-	public final fun copy (Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfOptionalContent;
-	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/PdfOptionalContent;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfOptionalContent;
+	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Ljava/util/Set;
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/List;)Lio/github/yuroyami/kitepdf/PdfOptionalContent;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/PdfOptionalContent;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/List;Ljava/util/Set;Ljava/util/List;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfOptionalContent;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun forEvent (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfOptionalContent;
+	public final fun getConfigurations ()Ljava/util/List;
 	public final fun getDefaultConfigName ()Ljava/lang/String;
 	public final fun getGroups ()Ljava/util/List;
+	public final fun getLocked ()Ljava/util/Set;
 	public final fun getOffByDefault ()Ljava/util/Set;
 	public final fun getOnByDefault ()Ljava/util/Set;
+	public final fun getRadioGroups ()Ljava/util/List;
 	public fun hashCode ()I
 	public final fun isVisibleByDefault (Ljava/lang/String;)Z
 	public fun toString ()Ljava/lang/String;
+	public final fun withConfiguration (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfOptionalContent;
+	public final fun withVisible (Ljava/lang/String;Z)Lio/github/yuroyami/kitepdf/PdfOptionalContent;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfOptionalContent$Companion {

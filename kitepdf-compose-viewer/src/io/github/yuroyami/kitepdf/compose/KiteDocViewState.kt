@@ -1126,7 +1126,38 @@ public class KiteDocViewState(
         // Every count only grows, so their sum moves whenever one does (#41).
         if (remoteArrivals < 0 || chapterRevision < 0) return 0
         val fonts = hostFontLandings[page] ?: 0
-        return fonts + ((page as? EpubPage)?.let { it.remoteVersion + it.chapterVersion } ?: 0)
+        return fonts + layerRevision + ((page as? EpubPage)?.let { it.remoteVersion + it.chapterVersion } ?: 0)
+    }
+
+    /** Counts the layer changes, so each page draws again and no bitmap of the old states is found (#938). */
+    private var layerRevision by mutableIntStateOf(0)
+
+    /**
+     * The layer states of a PDF, which its pages render with (#938): [io.github.yuroyami.kitepdf.PdfDocument.layers],
+     * null for a document without layers or of another format. Snapshot state, for a layer panel.
+     */
+    public val layers: io.github.yuroyami.kitepdf.PdfOptionalContent?
+        get() {
+            layerRevision
+            return (document as? io.github.yuroyami.kitepdf.PdfDocument)?.layers
+        }
+
+    /**
+     * Renders the pages with [layers], built from [KiteDocViewState.layers] with
+     * [io.github.yuroyami.kitepdf.PdfOptionalContent.withVisible] or another of its calls; null
+     * goes back to the document's defaults. The pages on screen draw again with the new states,
+     * and their text, search and selection follow. Nothing happens for a document of another format.
+     */
+    public fun setLayers(layers: io.github.yuroyami.kitepdf.PdfOptionalContent?) {
+        val pdf = document as? io.github.yuroyami.kitepdf.PdfDocument ?: return
+        pdf.layers = layers
+        layerRevision++
+    }
+
+    /** Switches the layer [id] on or off and renders the pages again, as a layer panel does. */
+    public fun setLayerVisible(id: String, visible: Boolean) {
+        val current = layers ?: return
+        setLayers(current.withVisible(id, visible))
     }
 
     /** Copies [EpubDocument.remoteArrivals] into [remoteArrivals] for as long as the view shows this state (#38). */

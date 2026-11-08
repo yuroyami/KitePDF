@@ -676,6 +676,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   such a file through the field setters, reporting the names it could not apply (#950).
 - A document script's getAnnots, getAnnot, getLinks, getOCGs and getPageNthWordQuads answer from the document
   instead of returning nothing, and the docs list the calls that are still stubs (#937).
+- PdfDocument.layers lets an app switch the layers that rendering and text extraction follow, with radio-button
+  groups, locked groups, alternate configurations and print states; KiteDocViewState.setLayerVisible redraws the
+  pages (#938).
 
 ## [0.13.0] - 2026-10-09
 

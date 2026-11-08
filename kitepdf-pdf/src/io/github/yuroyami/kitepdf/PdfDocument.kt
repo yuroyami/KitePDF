@@ -675,6 +675,28 @@ public class PdfDocument private constructor(
      * Optional Content / layers metadata (read-only). `null` when the
      * catalog has no `/OCProperties`.
      */
+    /**
+     * The layer states that rendering and text extraction follow (#938): [optionalContent], the
+     * document's default configuration, until a host sets others, built from it with
+     * [PdfOptionalContent.withVisible], [PdfOptionalContent.withConfiguration] or
+     * [PdfOptionalContent.forEvent]. A content stream, an XObject and an annotation on a group that
+     * is off neither draw nor give text. Setting it to null goes back to the defaults. Pages drawn
+     * before the change keep what they drew; a viewer draws them again.
+     */
+    public var layers: PdfOptionalContent?
+        get() = layerOverride ?: optionalContent
+        set(value) {
+            layerOverride = value
+            layersVersion++
+        }
+
+    @kotlin.concurrent.Volatile
+    private var layerOverride: PdfOptionalContent? = null
+
+    /** Moves each time [layers] is set, so a page's text follows the new states. */
+    @kotlin.concurrent.Volatile
+    internal var layersVersion: Int = 0
+
     public val optionalContent: PdfOptionalContent? by lazy {
         // Lenient salvage: an unreadable configuration leaves every layer visible (#252).
         runCatching { PdfOptionalContent.parse(catalog, this) }.getOrNull()

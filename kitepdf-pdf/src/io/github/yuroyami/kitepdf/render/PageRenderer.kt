@@ -274,7 +274,7 @@ public class PageRenderer(
     ) {
         if (pageResources !== page.resources) pageFormResourceCache.clear()
         pageResources = page.resources
-        optionalContent = page.internalDocument.optionalContent
+        optionalContent = page.internalDocument.layers
         activeClipCount = 0
         clipSaveStack.clear()
         pendingClip = 0
@@ -324,7 +324,7 @@ public class PageRenderer(
         formDepth = 0
         dispatchedOps = 0L
         cancelled = false
-        optionalContent = page.internalDocument.optionalContent
+        optionalContent = page.internalDocument.layers
         markedContentStack.clear()
         ocHiddenDepth = 0
         clipCapWarned = false

@@ -199,6 +199,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun getFocusedField ()Ljava/lang/String;
 	public final fun getHighlights ()Ljava/util/List;
 	public final fun getKnownPageCount ()I
+	public final fun getLayers ()Lio/github/yuroyami/kitepdf/PdfOptionalContent;
 	public final fun getOnSelectionChange ()Lkotlin/jvm/functions/Function1;
 	public final fun getPageCount ()I
 	public final fun getPanOffset-F1C5BW0 ()J
@@ -233,6 +234,8 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun scrollToPage (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun scrollToSlot (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun setHighlights (Ljava/util/List;)V
+	public final fun setLayerVisible (Ljava/lang/String;Z)V
+	public final fun setLayers (Lio/github/yuroyami/kitepdf/PdfOptionalContent;)V
 	public final fun setOnSelectionChange (Lkotlin/jvm/functions/Function1;)V
 	public final fun setSearchHighlights (Ljava/util/List;)V
 	public final fun setSkipsNonLinearChapters (Z)V

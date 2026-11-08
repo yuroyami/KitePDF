@@ -483,7 +483,7 @@ public object TextExtractor {
             val stream = runCatching { entry.resolve(doc) }.getOrNull() as? PdfStream ?: return
             if (stream.dict.getName("Subtype") != "Form") return
             // A form whose own /OC is off is not drawn (ISO 32000-1, 8.11.3.3).
-            val oc = doc.optionalContent
+            val oc = doc.layers
             if (oc != null) stream.dict["OC"]?.let { if (!OptionalContentVisibility.isVisible(it, oc, doc)) return }
             val number = (entry as? PdfReference)?.objectNumber
             if (number != null && !openForms.add(number)) return
@@ -505,7 +505,7 @@ public object TextExtractor {
         /** Whether the `/OC` operand of a `BDC`, a group or membership dictionary given inline or named in `/Properties`, is off. */
         private fun isHidden(operand: Any?, resources: PdfDictionary?): Boolean {
             val doc = document ?: return false
-            val oc = doc.optionalContent ?: return false
+            val oc = doc.layers ?: return false
             val target = when (operand) {
                 // A form without the name in its own resources reads the page's, as the renderer does (#56).
                 is PdfName -> resources?.getDict("Properties", doc)?.get(operand.value)

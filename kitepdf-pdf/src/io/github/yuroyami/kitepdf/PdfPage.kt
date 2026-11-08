@@ -257,8 +257,19 @@ public class PdfPage internal constructor(
      * within a tenth of an em of the same glyph, at the same size and in the same
      * direction, drops out instead, and the label reads once (#642, #643).
      */
-    public val structuredText: io.github.yuroyami.kitepdf.text.PdfStructuredText by lazy {
-        io.github.yuroyami.kitepdf.text.StructuredTextExtractor.extract(this)
+    public val structuredText: io.github.yuroyami.kitepdf.text.PdfStructuredText
+        get() = textFor(document.layersVersion).first
+
+    /** The structured text and its display-space form, for one layer state of the document (#938). */
+    @kotlin.concurrent.Volatile
+    private var textCache: Triple<Int, io.github.yuroyami.kitepdf.text.PdfStructuredText, Lazy<KiteStructuredText>>? = null
+
+    private fun textFor(version: Int): Pair<io.github.yuroyami.kitepdf.text.PdfStructuredText, Lazy<KiteStructuredText>> {
+        textCache?.let { (v, st, kite) -> if (v == version) return st to kite }
+        val st = io.github.yuroyami.kitepdf.text.StructuredTextExtractor.extract(this)
+        val kite = lazy { io.github.yuroyami.kitepdf.text.KiteTextAdapter.toKite(st, pageToDeviceBase()) }
+        textCache = Triple(version, st, kite)
+        return st to kite
     }
 
     /**
@@ -267,9 +278,8 @@ public class PdfPage internal constructor(
      * Display-space adapter. Built once and memoized; powers the shared search /
      * selection / copy path a viewer uses for every format.
      */
-    private val kiteTextContent: KiteStructuredText by lazy {
-        io.github.yuroyami.kitepdf.text.KiteTextAdapter.toKite(structuredText, pageToDeviceBase())
-    }
+    private val kiteTextContent: KiteStructuredText
+        get() = textFor(document.layersVersion).second.value
 
     override fun textContent(): KiteStructuredText = kiteTextContent
 
