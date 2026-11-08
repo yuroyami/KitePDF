@@ -722,8 +722,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before `DOMContentLoaded`, and those with `async` right after them.
 - `EmbeddedFont.load` embeds a font with only CFF2 outlines, such as a variable OpenType font with PostScript
   outlines, instead of throwing (#917). Its glyphs are written as CFF at the default instance by the new
-  `Cff2Converter` of `kitepdf-core`, and embed as `CIDFontType0C` through the existing subsetter. KitePDF,
-  Poppler and mutool draw it, and its text reads back.
+  `Cff2Converter` of `kitepdf-core`, and embed as `CIDFontType0C` through the existing subsetter. KitePDF and
+  Poppler draw it, and its text reads back.
 
 ## [0.13.0] - 2026-10-09
 
