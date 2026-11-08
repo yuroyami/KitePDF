@@ -98,9 +98,19 @@ public class OpenTypeKern private constructor(
                 r.u16() // lookupFlag
                 val subCount = r.u16()
                 val subOffsets = IntArray(subCount) { r.u16() }
-                if (type != 2) continue
+                if (type != 2 && type != 9) continue
                 for (so in subOffsets) {
-                    runCatching { parsePairPos(b, lookupBase + so) }.getOrNull()?.let { out.add(it) }
+                    var at = lookupBase + so
+                    if (type == 9) {
+                        // OpenType 1.9, GPOS Lookup Type 9: an Extension subtable holds its real type
+                        // and a 32-bit offset from itself to the subtable of that type (#784).
+                        val ext = R(b).also { it.seek(at) }
+                        if (ext.u16() != 1 || ext.u16() != 2) continue
+                        val offset = ext.u32()
+                        if (offset <= 0 || at + offset >= b.size) continue
+                        at += offset.toInt()
+                    }
+                    runCatching { parsePairPos(b, at) }.getOrNull()?.let { out.add(it) }
                 }
             }
             return out
