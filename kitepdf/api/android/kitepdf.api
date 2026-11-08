@@ -23,6 +23,7 @@ public final class io/github/yuroyami/kitepdf/document/KiteDocFormat : java/lang
 	public static final field Epub Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Fb2 Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Html Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
+	public static final field Mobi Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Pdf Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Svg Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
 	public static final field Text Lio/github/yuroyami/kitepdf/document/KiteDocFormat;

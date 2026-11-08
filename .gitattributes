@@ -1,6 +1,8 @@
 # Test documents are pinned by SHA-256; git must store their exact bytes.
 *.pdf binary
 *.epub binary
+*.mobi binary
+*.azw3 binary
 
 # Windows cmd needs CRLF line endings in batch files. Shells need LF in the kotlin script.
 *.bat text eol=crlf

@@ -13,6 +13,7 @@ final enum class io.github.yuroyami.kitepdf.document/KiteDocFormat : kotlin/Enum
     enum entry Epub // io.github.yuroyami.kitepdf.document/KiteDocFormat.Epub|null[0]
     enum entry Fb2 // io.github.yuroyami.kitepdf.document/KiteDocFormat.Fb2|null[0]
     enum entry Html // io.github.yuroyami.kitepdf.document/KiteDocFormat.Html|null[0]
+    enum entry Mobi // io.github.yuroyami.kitepdf.document/KiteDocFormat.Mobi|null[0]
     enum entry Pdf // io.github.yuroyami.kitepdf.document/KiteDocFormat.Pdf|null[0]
     enum entry Svg // io.github.yuroyami.kitepdf.document/KiteDocFormat.Svg|null[0]
     enum entry Text // io.github.yuroyami.kitepdf.document/KiteDocFormat.Text|null[0]

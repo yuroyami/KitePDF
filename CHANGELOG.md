@@ -685,6 +685,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   turned to the tangent, and the page text and search find it (#940).
 - FictionBook 2 books, HTML pages and plain text open as books through the EPUB engine: EpubDocument.openFb2,
   openHtml and openText, and KiteDoc recognises FB2 and HTML (#946, #947).
+- Kindle books without DRM open as books (#948). `EpubDocument.openMobi` and `isMobi`, and `KiteDocFormat.Mobi`,
+  which `KiteDoc.formatOf` sniffs from the `BOOKMOBI` database header. The reader decompresses PalmDOC and
+  HUFF/CDIC text records and strips their trailing entries. A KF8 book (`.azw3`, or the KF8 half of a joint file)
+  is rebuilt from its skeleton, fragment and FDST records, with its `kindle:embed`, `kindle:flow` and
+  `kindle:pos` references, fonts and NCX table of contents. A MOBI 6 book is cut at its page breaks, with its
+  `filepos` links, `recindex` images and legacy indents. A book with DRM throws with a message that says so. The
+  corpus gains Project Gutenberg's Alice as AZW3, MOBI 6 and the EPUB they were made from, and the Kindle books
+  read with the EPUB's text and contents.
 
 ## [0.13.0] - 2026-10-09
 

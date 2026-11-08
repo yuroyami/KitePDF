@@ -30,6 +30,8 @@ public enum class KiteDocFormat {
     Xps,
     /** FictionBook 2, an `.fb2` file or a ZIP holding one, laid out as a book (#946). */
     Fb2,
+    /** A Kindle book without DRM, a `.mobi` or `.azw3`, laid out as a book (#948). */
+    Mobi,
     /** An HTML or XHTML page, laid out as a book of one chapter (#947). */
     Html,
     /** Plain text, which has no signature, so [KiteDoc.formatOf] never answers it: open it by name (#947). */
@@ -83,6 +85,7 @@ public object KiteDoc {
             else -> null
         }
         findPdfHeader(bytes) -> KiteDocFormat.Pdf
+        EpubDocument.isMobi(bytes) -> KiteDocFormat.Mobi
         SvgImage.isSvg(bytes) -> KiteDocFormat.Svg
         EpubDocument.isFb2(bytes) -> KiteDocFormat.Fb2
         looksLikeHtml(bytes) -> KiteDocFormat.Html
@@ -121,6 +124,7 @@ public object KiteDoc {
         KiteDocFormat.Svg -> SvgDocument.open(bytes)
         KiteDocFormat.Xps -> XpsDocument.open(bytes)
         KiteDocFormat.Fb2 -> EpubDocument.openFb2(bytes, epubSettings)
+        KiteDocFormat.Mobi -> EpubDocument.openMobi(bytes, epubSettings)
         KiteDocFormat.Html -> EpubDocument.openHtml(bytes, epubSettings)
         KiteDocFormat.Text -> EpubDocument.openText(bytes, epubSettings)
         // One last try as a damaged PDF, by the String overload, which retries a non-ASCII password
@@ -153,6 +157,7 @@ public object KiteDoc {
         KiteDocFormat.Svg -> SvgDocument.open(bytes)
         KiteDocFormat.Xps -> XpsDocument.open(bytes)
         KiteDocFormat.Fb2 -> EpubDocument.openFb2(bytes, epubSettings)
+        KiteDocFormat.Mobi -> EpubDocument.openMobi(bytes, epubSettings)
         KiteDocFormat.Html -> EpubDocument.openHtml(bytes, epubSettings)
         KiteDocFormat.Text -> EpubDocument.openText(bytes, epubSettings)
     }

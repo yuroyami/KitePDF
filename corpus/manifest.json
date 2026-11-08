@@ -3782,6 +3782,109 @@
       "generator_sha256": "4426b23b481bb0472089e2c28402553a84148cbc1313225f823ed84e143d4e2c",
       "artifact_pinning_note": "Generated locally; the repository download URL becomes available when published. Regeneration instructions and the pinned encoder are documented in corpus/README.md.",
       "feature_evidence": "Headerless JBIG2 stream has page-info segment 48, arithmetic pattern-dictionary segment 16 with two 1x1 patterns, immediate halftone segment 22 (HMMR=0, HTEMPLATE=0) and end-of-page segment 49. MuPDF and PDFium reproduce all 19,200 chart pixels exactly. The current KiteImageCodec 0.2.0 also renders this arithmetic template-0 case, contrary to the older placeholder description in issue 621; initial AWT MAE is 0.0010 at 96 dpi. No decoder or dependency change is needed."
+    },
+    {
+      "id": "gutenberg-11-alice-azw3",
+      "path": "corpus/mobi/gutenberg-11-alice.azw3",
+      "title": "Alice's Adventures in Wonderland",
+      "creators": "Lewis Carroll",
+      "source_url": "https://www.gutenberg.org/ebooks/11",
+      "license": "LicenseRef-Project-Gutenberg",
+      "license_url": "https://www.gutenberg.org/policy/license.html",
+      "attribution": "Alice's Adventures in Wonderland. Lewis Carroll. Project Gutenberg eBook #11, downloaded unchanged. This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this eBook or online at www.gutenberg.org. If you are not located in the United States, you will have to check the laws of the country where you are located before using this eBook.",
+      "license_evidence": "The Project Gutenberg eBook #11, unchanged as Project Gutenberg serves it. The text is in the public domain in the United States. The file carries the Full Project Gutenberg License, which allows copying and redistribution at no cost with the license kept; the file is redistributed unchanged with it. The license text is in licenses/Gutenberg.txt, taken from the license chapter of the EPUB.",
+      "publication_kind": "third-party-publication",
+      "language": [
+        "en"
+      ],
+      "publishers": [
+        "Project Gutenberg"
+      ],
+      "modified": false,
+      "retrieved_on": "2026-11-08",
+      "embedded_rights_notices": [
+        "This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this eBook or online at www.gutenberg.org."
+      ],
+      "artifact_pinning_note": "Project Gutenberg rebuilds its ebook files from time to time. SHA-256 pins the bytes retrieved on 2026-11-08; the Kindle files were made by Ebookmaker 0.14.6 with calibre 9.5.0 from the same release as the EPUB.",
+      "download_url": "https://www.gutenberg.org/ebooks/11.kf8.images",
+      "upstream_revision": "Ebookmaker 0.14.6, calibre 9.5.0 KF8 build",
+      "sha256": "d8211269aed55ded8302f289950936db8368b4d4d384c463b722034152f8f1d2",
+      "bytes": 255506,
+      "coverage_tags": [
+        "kf8",
+        "azw3",
+        "real-publication",
+        "chapter-navigation",
+        "images"
+      ]
+    },
+    {
+      "id": "gutenberg-11-alice-mobi",
+      "path": "corpus/mobi/gutenberg-11-alice.mobi",
+      "title": "Alice's Adventures in Wonderland",
+      "creators": "Lewis Carroll",
+      "source_url": "https://www.gutenberg.org/ebooks/11",
+      "license": "LicenseRef-Project-Gutenberg",
+      "license_url": "https://www.gutenberg.org/policy/license.html",
+      "attribution": "Alice's Adventures in Wonderland. Lewis Carroll. Project Gutenberg eBook #11, downloaded unchanged. This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this eBook or online at www.gutenberg.org. If you are not located in the United States, you will have to check the laws of the country where you are located before using this eBook.",
+      "license_evidence": "The Project Gutenberg eBook #11, unchanged as Project Gutenberg serves it. The text is in the public domain in the United States. The file carries the Full Project Gutenberg License, which allows copying and redistribution at no cost with the license kept; the file is redistributed unchanged with it. The license text is in licenses/Gutenberg.txt, taken from the license chapter of the EPUB.",
+      "publication_kind": "third-party-publication",
+      "language": [
+        "en"
+      ],
+      "publishers": [
+        "Project Gutenberg"
+      ],
+      "modified": false,
+      "retrieved_on": "2026-11-08",
+      "embedded_rights_notices": [
+        "This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this eBook or online at www.gutenberg.org."
+      ],
+      "artifact_pinning_note": "Project Gutenberg rebuilds its ebook files from time to time. SHA-256 pins the bytes retrieved on 2026-11-08; the Kindle files were made by Ebookmaker 0.14.6 with calibre 9.5.0 from the same release as the EPUB.",
+      "download_url": "https://www.gutenberg.org/ebooks/11.kindle.images",
+      "upstream_revision": "Ebookmaker 0.14.6, calibre 9.5.0 MOBI 6 build",
+      "sha256": "1b4222ffdf1862a39d0fae6d42c588f28a34c12ad73cc21c2849fe2646cac3e1",
+      "bytes": 241000,
+      "coverage_tags": [
+        "mobi6",
+        "real-publication",
+        "filepos-links",
+        "chapter-navigation"
+      ]
+    },
+    {
+      "id": "gutenberg-11-alice-epub",
+      "path": "corpus/mobi/gutenberg-11-alice.epub",
+      "title": "Alice's Adventures in Wonderland",
+      "creators": "Lewis Carroll",
+      "source_url": "https://www.gutenberg.org/ebooks/11",
+      "license": "LicenseRef-Project-Gutenberg",
+      "license_url": "https://www.gutenberg.org/policy/license.html",
+      "attribution": "Alice's Adventures in Wonderland. Lewis Carroll. Project Gutenberg eBook #11, downloaded unchanged. This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this eBook or online at www.gutenberg.org. If you are not located in the United States, you will have to check the laws of the country where you are located before using this eBook.",
+      "license_evidence": "The Project Gutenberg eBook #11, unchanged as Project Gutenberg serves it. The text is in the public domain in the United States. The file carries the Full Project Gutenberg License, which allows copying and redistribution at no cost with the license kept; the file is redistributed unchanged with it. The license text is in licenses/Gutenberg.txt, taken from the license chapter of the EPUB.",
+      "publication_kind": "third-party-publication",
+      "language": [
+        "en"
+      ],
+      "publishers": [
+        "Project Gutenberg"
+      ],
+      "modified": false,
+      "retrieved_on": "2026-11-08",
+      "embedded_rights_notices": [
+        "This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this eBook or online at www.gutenberg.org."
+      ],
+      "artifact_pinning_note": "Project Gutenberg rebuilds its ebook files from time to time. SHA-256 pins the bytes retrieved on 2026-11-08; the Kindle files were made by Ebookmaker 0.14.6 with calibre 9.5.0 from the same release as the EPUB.",
+      "download_url": "https://www.gutenberg.org/ebooks/11.epub3.images",
+      "upstream_revision": "Ebookmaker 0.14.6 EPUB 3 build",
+      "sha256": "4f81245d31380ac1d6eafb9a321e3691369bc70985736ae4bccf849a4f784036",
+      "bytes": 189249,
+      "coverage_tags": [
+        "epub3",
+        "real-publication",
+        "mobi-reference",
+        "chapter-navigation"
+      ]
     }
   ]
 }

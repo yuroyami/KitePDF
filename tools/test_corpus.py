@@ -134,6 +134,15 @@ class CorpusToolTest(unittest.TestCase):
         self.assertEqual(self.entry["sha256"], receipt["verified"][0]["sha256"])
 
 
+    def test_a_kindle_book_sits_in_the_mobi_folder_only(self):
+        corpus.destination(self.root, "corpus/mobi/book.azw3")
+        corpus.destination(self.root, "corpus/mobi/book.mobi")
+        corpus.destination(self.root, "corpus/mobi/book.epub")
+        for bad in ("corpus/epub/book.mobi", "corpus/mobi/book.pdf", "corpus/pdf/book.azw3"):
+            with self.assertRaisesRegex(corpus.CorpusError, "unsafe corpus path"):
+                corpus.destination(self.root, bad)
+
+
 class PublicInventoryTest(unittest.TestCase):
     def test_publication_coverage_does_not_shrink_below_issue_624(self):
         entries = corpus.load_manifest(corpus.ROOT / "corpus/manifest.json", corpus.ROOT)

@@ -23,7 +23,12 @@ ALLOWED_LICENSES = {
     "CC0-1.0", "CC-BY-3.0", "CC-BY-4.0", "CC-BY-SA-2.5", "CC-BY-SA-3.0",
     "CC-BY-SA-4.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "W3C-20150513",
     "W3C-20230101", "LicenseRef-W3C-Software-and-Document", "Apache-2.0", "OFL-1.1",
+    # The Full Project Gutenberg License, which every Project Gutenberg ebook carries (#948).
+    "LicenseRef-Project-Gutenberg",
 }
+
+# The suffixes each corpus folder holds. The Kindle books sit beside the EPUB they were made from (#948).
+CORPUS_SUFFIXES = {"pdf": (".pdf",), "epub": (".epub",), "mobi": (".mobi", ".azw3", ".epub")}
 
 
 class CorpusError(Exception):
@@ -54,8 +59,8 @@ def destination(root, relative):
     path = PurePosixPath(relative)
     if (path.is_absolute() or path.as_posix() != relative or "\\" in relative or ".." in path.parts
             or len(path.parts) != 3 or path.parts[0] != "corpus"
-            or path.parts[1] not in ("pdf", "epub")
-            or path.suffix != "." + path.parts[1]):
+            or path.parts[1] not in CORPUS_SUFFIXES
+            or path.suffix not in CORPUS_SUFFIXES[path.parts[1]]):
         raise CorpusError(f"unsafe corpus path: {relative!r}")
     target = root / relative
     for part in (target, *target.parents):
@@ -126,6 +131,10 @@ def verify_file(path, entry):
         with path.open("rb") as stream:
             if b"%PDF-" not in stream.read(1024):
                 raise CorpusError(f"not a PDF: {entry['id']}")
+    elif entry["path"].endswith((".mobi", ".azw3")):
+        with path.open("rb") as stream:
+            if stream.read(68)[60:68] != b"BOOKMOBI":
+                raise CorpusError(f"not a MOBI book: {entry['id']}")
     else:
         try:
             with zipfile.ZipFile(path) as book:

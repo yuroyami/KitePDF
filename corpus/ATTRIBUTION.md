@@ -1,6 +1,6 @@
 # Public corpus attribution
 
-Credits and license evidence for the 29 unchanged public documents in
+Credits and license evidence for the 32 unchanged public documents in
 [manifest.json](manifest.json). This inventory excludes legacy/private local
 drop-ins. The project license does not replace these documents' licenses.
 The full license texts are preserved under [licenses/](licenses/README.md).
@@ -8,7 +8,7 @@ Retain existing embedded notices and these credits when sharing the files,
 and comply with the applicable attribution, share-alike, W3C and MIT notice terms.
 
 Generated from the manifest; regenerate these entries when its credits change.
-Source manifest SHA-256: `ff8bf84a3a388866140192bbce19c13e7f81f489928e0f7c080a1494ba82bd48`.
+Source manifest SHA-256: `5cf0f2562e4a014f9c410acdcb852c9606da0fbafbc6b82f5690e895c30831aa`.
 
 ## Thomas Cole - The Voyage of Life
 
@@ -956,3 +956,13 @@ Original eight-tone ordered-dither chart and PDF wrapper by KitePDF contributors
 Source: https://github.com/yuroyami/KitePDF/blob/main/tools/make_halftone_corpus.cpp
 
 Original chart pixels and PDF generation source are contributed under the repository Apache License 2.0. The external arithmetic encoder is Apache-2.0; source is used only to regenerate the fixture, not linked into KitePDF.
+
+## Kindle books and their EPUB (#948)
+
+Project Gutenberg eBook #11 in three of the formats Project Gutenberg serves, so the MOBI and KF8 readers are checked against the EPUB the Kindle files were made from. All three are downloaded unchanged on 2026-11-08 and pinned by SHA-256.
+
+- `corpus/mobi/gutenberg-11-alice.azw3`: the KF8 (AZW3) file, from https://www.gutenberg.org/ebooks/11.kf8.images.
+- `corpus/mobi/gutenberg-11-alice.mobi`: the MOBI 6 file, from https://www.gutenberg.org/ebooks/11.kindle.images.
+- `corpus/mobi/gutenberg-11-alice.epub`: the EPUB 3 file, from https://www.gutenberg.org/ebooks/11.epub3.images.
+
+Alice's Adventures in Wonderland by Lewis Carroll. Source: https://www.gutenberg.org/ebooks/11. The text is in the public domain in the United States. Each file carries the Full Project Gutenberg License, kept in [licenses/Gutenberg.txt](licenses/Gutenberg.txt): "This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this eBook or online at www.gutenberg.org." Readers outside the United States must check the laws of their country. Keep the license chapter inside each file when you share it.

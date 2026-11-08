@@ -136,11 +136,11 @@ import io.github.yuroyami.kitepdf.document.KiteDoc
 
 val doc = PdfDocument.open(bytes)      // a PDF; PdfDocument.open(bytes, "secret") if it is locked
 val any = KiteDoc.open(bytes)          // any format, detected from the bytes
-KiteDoc.formatOf(bytes)                // Pdf, Epub, Cbz, Svg, Xps, Fb2, Html, or null
+KiteDoc.formatOf(bytes)                // Pdf, Epub, Cbz, Svg, Xps, Fb2, Mobi, Html, or null
 KiteDoc.open(bytes, KiteDocFormat.Text) // plain text, which has no signature
 ```
 
-FictionBook 2 books (`.fb2` and `.fb2.zip`), HTML pages and plain text open as books through the EPUB engine, so the viewer, search, selection and bookmarks work as for an EPUB.
+FictionBook 2 books (`.fb2` and `.fb2.zip`), Kindle books without DRM (`.mobi` and `.azw3`), HTML pages and plain text open as books through the EPUB engine, so the viewer, search, selection and bookmarks work as for an EPUB.
 
 Besides bytes, `KiteDoc` can also open a file path, a `File`, an `InputStream`, an Android content `Uri`, Apple's `NSData` or `NSURL`, Base64 text or a `data:` URI (plus a remote URL through `kitepdf-net`).
 

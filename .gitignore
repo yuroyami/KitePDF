@@ -26,8 +26,13 @@ corpus/licenses/*
 !corpus/licenses/README.md
 !corpus/pdf/
 !corpus/epub/
+!corpus/mobi/
 corpus/pdf/*
 corpus/epub/*
+corpus/mobi/*
+!corpus/mobi/gutenberg-11-alice.azw3
+!corpus/mobi/gutenberg-11-alice.mobi
+!corpus/mobi/gutenberg-11-alice.epub
 !corpus/pdf/.gitkeep
 !corpus/epub/.gitkeep
 !corpus/epub/idpf-cole-voyage-of-life.epub

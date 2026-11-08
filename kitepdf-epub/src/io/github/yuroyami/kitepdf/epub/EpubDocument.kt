@@ -1798,6 +1798,23 @@ public class EpubDocument internal constructor(
         public fun isFb2(bytes: ByteArray): Boolean =
             io.github.yuroyami.kitepdf.epub.convert.Fb2Book.isFb2(bytes) || io.github.yuroyami.kitepdf.epub.convert.Fb2Book.fromZip(bytes) != null
 
+        /**
+         * A Kindle book without DRM (#948), a `.mobi` or an `.azw3`, laid out as a book. A KF8 book,
+         * or the KF8 half of a joint file, keeps its XHTML parts, style sheets, images, fonts and
+         * table of contents; an older MOBI 6 book is cut into chapters at its page breaks, with its
+         * `filepos` links and `recindex` images. The title, authors, language, description and
+         * cover come from the EXTH records.
+         *
+         * @throws EpubFormatException when [bytes] are no MOBI book, when the book is protected by
+         *   DRM, which is never removed, or when its text cannot be read.
+         */
+        @Throws(EpubFormatException::class)
+        public fun openMobi(bytes: ByteArray, settings: EpubSettings = EpubSettings()): EpubDocument =
+            open(io.github.yuroyami.kitepdf.epub.convert.MobiBook.convert(bytes), settings)
+
+        /** Whether [bytes] are a Palm database of type `BOOKMOBI`: a MOBI, AZW or AZW3 book (#948). */
+        public fun isMobi(bytes: ByteArray): Boolean = io.github.yuroyami.kitepdf.epub.convert.MobiBook.isMobi(bytes)
+
         /** [open], but null instead of [EpubFormatException] on a malformed book. */
         public fun openOrNull(bytes: ByteArray, settings: EpubSettings = EpubSettings()): EpubDocument? =
             try { open(bytes, settings) } catch (_: EpubFormatException) { null }

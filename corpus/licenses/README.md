@@ -19,11 +19,13 @@ Apply only the licenses that [the manifest](../manifest.json) and [ATTRIBUTION.m
 | [CC0-1.0](CC0-1.0.txt) | [Official dedication](https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt) | `a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499` |
 | [OFL-1.1](OFL-1.1.txt) | [Noto Sans JP notice](https://github.com/google/fonts/blob/295d98a7a0c17c68f1341eaeea354e7960ea70d3/ofl/notosansjp/OFL.txt) | `1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9` |
 | [Apache-2.0](Apache-2.0.txt) | [KitePDF project license](../../LICENSE) | `4cb4a0ad2d8f8b06ae451eabb3255878db929859de44f777fac3e9a03ea56c31` |
+| [Gutenberg](Gutenberg.txt) | [The license chapter of Project Gutenberg eBook #11](https://www.gutenberg.org/policy/license.html) | `3087647d4c10e416256e6c7ba8eac32b0fd723c440813c7d4e9143535572558c` |
 
 - A CC BY-SA file keeps its share-alike license. A derivative must follow the conditions for adaptations and record its changes.
 - The downloads from third parties are unchanged.
 - The Japanese editions adapt CC0 chapter markup and embed a subset of the OFL font, with its notice.
 - The JBIG2 chart is original material under Apache-2.0.
+- The Project Gutenberg books keep the Full Project Gutenberg License that each file carries. The text in this folder is that chapter of the EPUB, as plain text.
 - The CC0 of Standard Ebooks applies to its editorial contributions. Keep the territorial notice of each book for the public-domain work under it.
 
 These notices do not change the license of the KitePDF library, or of any private file that you add locally.

@@ -92,14 +92,16 @@ The EPUB engine also lays out books that come as one file. Each opens as an `Epu
 
 ```kotlin
 val tale = EpubDocument.openFb2(fb2Bytes)                       // FictionBook 2, .fb2 or .fb2.zip
+val kindle = EpubDocument.openMobi(mobiBytes)                   // a Kindle book without DRM, .mobi or .azw3
 val page = EpubDocument.openHtml(htmlBytes) { url -> fetch(url) } // relative style sheets and images through the resolver
 val text = EpubDocument.openText(txtBytes, joinLines = true)      // blank lines start paragraphs
 ```
 
 - An FB2 book gives its title, authors, language and annotation as metadata, each top-level section a chapter, its section titles the table of contents, its `binary` images, and its notes body, which `a type="note"` links go to.
+- A Kindle book gives its title, authors, language, description and cover from its EXTH records. A KF8 book (`.azw3`, or the KF8 half of a joint `.mobi`) keeps its XHTML parts, style sheets, images, fonts, links and table of contents. An older MOBI 6 book is cut into chapters at its page breaks, with its `filepos` links and `recindex` images. A book with DRM throws `EpubFormatException`, whose message says so; KitePDF never removes DRM.
 - An HTML page is one chapter. Without a resolver, the style sheets and images it names by a relative URL are left out.
 - A text file decodes by its BOM, then as UTF-8, then as windows-1252. A long file splits into chapters, so its first page shows before the rest is laid out.
-- `KiteDoc.open` recognises FB2 and HTML by their bytes. Plain text has no signature: open it with `KiteDoc.open(bytes, KiteDocFormat.Text)`.
+- `KiteDoc.open` recognises FB2, MOBI and HTML by their bytes. Plain text has no signature: open it with `KiteDoc.open(bytes, KiteDocFormat.Text)`.
 
 ## Rendering pages
 
