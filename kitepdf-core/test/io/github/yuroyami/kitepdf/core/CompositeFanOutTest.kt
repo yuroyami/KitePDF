@@ -29,8 +29,20 @@ class CompositeFanOutTest {
         assertEquals(4000, font.outline(1)!!.contours.sumOf { it.points.size })
     }
 
+    @Test
+    fun aCmapThatClaimsMoreGroupsThanItHoldsReadsAsEmpty() {
+        // A 16-byte format 12 header that claims 100 million groups sized three arrays of 400 MB (#983).
+        val start = TimeSource.Monotonic.markNow()
+        for (groups in listOf(100_000_000, 0x7FFFFFFF)) {
+            val cmap = u16(0) + u16(1) + u16(3) + u16(10) + u32(12) + u16(12) + u16(0) + u32(16) + u32(0) + u32(groups)
+            val font = TrueTypeFont.parse(fanOutFont(levels = 1, extra = listOf("cmap" to cmap)))
+            assertEquals(0, font.glyphIdForCodePoint('A'.code))
+        }
+        assertTrue(start.elapsedNow().inWholeSeconds < 10, "took ${start.elapsedNow()}")
+    }
+
     /** Glyphs 1 to [levels] are composites of ten copies of the next glyph; the last is a square. */
-    private fun fanOutFont(levels: Int): ByteArray {
+    private fun fanOutFont(levels: Int, extra: List<Pair<String, ByteArray>> = emptyList()): ByteArray {
         val glyphs = ArrayList<ByteArray>()
         glyphs.add(ByteArray(0))
         for (g in 1..levels) {
@@ -56,7 +68,7 @@ class CompositeFanOutTest {
         val maxp = u32(0x00010000) + u16(numGlyphs) + ByteArray(26)
         val hhea = ByteArray(36).also { it[35] = 1 }
         val hmtx = u16(500) + u16(0) + ByteArray(2 * (numGlyphs - 1))
-        return sfnt(listOf("glyf" to glyf, "head" to head, "hhea" to hhea, "hmtx" to hmtx, "loca" to loca, "maxp" to maxp))
+        return sfnt((extra + listOf("glyf" to glyf, "head" to head, "hhea" to hhea, "hmtx" to hmtx, "loca" to loca, "maxp" to maxp)).sortedBy { it.first })
     }
 
     private fun sfnt(tables: List<Pair<String, ByteArray>>): ByteArray {

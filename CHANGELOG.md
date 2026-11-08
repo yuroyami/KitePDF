@@ -119,6 +119,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stream, so a 459-byte WOFF2 or a 510 KB WOFF made the layout of a chapter allocate about 2 GB, and four
   WOFF tables over one stream threw `OutOfMemoryError` out of `pageCountIn` (#988).
 
+- A font's cmap format 12 and 13 group counts, CFF INDEX counts and kerning class counts are checked
+  against the bytes they need before anything is sized by them: a 612-byte font asked for 1.2 GB (#983).
+  A coverage or class definition whose ranges cover more than every glyph id twice over is dropped, so
+  a GPOS table of 393 KB no longer keeps a book's font loading busy for minutes (#984). GSUB lookups run
+  within a budget of operations and of buffer growth, as HarfBuzz's do, so a context lookup that applies
+  itself no longer hangs the layout (#985).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

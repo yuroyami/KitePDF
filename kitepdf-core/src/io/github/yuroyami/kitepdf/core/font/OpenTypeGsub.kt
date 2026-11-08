@@ -79,6 +79,7 @@ public class OpenTypeGsub private constructor(
         manualZwnj: Set<String> = emptySet(),
     ) {
         val lang = languageSystem(script, language) ?: return
+        val budget = Budget(glyphs.size)
         val active = HashMap<String, MutableList<Int>>()
         lang.required.takeIf { it >= 0 }?.let { features.getOrNull(it) }?.let { f -> active.getOrPut(f.tag) { ArrayList() } += f.lookups.toList() }
         for (fi in lang.features) {
@@ -95,7 +96,7 @@ public class OpenTypeGsub private constructor(
                 val global = tags.any { it !in positional }
                 val applies: (GsubGlyph) -> Boolean =
                     if (global) { _ -> true } else { g -> g.features.any { it in tags } }
-                Applier(glyphs, applies, tags.all { it in perSyllable }, tags.none { it in manualZwj }, tags.none { it in manualZwnj }).run(lookup)
+                Applier(glyphs, applies, tags.all { it in perSyllable }, tags.none { it in manualZwj }, tags.none { it in manualZwnj }, budget).run(lookup)
             }
         }
     }
@@ -156,12 +157,24 @@ public class OpenTypeGsub private constructor(
      * pass reach. [autoZwj] and [autoZwnj] say whether matching passes over a joiner, as
      * HarfBuzz's auto_zwj and auto_zwnj do.
      */
+    /**
+     * What one [substitute] call may spend, as HarfBuzz charges every lookup application against
+     * HB_BUFFER_MAX_OPS_FACTOR times the buffer length and caps the buffer's growth with
+     * HB_BUFFER_MAX_LEN_FACTOR. The nesting limit alone let a context lookup whose two records apply
+     * the lookup itself make 2^64 applications at one glyph (#985). Once spent, nothing more applies.
+     */
+    private class Budget(length: Int) {
+        var ops: Long = maxOf(length.toLong() * 1024, 16_384L)
+        val maxLength: Int = maxOf(length.toLong() * 64, 16_384L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
     private inner class Applier(
         val glyphs: MutableList<GsubGlyph>,
         val applies: (GsubGlyph) -> Boolean,
         val perSyllable: Boolean = false,
         val autoZwj: Boolean = true,
         val autoZwnj: Boolean = true,
+        private val budget: Budget = Budget(glyphs.size),
     ) {
         /** How deep nested lookups go, as HarfBuzz limits them. */
         private var nesting = 0
@@ -190,6 +203,7 @@ public class OpenTypeGsub private constructor(
 
         /** Applies the first subtable of [lookup] that matches at [i]; the index to go on from, or -1. */
         fun applyAt(lookup: Lookup, i: Int): Int {
+            if (--budget.ops < 0) return -1
             for (st in lookup.subtables) {
                 val next = when (st) {
                     is SingleSubst -> st.substitute(glyphs[i].gid)?.let { replace(i, it); i + 1 } ?: -1
@@ -214,6 +228,7 @@ public class OpenTypeGsub private constructor(
         private fun applyMultiple(st: MultipleSubst, i: Int): Int {
             val seq = st.sequence(glyphs[i].gid) ?: return -1
             if (seq.size == 1) { replace(i, seq[0]); return i + 1 }
+            if (glyphs.size + seq.size - 1 > budget.maxLength) return -1
             val source = glyphs.removeAt(i)
             for ((k, gid) in seq.withIndex()) {
                 // Each part counts as a component, unless the glyph is attached to a ligature.

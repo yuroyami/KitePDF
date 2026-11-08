@@ -183,8 +183,12 @@ public class OpenTypeMarks private constructor(
                 1 -> { val n = r.u16(); for (i in 0 until n) out[r.u16()] = i }
                 2 -> {
                     val n = r.u16()
+                    var expanded = 0L
                     for (i in 0 until n) {
                         val s = r.u16(); val e = r.u16(); val startIdx = r.u16()
+                        // Valid ranges do not overlap, so they cover each glyph id once at most (#984).
+                        expanded += maxOf(0, e - s + 1)
+                        if (expanded > MAX_RANGE_GLYPHS) return emptyMap()
                         for (g in s..e) out[g] = startIdx + (g - s)
                     }
                 }
@@ -243,3 +247,9 @@ public class OpenTypeMarks private constructor(
         }
     }
 }
+
+/**
+ * The most glyphs the ranges of one coverage or class definition may cover: every glyph id once, with
+ * room for a font whose ranges overlap a little (#984).
+ */
+private const val MAX_RANGE_GLYPHS = 2L * 65536

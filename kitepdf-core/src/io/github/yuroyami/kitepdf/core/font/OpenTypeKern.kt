@@ -147,6 +147,8 @@ public class OpenTypeKern private constructor(
                     val cd2 = parseClassDef(b, base + classDef2Off)
                     val recStart = base + 16
                     val recSize = v1size + v2size
+                    // The records must fit in the table before the array is sized by the two counts (#983).
+                    if (class1Count.toLong() * class2Count * maxOf(1, recSize) > b.size - recStart) return null
                     val values = IntArray(class1Count * class2Count)
                     for (c1 in 0 until class1Count) for (c2 in 0 until class2Count) {
                         val recBase = recStart + (c1 * class2Count + c2) * recSize
@@ -185,8 +187,13 @@ public class OpenTypeKern private constructor(
                 1 -> { val n = r.u16(); for (i in 0 until n) out[r.u16()] = i }
                 2 -> {
                     val n = r.u16()
+                    var expanded = 0L
                     for (i in 0 until n) {
                         val start = r.u16(); val end = r.u16(); val startIdx = r.u16()
+                        // The ranges of a valid table do not overlap, so they cover at most every glyph
+                        // id once. Repeated full ranges made a 393 KB table four billion puts (#984).
+                        expanded += maxOf(0, end - start + 1)
+                        if (expanded > MAX_RANGE_GLYPHS) return emptyMap()
                         for (g in start..end) out[g] = startIdx + (g - start)
                     }
                 }
@@ -204,8 +211,11 @@ public class OpenTypeKern private constructor(
                 }
                 2 -> {
                     val n = r.u16()
+                    var expanded = 0L
                     for (i in 0 until n) {
                         val s = r.u16(); val e = r.u16(); val c = r.u16()
+                        expanded += maxOf(0, e - s + 1)
+                        if (expanded > MAX_RANGE_GLYPHS) return emptyMap()
                         if (c != 0) for (g in s..e) out[g] = c
                     }
                 }
@@ -248,3 +258,9 @@ public class OpenTypeKern private constructor(
         }
     }
 }
+
+/**
+ * The most glyphs the ranges of one coverage or class definition may cover: every glyph id once, with
+ * room for a font whose ranges overlap a little (#984).
+ */
+private const val MAX_RANGE_GLYPHS = 2L * 65536

@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.core.font
 
+import io.github.yuroyami.kitepdf.core.PdfFormatException
+
 /**
  * TrueType / OpenType `cmap` table: character-code → glyph-index lookup.
  *
@@ -192,11 +194,25 @@ public class TtfCMap private constructor(private val subtable: Subtable) {
         }
 
         /** Format 12: segmented coverage (32-bit codepoints, supplementary planes). */
+        /**
+         * A format 12 or 13 subtable holds [numGroups] records of 12 bytes after its 16-byte header,
+         * within its own [length] and within the font. Three arrays were sized by the count before a
+         * record was read, so a 16-byte subtable that claimed 100 million groups asked for 1.2 GB,
+         * and the OutOfMemoryError was no RuntimeException to skip the subtable by (#983).
+         */
+        private fun checkGroups(reader: TtfReader, numGroups: Int, length: Long) {
+            val room = minOf(length - 16, (reader.size - reader.pos()).toLong())
+            if (numGroups < 0 || numGroups.toLong() * 12 > room) {
+                throw PdfFormatException("cmap: $numGroups groups in $room bytes")
+            }
+        }
+
         private fun parseFormat12(reader: TtfReader, base: Int): Subtable {
             reader.skip(2)  // reserved
-            reader.skip(4)  // length
+            val length = reader.u32()
             reader.skip(4)  // language
             val numGroups = reader.s32()
+            checkGroups(reader, numGroups, length)
             val starts = IntArray(numGroups)
             val ends = IntArray(numGroups)
             val startGlyphs = IntArray(numGroups)
@@ -218,9 +234,10 @@ public class TtfCMap private constructor(private val subtable: Subtable) {
          */
         private fun parseFormat13(reader: TtfReader, base: Int): Subtable {
             reader.skip(2)  // reserved
-            reader.skip(4)  // length
+            val length = reader.u32()
             reader.skip(4)  // language
             val numGroups = reader.s32()
+            checkGroups(reader, numGroups, length)
             val starts = IntArray(numGroups)
             val ends = IntArray(numGroups)
             val glyphs = IntArray(numGroups)

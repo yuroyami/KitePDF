@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.core.font
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /** The GSUB engine on tables built here: every lookup type, lookup flags, scripts and stages (#211). */
 class OpenTypeGsubTest {
@@ -92,6 +93,34 @@ class OpenTypeGsubTest {
         )))
         assertEquals(listOf(1, 20, 3), shape(t, run(1, 2, 3), listOf(listOf("calt"))))
         assertEquals(listOf(5, 2, 3), shape(t, run(5, 2, 3), listOf(listOf("calt"))), "no backtrack, no substitution")
+    }
+
+    @Test
+    fun a_context_lookup_whose_records_apply_itself_ends() {
+        // Two records that name the lookup itself doubled the work at each of 64 levels (#985).
+        val t = assertNotNull(OpenTypeGsub.from(gsub(
+            listOf("DFLT" to listOf(0)),
+            listOf("calt" to listOf(0)),
+            listOf(lookup(6, chain(back = emptyList(), input = listOf(5), ahead = emptyList(), records = listOf(0 to 0, 0 to 0)))),
+        )))
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        assertEquals(listOf(5), shape(t, run(5), listOf(listOf("calt"))))
+        assertTrue(start.elapsedNow().inWholeSeconds < 10, "took ${start.elapsedNow()}")
+    }
+
+    @Test
+    fun a_multiple_substitution_that_feeds_itself_stops_growing() {
+        // Glyph 5 becomes 5 5, and a chain applies that to every 5 again: the buffer has a ceiling.
+        val t = assertNotNull(OpenTypeGsub.from(gsub(
+            listOf("DFLT" to listOf(0)),
+            listOf("calt" to listOf(0)),
+            listOf(lookup(6, chain(back = emptyList(), input = listOf(5), ahead = emptyList(), records = listOf(0 to 1, 0 to 0))), lookup(2, multiple(5, 5, 5))),
+        )))
+        val glyphs = run(5)
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        t.substitute(glyphs, "DFLT", null, listOf(listOf("calt")))
+        assertTrue(glyphs.size <= 16_384, "${glyphs.size} glyphs")
+        assertTrue(start.elapsedNow().inWholeSeconds < 10, "took ${start.elapsedNow()}")
     }
 
     @Test

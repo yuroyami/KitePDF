@@ -467,6 +467,11 @@ public class CffFont private constructor(
             if (count < 0) throw PdfFormatException("CFF2: INDEX count out of range")
             if (count == 0) return emptyList()
             val offSize = reader.u8()
+            // The offset array must fit in what is left, before it is sized by the count: a CFF2
+            // INDEX count is 32 bits, so one header asked for gigabytes (#983).
+            if (offSize !in 1..4 || (count + 1L) * offSize > reader.size - reader.pos()) {
+                throw PdfFormatException("CFF: INDEX of $count entries of $offSize bytes")
+            }
             val offsets = IntArray(count + 1) { readOffset(reader, offSize) }
             val dataStart = reader.pos() - 1  // offset is relative to byte BEFORE data
             val result = ArrayList<ByteArray>(count)
