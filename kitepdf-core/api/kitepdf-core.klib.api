@@ -3164,6 +3164,9 @@ final object io.github.yuroyami.kitepdf.core.filters/RunLengthFilter : io.github
     final fun decode(kotlin/ByteArray, io.github.yuroyami.kitepdf.core.parser/PdfDictionary?): kotlin/ByteArray // io.github.yuroyami.kitepdf.core.filters/RunLengthFilter.decode|decode(kotlin.ByteArray;io.github.yuroyami.kitepdf.core.parser.PdfDictionary?){}[0]
 }
 
+final object io.github.yuroyami.kitepdf.core.font/Cff2Converter { // io.github.yuroyami.kitepdf.core.font/Cff2Converter|null[0]
+    final fun toCff(io.github.yuroyami.kitepdf.core.font/CffFont): kotlin/ByteArray // io.github.yuroyami.kitepdf.core.font/Cff2Converter.toCff|toCff(io.github.yuroyami.kitepdf.core.font.CffFont){}[0]
+}
 final object io.github.yuroyami.kitepdf.core.font/CffSubsetter { // io.github.yuroyami.kitepdf.core.font/CffSubsetter|null[0]
     final fun subset(io.github.yuroyami.kitepdf.core.font/CffFont, kotlin.collections/Set<kotlin/Int>, kotlin/Int = ...): io.github.yuroyami.kitepdf.core.font/CffSubsetter.Subset // io.github.yuroyami.kitepdf.core.font/CffSubsetter.subset|subset(io.github.yuroyami.kitepdf.core.font.CffFont;kotlin.collections.Set<kotlin.Int>;kotlin.Int){}[0]
 

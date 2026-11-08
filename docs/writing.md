@@ -169,7 +169,7 @@ val pdf = PdfBuilder()
 - The PDF also gets a map from each glyph back to its character, so a reader can copy and search the text.
 - A character that the font does not have draws as the font's missing-glyph shape.
 - `text` and `showText` map each character to one glyph, in the order of the string. They do not shape text, so Arabic letters do not join and right-to-left text runs left to right. Use `shapedText` or `paragraph` below for such scripts.
-- `load` throws `UnsupportedOperationException` for a font that has only CFF2 outlines.
+- A font with only CFF2 outlines, such as a variable OpenType font with PostScript outlines, embeds at its default instance: its glyphs are written as CFF without hints. The other values of its axes are out of reach.
 
 A TrueType collection (`.ttc`) gives its first font. Pass `faceIndex` for another one. `TrueTypeFont.faceCount(bytes)` tells how many fonts a collection has:
 

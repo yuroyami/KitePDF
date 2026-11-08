@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.writer
 
+import io.github.yuroyami.kitepdf.core.font.Cff2Converter
 import io.github.yuroyami.kitepdf.core.font.CffFont
 import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
 
@@ -21,8 +22,11 @@ import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
  * ```
  *
  * Scope: TrueType (`glyf` outline) and OpenType/CFF (`.otf`, sfnt tag
- * "OTTO") fonts are supported, subset by default. TrueType Collections
- * (`.ttc`) are rejected with a clear error; extract a single face first.
+ * "OTTO") fonts are supported, subset by default. A font with CFF2 outlines,
+ * such as a variable OpenType font with PostScript outlines, embeds at its
+ * default instance: its glyphs are written as CFF, without hints, and other
+ * values of its axes are out of reach (#917). A TrueType collection (`.ttc`)
+ * embeds one face.
  */
 public class EmbeddedFont private constructor(
     internal val fontBytes: ByteArray,
@@ -68,11 +72,11 @@ public class EmbeddedFont private constructor(
             require(collection || faceIndex == 0) { "A single font has only face 0, not $faceIndex" }
             val face = if (collection) TrueTypeFont.extractFace(fontBytes, faceIndex) else fontBytes
             val ttf = TrueTypeFont.parse(face)
-            // A CFF2 program has no subsetter yet, and a PDF font program holds CFF or TrueType outlines.
-            if (ttf.rawTable("CFF2") != null && ttf.rawTable("CFF ") == null && ttf.rawTable("glyf") == null) {
-                throw UnsupportedOperationException("CFF2 fonts cannot be embedded yet; use a font with CFF or TrueType outlines")
-            }
+            // A PDF font program holds CFF or TrueType outlines, so a CFF2 program, as a variable font with
+            // PostScript outlines has, is written as CFF at its default instance and embedded as that (#917).
+            val cff2 = ttf.rawTable("CFF2")?.takeIf { ttf.rawTable("CFF ") == null && ttf.rawTable("glyf") == null }
             val cff = ttf.rawTable("CFF ")?.let { CffFont.parse(it) }
+                ?: cff2?.let { CffFont.parse(Cff2Converter.toCff(CffFont.parse(it))) }
             val resolved = (name ?: postScriptNameOf(ttf))?.let(::sanitizeName)?.takeIf { it.isNotEmpty() }
             return EmbeddedFont(face, ttf, cff, resolved ?: "KiteFont", subset)
         }
