@@ -59,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   twice in one place read once. A string never matches the strings that it follows along a line, so double
   letters in tight type stay. The plain text of every page of the corpus stays the same (#644).
 
+- A CFF or Type 1 glyph whose subroutines call each other over and over reads at most 200,000 charstring
+  bytes, past which the glyph is empty. A program of 262 bytes ran 10^9 subroutine calls and filled the
+  heap (#981). A Type 1 `seac` follows no `seac` of its base or accent, so a glyph that names itself no longer
+  recurses until the stack runs out, which ends the process on a native target (#982).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

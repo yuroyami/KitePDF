@@ -37,6 +37,10 @@ internal class Type1CharstringInterpreter(
     private var done = false
     private var depth = 0
 
+    /** Charstring bytes read so far, subroutines included: the budget of [MAX_CHARSTRING_STEPS] (#981). */
+    private var steps = 0
+    private var overBudget = false
+
     /** Left sidebearing x set by hsbw/sbw. Needed for seac accent placement. */
     private var sbx = 0.0
 
@@ -48,6 +52,7 @@ internal class Type1CharstringInterpreter(
 
     fun interpret(): KitePath {
         execute(charstring)
+        if (overBudget) return KitePath.Builder().build()
         return pathBuilder.build()
     }
 
@@ -57,6 +62,7 @@ internal class Type1CharstringInterpreter(
         var i = 0
         try {
             while (i < cs.size && !done) {
+                if (++steps > MAX_CHARSTRING_STEPS) { done = true; overBudget = true; return }
                 val b = cs[i].toInt() and 0xFF
                 when {
                     b in 32..246 -> { stack.addLast((b - 139).toDouble()); i++ }
@@ -326,9 +332,14 @@ internal class Type1CharstringInterpreter(
         done = true
     }
 
-    /** Render [cs] with a fresh interpreter and append its outline, translated by (dx, dy). */
+    /**
+     * Render [cs] with a fresh interpreter and append its outline, translated by (dx, dy). The base
+     * and the accent of a `seac` are plain glyphs (Adobe Type 1 Font Format, 6.4), so the nested
+     * interpreter follows no `seac` of its own: a glyph that names itself as its base or accent
+     * recursed until the stack ran out, which a native target cannot catch (#982).
+     */
     private fun appendGlyph(cs: ByteArray, dx: Double, dy: Double) {
-        val sub = Type1CharstringInterpreter(cs, subrs, seacResolver).interpret()
+        val sub = Type1CharstringInterpreter(cs, subrs, seacResolver = null).interpret()
         for (seg in sub.segments) {
             when (seg) {
                 is KitePath.Segment.MoveTo -> pathBuilder.moveTo(seg.x + dx, seg.y + dy)

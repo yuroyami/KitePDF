@@ -79,9 +79,19 @@ internal class CharstringInterpreter(
     /** Recursion depth. The Type 2 spec mandates ≤10. */
     private var depth = 0
 
+    /**
+     * Charstring bytes read so far, across every subroutine call. The depth bound alone lets a
+     * subroutine that calls the next one ten times, level after level, run 10^levels calls, so a
+     * program of a few hundred bytes filled the heap (#981). Past [MAX_CHARSTRING_STEPS] the glyph
+     * is empty, as a corrupt font becomes a skip.
+     */
+    private var steps = 0
+    private var overBudget = false
+
     fun interpret(): KitePath {
         if (cff2) widthSet = true
         execute(charstring)
+        if (overBudget) return KitePath.Builder().build()
         // A CFF2 glyph ends with its data, where a CFF glyph has endchar.
         if (cff2 && !done && !pathBuilder.isEmpty()) pathBuilder.close()
         return pathBuilder.build()
@@ -93,6 +103,7 @@ internal class CharstringInterpreter(
         var i = 0
         try {
             while (i < cs.size && !done) {
+                if (++steps > MAX_CHARSTRING_STEPS) { done = true; overBudget = true; return }
                 val b = cs[i].toInt() and 0xFF
                 when {
                     b in 32..246 -> { stack.addLast((b - 139).toDouble()); i++ }
@@ -591,3 +602,9 @@ internal class CharstringInterpreter(
         else -> 32768
     }
 }
+
+/**
+ * The most charstring bytes one glyph may read, subroutines included. A real glyph reads a few
+ * thousand at most, CJK and heavily hinted ones included (#981).
+ */
+internal const val MAX_CHARSTRING_STEPS = 200_000
