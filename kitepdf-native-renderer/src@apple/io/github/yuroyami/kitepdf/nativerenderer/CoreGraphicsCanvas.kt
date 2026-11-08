@@ -34,6 +34,7 @@ import kotlinx.cinterop.cValue
 import kotlinx.cinterop.cValuesOf
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.set
@@ -194,6 +195,60 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         val font = createCFString(key)?.let { name -> CTFontCreateWithName(name, HOST_EM, null).also { CFRelease(name) } } ?: return null
         hostFonts[key] = font
         return font
+    }
+
+    /**
+     * The outline of [text] in the face host text draws in, from CTFontCreatePathForGlyph, at
+     * 1000 units to the em with y up, each character after the advance of the one before. Text in a
+     * font without a program then strokes, clips and fills with a pattern by its letters, not by a
+     * box per glyph (ISO 32000-1, 9.3.6; #857). Null when the face has no glyph for any character.
+     */
+    override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? {
+        if (text.isEmpty()) return null
+        // The page's face is made at HOST_EM points, so its units are 1000 to the em.
+        val font = hostFont(fontSpec) ?: return null
+        val b = KitePath.Builder()
+        var pen = 0.0
+        var any = false
+        memScoped {
+            val chars = allocArray<UShortVar>(2)
+            val ids = allocArray<CGGlyphVar>(2)
+            var i = 0
+            while (i < text.length) {
+                val pair = text[i].isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()
+                val n = if (pair) 2 else 1
+                for (k in 0 until n) chars[k] = text[i + k].code.toUShort()
+                i += n
+                if (!CTFontGetGlyphsForCharacters(font, chars, ids, n.toLong())) continue
+                val advance = platform.CoreText.CTFontGetAdvancesForGlyphs(
+                    font, platform.CoreText.kCTFontOrientationHorizontal, ids, null, 1,
+                )
+                val path = CTFontCreatePathForGlyph(font, ids[0], null)
+                if (path != null) {
+                    val dx = pen
+                    platform.CoreGraphics.CGPathApplyWithBlock(path) { element ->
+                        val e = element?.pointed ?: return@CGPathApplyWithBlock
+                        val p = e.points
+                        when (e.type) {
+                            platform.CoreGraphics.CGPathElementType.kCGPathElementMoveToPoint ->
+                                b.moveTo(p!![0].x + dx, p[0].y)
+                            platform.CoreGraphics.CGPathElementType.kCGPathElementAddLineToPoint ->
+                                b.lineTo(p!![0].x + dx, p[0].y)
+                            platform.CoreGraphics.CGPathElementType.kCGPathElementAddQuadCurveToPoint ->
+                                b.quadTo(p!![0].x + dx, p[0].y, p[1].x + dx, p[1].y)
+                            platform.CoreGraphics.CGPathElementType.kCGPathElementAddCurveToPoint ->
+                                b.curveTo(p!![0].x + dx, p[0].y, p[1].x + dx, p[1].y, p[2].x + dx, p[2].y)
+                            platform.CoreGraphics.CGPathElementType.kCGPathElementCloseSubpath -> b.close()
+                            else -> {}
+                        }
+                    }
+                    CGPathRelease(path)
+                    any = true
+                }
+                pen += advance
+            }
+        }
+        return if (any) b.build() else null
     }
 
     private fun releaseHostFonts() {

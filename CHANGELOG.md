@@ -828,6 +828,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   differential sweep (#853).
 - Host-font text keeps the shear and the reflection of its text matrix on the AWT, Skia, Android and Canvas2D
   canvases, as on Compose: a slanted Verdana run slants, and a mirrored one mirrors (#848).
+- `CoreGraphicsCanvas` and `Canvas2dCanvas` give host glyph outlines, so stroked and clipping text in a font
+  without a program draws its letters instead of filled shapes or a box per glyph. CoreGraphics takes them from
+  CoreText, and Canvas2D from the bundled standard faces for a Latin character (#857).
 
 ## [0.13.0] - 2026-10-09
 

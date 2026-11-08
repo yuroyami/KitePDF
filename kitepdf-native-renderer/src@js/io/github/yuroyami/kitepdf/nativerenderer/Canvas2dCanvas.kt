@@ -5,6 +5,7 @@ import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.font.KiteFontFamily
 import io.github.yuroyami.kitepdf.core.font.FontSpec
 import io.github.yuroyami.kitepdf.core.font.TextGlyph
+import io.github.yuroyami.kitepdf.core.font.standardFaceGlyphs
 import io.github.yuroyami.kitepdf.core.render.KiteBlendMode
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
@@ -333,6 +334,16 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             ctx.restore(); openLayers--
         }
     }
+
+    /**
+     * A browser gives Canvas2D no glyph outlines, so the outline of one character of host text
+     * comes from the bundled standard face of [fontSpec]'s family (#593), at 1000 units to the em
+     * with y up. Text in a font without a program then strokes and clips by its letters, not by a
+     * box per glyph (ISO 32000-1, 9.3.6; #857). Null for more than one character, or one the
+     * bundled face lacks, such as a CJK character, which keeps the box.
+     */
+    override fun hostGlyphOutline(text: String, fontSpec: FontSpec): KitePath? =
+        standardFaceGlyphs(listOf(TextGlyph(0, 1, 0, text, 0.0, null, false)), fontSpec)?.single()?.outline
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double) {
         drawImage(image, ctm, alpha, KiteBlendMode.Normal)
