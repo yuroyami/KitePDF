@@ -420,6 +420,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stamp, a rotation or `/NeedAppearances` went back to the base (#680).
 - `PdfSigner.prepareSignature` keeps every other field and annotation when `/AcroForm` is direct or `/Fields` or
   `/Annots` is an indirect array, where signing took them out of the form and off the page (#674).
+- A `PdfScriptRunner` whose policy runs no script never opens a script engine, so a DENY runner stores form
+  values where QuickJS cannot load or the event budget has passed, and an engine that fails to load with an
+  `Error` is recorded as a failure instead of escaping (#894).
 
 ## [0.13.0] - 2026-10-09
 

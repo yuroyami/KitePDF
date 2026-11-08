@@ -286,6 +286,20 @@ class FormScriptTest {
         }
     }
 
+    @Test
+    fun a_policy_that_denies_scripts_opens_no_engine(): TestResult = scriptTest {
+        // The engine's setup ran under the event budget, so five seconds after the runner was made
+        // the first value of a DENY runner was refused as an interrupted script (#894).
+        var now = 0L
+        val doc = PdfDocument.open(invoicePdf())
+        PdfScriptRunner(doc, policy = PdfScriptPolicy.DENY, clock = { now }).use { runner ->
+            now = 60_000
+            assertTrue(runner.setFieldValue("a", "2"))
+            assertEquals("2", runner.formState.value("a"))
+            assertEquals(emptyList(), runner.failures, "no engine opened, so nothing failed")
+        }
+    }
+
     /** What a script asks for outside the document reaches the host, and nothing else happens. */
     @Test
     fun a_request_to_leave_the_document_reaches_the_host(): TestResult = scriptTest {

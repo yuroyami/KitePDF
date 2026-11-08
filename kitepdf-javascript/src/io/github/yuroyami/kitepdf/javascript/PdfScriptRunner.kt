@@ -230,6 +230,10 @@ public class PdfScriptRunner(
      */
     private fun ensureEngine(): Boolean {
         if (openEngine != null) return true
+        // A runner that runs no script opens no engine: with DENY the reader still fills the form,
+        // and a QuickJS that does not load, or another runner's engine on the one web thread, is
+        // nothing to it (#894).
+        if (!policy.enabled) return false
         val engine = engineSource ?: try {
             check(KiteJsScriptEngine.isLoaded) { KiteJsScriptEngine.NOT_LOADED }
             // Where every engine shares one thread, another runner's engine closes first (#553).
@@ -240,7 +244,10 @@ public class PdfScriptRunner(
                 clock = clock,
                 maxStackBytes = scriptThread.value.stackBytes,
             )
-        } catch (failure: RuntimeException) {
+        } catch (failure: Throwable) {
+            // A native library that does not load throws an Error, UnsatisfiedLinkError, not an
+            // exception, and the value the call was storing must still be stored (#894).
+            if (failure is kotlinx.coroutines.CancellationException) throw failure
             recordFailure(KiteScriptException("the engine did not open: ${failure.message}", failure))
             return false
         }
