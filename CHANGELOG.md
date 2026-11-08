@@ -114,6 +114,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one-kilobyte book ran the layout out of memory, and a row past 100,000 columns put its cells in the next
   row's slots (#986).
 
+- A WOFF table inflates to its declared length at most, a WOFF2 stream decodes to the sum of its table
+  lengths at most, and a web font unpacks to at most 64 MiB. Both decoders used the 512 MiB cap of a PDF
+  stream, so a 459-byte WOFF2 or a 510 KB WOFF made the layout of a chapter allocate about 2 GB, and four
+  WOFF tables over one stream threw `OutOfMemoryError` out of `pageCountIn` (#988).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

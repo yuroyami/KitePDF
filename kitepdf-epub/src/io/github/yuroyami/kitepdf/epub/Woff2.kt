@@ -1,7 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.epub.brotli.Brotli
-import io.github.yuroyami.kitepdf.core.filters.FilterChain
 
 /**
  * WOFF2 (W3C Web Open Font Format 2.0) → bare SFNT decoder. A WOFF2 file is
@@ -73,13 +72,18 @@ internal object Woff2 {
                 !transformed -> origLength
                 else -> rd.base128() // transformLength (0 for transformed loca)
             }
+            if (origLength < 0 || srcLength < 0 || srcOffset.toLong() + srcLength > Woff.MAX_FONT_BYTES) return null
             entries.add(Entry(tag, origLength, version, transformed, srcOffset, srcLength))
             srcOffset += srcLength
         }
 
+        // The table lengths sum to the size of the decompressed stream (WOFF2, 5.2), so the stream
+        // decodes with that sum as its cap, and the font with the ceiling of a WOFF 1.0 font: a
+        // 459-byte file decoded 500 MiB under the cap of a PDF stream (#988).
+        if (entries.sumOf { it.origLength.toLong() } > Woff.MAX_FONT_BYTES) return null
         // Single Brotli stream holding every table's (possibly transformed) data.
         val compressed = b.copyOfRange(rd.pos, minOf(b.size, rd.pos + totalCompressedSize))
-        val raw = Brotli.decode(compressed, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
+        val raw = Brotli.decode(compressed, maxOutputBytes = srcOffset)
         if (raw.size < srcOffset) return null
 
         // Reconstruct glyf/loca first (hmtx may need its xMins).

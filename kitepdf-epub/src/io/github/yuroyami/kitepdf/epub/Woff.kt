@@ -1,7 +1,6 @@
 package io.github.yuroyami.kitepdf.epub
 
 import io.github.yuroyami.kitepdf.core.compression.Zlib
-import io.github.yuroyami.kitepdf.core.filters.FilterChain
 
 /**
  * WOFF 1.0 (Web Open Font Format) → bare SFNT decoder. A WOFF file is an SFNT
@@ -38,6 +37,15 @@ internal object Woff {
         }
         // SFNT requires the table directory sorted by tag ascending.
         entries.sortBy { it.tag }
+        // WOFF 1.0, 5: each entry gives its table's uncompressed length. A font has a ceiling of its
+        // own, far below the 512 MiB cap of a PDF stream: four entries over one stream of 500 MiB of
+        // zeros made a 510 KB file ask for 2 GB (#988).
+        var total = 0L
+        for (e in entries) {
+            if (e.origLen < 0) return null
+            total += align4(e.origLen)
+        }
+        if (total > MAX_FONT_BYTES) return null
 
         // Decompress each table's payload up front (zlib when compressed, else stored).
         val payloads = arrayOfNulls<ByteArray>(numTables)
@@ -49,7 +57,7 @@ internal object Woff {
                 comp // stored uncompressed
             } else {
                 val out = runCatching {
-                    Zlib.decode(comp, verifyChecksum = false, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
+                    Zlib.decode(comp, verifyChecksum = false, maxOutputBytes = e.origLen)
                 }.getOrNull() ?: return null
                 if (out.size < e.origLen) return null
                 if (out.size == e.origLen) out else out.copyOf(e.origLen)
@@ -93,6 +101,12 @@ internal object Woff {
     }
 
     private fun align4(x: Int) = (x + 3) and 3.inv()
+
+    /**
+     * The most a font may unpack to. The largest real fonts, Noto Serif CJK and Source Han, unpack to
+     * 30 to 40 MB, and a phone's heap is 192 to 512 MB (#988).
+     */
+    internal const val MAX_FONT_BYTES = 64 shl 20
 
     private fun u16(b: ByteArray, o: Int) = ((b[o].toInt() and 0xFF) shl 8) or (b[o + 1].toInt() and 0xFF)
     private fun u32(b: ByteArray, o: Int): Long =
