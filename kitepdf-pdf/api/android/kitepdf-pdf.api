@@ -594,6 +594,10 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun dropOperationCache ()V
 	public final fun edit (Lkotlin/random/Random;)Lio/github/yuroyami/kitepdf/writer/PdfEditor;
 	public static synthetic fun edit$default (Lio/github/yuroyami/kitepdf/PdfDocument;Lkotlin/random/Random;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfEditor;
+	public final fun exportFdf (Ljava/lang/String;)[B
+	public static synthetic fun exportFdf$default (Lio/github/yuroyami/kitepdf/PdfDocument;Ljava/lang/String;ILjava/lang/Object;)[B
+	public final fun exportXfdf (Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun exportXfdf$default (Lio/github/yuroyami/kitepdf/PdfDocument;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 	public final fun formField (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfFormField;
 	public final fun getAcroForm ()Lio/github/yuroyami/kitepdf/PdfAcroForm;
 	public final fun getAdditionalActions ()Lio/github/yuroyami/kitepdf/PdfDocumentActions;
@@ -1707,6 +1711,7 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public static synthetic fun flatten$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;Lio/github/yuroyami/kitepdf/writer/FlattenMode;ZILjava/lang/Object;)V
 	public final fun getPendingObjectCount ()I
 	public final fun graftPage (Lio/github/yuroyami/kitepdf/PdfDocument;I)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
+	public final fun importFormData ([B)Ljava/util/List;
 	public final fun insertPageAt (ILio/github/yuroyami/kitepdf/core/parser/PdfReference;)V
 	public final fun mergeDocument (Lio/github/yuroyami/kitepdf/PdfDocument;)V
 	public final fun redactRegion (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/KiteRectangle;)V

@@ -109,6 +109,24 @@ val saved = editor.saveIncremental()
 
 A password field draws one asterisk a character, never its value, in the appearance that `setTextFieldValue` writes, on the page in the viewer, and in the viewer's accessibility tree. `setTextFieldValue` still stores the value in `/V` when you call it, so the loop above skips such fields, as the note to Table 228 advises.
 
+### Exchange form data
+
+`exportXfdf()` and `exportFdf()` write the values of a form as XFDF or FDF, the formats Acrobat and back offices exchange form data in, and `importFormData` applies such a file to a form:
+
+```kotlin
+val xfdf = filled.exportXfdf(sourceFile = "application.pdf")
+
+val skipped = template.edit().run {
+    val names = importFormData(xfdf.encodeToByteArray())
+    saveIncremental().also { /* ... */ }
+    names
+}
+```
+
+- Each value goes to the field of its fully qualified name through the field setters, so the appearances are written. A check box or radio button takes its export value, a list box several values.
+- `importFormData` returns the names it could not apply: a field the form does not have, or a value that names no state of its button.
+- XFDF annotations are not read.
+
 ### Flatten a form
 
 `flatten()` draws the appearance of each field and annotation into the page content and takes it off the page, so a filled form is final and looks the same in every reader:

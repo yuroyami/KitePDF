@@ -737,6 +737,20 @@ public class PdfDocument private constructor(
     }.getOrNull()
 
     /** Look up a form field by its fully-qualified name; null if not present. */
+    /**
+     * The values of the form as XFDF (ISO 19444-1; #950): `<xfdf><fields><field name>`, nested as
+     * the field names are, each value in a `<value>`, several for a list box. [sourceFile] goes
+     * in `<f href>`. A push button and a signature hold no value and are left out.
+     */
+    public fun exportXfdf(sourceFile: String? = null): String = FormData.xfdf(this, sourceFile)
+
+    /**
+     * The values of the form as FDF (ISO 32000-1, 12.7.7; #950): a catalog whose `/FDF` holds
+     * `/Fields`, each with its partial name `/T`, its `/V` and its `/Kids`, and `/F` naming
+     * [sourceFile]. A check box or radio button state is a name, a text a string.
+     */
+    public fun exportFdf(sourceFile: String? = null): ByteArray = FormData.fdf(this, sourceFile)
+
     public fun formField(fullyQualifiedName: String): PdfFormField? =
         formFields.firstOrNull { it.fullyQualifiedName == fullyQualifiedName }
 

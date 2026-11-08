@@ -598,6 +598,51 @@ public class PdfEditor internal constructor(
         updateObject(ref, newPage)
     }
 
+    /**
+     * Applies [data], an XFDF (ISO 19444-1) or FDF (ISO 32000-1, 12.7.7) file, to the form (#950):
+     * each value goes to the field of its fully qualified name through [setTextFieldValue],
+     * [setButtonValue] (a check box or radio button takes its export value, `Off` clears it) or
+     * [setChoiceValue], several values to a list box, so the appearances are written as a fill
+     * writes them. Returns the names it could not apply: a field the form does not have, or a
+     * value that names no state of its button. Neither is an error.
+     */
+    public fun importFormData(data: ByteArray): List<String> {
+        val skipped = ArrayList<String>()
+        for ((name, values) in io.github.yuroyami.kitepdf.FormData.parse(data)) {
+            val field = base.formField(name)
+            if (field == null || values.isEmpty()) { skipped += name; continue }
+            val applied = runCatching {
+                when (field.type) {
+                    PdfFormField.FieldType.Text -> setTextFieldValue(field, values.first())
+                    PdfFormField.FieldType.Button -> setButtonValue(field, values.first())
+                    PdfFormField.FieldType.Choice -> if (values.size == 1) setChoiceValue(field, values.first()) else setChoiceValues(field, values)
+                    else -> throw IllegalArgumentException("a ${field.type} field takes no value")
+                }
+            }.isSuccess
+            if (!applied) skipped += name
+        }
+        return skipped
+    }
+
+    /** A list box set to several [values] at once: `/V` an array and `/I` their indices (ISO 32000-1, 12.7.4.4). */
+    private fun setChoiceValues(field: PdfFormField, values: List<String>) {
+        val fieldRef = field.fieldReference
+            ?: throw IllegalArgumentException("Field '${field.fullyQualifiedName}' has no indirect reference")
+        val entries = LinkedHashMap<String, PdfObject>()
+        entries["V"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(values.map { PdfString(PdfText.encodeTextString(it)) })
+        val indices = values.map { optionIndex(field, it) }.filter { it >= 0 }.distinct().sorted()
+        if (indices.isNotEmpty()) entries["I"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(indices.map { PdfInt(it.toLong()) })
+        val selection = io.github.yuroyami.kitepdf.PdfChoiceSelection(indices, unresolvedValues = values.filter { optionIndex(field, it) < 0 })
+        val da = FieldAppearance.parseDA(field.defaultAppearance)
+        val (fontRef, metrics) = appearanceFont(da)
+        val label = field.choiceOptions.firstOrNull { it.index in selection.indices }?.label ?: values.first()
+        writeFieldValue(field, fieldRef, buttonWidgets(field), entries) { w, h, widget ->
+            io.github.yuroyami.kitepdf.render.ChoiceAppearance.build(field, selection, widget, w, h, base)
+                ?: FieldAppearance.build(label, w, h, da, fontRef, metrics = metrics, look = FieldAppearance.lookOf(widget, base, field.flags, null))
+        }
+        clearNeedAppearances()
+    }
+
     /* ─── Flattening (#949) ──────────────────────────────────────────────── */
 
     /** [flatten] on every page of the document. */

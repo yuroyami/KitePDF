@@ -672,6 +672,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embeddings, overrides and isolates of UAX #9 around their content (#932).
 - PdfEditor.flatten draws the fields and annotations of a page or the whole document into the page content and
   takes them off, for what prints or what shows, as a final copy of a filled form (#949).
+- PdfDocument.exportXfdf and exportFdf write a form's values as XFDF or FDF, and PdfEditor.importFormData applies
+  such a file through the field setters, reporting the names it could not apply (#950).
 
 ## [0.13.0] - 2026-10-09
 
