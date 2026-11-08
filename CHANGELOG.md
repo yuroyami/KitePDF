@@ -165,6 +165,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dropped with a warning, and a member that the array names again decodes once. The 512 MiB cap applied to
   each member, so a 66 KB file that named one 64 MiB stream 16 times threw `OutOfMemoryError` (#1018).
 
+- The viewer's guard around a document's script handler catches an `Error` too, and the script work it
+  launches outside a composition runs in a scope whose failures are logged. A chapter that built a tree
+  30,000 levels deep threw `StackOverflowError` past the guard, from a scope with no parent and no handler,
+  which ends an Android app (#956).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

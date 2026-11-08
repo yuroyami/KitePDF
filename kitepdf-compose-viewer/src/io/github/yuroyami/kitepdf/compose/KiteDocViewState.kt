@@ -658,7 +658,7 @@ public class KiteDocViewState(
         val lane = scriptLane
         val scope = scriptScope
         if (lane == null || scope == null) runInPlace { answer(work()) }
-        else kotlinx.coroutines.CoroutineScope(lane).launch {
+        else isolatedScriptScope(lane).launch {
             val selection = work()
             scope.launch {
                 backOnComposeThread()
@@ -711,7 +711,7 @@ public class KiteDocViewState(
         val lane = scriptLane
         val scope = scriptScope
         if (lane == null || scope == null) runInPlace { answer(work()) }
-        else kotlinx.coroutines.CoroutineScope(lane).launch {
+        else isolatedScriptScope(lane).launch {
             val result = work()
             scope.launch {
                 backOnComposeThread()
@@ -777,7 +777,7 @@ public class KiteDocViewState(
             scriptsRan()
         }
         val lane = scriptLane
-        if (lane == null) runInPlace(work) else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
+        if (lane == null) runInPlace(work) else isolatedScriptScope(lane).launch { work() }
     }
 
     /** Moves keyboard focus among the visible editable text and choice widgets in annotation order. */
@@ -859,7 +859,7 @@ public class KiteDocViewState(
             scriptsRan()
         }
         val lane = scriptLane
-        if (lane == null) runInPlace(work) else kotlinx.coroutines.CoroutineScope(lane).launch { work() }
+        if (lane == null) runInPlace(work) else isolatedScriptScope(lane).launch { work() }
     }
 
     /**
@@ -891,7 +891,7 @@ public class KiteDocViewState(
             val last = open
             // The view is leaving and its scope with it, so the close runs on a scope of its own.
             if (last != null) {
-                kotlinx.coroutines.CoroutineScope(lane).launch { scriptCall("pageClosed", Unit) { handler.pageClosed(last) } }
+                isolatedScriptScope(lane).launch { scriptCall("pageClosed", Unit) { handler.pageClosed(last) } }
             }
         }
     }
