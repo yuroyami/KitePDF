@@ -164,10 +164,26 @@ internal fun PdfEditor.recurseIntoForms(
         if (hit.formRects.isEmpty()) continue
         val formRef = xobjects.getRef(hit.name) ?: continue
         // Already on the descent: the outer invocation that put it there owns the
-        // rewrite, so this one keeps pointing at whatever that produces.
-        if (formRef.objectNumber in formDescent) continue
+        // rewrite, so this one points at the copy that one produces (#1007).
+        if (formRef.objectNumber in formDescent) {
+            val target = descentTargets[formRef.objectNumber]
+            if (target != null && target.objectNumber != formRef.objectNumber) {
+                val name = formCloneNames.getOrPut(target.objectNumber) {
+                    var i = 1
+                    while ("${hit.name}R$i" in usedNames) i++
+                    "${hit.name}R$i".also { usedNames.add(it) }
+                }
+                result.renames[hit.opIndex] = Rename(from = hit.name, to = name)
+                result.additions[name] = target
+            }
+            continue
+        }
         val key = formKey(formRef.objectNumber, hit.formRects, hit.lineWidth, hit.miterLimit, hit.text)
-        val claimable = formRef.objectNumber !in pristine
+        // A form is never rewritten in place: another page, another form or a later call can
+        // draw it outside every region, and one stream's Do operators cannot see them (ISO 32000-1,
+        // 8.10.1; #1007). The invocation gets a copy, and the original loses its name wherever
+        // nothing draws it any more, so the rewrite drops it.
+        val claimable = false
         val target = redactedFormCache[key]
             ?: redactFormXObject(formRef, hit.formRects, key, claimable, hit.lineWidth, hit.miterLimit, hit.text)
         if (target == null) {
@@ -336,6 +352,7 @@ internal fun PdfEditor.redactFormXObject(
     redactedFormCache[key] = target
 
     formDescent.addLast(formRef.objectNumber)
+    descentTargets[formRef.objectNumber] = target
     try {
         // A form may omit /Resources and take the page's (7.8.3). The renderer
         // does the same, which is what keeps the mirror invariant true.
@@ -370,6 +387,7 @@ internal fun PdfEditor.redactFormXObject(
             withoutKeys(stream.dict, UNREDACTABLE_KEYS), engine.droppedImageNames, engine.survivingImageNames,
         )
         newDict = prunePageResourceXObjects(newDict, nested.droppedNames, namesStillDrawn(finalOps))
+        newDict = prunePageResourceXObjects(newDict, nested.renames.values.map { it.from }.toSet(), namesStillDrawn(finalOps))
         val formOwnResources = newDict.getDict("Resources", effective)?.let { own ->
             strippedResources?.getDict("Properties", effective)?.let { withEntry(own, "Properties", it) } ?: own
         }
@@ -385,6 +403,7 @@ internal fun PdfEditor.redactFormXObject(
         throw e
     } finally {
         formDescent.removeLast()
+        descentTargets.remove(formRef.objectNumber)
     }
     return target
 }

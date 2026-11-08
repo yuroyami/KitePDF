@@ -896,7 +896,7 @@ public class PdfEditor internal constructor(
      * them and holds a form XObject or a pattern, which could draw it unnamed in its content,
      * counts as drawing it.
      */
-    private fun unnameUndrawnImages(pageRef: PdfReference, pageDict: PdfDictionary, dropped: Set<PdfReference>) {
+    private fun unnameUndrawnXObjects(pageRef: PdfReference, pageDict: PdfDictionary, dropped: Set<PdfReference>) {
         if (dropped.isEmpty()) return
         val stillDrawn = HashSet<PdfReference>()
         for (other in base.pages) {
@@ -1083,8 +1083,12 @@ public class PdfEditor internal constructor(
         newPage.getDict("Resources", effective)?.let { res ->
             withoutUnshownFonts(res, finalOps, keepAll = lendsFonts(res))?.let { if (it !== res) newPage = withEntry(newPage, "Resources", it) }
         }
-        // The images whose Do went, which a shared or inherited resource dictionary still names (#1010).
-        val droppedImages = (engine.droppedImageNames - engine.survivingImageNames).mapNotNull { name ->
+        // The images whose Do went, and the forms whose Do now names a redacted copy, which a shared
+        // or inherited resource dictionary still names (#1010, #1007).
+        val drawnNow = namesStillDrawn(finalOps)
+        val renamedAway = formRedaction.renames.values.map { it.from }.toSet() - drawnNow
+        newPage = prunePageResourceXObjects(newPage, renamedAway, drawnNow)
+        val droppedImages = ((engine.droppedImageNames - engine.survivingImageNames) + renamedAway).mapNotNull { name ->
             pageResources?.getDict("XObject", effective)?.get(name) as? PdfReference
         }.toSet()
         val droppedAnnots = ArrayList<PdfReference>()
@@ -1092,7 +1096,7 @@ public class PdfEditor internal constructor(
         // Stage the page first: what follows reads effective objects, and a widget's
         // field is only reachable through the /Annots this call just rewrote.
         updateObject(ref, newPage)
-        unnameUndrawnImages(ref, pageDict, droppedImages)
+        unnameUndrawnXObjects(ref, pageDict, droppedImages)
         // Set before the field detach, which raises on a malformed /Parent chain: the
         // page is already rewritten, so a caller that catches must still be refused an
         // incremental save (it would leave the original bytes in the file).
@@ -1116,6 +1120,9 @@ public class PdfEditor internal constructor(
      * visited set.
      */
     internal val formDescent = ArrayDeque<Long>()
+
+    /** The copy each form on [formDescent] is being redacted into, so a form that draws itself names its copy (#1007). */
+    internal val descentTargets = HashMap<Long, PdfReference>()
 
     /** Form object numbers whose ORIGINAL object is already spoken for. */
     internal val claimedForms = HashSet<Long>()

@@ -600,6 +600,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   program, or the glyph pictures of a Type 3 font, no longer stay in the file (#1013).
 - A redacted image leaves the file when the page inherits its resources from the page tree or shares them with
   pages that do not draw it; an image another page still draws stays (#1010).
+- Redacting a form XObject on one page no longer changes what other pages or forms draw: the redacted place gets
+  a copy, and the original loses its name only where nothing still draws it (#1007).
 
 ## [0.13.0] - 2026-10-09
 
