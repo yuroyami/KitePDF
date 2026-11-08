@@ -426,6 +426,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A PDF runner whose first script comes long after it was made runs it, as the setup of the Acrobat API no longer
   counts against an event's budget; a setup that fails is recorded and leaves no half-made engine, so the next
   call tries again (#869).
+- Where the QuickJS library of KiteJS cannot load, a PDF's or a book's first script is a recorded failure, where
+  the `UnsatisfiedLinkError` or `NoClassDefFoundError` left the runner and could end the app (#830).
 
 ## [0.13.0] - 2026-10-09
 

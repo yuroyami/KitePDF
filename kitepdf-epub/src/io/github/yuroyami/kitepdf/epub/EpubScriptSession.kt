@@ -416,7 +416,10 @@ public class EpubScriptSession(
         /** Null when it would not open, so nothing runs here. */
         private val opened: KiteScriptEngine? = try {
             engineFor(chapter)
-        } catch (failure: Exception) {
+        } catch (failure: Throwable) {
+            // A QuickJS library that does not load throws an Error, UnsatisfiedLinkError or
+            // NoClassDefFoundError, which is a script failure like any other, never the app's end (#830).
+            if (failure is kotlinx.coroutines.CancellationException) throw failure
             recordFailure(KiteScriptException("$label: the engine did not open: ${failure.message}", failure))
             null
         }
