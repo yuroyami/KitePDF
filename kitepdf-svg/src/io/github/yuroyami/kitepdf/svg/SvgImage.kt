@@ -451,10 +451,21 @@ public class SvgImage private constructor(
         val w = cssW ?: cssH?.let { if (ih > 0.0) it * iw / ih else iw } ?: iw
         val h = cssH ?: cssW?.let { if (iw > 0.0) it * ih / iw else ih } ?: ih
         if (w <= 0.0 || h <= 0.0 || !w.isFinite() || !h.isFinite()) return
-        // The image's unit square has row 0 at v=1, and SVG's y grows down, so
+        // The picture's intrinsic size is its viewBox, which preserveAspectRatio fits into the box:
+        // xMidYMid meet by default, none stretches, slice covers and clips (SVG 1.1, 5.7 and 7.8;
+        // SVG 2, 12.2; #710). The image's unit square has row 0 at v=1, and SVG's y grows down, so
         // the placement matrix flips y the way a y-down page does.
-        val placed = compose(ctm, KiteMatrix(w, 0.0, 0.0, -h, num(el, "x", paint), num(el, "y", paint) + h))
-        canvas.drawImage(image, placed, paint.opacity)
+        val origin = compose(ctm, KiteMatrix.translation(num(el, "x", paint), num(el, "y", paint)))
+        val par = el.attrs["preserveAspectRatio"] ?: el.attrs["preserveaspectratio"]
+        if (iw <= 0.0 || ih <= 0.0) return
+        val fit = viewBoxFit(doubleArrayOf(0.0, 0.0, iw, ih), w, h, par)
+        val placed = compose(origin, compose(fit.matrix, KiteMatrix(iw, 0.0, 0.0, -ih, 0.0, ih)))
+        if (fit.slice) canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, w, h) }.build(), origin, evenOdd = false)
+        try {
+            canvas.drawImage(image, placed, paint.opacity)
+        } finally {
+            if (fit.slice) canvas.popClip()
+        }
     }
 
     /**

@@ -463,6 +463,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An SVG `<clipPath>` applies its own `transform`, and is the union of its children, each under its own `clip-
   rule`: an even-odd child keeps its hole, and two children wound in opposite directions no longer cancel where
   they overlap (#727, #731).
+- An SVG `<image>` of a raster picture fits its box by `preserveAspectRatio`, `xMidYMid meet` by default, where
+  it always stretched the picture to the box, so photos and covers in SVG drew distorted (#710).
 
 ## [0.13.0] - 2026-10-09
 

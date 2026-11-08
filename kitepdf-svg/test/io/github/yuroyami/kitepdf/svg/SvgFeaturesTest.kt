@@ -120,12 +120,28 @@ class SvgFeaturesTest {
     @Test
     fun image_percentage_coordinates_and_dimensions_use_their_axis() {
         val image = calls(
-            """<svg width="200" height="100"><image href="pic.bmp" x="10%" y="20%" width="50%" height="40%"/></svg>""",
+            """<svg width="200" height="100"><image href="pic.bmp" x="10%" y="20%" width="50%" height="40%" preserveAspectRatio="none"/></svg>""",
         ) { bmp2x1() }.filterIsInstance<RecordingCanvas.Call.Image>().single()
         assertEquals(100.0, image.ctm.a, 1e-9)
         assertEquals(-40.0, image.ctm.d, 1e-9)
         assertEquals(20.0, image.ctm.e, 1e-9)
         assertEquals(60.0, image.ctm.f, 1e-9)
+    }
+
+    @Test
+    fun an_image_fits_its_box_by_preserve_aspect_ratio() {
+        // SVG 2, 12.2: the picture's intrinsic size is its viewBox; a 2 by 1 picture in a 100 by 100 box (#710).
+        fun drawn(par: String) = calls("<svg width='100' height='100'><image href='pic.bmp' width='100' height='100' $par/></svg>") { bmp2x1() }
+        val meet = drawn("").filterIsInstance<RecordingCanvas.Call.Image>().single()
+        assertEquals(listOf(100.0, -50.0, 0.0, 75.0), listOf(meet.ctm.a, meet.ctm.d, meet.ctm.e, meet.ctm.f), "100 by 50 at y = 25")
+        val none = drawn("preserveAspectRatio='none'").filterIsInstance<RecordingCanvas.Call.Image>().single()
+        assertEquals(listOf(100.0, -100.0, 0.0, 100.0), listOf(none.ctm.a, none.ctm.d, none.ctm.e, none.ctm.f))
+        val sliced = drawn("preserveAspectRatio='xMidYMid slice'")
+        val slice = sliced.filterIsInstance<RecordingCanvas.Call.Image>().single()
+        assertEquals(listOf(200.0, -100.0, -50.0, 100.0), listOf(slice.ctm.a, slice.ctm.d, slice.ctm.e, slice.ctm.f), "200 by 100 at x = -50")
+        assertTrue(sliced.any { it is RecordingCanvas.Call.PushClip }, "slice clips to the box")
+        val top = drawn("preserveAspectRatio='xMinYMin meet'").filterIsInstance<RecordingCanvas.Call.Image>().single()
+        assertEquals(50.0, top.ctm.f, 1e-9, "at the top")
     }
 
     @Test
