@@ -192,20 +192,17 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         val text = glyphs.joinToString("") { it.text }
         if (text.isBlank()) return
 
-        // Decompose the (text-space → device) matrix like the Compose/AWT path:
-        // translation + rotation + *positive* scale magnitudes, so the device
-        // Y-flip baked into the matrix doesn't render the glyphs mirrored.
-        val sx = kotlin.math.sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
+        // The face draws at the device size of the em, sy, and the rest of the whole text matrix,
+        // shear and reflection included, maps its y-down space onto the y-up text space: a
+        // decomposition into a rotation and two lengths drew a slanted run upright and a mirrored
+        // one unmirrored (ISO 32000-1, 9.4.4; #848), as the Compose canvas no longer does (#416).
         val sy = kotlin.math.sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
         if (sy == 0.0) return
-        val rotation = kotlin.math.atan2(textMatrix.b, textMatrix.a)
         val renderedSize = (fontSize * sy).coerceAtLeast(0.01)
 
         ctx.save()
         try {
-            ctx.translate(textMatrix.e, textMatrix.f)
-            if (rotation != 0.0) ctx.rotate(rotation)
-            if (sx != sy) ctx.scale(sx / sy, 1.0)
+            ctx.transform(textMatrix.a / sy, textMatrix.b / sy, -textMatrix.c / sy, -textMatrix.d / sy, textMatrix.e, textMatrix.f)
             ctx.fillStyle = color.toCssRgba(alpha)
             ctx.font = systemFontFor(fontSpec, renderedSize)
             // Position each glyph by the PDF's OWN advance widths (1/1000 em),

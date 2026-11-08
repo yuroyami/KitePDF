@@ -826,6 +826,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A run in an embedded font whose glyphs have no outlines now draws nothing on every canvas. The AWT, Android,
   CoreGraphics and Canvas2D canvases drew it in a host font, which hid fonts KitePDF could not read from the
   differential sweep (#853).
+- Host-font text keeps the shear and the reflection of its text matrix on the AWT, Skia, Android and Canvas2D
+  canvases, as on Compose: a slanted Verdana run slants, and a mirrored one mirrors (#848).
 
 ## [0.13.0] - 2026-10-09
 

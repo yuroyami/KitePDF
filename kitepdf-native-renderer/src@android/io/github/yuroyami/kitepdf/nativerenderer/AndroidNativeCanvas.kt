@@ -200,21 +200,28 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         val text = glyphs.joinToString("") { it.text }
         if (text.isBlank()) return
 
-        // Decompose the (text-space → device) matrix like the Compose path:
-        // translation + rotation + *positive* scale magnitudes, so the device
-        // Y-flip baked into the matrix doesn't render the glyphs mirrored.
-        val sx = kotlin.math.sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
+        // The face draws at the device size of the em, sy, and the rest of the whole text matrix,
+        // shear and reflection included, maps its y-down space onto the y-up text space: a
+        // decomposition into a rotation and two lengths drew a slanted run upright and a mirrored
+        // one unmirrored (ISO 32000-1, 9.4.4; #848), as the Compose canvas no longer does (#416).
         val sy = kotlin.math.sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
         if (sy == 0.0) return
-        val rotation = kotlin.math.atan2(textMatrix.b, textMatrix.a)
         val renderedSize = (fontSize * sy).coerceAtLeast(0.01)
 
         canvas.save()
         openLayers++
         try {
-            canvas.translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
-            if (rotation != 0.0) canvas.rotate(Math.toDegrees(rotation).toFloat())
-            if (sx != sy) canvas.scale((sx / sy).toFloat(), 1f)
+            canvas.concat(
+                android.graphics.Matrix().apply {
+                    setValues(
+                        floatArrayOf(
+                            (textMatrix.a / sy).toFloat(), (-textMatrix.c / sy).toFloat(), textMatrix.e.toFloat(),
+                            (textMatrix.b / sy).toFloat(), (-textMatrix.d / sy).toFloat(), textMatrix.f.toFloat(),
+                            0f, 0f, 1f,
+                        ),
+                    )
+                },
+            )
             val paint = Paint().apply {
                 isAntiAlias = true
                 style = Paint.Style.FILL

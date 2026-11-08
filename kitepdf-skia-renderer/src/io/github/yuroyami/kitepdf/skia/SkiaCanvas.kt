@@ -314,11 +314,9 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         textMatrix: KiteMatrix, color: RgbColor, alpha: Double, blendMode: KiteBlendMode,
     ) {
         if (glyphs.all { it.text.isEmpty() }) return
-        val sx = kotlin.math.sqrt(textMatrix.a * textMatrix.a + textMatrix.b * textMatrix.b)
         val sy = kotlin.math.sqrt(textMatrix.c * textMatrix.c + textMatrix.d * textMatrix.d)
         val renderedSize = (fontSize * sy).toFloat()
         if (renderedSize <= 0f) return
-        val rotationDeg = (kotlin.math.atan2(textMatrix.b, textMatrix.a) * 180.0 / kotlin.math.PI).toFloat()
 
         val argb = color.toArgb(alpha)
         val paint = Paint().owned().apply {
@@ -334,9 +332,15 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         val advanceScale = renderedSize / 1000.0
         canvas.save()
         try {
-            canvas.translate(textMatrix.e.toFloat(), textMatrix.f.toFloat())
-            if (rotationDeg != 0f) canvas.rotate(rotationDeg)
-            if (sx != sy && sy != 0.0) canvas.scale((sx / sy).toFloat(), 1f)
+            // The face draws at the device size of the em, and the rest of the whole text matrix, shear and
+            // reflection included, maps its y-down space onto the y-up text space (ISO 32000-1, 9.4.4; #848).
+            canvas.concat(
+                org.jetbrains.skia.Matrix33(
+                    (textMatrix.a / sy).toFloat(), (-textMatrix.c / sy).toFloat(), textMatrix.e.toFloat(),
+                    (textMatrix.b / sy).toFloat(), (-textMatrix.d / sy).toFloat(), textMatrix.f.toFloat(),
+                    0f, 0f, 1f,
+                ),
+            )
             // renderedSize already carries sy, so the text-space adjustment needs it too.
             for (part in hostTextParts(glyphs, advanceScale, sy)) {
                 if (part.shaped) {
