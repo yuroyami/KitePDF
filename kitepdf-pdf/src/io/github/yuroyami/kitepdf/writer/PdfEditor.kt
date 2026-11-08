@@ -338,36 +338,55 @@ public class PdfEditor internal constructor(
         }
         val fieldRef = field.fieldReference
             ?: throw IllegalArgumentException("Field '${field.fullyQualifiedName}' has no indirect reference")
-        val rect = field.rect
-            ?: throw IllegalArgumentException("Field '${field.fullyQualifiedName}' has no widget /Rect for an appearance")
+        val widgets = buttonWidgets(field)
+        require(widgets.any { rectOf(it.second) != null }) {
+            "Field '${field.fullyQualifiedName}' has no widget /Rect for an appearance"
+        }
 
         val da = FieldAppearance.parseDA(field.defaultAppearance)
         // A password field draws asterisks, never its value (ISO 32000-1, 12.7.4.3, Table 228, #954).
         val shown = if ((field.flags and FieldAppearance.PASSWORD) != 0) FieldAppearance.masked(value) else value
         val (fontRef, metrics) = appearanceFont(da)
-        val ap = FieldAppearance.build(shown, abs(rect.width), abs(rect.height), da, fontRef, field.isMultiline, field.quadding, metrics)
-        val apDict = PdfDictionary(linkedMapOf("N" to (addObject(ap) as PdfObject)))
-        val vStr = PdfString(PdfText.encodeTextString(value))
+        val entries = LinkedHashMap<String, PdfObject>()
+        entries["V"] = PdfString(PdfText.encodeTextString(value))
         // A rich text field keeps its rich value in step with the plain one, so a reader that
         // shows the rich value shows the new text too (ISO 32000-1, 12.7.3.4, #204).
-        val rv = if (field.isRichText) PdfString(PdfText.encodeTextString(richBodyOf(value))) else null
-
-        val widgetRef = field.widgetReference ?: fieldRef
-        if (widgetRef == fieldRef) {
-            // Merged field+widget: one object carries both /V and /AP.
-            val d = LinkedHashMap(field.fieldDict.map)
-            d["V"] = vStr
-            rv?.let { d["RV"] = it }
-            d["AP"] = apDict
-            updateObject(fieldRef, PdfDictionary(d))
-        } else {
-            val fieldEntries = LinkedHashMap(field.fieldDict.map)
-            fieldEntries["V"] = vStr
-            rv?.let { fieldEntries["RV"] = it }
-            updateObject(fieldRef, PdfDictionary(fieldEntries))
-            updateObject(widgetRef, withEntry(field.widgetDict, "AP", apDict))
+        if (field.isRichText) entries["RV"] = PdfString(PdfText.encodeTextString(richBodyOf(value)))
+        writeFieldValue(field, fieldRef, widgets, entries) { w, h ->
+            FieldAppearance.build(shown, w, h, da, fontRef, field.isMultiline, field.quadding, metrics)
         }
         clearNeedAppearances()
+    }
+
+    /**
+     * Stores [entries] on the field and gives each of [widgets] an appearance [draw]s for its own
+     * `/Rect`. ISO 32000-1, 12.7.3.1: a field shown in several places has a widget for each place,
+     * and all of them show its value, so the editor redraws every one before it clears
+     * `/NeedAppearances` (#702). A merged field and widget takes both in one dictionary.
+     */
+    private fun writeFieldValue(
+        field: PdfFormField,
+        fieldRef: PdfReference,
+        widgets: List<Pair<PdfReference, PdfDictionary>>,
+        entries: Map<String, PdfObject>,
+        draw: (width: Double, height: Double) -> PdfStream,
+    ) {
+        var merged = false
+        for ((ref, widget) in widgets) {
+            val ap = rectOf(widget)?.let { r ->
+                PdfDictionary(linkedMapOf("N" to (addObject(draw(abs(r[2] - r[0]), abs(r[3] - r[1]))) as PdfObject)))
+            }
+            if (ref == fieldRef) {
+                val d = LinkedHashMap(field.fieldDict.map)
+                d.putAll(entries)
+                if (ap != null) d["AP"] = ap
+                updateObject(fieldRef, PdfDictionary(d))
+                merged = true
+            } else if (ap != null) {
+                updateObject(ref, withEntry(widget, "AP", ap))
+            }
+        }
+        if (!merged) updateObject(fieldRef, PdfDictionary(LinkedHashMap(field.fieldDict.map).apply { putAll(entries) }))
     }
 
     /** [value] as the XHTML body of a rich text value, one paragraph a line, with no style of its own. */
@@ -470,32 +489,17 @@ public class PdfEditor internal constructor(
         }
         val fieldRef = field.fieldReference
             ?: throw IllegalArgumentException("Field '${field.fullyQualifiedName}' has no indirect reference")
-        val vStr = PdfString(PdfText.encodeTextString(value))
-
-        // Build the appearance (same path as a text field shows its value).
-        val apDict = field.rect?.let { rect ->
-            val da = FieldAppearance.parseDA(field.defaultAppearance)
-            val (fontRef, metrics) = appearanceFont(da)
-            val ap = FieldAppearance.build(value, abs(rect.width), abs(rect.height), da, fontRef, metrics = metrics)
-            PdfDictionary(linkedMapOf("N" to (addObject(ap) as PdfObject)))
-        }
-
+        val entries = LinkedHashMap<String, PdfObject>()
+        entries["V"] = PdfString(PdfText.encodeTextString(value))
         // /I selected-index, when the value is one of /Opt.
         val selectedIndex = optionIndex(field, value)
+        if (selectedIndex >= 0) entries["I"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
 
-        val widgetRef = field.widgetReference ?: fieldRef
-        if (widgetRef == fieldRef) {
-            val d = LinkedHashMap(field.fieldDict.map)
-            d["V"] = vStr
-            if (selectedIndex >= 0) d["I"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
-            if (apDict != null) d["AP"] = apDict
-            updateObject(fieldRef, PdfDictionary(d))
-        } else {
-            val fd = LinkedHashMap(field.fieldDict.map)
-            fd["V"] = vStr
-            if (selectedIndex >= 0) fd["I"] = io.github.yuroyami.kitepdf.core.parser.PdfArray(listOf(PdfInt(selectedIndex.toLong())))
-            updateObject(fieldRef, PdfDictionary(fd))
-            if (apDict != null) updateObject(widgetRef, withEntry(field.widgetDict, "AP", apDict))
+        // Build the appearance of each widget (same path as a text field shows its value).
+        val da = FieldAppearance.parseDA(field.defaultAppearance)
+        val (fontRef, metrics) = appearanceFont(da)
+        writeFieldValue(field, fieldRef, buttonWidgets(field), entries) { w, h ->
+            FieldAppearance.build(value, w, h, da, fontRef, metrics = metrics)
         }
         clearNeedAppearances()
     }
