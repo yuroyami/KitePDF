@@ -777,6 +777,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   face its fill draws in, so a fill-and-stroke run or SVG text with a stroke lines up with its fill (#891).
 - The bytecode cache that the script engines of a process share no longer keeps a script larger than its whole 64
   MiB budget, which stayed in memory after its document closed and evicted every other entry (#896).
+- On Apple platforms a soft mask in force at the `Do` of a transparency group applies once, to what the group
+  composites, instead of to each of its paints, so two overlapping opaque shapes under a half mask show half
+  their colour where they overlap too (#897).
 
 ## [0.13.0] - 2026-10-09
 

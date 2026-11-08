@@ -755,7 +755,10 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         alpha: Double, blendMode: KiteBlendMode,
     ) {
         // A group nested in a knockout group gets a layer, so its own paints do not knock each other out.
-        val layered = isolated || knockout || knockingOut || alpha < 1.0 || blendMode != KiteBlendMode.Normal
+        // A group straight under a soft mask gets one too: the mask applies once, to what the group
+        // composites, not to each of its paints (ISO 32000-1, 11.6.6; #897).
+        val masked = groups.lastOrNull()?.masked == true
+        val layered = isolated || knockout || knockingOut || masked || alpha < 1.0 || blendMode != KiteBlendMode.Normal
         groups.addLast(Group(layered, knockout))
         if (!layered) return
         CGContextSaveGState(ctx)
@@ -766,8 +769,12 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         layers++
     }
 
-    /** An open group: whether it opened a layer, and whether its paints knock out. */
-    private class Group(val layered: Boolean, val knockout: Boolean)
+    /**
+     * An open group: whether it opened a layer, and whether its paints knock out. [masked] marks
+     * the entry of a soft mask's content, which a single paint keeps as a clip, so that it keeps
+     * its blend mode against the page (#79), and a group inside paints into a layer (#897).
+     */
+    private class Group(val layered: Boolean, val knockout: Boolean, val masked: Boolean = false)
 
     private val groups = ArrayDeque<Group>()
 
@@ -1031,7 +1038,7 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         }
         CGContextSaveGState(ctx)
         // The content composites as usual, also inside a knockout group.
-        groups.addLast(Group(layered = false, knockout = false))
+        groups.addLast(Group(layered = false, knockout = false, masked = true))
         try {
             // Clip in device pixels, then return to the user space the content paints in.
             CGContextConcatCTM(ctx, CGAffineTransformInvert(toDevice))

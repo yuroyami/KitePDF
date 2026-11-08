@@ -36,22 +36,23 @@ class CoreGraphicsSoftMaskTest {
     /**
      * A page that fills a red square under a soft mask of [kind], whose group draws
      * [mask] with the resources in [maskResources]. The mask dictionary also holds
-     * [entries], and the group has the box [bbox] and the colour space [space].
+     * [entries], and the group has the box [bbox] and the colour space [space]. The page draws
+     * [content] with [pageResources] besides /GS1, and [extra] objects follow from 7.
      */
     private fun pdf(
         kind: String, mask: String, maskResources: String = "",
         entries: String = "", bbox: String = "0 0 $side $side", space: String = "DeviceRGB",
+        content: String = "q /GS1 gs 1 0 0 rg 20 20 160 160 re f Q", pageResources: String = "", extra: List<String> = emptyList(),
     ): ByteArray {
-        val content = "q /GS1 gs 1 0 0 rg 20 20 160 160 re f Q"
         val objects = listOf(
             "<< /Type /Catalog /Pages 2 0 R >>",
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 $side $side] /Resources << /ExtGState << /GS1 5 0 R >> >> /Contents 4 0 R >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 $side $side] /Resources << /ExtGState << /GS1 5 0 R >> $pageResources >> /Contents 4 0 R >>",
             "<< /Length ${content.length} >>\nstream\n$content\nendstream",
             "<< /Type /ExtGState /SMask << /S /$kind /G 6 0 R $entries >> >>",
             "<< /Type /XObject /Subtype /Form /BBox [$bbox] /Group << /S /Transparency /CS /$space >> " +
                 "$maskResources /Length ${mask.length} >>\nstream\n$mask\nendstream",
-        )
+        ) + extra
         var out = "%PDF-1.7\n"
         val offsets = ArrayList<Int>()
         objects.forEachIndexed { i, body ->
@@ -97,6 +98,25 @@ class CoreGraphicsSoftMaskTest {
         pixels.assertPixel(60, 100, listOf(255, 0, 0))
         pixels.assertPixel(140, 100, listOf(255, 255, 255))
         pixels.assertPixel(10, 10, listOf(255, 255, 255))
+    }
+
+    @Test
+    fun a_soft_mask_applies_once_to_a_group_and_not_to_each_of_its_paints() {
+        // ISO 32000-1, 11.6.6: under a half mask two overlapping opaque squares of one group show
+        // half red where they overlap too, as AWT, the raster canvas and pdftoppm draw it (#897).
+        val squares = "1 0 0 rg 20 20 100 100 re f 80 80 100 100 re f"
+        val pixels = render(
+            pdf(
+                "Alpha", "/A gs 0 g 0 0 200 200 re f", "/Resources << /ExtGState << /A << /ca 0.5 >> >> >>",
+                content = "1 g 0 0 200 200 re f /GS1 gs /Fm1 Do", pageResources = "/XObject << /Fm1 7 0 R >>",
+                extra = listOf(
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 200 200] /Group << /S /Transparency >> " +
+                        "/Length ${squares.length} >>\nstream\n$squares\nendstream",
+                ),
+            ),
+        )
+        pixels.assertPixel(40, 40, listOf(255, 128, 128))
+        pixels.assertPixel(100, 100, listOf(255, 128, 128))
     }
 
     @Test
