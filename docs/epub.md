@@ -137,7 +137,7 @@ The reader stays on the same paragraph, and KitePDF lays out only that chapter b
 
 Use `knownPageCount` with `isComplete` for a running total, and `pageCountIn(chapter)` for one chapter.
 
-The layout of any chapter also reads the first reflowable chapter. The writing mode (horizontal or vertical) is one decision for each book, and KitePDF takes it from that chapter. That is one more chapter, never the whole book. The hyphenation language comes from each spine item's own `xml:lang` or `lang`, and else from the language of the book.
+Laying out one chapter reads no other. Each chapter's writing mode (horizontal or vertical) comes from its own root element or body, as CSS Writing Modes 3, 8 asks. The hyphenation language comes from each spine item's own `xml:lang` or `lang`, and else from the language of the book.
 
 ### Where embedded fonts come from
 

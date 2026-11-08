@@ -36,10 +36,10 @@ class VerticalWritingTest {
 
     @Test
     fun vertical_rl_gates_on_the_spine_root() {
-        assertTrue(open("<p>縦</p>").isVertical, "vertical-rl root resolves vertical")
+        assertTrue(open("<p>縦</p>").pages[0].isVertical, "vertical-rl root resolves vertical")
         val horizontal = EpubDocument.open(EpubFixtures.epub("<p>横</p>"), settings)
         assertNotNull(horizontal)
-        assertFalse(horizontal.isVertical, "no writing-mode stays horizontal")
+        assertFalse(horizontal.pages[0].isVertical, "no writing-mode stays horizontal")
     }
 
     @Test
@@ -173,8 +173,8 @@ class VerticalWritingTest {
     @Test
     fun vertical_lr_also_lays_out_vertically() {
         val doc = openLr("<p>\u7E26\u66F8\u304D</p>")
-        assertTrue(doc.isVertical, "vertical-lr is a vertical mode")
-        assertTrue(doc.isVerticalLr, "and it is the left-to-right one")
+        assertTrue(doc.pages[0].isVertical, "vertical-lr is a vertical mode")
+        assertTrue(doc.pages[0].isVerticalLr, "and it is the left-to-right one")
         val calls = glyphCalls(doc).filter { it.text.isNotBlank() }
         assertEquals(3, calls.size, "one upright call per full-width glyph")
     }

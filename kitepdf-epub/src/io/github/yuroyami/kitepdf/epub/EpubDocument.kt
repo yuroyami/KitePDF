@@ -744,16 +744,6 @@ public class EpubDocument internal constructor(
         BlockBox(ComputedStyle.initial(settings.fontSize, direction = directionFor(chapter)), listOf(docRoot))
 
     /**
-     * The writing mode of the first reflowable chapter, if it is a vertical one. Each chapter
-     * lays out in its own mode, which [verticalModeOf] reads from its box tree (#507).
-     * Fixed-layout chapters stay on the pre-paginated path regardless.
-     */
-    internal val verticalMode: io.github.yuroyami.kitepdf.epub.css.WritingMode? by lazy {
-        val first = parsed.spineIndices.firstOrNull { !parsed.isFixed(it) } ?: return@lazy null
-        verticalModeOf(buildDocRoot(first))
-    }
-
-    /**
      * The writing mode a chapter's root resolves, if it is a vertical one: `vertical-rl` is
      * Japanese tategaki, columns running right to left, and `vertical-lr` runs its columns the
      * other way. A document's principal writing mode is its own, from its root element or, in
@@ -779,12 +769,6 @@ public class EpubDocument internal constructor(
         }
         return null
     }
-
-    internal val isVertical: Boolean get() = verticalMode != null
-
-    /** True for `vertical-lr`: vertical text whose columns advance left to right. */
-    internal val isVerticalLr: Boolean
-        get() = verticalMode == io.github.yuroyami.kitepdf.epub.css.WritingMode.VERTICAL_LR
 
     private fun fixedSpine(chapter: Int): FixedSpine? {
         if (!parsed.isFixed(chapter)) return null
@@ -1941,6 +1925,10 @@ public class EpubPage internal constructor(
     /** The laid-out page, fetched per operation: holding it would defeat the budget. */
     private fun laidOut(): PageRender = frame?.let { doc.frameRender(chapter, it.path, pageWidth, pageHeight) ?: EMPTY_FRAME }
         ?: doc.render(chapter, index)
+
+    /** Whether this page's chapter lays out in a vertical writing mode, and whether its columns run left to right (#863). */
+    internal val isVertical: Boolean get() = laidOut().vertical
+    internal val isVerticalLr: Boolean get() = laidOut().verticalLr
 
     /** The content box of the frame showing [path] on this page, in points, or null when the page has none (#528). */
     internal fun frameSize(path: String): Pair<Double, Double>? = frameSizeIn(laidOut(), path)
