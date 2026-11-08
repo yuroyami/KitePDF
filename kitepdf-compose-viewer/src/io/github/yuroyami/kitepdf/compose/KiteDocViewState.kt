@@ -44,6 +44,8 @@ import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteTextRange
+import io.github.yuroyami.kitepdf.core.KiteTextRangeHits
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.kiteWarn
@@ -498,8 +500,47 @@ public class KiteDocViewState(
     /** Marks resolved to published slots, in host order, shared by painting and taps. */
     internal val highlightsByPage: Map<Int, List<KiteHighlight>> by androidx.compose.runtime.derivedStateOf {
         val groups = LinkedHashMap<Int, MutableList<KiteHighlight>>()
-        for (highlight in highlights) slotOf(highlight.hit)?.let { groups.getOrPut(it) { ArrayList() }.add(highlight) }
+        for (highlight in highlights) {
+            val range = highlight.range
+            if (range == null) {
+                slotOf(highlight.hit)?.let { groups.getOrPut(it) { ArrayList() }.add(highlight) }
+                continue
+            }
+            // A range paints on every page its words reach, once their chapters are laid out (#944).
+            for (hit in rangeHits(range)?.hits.orEmpty()) {
+                slotOf(hit)?.let { groups.getOrPut(it) { ArrayList() }.add(highlight.copy(hit = hit)) }
+            }
+        }
         groups
+    }
+
+    /** Where each range of [highlights] is in this document's layout, found once a range (#944). */
+    private val rangeHitsCache = HashMap<KiteTextRange, KiteTextRangeHits?>()
+
+    /**
+     * [range] in this layout, or null while a chapter it touches is not laid out yet, and for a
+     * range whose text is not in the book. The layout of a document never changes, so a range
+     * found once stays found.
+     */
+    private fun rangeHits(range: KiteTextRange): KiteTextRangeHits? {
+        rangeHitsCache[range]?.let { return it }
+        if (rangeHitsCache.containsKey(range)) return null
+        val chapters = range.start.chapter..range.end.chapter
+        // Reading the strip makes the marks wait for a chapter landing in it.
+        if (items.isEmpty() || chapters.any { it !in 0 until document.chapterCount || !document.isChapterReady(it) }) return null
+        val hits = document.locate(range)
+        rangeHitsCache[range] = hits
+        return hits
+    }
+
+    /**
+     * [selection] as a range of the book's text that survives a reflow, which a [KiteHighlight]
+     * built from it keeps on its words (#944). Null on a fixed-layout document, whose quads do not
+     * move, and for a selection of no text of the book.
+     */
+    public fun textRangeOf(selection: KiteTextSelection): KiteTextRange? {
+        val location = selection.location ?: locationOf(selection.pageIndex) ?: return null
+        return document.textRangeOf(location, selection.start, selection.end)
     }
 
     /**
@@ -2777,7 +2818,40 @@ public data class KiteHighlight(
     val edgeMarkerSide: KiteMarkerSide = KiteMarkerSide.End,
     /** Stable host identity, returned intact by [KiteDocViewState.highlightAt]. */
     val id: String? = null,
+    /**
+     * The words of a reflowable book this highlight covers (#944). When set, the viewer finds
+     * them in the current layout with [io.github.yuroyami.kitepdf.core.KiteDocument.locate] and
+     * paints their quads on each page they reach, so the highlight follows its words through a
+     * change of font, page size or margins; [hit] is then only a placeholder. A range whose text
+     * is no longer in the book paints nothing.
+     */
+    val range: KiteTextRange? = null,
 ) {
+    /** A highlight of [hit], with the original signature for existing callers. */
+    public constructor(
+        hit: KiteSearchHit, color: Color?, edgeMarker: Boolean, edgeMarkerColor: Color?, edgeMarkerSide: KiteMarkerSide, id: String?,
+    ) : this(hit, color, edgeMarker, edgeMarkerColor, edgeMarkerSide, id, null)
+
+    /** A highlight of the words of [range], wherever the current layout puts them (#944). */
+    public constructor(
+        range: KiteTextRange,
+        color: Color? = null,
+        edgeMarker: Boolean = false,
+        edgeMarkerColor: Color? = null,
+        edgeMarkerSide: KiteMarkerSide = KiteMarkerSide.End,
+        id: String? = null,
+    ) : this(KiteSearchHit(-1, emptyList(), range.text), color, edgeMarker, edgeMarkerColor, edgeMarkerSide, id, range)
+
+    /** Keeps the original copy signature and preserves this highlight's range. */
+    public fun copy(
+        hit: KiteSearchHit = this.hit,
+        color: Color? = this.color,
+        edgeMarker: Boolean = this.edgeMarker,
+        edgeMarkerColor: Color? = this.edgeMarkerColor,
+        edgeMarkerSide: KiteMarkerSide = this.edgeMarkerSide,
+        id: String? = this.id,
+    ): KiteHighlight = KiteHighlight(hit, color, edgeMarker, edgeMarkerColor, edgeMarkerSide, id, range)
+
     /** The page of [hit], in its current layout, when the producer supplied it. */
     public val location: KiteLocation? get() = hit.location
 }

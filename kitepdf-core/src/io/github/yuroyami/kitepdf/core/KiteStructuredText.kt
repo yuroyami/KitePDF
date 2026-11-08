@@ -282,6 +282,35 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
     }
 
     /**
+     * Where the flattened char [index] is in its chapter's text ([KiteTextLine.sourceOffsets]),
+     * or -1 for a char the layout added, an index with no char, or a fixed page (#944).
+     */
+    public fun sourceOffsetAt(index: Int): Int {
+        val ref = flatChars.getOrNull(index) ?: return -1
+        return blocks[ref.block].lines[ref.line].sourceOffsets?.get(ref.char) ?: -1
+    }
+
+    /**
+     * The flattened chars whose chapter offsets lie in [from] until [until], as inclusive index
+     * ranges in reading order, one for each stretch of them (#944). A char the layout added
+     * between two such chars, such as a space it restored, joins them. Empty on a fixed page.
+     */
+    public fun charRangesOfSource(from: Int, until: Int): List<IntRange> {
+        val out = ArrayList<IntRange>()
+        var start = -1
+        var last = -1
+        for (i in flatChars.indices) {
+            val o = sourceOffsetAt(i)
+            when {
+                o in from until until -> { if (start < 0) start = i; last = i }
+                o >= 0 && start >= 0 -> { out += start..last; start = -1 }
+            }
+        }
+        if (start >= 0) out += start..last
+        return out
+    }
+
+    /**
      * Display-space quads (one per line touched) for the inclusive flattened
      * range. Search hits use the same walker.
      */
@@ -374,10 +403,24 @@ public class KiteTextLine(
     public val vertical: Boolean = false,
     /** How the line ends, for [KiteStructuredText.copyText]. A reflowable page sets it; a fixed page keeps [KiteLineEnd.HARD]. */
     public val end: KiteLineEnd = KiteLineEnd.HARD,
+    /**
+     * On a page of a reflowable book, where each char of [text] is in its chapter's text, as
+     * [KiteBookmark.Flow.charOffset] counts: one entry per char, -1 for a char the layout added,
+     * such as the hyphen of a break. Null on a fixed page. A reflow moves a char to another line
+     * but keeps its offset, which is what a [KiteTextRange] holds (#944).
+     */
+    public val sourceOffsets: IntArray? = null,
 ) {
+    /** The line without [sourceOffsets], with its original signature for existing callers. */
+    public constructor(text: String, bounds: KiteRectangle, charEdges: DoubleArray, vertical: Boolean, end: KiteLineEnd) :
+        this(text, bounds, charEdges, vertical, end, null)
+
     init {
         require(charEdges.size == text.length + 1) {
             "charEdges must have text.length + 1 entries (got ${charEdges.size} for ${text.length} chars)"
+        }
+        require(sourceOffsets == null || sourceOffsets.size == text.length) {
+            "sourceOffsets must have text.length entries (got ${sourceOffsets?.size} for ${text.length} chars)"
         }
     }
 }

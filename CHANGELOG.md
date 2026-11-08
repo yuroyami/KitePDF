@@ -701,6 +701,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which now holds a whole cluster per glyph, and into an `/ActualText` where the map cannot give it back.
   `KiteShaper` in `kitepdf-epub` shapes a line in any font, and its glyphs and positions match `hb-shape` for
   Arabic and Devanagari.
+- Highlights that follow their words through a reflow (#944). `KiteTextRange` in `kitepdf-core` holds a stretch
+  of a reflowable book by its `KiteBookmark.Flow` offsets, with its quote and context. `encode` and `decode` save
+  it as one line of text. `KiteDocument.textRangeOf` builds a range from a selection or from two positions, and
+  `KiteDocument.locate(range)` gives its quads in the current layout, one hit for each page, across page breaks
+  and chapters. When the text changed, `locate` finds it again by its quote and context, or returns null instead
+  of moving to other words. `KiteHighlight(range)` and `KiteDocViewState.textRangeOf(selection)` use them in the
+  viewer. `KiteTextLine.sourceOffsets` gives the chapter offset of each character of a page of a book.
 
 ## [0.13.0] - 2026-10-09
 

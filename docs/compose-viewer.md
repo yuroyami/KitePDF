@@ -501,7 +501,30 @@ state.onSelectionChange = { selection ->
 A hit without a location reads its `pageIndex` as a page of the whole document, as a document search does. In an EPUB that is still laying out, such a hit paints only on the pages before the first chapter that is not laid out.
 
 !!! warning
-    A location and its quads stay correct while other chapters lay out, and when you open the same content with the same settings. After a change of font, viewport, margins or resources, they point at the wrong text. Calculate them again after such a change. A highlight holds page coordinates and no range of text, so it cannot follow its words through a reflow.
+    A location and its quads stay correct while other chapters lay out, and when you open the same content with the same settings. After a change of font, viewport, margins or resources, they point at the wrong text. In a reflowable book, save a text range instead, as the next section shows.
+
+### Highlights that follow a reflow
+
+A `KiteTextRange` holds a stretch of a book's text by the character offsets of `KiteBookmark.Flow`, with the selected text and a few characters on each side, as the W3C Web Annotation `TextQuoteSelector` keeps them. A change of font, page size or margins moves the words to other pages but not to other offsets:
+
+```kotlin
+state.onSelectionChange = { selection ->
+    val range = selection?.let(state::textRangeOf)
+    if (range != null) {
+        notes.save(range.encode())             // one line of text
+        state.highlights = listOf(KiteHighlight(range, color = Color.Yellow, id = "note-1"))
+    }
+}
+
+// Later, in another layout or another session:
+val range = KiteTextRange.decode(saved)!!
+state.highlights = listOf(KiteHighlight(range, id = "note-1"))
+```
+
+- A highlight built from a range paints on every page its words reach, across a page break and across chapters, once those chapters are laid out. Taps on it give the highlight back with `highlightAt`.
+- `document.locate(range)` gives the quads of the current layout as one `KiteSearchHit` for each page, without a viewer. `document.textRangeOf(start, end)` builds a range from two `KiteBookmark.Flow` positions.
+- When the book's text changed, by a script or in a new edition, so that the offsets no longer hold the range's text, `locate` looks for the text in the chapters the range names, and the context picks between copies of it. Its result is then `repaired`, and its `range` is where the text is now: save that one. When the text is gone, `locate` returns null and the highlight paints nothing, so it never lands on other words.
+- A PDF and the other fixed-layout formats keep page coordinates, which do not move: `textRangeOf` returns null for them.
 
 A slot is the place of a page in the viewer's strip of pages. While an EPUB lays out, a chapter that is not laid out yet fills one slot, so a slot and a page of the document can differ:
 

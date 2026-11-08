@@ -240,11 +240,14 @@ abstract interface io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.y
     open fun isChapterReady(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteDocument.isChapterReady|isChapterReady(kotlin.Int){}[0]
     open fun keepChapters(kotlin.collections/Set<kotlin/Int>) // io.github.yuroyami.kitepdf.core/KiteDocument.keepChapters|keepChapters(kotlin.collections.Set<kotlin.Int>){}[0]
     open fun locate(io.github.yuroyami.kitepdf.core/KiteBookmark): io.github.yuroyami.kitepdf.core/KiteLocation // io.github.yuroyami.kitepdf.core/KiteDocument.locate|locate(io.github.yuroyami.kitepdf.core.KiteBookmark){}[0]
+    open fun locate(io.github.yuroyami.kitepdf.core/KiteTextRange): io.github.yuroyami.kitepdf.core/KiteTextRangeHits? // io.github.yuroyami.kitepdf.core/KiteDocument.locate|locate(io.github.yuroyami.kitepdf.core.KiteTextRange){}[0]
     open fun locationOf(kotlin/Int): io.github.yuroyami.kitepdf.core/KiteLocation? // io.github.yuroyami.kitepdf.core/KiteDocument.locationOf|locationOf(kotlin.Int){}[0]
     open fun page(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.core/KitePage // io.github.yuroyami.kitepdf.core/KiteDocument.page|page(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     open fun pageCountIn(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteDocument.pageCountIn|pageCountIn(kotlin.Int){}[0]
     open fun pageIndexOf(io.github.yuroyami.kitepdf.core/KiteLocation): kotlin/Int? // io.github.yuroyami.kitepdf.core/KiteDocument.pageIndexOf|pageIndexOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     open fun prepareChapter(kotlin/Int) // io.github.yuroyami.kitepdf.core/KiteDocument.prepareChapter|prepareChapter(kotlin.Int){}[0]
+    open fun textRangeOf(io.github.yuroyami.kitepdf.core/KiteBookmark.Flow, io.github.yuroyami.kitepdf.core/KiteBookmark.Flow): io.github.yuroyami.kitepdf.core/KiteTextRange? // io.github.yuroyami.kitepdf.core/KiteDocument.textRangeOf|textRangeOf(io.github.yuroyami.kitepdf.core.KiteBookmark.Flow;io.github.yuroyami.kitepdf.core.KiteBookmark.Flow){}[0]
+    open fun textRangeOf(io.github.yuroyami.kitepdf.core/KiteLocation, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.core/KiteTextRange? // io.github.yuroyami.kitepdf.core/KiteDocument.textRangeOf|textRangeOf(io.github.yuroyami.kitepdf.core.KiteLocation;kotlin.Int;kotlin.Int){}[0]
     open fun topOf(io.github.yuroyami.kitepdf.core/KiteBookmark): kotlin/Double? // io.github.yuroyami.kitepdf.core/KiteDocument.topOf|topOf(io.github.yuroyami.kitepdf.core.KiteBookmark){}[0]
     open suspend fun prepareChapter(kotlin/Int, kotlin.coroutines/SuspendFunction0<kotlin/Unit>) // io.github.yuroyami.kitepdf.core/KiteDocument.prepareChapter|prepareChapter(kotlin.Int;kotlin.coroutines.SuspendFunction0<kotlin.Unit>){}[0]
 }
@@ -2186,11 +2189,13 @@ final class io.github.yuroyami.kitepdf.core/KiteStructuredText { // io.github.yu
 
     final fun caretAt(kotlin/Int, kotlin/Boolean): io.github.yuroyami.kitepdf.core/KiteCaret? // io.github.yuroyami.kitepdf.core/KiteStructuredText.caretAt|caretAt(kotlin.Int;kotlin.Boolean){}[0]
     final fun charIndexAt(kotlin/Double, kotlin/Double): kotlin/Int? // io.github.yuroyami.kitepdf.core/KiteStructuredText.charIndexAt|charIndexAt(kotlin.Double;kotlin.Double){}[0]
+    final fun charRangesOfSource(kotlin/Int, kotlin/Int): kotlin.collections/List<kotlin.ranges/IntRange> // io.github.yuroyami.kitepdf.core/KiteStructuredText.charRangesOfSource|charRangesOfSource(kotlin.Int;kotlin.Int){}[0]
     final fun copyText(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.copyText|copyText(kotlin.Int;kotlin.Int){}[0]
     final fun quadsFor(kotlin/Int, kotlin/Int): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle> // io.github.yuroyami.kitepdf.core/KiteStructuredText.quadsFor|quadsFor(kotlin.Int;kotlin.Int){}[0]
     final fun search(kotlin/String, io.github.yuroyami.kitepdf.core/KiteSearchOptions, kotlin/Int = ..., io.github.yuroyami.kitepdf.core/KiteLocation? = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;io.github.yuroyami.kitepdf.core.KiteSearchOptions;kotlin.Int;io.github.yuroyami.kitepdf.core.KiteLocation?){}[0]
     final fun search(kotlin/String, kotlin/Boolean = ..., kotlin/Int = ...): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;kotlin.Boolean;kotlin.Int){}[0]
     final fun search(kotlin/String, kotlin/Boolean = ..., kotlin/Int = ..., io.github.yuroyami.kitepdf.core/KiteLocation?): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;kotlin.Boolean;kotlin.Int;io.github.yuroyami.kitepdf.core.KiteLocation?){}[0]
+    final fun sourceOffsetAt(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteStructuredText.sourceOffsetAt|sourceOffsetAt(kotlin.Int){}[0]
     final fun textRange(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.textRange|textRange(kotlin.Int;kotlin.Int){}[0]
 }
 
@@ -2202,7 +2207,8 @@ final class io.github.yuroyami.kitepdf.core/KiteTextBlock { // io.github.yuroyam
 }
 
 final class io.github.yuroyami.kitepdf.core/KiteTextLine { // io.github.yuroyami.kitepdf.core/KiteTextLine|null[0]
-    constructor <init>(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/DoubleArray, kotlin/Boolean = ..., io.github.yuroyami.kitepdf.core/KiteLineEnd = ...) // io.github.yuroyami.kitepdf.core/KiteTextLine.<init>|<init>(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.DoubleArray;kotlin.Boolean;io.github.yuroyami.kitepdf.core.KiteLineEnd){}[0]
+    constructor <init>(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/DoubleArray, kotlin/Boolean, io.github.yuroyami.kitepdf.core/KiteLineEnd) // io.github.yuroyami.kitepdf.core/KiteTextLine.<init>|<init>(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.DoubleArray;kotlin.Boolean;io.github.yuroyami.kitepdf.core.KiteLineEnd){}[0]
+    constructor <init>(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/DoubleArray, kotlin/Boolean = ..., io.github.yuroyami.kitepdf.core/KiteLineEnd = ..., kotlin/IntArray? = ...) // io.github.yuroyami.kitepdf.core/KiteTextLine.<init>|<init>(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.DoubleArray;kotlin.Boolean;io.github.yuroyami.kitepdf.core.KiteLineEnd;kotlin.IntArray?){}[0]
 
     final val bounds // io.github.yuroyami.kitepdf.core/KiteTextLine.bounds|{}bounds[0]
         final fun <get-bounds>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.core/KiteTextLine.bounds.<get-bounds>|<get-bounds>(){}[0]
@@ -2210,12 +2216,53 @@ final class io.github.yuroyami.kitepdf.core/KiteTextLine { // io.github.yuroyami
         final fun <get-charEdges>(): kotlin/DoubleArray // io.github.yuroyami.kitepdf.core/KiteTextLine.charEdges.<get-charEdges>|<get-charEdges>(){}[0]
     final val end // io.github.yuroyami.kitepdf.core/KiteTextLine.end|{}end[0]
         final fun <get-end>(): io.github.yuroyami.kitepdf.core/KiteLineEnd // io.github.yuroyami.kitepdf.core/KiteTextLine.end.<get-end>|<get-end>(){}[0]
+    final val sourceOffsets // io.github.yuroyami.kitepdf.core/KiteTextLine.sourceOffsets|{}sourceOffsets[0]
+        final fun <get-sourceOffsets>(): kotlin/IntArray? // io.github.yuroyami.kitepdf.core/KiteTextLine.sourceOffsets.<get-sourceOffsets>|<get-sourceOffsets>(){}[0]
     final val text // io.github.yuroyami.kitepdf.core/KiteTextLine.text|{}text[0]
         final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextLine.text.<get-text>|<get-text>(){}[0]
     final val vertical // io.github.yuroyami.kitepdf.core/KiteTextLine.vertical|{}vertical[0]
         final fun <get-vertical>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteTextLine.vertical.<get-vertical>|<get-vertical>(){}[0]
 }
 
+final class io.github.yuroyami.kitepdf.core/KiteTextRange { // io.github.yuroyami.kitepdf.core/KiteTextRange|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteBookmark.Flow, io.github.yuroyami.kitepdf.core/KiteBookmark.Flow, kotlin/String, kotlin/String = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.core/KiteTextRange.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteBookmark.Flow;io.github.yuroyami.kitepdf.core.KiteBookmark.Flow;kotlin.String;kotlin.String;kotlin.String){}[0]
+
+    final val end // io.github.yuroyami.kitepdf.core/KiteTextRange.end|{}end[0]
+        final fun <get-end>(): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.core/KiteTextRange.end.<get-end>|<get-end>(){}[0]
+    final val prefix // io.github.yuroyami.kitepdf.core/KiteTextRange.prefix|{}prefix[0]
+        final fun <get-prefix>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextRange.prefix.<get-prefix>|<get-prefix>(){}[0]
+    final val start // io.github.yuroyami.kitepdf.core/KiteTextRange.start|{}start[0]
+        final fun <get-start>(): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.core/KiteTextRange.start.<get-start>|<get-start>(){}[0]
+    final val suffix // io.github.yuroyami.kitepdf.core/KiteTextRange.suffix|{}suffix[0]
+        final fun <get-suffix>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextRange.suffix.<get-suffix>|<get-suffix>(){}[0]
+    final val text // io.github.yuroyami.kitepdf.core/KiteTextRange.text|{}text[0]
+        final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextRange.text.<get-text>|<get-text>(){}[0]
+
+    final fun component1(): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.core/KiteTextRange.component1|component1(){}[0]
+    final fun component2(): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.core/KiteTextRange.component2|component2(){}[0]
+    final fun component3(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextRange.component3|component3(){}[0]
+    final fun component4(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextRange.component4|component4(){}[0]
+    final fun component5(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextRange.component5|component5(){}[0]
+    final fun copy(io.github.yuroyami.kitepdf.core/KiteBookmark.Flow = ..., io.github.yuroyami.kitepdf.core/KiteBookmark.Flow = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String = ...): io.github.yuroyami.kitepdf.core/KiteTextRange // io.github.yuroyami.kitepdf.core/KiteTextRange.copy|copy(io.github.yuroyami.kitepdf.core.KiteBookmark.Flow;io.github.yuroyami.kitepdf.core.KiteBookmark.Flow;kotlin.String;kotlin.String;kotlin.String){}[0]
+    final fun encode(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextRange.encode|encode(){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteTextRange.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteTextRange.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteTextRange.toString|toString(){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.core/KiteTextRange.Companion|null[0]
+        final fun decode(kotlin/String): io.github.yuroyami.kitepdf.core/KiteTextRange? // io.github.yuroyami.kitepdf.core/KiteTextRange.Companion.decode|decode(kotlin.String){}[0]
+    }
+}
+final class io.github.yuroyami.kitepdf.core/KiteTextRangeHits { // io.github.yuroyami.kitepdf.core/KiteTextRangeHits|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteTextRange, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit>, kotlin/Boolean) // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteTextRange;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteSearchHit>;kotlin.Boolean){}[0]
+
+    final val hits // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.hits|{}hits[0]
+        final fun <get-hits>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.hits.<get-hits>|<get-hits>(){}[0]
+    final val range // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.range|{}range[0]
+        final fun <get-range>(): io.github.yuroyami.kitepdf.core/KiteTextRange // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.range.<get-range>|<get-range>(){}[0]
+    final val repaired // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.repaired|{}repaired[0]
+        final fun <get-repaired>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.repaired.<get-repaired>|<get-repaired>(){}[0]
+}
 final class io.github.yuroyami.kitepdf.core/KiteWrongPasswordException : kotlin/RuntimeException { // io.github.yuroyami.kitepdf.core/KiteWrongPasswordException|null[0]
     constructor <init>(kotlin/String, kotlin/Throwable? = ...) // io.github.yuroyami.kitepdf.core/KiteWrongPasswordException.<init>|<init>(kotlin.String;kotlin.Throwable?){}[0]
 }

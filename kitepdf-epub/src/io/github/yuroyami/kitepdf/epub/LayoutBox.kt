@@ -198,6 +198,12 @@ internal class PlacedRun(
      * side by side in the column's em; [glyphs] then hold the same glyphs spread over that em (#508).
      */
     val combined: List<TextGlyph>? = null,
+    /**
+     * Where each glyph's text starts in its block's text, in code points, or -1 for one the layout
+     * added; null for a run with no text of the book. A page's text maps each char back to its
+     * chapter through these, so a text range follows its words through a reflow (#944).
+     */
+    val sources: IntArray? = null,
 )
 
 /**
@@ -248,6 +254,8 @@ internal class PositionedLine(
     val end: KiteLineEnd = KiteLineEnd.HARD,
     /** Formulas on this line, their baselines on the line's (#32). */
     val maths: List<PlacedMath> = emptyList(),
+    /** Where the line's [sourceLength] characters start in its block's text, in code points (#944). */
+    val sourceStart: Int = 0,
 ) {
     /** Owning box + line index, filled after layout, for the paginator's widows/orphans. */
     var owner: TextBlockBox? = null

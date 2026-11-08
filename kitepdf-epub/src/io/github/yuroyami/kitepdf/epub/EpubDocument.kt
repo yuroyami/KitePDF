@@ -43,6 +43,8 @@ import io.github.yuroyami.kitepdf.core.KiteMetadata
 import io.github.yuroyami.kitepdf.core.KiteOutlineItem
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteSearchHit
+import io.github.yuroyami.kitepdf.core.KiteTextRange
+import io.github.yuroyami.kitepdf.core.KiteTextRangeHits
 import io.github.yuroyami.kitepdf.core.KiteSearchOptions
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.KiteTextBlock
@@ -1535,6 +1537,158 @@ public class EpubDocument internal constructor(
             seen += length
         }
         return KiteLocation(chapter, last)
+    }
+
+    /** Where page [index] of [chapter] starts in the chapter's text, as [KiteBookmark.Flow.charOffset] counts, or -1 off the spine. */
+    internal fun pageSourceStart(chapter: Int, index: Int): Int {
+        val summary = summaryOf(chapter) ?: return -1
+        var offset = 0
+        for (i in 0 until index.coerceAtMost(summary.pageCount)) offset += summary.textLengths[i]
+        return offset
+    }
+
+    /** The chapters whose texts [sourceText] keeps, the most recent last (#944). */
+    private val sourceTexts = LinkedHashMap<Int, IntArray>()
+
+    /**
+     * [chapter]'s text by its offsets, one code point for each offset: the char that a page shows
+     * there, or a space where none does, as for white space the layout collapsed (#944).
+     */
+    private fun sourceText(chapter: Int): IntArray {
+        tableLock.withLock { sourceTexts[chapter] }?.let { return it }
+        val summary = summaryOf(chapter) ?: return IntArray(0)
+        val total = summary.textLengths.sum()
+        val cps = IntArray(total) { ' '.code }
+        for (p in 0 until summary.pageCount) {
+            for (block in page(KiteLocation(chapter, p)).textContent().blocks) for (line in block.lines) {
+                val offsets = line.sourceOffsets ?: continue
+                var k = 0
+                while (k < line.text.length) {
+                    val c = line.text[k]
+                    val pair = c.isHighSurrogate() && k + 1 < line.text.length && line.text[k + 1].isLowSurrogate()
+                    val cp = if (pair) 0x10000 + ((c.code - 0xD800) shl 10) + (line.text[k + 1].code - 0xDC00) else c.code
+                    val o = offsets[k]
+                    if (o in 0 until total) cps[o] = cp
+                    k += if (pair) 2 else 1
+                }
+            }
+        }
+        tableLock.withLock {
+            sourceTexts[chapter] = cps
+            while (sourceTexts.size > SOURCE_TEXTS) sourceTexts.remove(sourceTexts.keys.first())
+        }
+        return cps
+    }
+
+    private fun textOf(cps: IntArray, from: Int, until: Int): String = buildString {
+        for (i in from.coerceIn(0, cps.size) until until.coerceIn(0, cps.size)) {
+            val cp = cps[i]
+            if (cp < 0x10000) append(cp.toChar()) else append((0xD800 + ((cp - 0x10000) ushr 10)).toChar()).append((0xDC00 + ((cp - 0x10000) and 0x3FF)).toChar())
+        }
+    }
+
+    /** The text from [start] until [end], the chapters joined by a line break (#944). */
+    private fun textBetween(start: KiteBookmark.Flow, end: KiteBookmark.Flow): String = buildString {
+        for (chapter in start.chapter..end.chapter) {
+            val cps = sourceText(chapter)
+            if (chapter > start.chapter) append('\n')
+            append(textOf(cps, if (chapter == start.chapter) start.charOffset else 0, if (chapter == end.chapter) end.charOffset else cps.size))
+        }
+    }
+
+    /**
+     * The range of the page at [location] from the flattened char [start] to [endInclusive]: from
+     * the first char of the book's text among them to the last (#944).
+     */
+    override fun textRangeOf(location: KiteLocation, start: Int, endInclusive: Int): KiteTextRange? {
+        if (location.chapter !in 0 until chapterCount) return null
+        val text = page(location).textContent()
+        var from = Int.MAX_VALUE
+        var to = -1
+        for (i in minOf(start, endInclusive)..maxOf(start, endInclusive)) {
+            val o = text.sourceOffsetAt(i)
+            if (o < 0) continue
+            from = minOf(from, o); to = maxOf(to, o)
+        }
+        if (to < 0) return null
+        // The last char may be the first half of a pair, whose second half has the same offset.
+        return textRangeOf(KiteBookmark.Flow(location.chapter, from), KiteBookmark.Flow(location.chapter, to + 1))
+    }
+
+    /** The text from [start] until [end], with [RANGE_CONTEXT] characters of context on each side (#944). */
+    override fun textRangeOf(start: KiteBookmark.Flow, end: KiteBookmark.Flow): KiteTextRange? {
+        if (start.chapter !in 0 until chapterCount || end.chapter !in 0 until chapterCount) return null
+        if (end.chapter < start.chapter || end.chapter == start.chapter && end.charOffset <= start.charOffset) return null
+        val s = KiteBookmark.Flow(start.chapter, start.charOffset.coerceAtMost(sourceText(start.chapter).size))
+        val e = KiteBookmark.Flow(end.chapter, end.charOffset.coerceAtMost(sourceText(end.chapter).size))
+        val before = sourceText(s.chapter)
+        val after = sourceText(e.chapter)
+        return KiteTextRange(
+            s, e, collapse(textBetween(s, e)),
+            prefix = collapse(textOf(before, s.charOffset - RANGE_CONTEXT, s.charOffset)).trimStart(),
+            suffix = collapse(textOf(after, e.charOffset, e.charOffset + RANGE_CONTEXT)).trimEnd(),
+        )
+    }
+
+    /**
+     * Where [range] is in this layout (#944). When its offsets no longer hold its text, its quote
+     * is looked for in the chapters it names, the place whose context matches best winning; null
+     * when the quote is in none of them.
+     */
+    override fun locate(range: KiteTextRange): KiteTextRangeHits? {
+        val first = range.start.chapter
+        val last = range.end.chapter
+        if (first !in 0 until chapterCount || last !in first until chapterCount) return null
+        val want = collapse(range.text).trim()
+        if (want.isEmpty()) return null
+        val s = KiteBookmark.Flow(first, range.start.charOffset.coerceAtMost(sourceText(first).size))
+        val e = KiteBookmark.Flow(last, range.end.charOffset.coerceAtMost(sourceText(last).size))
+        if ((last > first || e.charOffset > s.charOffset) && collapse(textBetween(s, e)).trim() == want) {
+            return KiteTextRangeHits(range, hitsBetween(s, e), repaired = false)
+        }
+        var best: Triple<Int, Int, Int>? = null // chapter, start, end
+        var bestScore = -1
+        for (chapter in first..last) {
+            val cps = sourceText(chapter)
+            val (folded, map) = collapseWithMap(textOf(cps, 0, cps.size))
+            var at = folded.indexOf(want)
+            while (at >= 0) {
+                val from = map[at]
+                val until = map[at + want.length - 1] + 1
+                val score = commonSuffix(collapse(textOf(cps, from - RANGE_CONTEXT * 2, from)).trimEnd(), range.prefix.trimEnd()) +
+                    commonPrefix(collapse(textOf(cps, until, until + RANGE_CONTEXT * 2)).trimStart(), range.suffix.trimStart())
+                if (score > bestScore) { bestScore = score; best = Triple(chapter, from, until) }
+                at = folded.indexOf(want, at + 1)
+            }
+        }
+        val (chapter, from, until) = best ?: return null
+        val moved = textRangeOf(KiteBookmark.Flow(chapter, from), KiteBookmark.Flow(chapter, until)) ?: return null
+        return KiteTextRangeHits(moved, hitsBetween(moved.start, moved.end), repaired = true)
+    }
+
+    /** One hit for each page with text from [start] until [end], in reading order (#944). */
+    private fun hitsBetween(start: KiteBookmark.Flow, end: KiteBookmark.Flow): List<KiteSearchHit> {
+        val hits = ArrayList<KiteSearchHit>()
+        for (chapter in start.chapter..end.chapter) {
+            val summary = summaryOf(chapter) ?: continue
+            val from = if (chapter == start.chapter) start.charOffset else 0
+            val until = if (chapter == end.chapter) end.charOffset else Int.MAX_VALUE
+            var pageStart = 0
+            for (p in 0 until summary.pageCount) {
+                val pageEnd = pageStart + summary.textLengths[p]
+                if (pageEnd > from && pageStart < until) {
+                    val location = KiteLocation(chapter, p)
+                    val text = page(location).textContent()
+                    val ranges = text.charRangesOfSource(from, until)
+                    val quads = ranges.flatMap { text.quadsFor(it.first, it.last) }
+                    if (quads.isNotEmpty()) {
+                        hits += KiteSearchHit(pageIndexOf(location) ?: -1, quads, ranges.joinToString(" ") { text.copyText(it.first, it.last) }, location)
+                    }
+                }
+                pageStart = pageEnd
+            }
+        }
+        return hits
     }
 
     /**
@@ -3546,9 +3700,13 @@ public class EpubPage internal constructor(
         fun flush() {
             if (curLines.isNotEmpty()) { blocks.add(KiteTextBlock(curLines)); curLines = ArrayList() }
         }
+        // Where each line starts in the chapter's text, for the offsets of its chars (#944). A frame's page has none.
+        var at = if (frame == null) doc.pageSourceStart(chapter, index) else -1
         for (line in page.lines) {
             if (line.owner !== curOwner) { flush(); curOwner = line.owner }
-            extractLine(page, line)?.let { curLines += movedLine(it, displayTransformAt(page, line.paintRank)) }
+            val lineAt = at
+            if (at >= 0) at += line.sourceLength
+            extractLine(page, line, sourceAt = lineAt)?.let { curLines += movedLine(it, displayTransformAt(page, line.paintRank)) }
         }
         flush()
         // The text an SVG draws reads where the SVG stands, before the first block below its own (#523).
@@ -3585,10 +3743,15 @@ public class EpubPage internal constructor(
     private fun movedLine(line: KiteTextLine, m: KiteMatrix?): KiteTextLine {
         if (m == null || line.vertical || m.b != 0.0 || m.c != 0.0 || m.a <= 0.0 || m.d <= 0.0) return line
         val edges = DoubleArray(line.charEdges.size) { m.a * line.charEdges[it] + m.e }
-        return KiteTextLine(line.text, movedRect(line.bounds, m), edges, line.vertical, line.end)
+        return KiteTextLine(line.text, movedRect(line.bounds, m), edges, line.vertical, line.end, line.sourceOffsets)
     }
 
-    private fun extractLine(page: PageRender, line: PositionedLine, only: List<PlacedRun> = line.runs): KiteTextLine? {
+    /**
+     * The text of [line] in reading order with the edges of its chars. With [sourceAt], the
+     * chapter offset where the line's text starts, each char also gets its offset in the chapter's
+     * text, or -1 for one the layout added (#944).
+     */
+    private fun extractLine(page: PageRender, line: PositionedLine, only: List<PlacedRun> = line.runs, sourceAt: Int = -1): KiteTextLine? {
         val runs = only
             .filter { !it.isAnnotation && it.glyphs.isNotEmpty() }
             .sortedBy { it.x }
@@ -3597,6 +3760,7 @@ public class EpubPage internal constructor(
         if (runs.isEmpty() && maths.isEmpty()) return null
         val sb = StringBuilder()
         val edges = ArrayList<Double>()
+        val srcs = ArrayList<Int>()
         var penEnd = Double.NaN
         var penSize = 0.0
         var nextMath = 0
@@ -3605,9 +3769,9 @@ public class EpubPage internal constructor(
                 val m = maths[nextMath++]
                 val x = page.margin + m.x
                 if (!penEnd.isNaN() && x - penEnd > penSize * SPACE_GAP_EM && sb.isNotEmpty() && sb.last() != ' ') {
-                    edges.add(penEnd); sb.append(' ')
+                    edges.add(penEnd); sb.append(' '); srcs.add(-1)
                 }
-                for (k in m.text.indices) { edges.add(x + m.box.width * k / m.text.length); sb.append(m.text[k]) }
+                for (k in m.text.indices) { edges.add(x + m.box.width * k / m.text.length); sb.append(m.text[k]); srcs.add(-1) }
                 penEnd = x + m.box.width
             }
         }
@@ -3620,18 +3784,26 @@ public class EpubPage internal constructor(
             val leading = penEnd.isNaN() && sb.isEmpty() && only === line.runs
             if (n >= 2 && !penEnd.isNaN() || n >= 1 && leading) {
                 val from = if (penEnd.isNaN()) x - run.spacesWidth else penEnd
-                for (k in 0 until n) { edges.add(from + (x - from) * k / n); sb.append(' ') }
+                for (k in 0 until n) { edges.add(from + (x - from) * k / n); sb.append(' '); srcs.add(-1) }
             } else if (!penEnd.isNaN() && x - penEnd > minOf(run.fontSize, penSize) * SPACE_GAP_EM && sb.isNotEmpty() && sb.last() != ' ') {
                 // Words are separate runs with a pen gap where the collapsed space
                 // was; restore it as one space char spanning the gap. The smaller of
                 // the two sizes judges the gap, since either side may hold the space (#259).
-                edges.add(penEnd); sb.append(' ')
+                edges.add(penEnd); sb.append(' '); srcs.add(-1)
             }
-            for (g in run.glyphs) {
+            for ((gi, g) in run.glyphs.withIndex()) {
                 val gw = g.advanceWidth * run.fontSize / 1000.0
                 val t = g.text
+                val base = if (sourceAt >= 0) run.sources?.getOrNull(gi) ?: -1 else -1
+                var cp = 0
                 // A ligature glyph carries several chars: split its advance evenly.
-                for (k in t.indices) { edges.add(x + gw * k / t.length); sb.append(t[k]) }
+                for (k in t.indices) {
+                    edges.add(x + gw * k / t.length); sb.append(t[k])
+                    // A glyph's chars follow each other in the text from where the glyph's text starts.
+                    val o = if (base >= 0) sourceAt + (base - line.sourceStart) + cp else -1
+                    srcs.add(if (o >= sourceAt && o < sourceAt + line.sourceLength) o else -1)
+                    if (!(t[k].isHighSurrogate() && k + 1 < t.length && t[k + 1].isLowSurrogate())) cp++
+                }
                 x += gw
             }
             penEnd = x
@@ -3653,6 +3825,7 @@ public class EpubPage internal constructor(
                 charEdges = edges.toDoubleArray(),
                 vertical = true,
                 end = line.end,
+                sourceOffsets = if (sourceAt >= 0) srcs.toIntArray() else null,
             )
         }
         val top = displayY(page, line.yTop)
@@ -3670,6 +3843,7 @@ public class EpubPage internal constructor(
             bounds = io.github.yuroyami.kitepdf.core.KiteRectangle(visualEdges.first(), top, visualEdges.last(), top + line.height),
             charEdges = charEdges,
             end = line.end,
+            sourceOffsets = if (sourceAt < 0) null else if (logical == null) srcs.toIntArray() else IntArray(srcs.size) { srcs[logical.first[it]] },
         )
     }
 
@@ -3768,3 +3942,40 @@ private const val CSS_PX = 0.75
 
 /** The grey of a media element without a poster. */
 private val MEDIA_PLACEHOLDER = RgbColor(0.85, 0.85, 0.85)
+
+/** How many characters of context a [KiteTextRange] keeps on each side of its text (#944). */
+private const val RANGE_CONTEXT = 32
+
+/** How many chapters' texts by offset [EpubDocument] keeps for its text ranges (#944). */
+private const val SOURCE_TEXTS = 4
+
+/** [s] with each run of white space as one space. */
+private fun collapse(s: String): String = collapseWithMap(s).first
+
+/** [collapse] of [s], with the index in [s] of each char of the result. */
+private fun collapseWithMap(s: String): Pair<String, IntArray> {
+    val sb = StringBuilder(s.length)
+    val map = IntArray(s.length)
+    var n = 0
+    var space = false
+    // Offsets count code points: the map gives the code point index of each char.
+    var cp = 0
+    var i = 0
+    while (i < s.length) {
+        val c = s[i]
+        val pair = c.isHighSurrogate() && i + 1 < s.length && s[i + 1].isLowSurrogate()
+        if (c.isWhitespace()) {
+            if (!space) { sb.append(' '); map[n++] = cp; space = true }
+        } else {
+            sb.append(c); map[n++] = cp
+            if (pair) { sb.append(s[i + 1]); map[n++] = cp }
+            space = false
+        }
+        i += if (pair) 2 else 1
+        cp++
+    }
+    return sb.toString() to map.copyOf(n)
+}
+
+private fun commonPrefix(a: String, b: String): Int { var n = 0; while (n < a.length && n < b.length && a[n] == b[n]) n++; return n }
+private fun commonSuffix(a: String, b: String): Int { var n = 0; while (n < a.length && n < b.length && a[a.length - 1 - n] == b[b.length - 1 - n]) n++; return n }

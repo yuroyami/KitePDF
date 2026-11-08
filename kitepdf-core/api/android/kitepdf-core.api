@@ -111,12 +111,15 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KiteDocument {
 	public fun isComplete ()Z
 	public fun keepChapters (Ljava/util/Set;)V
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteTextRange;)Lio/github/yuroyami/kitepdf/core/KiteTextRangeHits;
 	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
 	public fun pageCountIn (I)I
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
 	public fun prepareChapter (ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
+	public fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;II)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
 	public fun topOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 }
 
@@ -130,12 +133,15 @@ public final class io/github/yuroyami/kitepdf/core/KiteDocument$DefaultImpls {
 	public static fun isComplete (Lio/github/yuroyami/kitepdf/core/KiteDocument;)Z
 	public static fun keepChapters (Lio/github/yuroyami/kitepdf/core/KiteDocument;Ljava/util/Set;)V
 	public static fun locate (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public static fun locate (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteTextRange;)Lio/github/yuroyami/kitepdf/core/KiteTextRangeHits;
 	public static fun locationOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public static fun page (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
 	public static fun pageCountIn (Lio/github/yuroyami/kitepdf/core/KiteDocument;I)I
 	public static fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public static fun prepareChapter (Lio/github/yuroyami/kitepdf/core/KiteDocument;I)V
 	public static fun prepareChapter (Lio/github/yuroyami/kitepdf/core/KiteDocument;ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
+	public static fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteLocation;II)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
 	public static fun topOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 }
 
@@ -351,6 +357,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteStructuredText {
 	public fun <init> (Ljava/util/List;)V
 	public final fun caretAt (IZ)Lio/github/yuroyami/kitepdf/core/KiteCaret;
 	public final fun charIndexAt (DD)Ljava/lang/Integer;
+	public final fun charRangesOfSource (II)Ljava/util/List;
 	public final fun copyText (II)Ljava/lang/String;
 	public final fun getBlocks ()Ljava/util/List;
 	public final fun getCharCount ()I
@@ -362,6 +369,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteStructuredText {
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/core/KiteStructuredText;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteSearchOptions;ILio/github/yuroyami/kitepdf/core/KiteLocation;ILjava/lang/Object;)Ljava/util/List;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/core/KiteStructuredText;Ljava/lang/String;ZIILjava/lang/Object;)Ljava/util/List;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/core/KiteStructuredText;Ljava/lang/String;ZILio/github/yuroyami/kitepdf/core/KiteLocation;ILjava/lang/Object;)Ljava/util/List;
+	public final fun sourceOffsetAt (I)I
 	public final fun textRange (II)Ljava/lang/String;
 }
 
@@ -372,12 +380,47 @@ public final class io/github/yuroyami/kitepdf/core/KiteTextBlock {
 
 public final class io/github/yuroyami/kitepdf/core/KiteTextLine {
 	public fun <init> (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DZLio/github/yuroyami/kitepdf/core/KiteLineEnd;)V
-	public synthetic fun <init> (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DZLio/github/yuroyami/kitepdf/core/KiteLineEnd;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DZLio/github/yuroyami/kitepdf/core/KiteLineEnd;[I)V
+	public synthetic fun <init> (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;[DZLio/github/yuroyami/kitepdf/core/KiteLineEnd;[IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public final fun getCharEdges ()[D
 	public final fun getEnd ()Lio/github/yuroyami/kitepdf/core/KiteLineEnd;
+	public final fun getSourceOffsets ()[I
 	public final fun getText ()Ljava/lang/String;
 	public final fun getVertical ()Z
+}
+
+public final class io/github/yuroyami/kitepdf/core/KiteTextRange {
+	public static final field Companion Lio/github/yuroyami/kitepdf/core/KiteTextRange$Companion;
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;
+	public final fun component2 ()Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
+	public static synthetic fun copy$default (Lio/github/yuroyami/kitepdf/core/KiteTextRange;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
+	public final fun encode ()Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;
+	public final fun getPrefix ()Ljava/lang/String;
+	public final fun getStart ()Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;
+	public final fun getSuffix ()Ljava/lang/String;
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/core/KiteTextRange$Companion {
+	public final fun decode (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
+}
+
+public final class io/github/yuroyami/kitepdf/core/KiteTextRangeHits {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteTextRange;Ljava/util/List;Z)V
+	public final fun getHits ()Ljava/util/List;
+	public final fun getRange ()Lio/github/yuroyami/kitepdf/core/KiteTextRange;
+	public final fun getRepaired ()Z
 }
 
 public abstract interface class io/github/yuroyami/kitepdf/core/KiteWarningSink {

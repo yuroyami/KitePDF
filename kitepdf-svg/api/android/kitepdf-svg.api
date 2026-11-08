@@ -11,12 +11,15 @@ public final class io/github/yuroyami/kitepdf/svg/SvgDocument : io/github/yuroya
 	public fun isComplete ()Z
 	public fun keepChapters (Ljava/util/Set;)V
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteTextRange;)Lio/github/yuroyami/kitepdf/core/KiteTextRangeHits;
 	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public fun page (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Lio/github/yuroyami/kitepdf/core/KitePage;
 	public fun pageCountIn (I)I
 	public fun pageIndexOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
 	public fun prepareChapter (I)V
 	public fun prepareChapter (ILkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
+	public fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;II)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
 	public fun topOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 }
 

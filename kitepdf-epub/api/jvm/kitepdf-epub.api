@@ -33,6 +33,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public fun keepChapters (Ljava/util/Set;)V
 	public final fun linkTarget (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubLinkTarget;
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
+	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteTextRange;)Lio/github/yuroyami/kitepdf/core/KiteTextRangeHits;
 	public final fun locateFragment (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubFragmentBox;
 	public fun locationOf (I)Lio/github/yuroyami/kitepdf/core/KiteLocation;
 	public final fun markNarration (Ljava/lang/String;Z)Z
@@ -53,6 +54,8 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public final fun search (Ljava/lang/String;Z)Lkotlin/sequences/Sequence;
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/epub/EpubDocument;Ljava/lang/String;ZILjava/lang/Object;)Lkotlin/sequences/Sequence;
 	public final fun setFragment (ILjava/lang/String;)V
+	public fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
+	public fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;II)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
 	public fun topOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 	public final fun withFontSize (D)Lio/github/yuroyami/kitepdf/epub/EpubDocument;
 	public final fun withMargin (D)Lio/github/yuroyami/kitepdf/epub/EpubDocument;

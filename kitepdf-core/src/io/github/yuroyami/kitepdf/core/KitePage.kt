@@ -260,4 +260,30 @@ public interface KiteDocument {
      * element in a long scrolled chapter shows the element, not the start of the chapter (#505).
      */
     public fun topOf(bookmark: KiteBookmark): Double? = null
+
+    /* ── text ranges (#944) ──────────────────────────────────────────────── */
+
+    /**
+     * The text of the page at [location] from the flattened char [start] to [endInclusive] of
+     * its [KitePage.textContent], as a range that survives a reflow: what a selection gives.
+     * Null for a fixed-layout document, whose pages keep their coordinates, and for a range of
+     * chars that has no text of the book, such as a hyphen the layout added.
+     */
+    public fun textRangeOf(location: KiteLocation, start: Int, endInclusive: Int): KiteTextRange? = null
+
+    /**
+     * The text from [start] until [end], each a [KiteBookmark.Flow] offset, as a range with its
+     * quote and context, or null for a fixed-layout document or an empty range. The range may
+     * cross pages and chapters.
+     */
+    public fun textRangeOf(start: KiteBookmark.Flow, end: KiteBookmark.Flow): KiteTextRange? = null
+
+    /**
+     * Where [range] is in the current layout, with the quads of each page it touches. When the
+     * text at its offsets is no longer its [KiteTextRange.text], as after a script changed the
+     * chapter or in a new edition, the text is looked for by its quote and context; null when
+     * it is not found, so a highlight never lands on other words. Null on a fixed-layout
+     * document. This lays out the chapters the range touches.
+     */
+    public fun locate(range: KiteTextRange): KiteTextRangeHits? = null
 }

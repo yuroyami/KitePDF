@@ -1799,6 +1799,12 @@ internal class BoxLayout(
      */
     private fun sourceLengths(lines: List<List<Cell>>, runs: List<InlineRun>): IntArray {
         val total = runs.sumOf { codePointCount(it.text) }
+        val starts = sourceStarts(lines, total)
+        return IntArray(lines.size) { i -> (if (i + 1 < lines.size) starts[i + 1] else total) - starts[i] }
+    }
+
+    /** Where each of [lines] starts in its block's text of [total] code points, as [sourceLengths] counts (#944). */
+    private fun sourceStarts(lines: List<List<Cell>>, total: Int): IntArray {
         val starts = IntArray(lines.size)
         var next = total
         for (i in lines.indices.reversed()) {
@@ -1807,7 +1813,7 @@ internal class BoxLayout(
             next = starts[i]
         }
         if (starts.isNotEmpty()) starts[0] = 0
-        return IntArray(lines.size) { i -> (if (i + 1 < lines.size) starts[i + 1] else total) - starts[i] }
+        return starts
     }
 
     private fun layoutInline(
@@ -1845,6 +1851,7 @@ internal class BoxLayout(
             ends = ends,
         )
         val lengths = sourceLengths(cellLines, runs)
+        val starts = sourceStarts(cellLines, runs.sumOf { codePointCount(it.text) })
         val visualLines = bidiLines(cellLines, baseLevel) // logical → visual order (UAX #9)
         val out = ArrayList<PositionedLine>(cellLines.size)
         var y = topY
@@ -1919,7 +1926,7 @@ internal class BoxLayout(
                 markerRun(marker, style.fontSizePt, contentLeft, contentLeft + contentW, rtl, markerColor)?.let(placed::add)
             }
             placed.addAll(placeRuns(cells, xStart, extraPerSpace, images, maths))
-            out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i], ends[i], maths))
+            out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i], ends[i], maths, starts[i]))
             y += lineHeight
         }
         if (out.isEmpty()) {
@@ -3006,7 +3013,7 @@ internal class BoxLayout(
                     hasOutlines = comb.face != null, unitsPerEm = comb.face?.unitsPerEm ?: 1000,
                     href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, overline = c.overline, backgroundColor = c.backgroundColor,
                     paintWidth = c.width, element = c.element, spacesBefore = spaces, spacesWidth = spacesWidth,
-                    combined = comb.glyphs,
+                    combined = comb.glyphs, sources = IntArray(spread.size) { k -> if (c.src >= 0) c.src + k else -1 },
                 ))
                 // One emphasis mark for the composition, as for one character.
                 if (c.emphasis != null && codePointsOf(c.text ?: "").any { takesMark(it) }) markRun(c, startX + c.fontSize / 2)?.let(out::add)
@@ -3016,6 +3023,7 @@ internal class BoxLayout(
             }
             val spec = c.spec; val fs = c.fontSize; val col = c.color; val sh = c.shift; val ul = c.underline; val face = c.face
             val glyphs = ArrayList<TextGlyph>()
+            val sources = ArrayList<Int>()
             val marks = ArrayList<PlacedRun>()
             // An image cell always ends a text run, even when glued to a word (#99).
             while (i < cells.size && !isGap(cells[i].cp) && !cells[i].isImage && cells[i].math == null && cells[i].combined == null && cells[i].rubyGroup == c.rubyGroup &&
@@ -3023,6 +3031,7 @@ internal class BoxLayout(
                 samePaint(cells[i], c) && cells[i].orientation == c.orientation
             ) {
                 glyphs.add(glyphFor(cells[i]))
+                sources.add(cells[i].src)
                 // One mark over each letter a ligature stands for.
                 val n = cells[i].ligComponents
                 if (cells[i].emphasis != null && takesMark(cells[i].cp)) {
@@ -3035,7 +3044,7 @@ internal class BoxLayout(
                 hasOutlines = face != null, unitsPerEm = face?.unitsPerEm ?: 1000,
                 href = c.href, speech = c.speech, ids = c.ids, lineThrough = c.lineThrough, overline = c.overline, backgroundColor = c.backgroundColor,
                 paintWidth = x - startX, element = c.element, spacesBefore = spaces, spacesWidth = spacesWidth,
-                orientation = c.orientation,
+                orientation = c.orientation, sources = sources.toIntArray(),
             ))
             out.addAll(marks)
             spaces = 0; spacesWidth = 0.0
