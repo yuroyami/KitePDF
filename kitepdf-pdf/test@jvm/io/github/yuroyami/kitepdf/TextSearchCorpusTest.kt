@@ -1,14 +1,15 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.text.search
+import org.junit.Assume.assumeTrue
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Corpus smoke: searching a common word in a real-world PDF's first
- * page returns hits without throwing. Skipped when the git-ignored corpus
- * is not present (CI).
+ * Corpus smoke: searching a word in the first page of a real PDF returns hits, inside the page,
+ * without throwing. The PDF is in the public corpus, so the test runs on CI and every clean
+ * checkout; a checkout without it reports SKIPPED, never a pass (#730).
  */
 class TextSearchCorpusTest {
 
@@ -20,19 +21,19 @@ class TextSearchCorpusTest {
 
     @Test
     fun searching_a_known_word_in_a_real_pdf_page_returns_hits() {
-        // The audit suggested searching "the", but GoldenHour is a 4-page ECG
-        // chart with no prose at all; its lead labels (aVR/aVL/aVF) are the
-        // real text, so the smoke needle is one of those, case-insensitively.
-        val file = corpusPdf("GoldenHour-byIOS.pdf") ?: return
-        val doc = KitePDF.open(file.readBytes())
-        val hits = doc.pages[0].search("avr")
-        assertTrue(hits.isNotEmpty(), "page 0 contains the aVR lead label")
+        val file = corpusPdf("public-joss-10076.pdf")
+        assumeTrue("corpus/pdf/public-joss-10076.pdf is not here; run ./kotlin check corpus", file != null)
+        val doc = KitePDF.open(file!!.readBytes())
+        val page = doc.pages[0]
+        // Every JOSS paper names its journal on the first page, which the search folds to lower case.
+        val hits = page.search("software")
+        assertTrue(hits.isNotEmpty(), "page 0 names the Journal of Open Source Software")
         for (h in hits) {
             assertTrue(h.quads.isNotEmpty())
             for (q in h.quads) {
                 assertTrue(
-                    q.left >= -1.0 && q.right <= doc.pages[0].displayWidth + 1.0 &&
-                        q.bottom >= -1.0 && q.top <= doc.pages[0].displayHeight + 1.0,
+                    q.left >= -1.0 && q.right <= page.displayWidth + 1.0 &&
+                        q.bottom >= -1.0 && q.top <= page.displayHeight + 1.0,
                     "quad within the display box: $q",
                 )
             }
