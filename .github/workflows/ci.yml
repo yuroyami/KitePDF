@@ -63,6 +63,20 @@ jobs:
       - name: Test the public-corpus tool
         run: python3 -m unittest discover -s tools -p test_corpus.py -v
 
+      # Each published module's resources/META-INF carries LICENSE and NOTICE into its jar, and
+      # kitepdf-core also the licence texts of its bundled fonts, patterns and PDFium data, which
+      # ask for their notice in binary copies (#703).
+      - name: Check the notices that the jars carry
+        run: |
+          for m in kitepdf kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps \
+                   kitepdf-javascript kitepdf-net kitepdf-media kitepdf-compose-viewer \
+                   kitepdf-native-renderer kitepdf-skia-renderer; do
+            cmp LICENSE "$m/resources/META-INF/LICENSE"
+            cmp NOTICE "$m/resources/META-INF/NOTICE"
+          done
+          python3 tools/generate_license_notices.py
+          git diff --exit-code -- kitepdf-core/resources/META-INF
+
       # The public documents are in the checkout; this fails on a changed or missing one.
       - name: Verify the licensed public documents
         run: ./kotlin check corpus

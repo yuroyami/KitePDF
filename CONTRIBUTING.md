@@ -112,6 +112,10 @@ Each published module keeps a dump of its public API in its `api/` directory: `a
 
 CI runs `./kotlin check abi androidAbi klibAbi` on macOS, the one host that compiles every target. It fails when the code and the dumps differ. A diff in `api/` that you did not intend is an API change by accident.
 
+### Notices in the artifacts
+
+Each published module carries `LICENSE` and `NOTICE` in `resources/META-INF`, so its jar does. When you change `NOTICE` or `LICENSE`, copy it into every module's `resources/META-INF`. When you regenerate the fonts, the hyphenation patterns or the PDFium table, run `python3 tools/generate_license_notices.py` too. CI fails when a copy differs.
+
 ### Version
 
 `settings.publishing.version` in `library.module-template.yaml` is the version of every published module. The `KITEPDF_VERSION` constant in `kitepdf-pdf` repeats it, so `KitePDF.VERSION` needs no generated code. After a version change, run `./kotlin do updateVersion`. CI runs `./kotlin check version`, which fails when the two differ.
