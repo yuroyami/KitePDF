@@ -358,4 +358,52 @@ class RevisionChangesTest {
         assertFalse(changes.single().isPermitted)
         assertEquals(emptyList(), io.github.yuroyami.kitepdf.RevisionChanges.between(old, old, 1, null))
     }
+
+    @Test
+    fun anAnnotationTakenOffAPageIsAnAnnotationChange() {
+        // ISO 32000-1, Table 254: only level 3 allows deleting an annotation (#1004).
+        val square = "<< /Type /Annot /Subtype /Square /Rect [10 10 80 80] /IC [1 1 1] /P 3 0 R >>"
+        for ((level, permitted) in listOf(1 to false, 3 to true)) {
+            val o = PdfOptions(certification = level, annotation = square)
+            val result = check(SigFixtures.update(signed(o), mapOf(SigFixtures.numbers(o).page to page(o, "4 0 R"))))
+            val change = result.changes!!.single()
+            assertEquals(Kind.Annotation, change.kind)
+            assertEquals("a Square annotation taken off page 1", change.subject)
+            assertEquals(permitted, result.areChangesPermitted, "level $level")
+        }
+    }
+
+    @Test
+    fun anUnlistedAnnotationPutOnAPageIsAnAnnotationChange() {
+        val freeText = "<< /Type /Annot /Subtype /FreeText /Rect [10 10 180 40] /Contents (PAID IN FULL) /DA (/Helv 12 Tf 0 g) /P 3 0 R >>"
+        val o = PdfOptions(certification = 1, annotation = freeText, listAnnotation = false)
+        val n = SigFixtures.numbers(o)
+        val result = check(SigFixtures.update(signed(o), mapOf(n.page to page(o, "4 0 R ${n.annotation} 0 R"))))
+        val change = result.changes!!.single()
+        assertEquals(Kind.Annotation, change.kind)
+        assertEquals("a FreeText annotation listed on page 1", change.subject)
+        assertFalse(result.areChangesPermitted)
+    }
+
+    @Test
+    fun aFormFieldRemovedFromTheFormIsNeverPermitted() {
+        val o = PdfOptions(certification = 3, textField = "before")
+        val n = SigFixtures.numbers(o)
+        val result = check(SigFixtures.update(signed(o), mapOf(n.catalog to catalog(o, "4 0 R"), n.page to page(o, "4 0 R"))))
+        val change = result.changes!!.single()
+        assertEquals(Kind.Other, change.kind)
+        assertEquals("the removal of form field Name", change.subject)
+        assertFalse(result.areChangesPermitted)
+    }
+
+    @Test
+    fun aDirectAnnotationAddedToAPageIsAnAnnotationChange() {
+        val o = PdfOptions(certification = 1)
+        val n = SigFixtures.numbers(o)
+        val result = check(SigFixtures.update(signed(o), mapOf(n.page to page(o, "4 0 R << /Type /Annot /Subtype /Text /Rect [10 10 30 30] /Contents (A note) >>"))))
+        val change = result.changes!!.single()
+        assertEquals(Kind.Annotation, change.kind)
+        assertEquals("the direct annotations of page 1", change.subject)
+        assertFalse(result.areChangesPermitted)
+    }
 }

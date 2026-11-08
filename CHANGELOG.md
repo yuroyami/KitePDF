@@ -622,6 +622,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signed field's /V (#1002).
 - A signature's change report now compares the members of an object stream that a later revision writes again
   under its own number, so a font, page or field changed that way is no longer hidden (#1003).
+- A signature's change report now sees an annotation taken off a page or put on one, a direct annotation added,
+  and a form field removed from the form, which no longer pass as no change (#1004).
 
 ## [0.13.0] - 2026-10-09
 

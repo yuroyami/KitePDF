@@ -281,10 +281,14 @@ internal object SigFixtures {
         val lock: String? = null,
         /** The value of a text field `Name` on the page, or null for a form with the signature field alone. */
         val textField: String? = null,
+        /** An annotation the signed file also holds, after the text field, or null. */
+        val annotation: String? = null,
+        /** Whether the page's `/Annots` lists [annotation]. */
+        val listAnnotation: Boolean = true,
     )
 
     /** The object numbers of a [signedPdf], for revisions that change them. */
-    class Numbers(val content: Int, val textField: Int, val next: Int) {
+    class Numbers(val content: Int, val textField: Int, val next: Int, val annotation: Int = next) {
         val catalog = 1
         val page = 3
         val signatureField = 4
@@ -295,7 +299,8 @@ internal object SigFixtures {
     fun numbers(o: PdfOptions = PdfOptions()): Numbers {
         val dss = o.dssCerts.size + o.dssCrls.size + o.dssOcsps.size
         val content = if (dss > 0) 7 + dss else 6
-        return Numbers(content = content, textField = content + 1, next = content + if (o.textField != null) 2 else 1)
+        val annotation = content + if (o.textField != null) 2 else 1
+        return Numbers(content = content, textField = content + 1, next = annotation + if (o.annotation != null) 1 else 0, annotation = annotation)
     }
 
     /**
@@ -321,7 +326,8 @@ internal object SigFixtures {
                 (if (o.certification != null) " /Perms << /DocMDP 5 0 R >>" else "") + " >>",
         )
         add("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
-        add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [$fields] /Contents ${n.content} 0 R >>")
+        val annots = fields + (if (o.annotation != null && o.listAnnotation) " ${n.annotation} 0 R" else "")
+        add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [$annots] /Contents ${n.content} 0 R >>")
         add("<< /Type /Annot /Subtype /Widget /FT /Sig /T (Signature1) /Rect [0 0 0 0] /F 132 /P 3 0 R /V 5 0 R" + (o.lock?.let { " /Lock $it" } ?: "") + " >>")
         add(
             "<< /Type /${o.type} /Filter /Adobe.PPKLite /SubFilter /${o.subFilter} /Name (KitePDF Test) /Reason (Testing) " +
@@ -337,6 +343,7 @@ internal object SigFixtures {
         }
         add(stream("0 0 1 rg 20 20 50 50 re f"))
         if (o.textField != null) add("<< /Type /Annot /Subtype /Widget /FT /Tx /T (Name) /Rect [20 150 180 170] /F 4 /P 3 0 R /V (${o.textField}) >>")
+        if (o.annotation != null) add(o.annotation)
         val out = java.io.ByteArrayOutputStream()
         out.write("%PDF-1.7\n%\u00E2\u00E3\u00CF\u00D3\n".toByteArray(Charsets.ISO_8859_1))
         val offsets = ArrayList<Int>()

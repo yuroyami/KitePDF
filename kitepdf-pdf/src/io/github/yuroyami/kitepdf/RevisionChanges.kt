@@ -45,12 +45,29 @@ internal object RevisionChanges {
     /** What an object is: its role, what a reader calls it, and the field it belongs to, if any. */
     private class Place(val role: Role, val subject: String, val field: String? = null)
 
+    /**
+     * Where each annotation and field of a revision is listed: the page whose `/Annots` names an
+     * annotation, the field that a field or widget belongs to through `/Fields` and `/Kids`, and
+     * the direct annotations of each page (#1004).
+     */
+    private class Listing {
+        val onPage = HashMap<Long, String>()
+        val inForm = HashMap<Long, String>()
+        val direct = HashMap<String, Pair<Long, List<PdfDictionary>>>()
+    }
+
     /** The changes after [old], the signed revision, up to [new], judged at certification [level] (null: an approval signature) and [lock]. */
     fun between(old: PdfDocument, new: PdfDocument, level: Int?, lock: FieldLock?): List<PdfRevisionChange> {
-        val newPlaces = placesOf(new)
-        val oldPlaces = placesOf(old)
+        val newListing = Listing()
+        val oldListing = Listing()
+        val newPlaces = placesOf(new, newListing)
+        val oldPlaces = placesOf(old, oldListing)
         var reachable: Set<Long>? = null
         val out = ArrayList<PdfRevisionChange>()
+        fun report(kind: PdfRevisionChange.Kind, subject: String, number: Long, place: Place?) {
+            out += PdfRevisionChange(kind, subject, number, permitted(kind, place, level, lock, subject))
+        }
+        val moved = listingChanges(old, new, oldListing, newListing, newPlaces, oldPlaces, ::report)
         val numbers = (old.xref.keys + new.xref.keys).sorted()
         // An object stream written again under its own number changes its members, whose entries stay
         // the same (ISO 32000-1, 7.5.7 and 7.5.8.3), so a member of a changed stream is compared too (#1003).
@@ -59,6 +76,7 @@ internal object RevisionChanges {
             val oldEntry = old.xref[number]
             val newEntry = new.xref[number]
             if (oldEntry == newEntry && (newEntry as? XrefEntry.Compressed)?.containingObjectStream !in changedStreams) continue
+            if (number in moved) continue
             val before = objectOf(old, number, oldEntry)
             val after = objectOf(new, number, newEntry)
             // A cross-reference stream or an object stream is a container that nothing references, so
@@ -71,9 +89,80 @@ internal object RevisionChanges {
                 if (number !in seen) continue
             }
             val (kind, subject) = classify(place, number, before, after) ?: continue
-            out += PdfRevisionChange(kind, subject, number, permitted(kind, place, level, lock, subject))
+            report(kind, subject, number, place)
         }
-        return out
+        return out.sortedBy { it.objectNumber }
+    }
+
+    /**
+     * The annotations and fields that joined or left a page or the form, as [report] gets them,
+     * and the numbers of those objects. The rules of [classify] leave a changed `/Annots`,
+     * `/Fields` or `/Kids` to the objects they list, but an object that leaves a list, or one
+     * that the signed revision held unlisted, does not change itself (#1004). ISO 32000-1,
+     * 12.8.2.2, Table 254: only level 3 allows an annotation to come or go, and no level allows
+     * a form field to, except a signature field that comes.
+     */
+    private fun listingChanges(
+        old: PdfDocument,
+        new: PdfDocument,
+        oldListing: Listing,
+        newListing: Listing,
+        newPlaces: Map<Long, Place>,
+        oldPlaces: Map<Long, Place>,
+        report: (PdfRevisionChange.Kind, String, Long, Place?) -> Unit,
+    ): Set<Long> {
+        val moved = HashSet<Long>()
+        // An object new in this revision, or one it deleted, reports itself through its own entry.
+        fun inBoth(number: Long) = objectOf(old, number, old.xref[number]) != null && objectOf(new, number, new.xref[number]) != null
+        for (number in (oldListing.inForm.keys + newListing.inForm.keys).sorted()) {
+            val before = oldListing.inForm[number]
+            val after = newListing.inForm[number]
+            if (before == after || !inBoth(number)) continue
+            moved += number
+            val place = newPlaces[number] ?: oldPlaces[number]
+            when {
+                before == null && isSignature(new, number) -> report(PdfRevisionChange.Kind.Signature, "the signature field $after", number, place)
+                before == null -> report(PdfRevisionChange.Kind.Other, "form field $after, listed in the form", number, place)
+                after == null -> report(PdfRevisionChange.Kind.Other, "the removal of form field $before", number, place)
+                else -> report(PdfRevisionChange.Kind.Other, "form field $before, moved to $after", number, place)
+            }
+        }
+        for (number in (oldListing.onPage.keys + newListing.onPage.keys).sorted()) {
+            val before = oldListing.onPage[number]
+            val after = newListing.onPage[number]
+            if (before == after || number in moved || !inBoth(number)) continue
+            moved += number
+            val dict = objectOf(new, number, new.xref[number]) as? PdfDictionary
+            val subtype = dict?.getName("Subtype") ?: "plain"
+            val where = when {
+                before == null -> "listed on $after"
+                after == null -> "taken off $before"
+                else -> "moved from $before to $after"
+            }
+            val kind = when {
+                subtype != "Widget" -> PdfRevisionChange.Kind.Annotation
+                before == null && isSignature(new, number) -> PdfRevisionChange.Kind.Signature
+                else -> PdfRevisionChange.Kind.Other
+            }
+            report(kind, "a $subtype annotation $where", number, newPlaces[number] ?: oldPlaces[number])
+        }
+        for (page in (oldListing.direct.keys + newListing.direct.keys).sorted()) {
+            val before = oldListing.direct[page]
+            val after = newListing.direct[page] ?: continue
+            if (before == null || before.second == after.second) continue
+            val gone = before.second.filter { it !in after.second }
+            val come = after.second.filter { it !in before.second }
+            val widget = (gone + come).any { it.getName("Subtype") == "Widget" }
+            val kind = if (widget) PdfRevisionChange.Kind.Other else PdfRevisionChange.Kind.Annotation
+            report(kind, "the direct annotations of $page", after.first, newPlaces[after.first])
+        }
+        return moved
+    }
+
+    /** Whether object [number] of [doc] is a signature field, or a widget of one. */
+    private fun isSignature(doc: PdfDocument, number: Long): Boolean {
+        val dict = objectOf(doc, number, doc.xref[number]) as? PdfDictionary ?: return false
+        return isSignatureField(dict) || isSignatureField(dict["Parent"]?.resolve(doc))
     }
 
     private fun permitted(kind: PdfRevisionChange.Kind, place: Place?, level: Int?, lock: FieldLock?, subject: String): Boolean {
@@ -150,7 +239,7 @@ internal object RevisionChanges {
     }
 
     /** What each object of [doc] is, by object number. The form comes first, so a field merged with its widget stays a field. */
-    private fun placesOf(doc: PdfDocument): Map<Long, Place> {
+    private fun placesOf(doc: PdfDocument, listing: Listing): Map<Long, Place> {
         val out = HashMap<Long, Place>()
         fun mark(obj: PdfObject?, place: Place) {
             (obj as? PdfReference)?.let { out.getOrPut(it.objectNumber) { place } }
@@ -174,11 +263,13 @@ internal object RevisionChanges {
             val dict = node.resolve(doc) as? PdfDictionary ?: return
             val partial = (dict["T"] as? PdfString)?.asText()
             if (partial == null && dict.getName("Subtype") == "Widget" && parent != null) {
+                if (node is PdfReference) listing.inForm[node.objectNumber] = parent
                 mark(node, Place(Role.WIDGET, "a widget of field $parent", parent))
                 dict["AP"]?.let { reach(doc, it, Place(Role.WIDGET_LOOK, "the appearance of field $parent", parent), out) }
                 return
             }
             val name = listOfNotNull(parent, partial).joinToString(".").ifEmpty { "(unnamed)" }
+            if (node is PdfReference) listing.inForm[node.objectNumber] = name
             mark(node, Place(Role.FIELD, "field $name", name))
             dict["AP"]?.let { reach(doc, it, Place(Role.WIDGET_LOOK, "the appearance of field $name", name), out) }
             dict["V"]?.let { value ->
@@ -204,8 +295,11 @@ internal object RevisionChanges {
                 val page = "page $pageNumber"
                 mark(node, Place(Role.PAGE, page))
                 mark(dict["Annots"], Place(Role.ANNOTS, "the annotations of $page"))
+                val direct = ArrayList<PdfDictionary>()
+                (node as? PdfReference)?.let { listing.direct[page] = it.objectNumber to direct }
                 for (annotation in dict.getArray("Annots", doc).orEmpty()) {
                     val a = annotation.resolve(doc) as? PdfDictionary ?: continue
+                    if (annotation is PdfReference) listing.onPage.getOrPut(annotation.objectNumber) { page } else direct += a
                     if (a.getName("Subtype") == "Widget") {
                         mark(annotation, Place(Role.WIDGET, "a form widget on $page"))
                         a["AP"]?.let { reach(doc, it, Place(Role.WIDGET_LOOK, "the appearance of a form widget on $page"), out) }
