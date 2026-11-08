@@ -631,7 +631,7 @@ internal object MobiBook {
             var s = latin1(text(pdb, 0, h))
             val ncx = index(pdb, h.ncx)
             val targets = (FILEPOS.findAll(s).map { it.groupValues[1].toInt() } +
-                ncx?.entries.orEmpty().mapNotNull { it.first(1) }).toSortedSet().toList()
+                ncx?.entries.orEmpty().mapNotNull { it.first(1) }).distinct().sorted().toList()
             // Anchors go in from the end, so each byte offset still names its place; one inside a tag goes before it.
             val sb = StringBuilder(s)
             for (pos in targets.asReversed()) {
@@ -687,7 +687,9 @@ internal object MobiBook {
         }
         if (css.isEmpty()) return tag
         val style = STYLE_ATTR.find(tag)
-        return if (style != null) tag.replaceRange(style.groups[2]!!.range, css.toString() + style.groupValues[2])
+        // The value starts after the attribute's opening quote; the whole match's range is common to every target.
+        val valueStart = style?.let { it.range.first + it.value.indexOf('"') + 1 }
+        return if (valueStart != null) tag.substring(0, valueStart) + css + tag.substring(valueStart)
         else tag.substring(0, tag.length - 1).trimEnd('/').trimEnd() + " style=\"$css\"" + (if (tag.endsWith("/>")) "/>" else ">")
     }
 

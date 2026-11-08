@@ -189,7 +189,7 @@ internal object Fb2Book {
     }
 
     private fun collectIds(e: KiteXmlNode.Element, file: String, into: MutableMap<String, String>) {
-        e.attrs["id"]?.let { into.putIfAbsent(it, file) }
+        e.attrs["id"]?.let { if (it !in into) into[it] = file }
         for (c in e.children) if (c is KiteXmlNode.Element) collectIds(c, file, into)
     }
 
