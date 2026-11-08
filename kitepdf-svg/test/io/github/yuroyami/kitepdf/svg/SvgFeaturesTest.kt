@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.KiteShading
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.xml.KiteXml
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 import kotlin.test.Test
@@ -52,6 +53,27 @@ class SvgFeaturesTest {
                </svg>""",
         )
         assertEquals(1, f.size)
+    }
+
+    @Test
+    fun a_use_of_a_symbol_is_a_viewport_of_its_view_box() {
+        // A 10 by 10 viewBox in a 100 by 50 viewport at (20, 30): a red square from (45, 30) to (95, 80) (#704).
+        val calls = calls(
+            """<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">
+                 <defs><symbol id="s" viewBox="0 0 10 10" fill="red"><rect width="10" height="10"/></symbol></defs>
+                 <use href="#s" x="20" y="30" width="100" height="50"/>
+               </svg>""",
+        )
+        val fill = calls.filterIsInstance<RecordingCanvas.Call.Fill>().single()
+        assertEquals(RgbColor(1.0, 0.0, 0.0), fill.color, "the symbol's fill reaches its child")
+        val b = assertNotNull(fill.path.bounds(fill.ctm))
+        assertEquals(listOf(45.0, 30.0, 95.0, 80.0), listOf(b.left, b.bottom, b.right, b.top).map { kotlin.math.round(it) })
+        assertTrue(calls.any { it is RecordingCanvas.Call.PushClip }, "the viewport clips")
+        // Without a viewBox the symbol draws in its own units, its paint still inherited.
+        val plain = fills("""<svg width="50" height="50"><symbol id="s" fill="red"><rect width="10" height="10"/></symbol><use href="#s"/></svg>""")
+        assertEquals(RgbColor(1.0, 0.0, 0.0), plain.single().color)
+        // A zero width disables the instance.
+        assertTrue(fills("""<svg width="50" height="50"><symbol id="s"><rect width="10" height="10"/></symbol><use href="#s" width="0"/></svg>""").isEmpty())
     }
 
     @Test

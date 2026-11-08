@@ -465,6 +465,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   they overlap (#727, #731).
 - An SVG `<image>` of a raster picture fits its box by `preserveAspectRatio`, `xMidYMid meet` by default, where
   it always stretched the picture to the box, so photos and covers in SVG drew distorted (#710).
+- A `<use>` of an SVG `<symbol>` draws it as a viewport of the use's width and height, fitting the symbol's
+  `viewBox` by its `preserveAspectRatio` and clipping to it, and the symbol's presentation attributes reach its
+  children. Icon sprites drew unscaled and black (#704).
 
 ## [0.13.0] - 2026-10-09
 

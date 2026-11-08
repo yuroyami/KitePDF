@@ -386,9 +386,28 @@ public class SvgImage private constructor(
         if (refersBack(el, target, paint)) return
         val moved = compose(ctm, KiteMatrix.translation(num(el, "x", paint), num(el, "y", paint)))
         val inner = paint.copy(useTargets = paint.useTargets + target)
-        // <symbol> is invisible on its own but paints through <use>, as a group.
+        // <symbol> is invisible on its own but paints through <use> as a new viewport (SVG 1.1, 5.5
+        // and 5.6; SVG 2, 5.6; #704): the use's width by height, 100% when absent, the symbol's
+        // viewBox fitted into it by its preserveAspectRatio, clipped unless overflow is visible, and
+        // the symbol's own presentation attributes inherited by its children.
         if (target.tag.lowercase() == "symbol") {
-            for (c in target.children) if (c is KiteXmlNode.Element) walk(c, moved, inner, canvas, load, depth + 1, stop)
+            fun size(name: String, whole: Double): Double = el.attrs[name]?.trim()?.let { parseLen(it, paint.fontSize, whole) } ?: whole
+            val w = size("width", paint.viewportWidth)
+            val h = size("height", paint.viewportHeight)
+            if (!(w > 0.0 && h > 0.0) || !w.isFinite() || !h.isFinite()) return
+            val vb = (target.attrs["viewBox"] ?: target.attrs["viewbox"])?.let { numbers(it) }?.takeIf { it.size >= 4 && it[2] > 0 && it[3] > 0 }
+            val content = if (vb == null) moved
+            else compose(moved, viewBoxFit(vb, w, h, target.attrs["preserveAspectRatio"] ?: target.attrs["preserveaspectratio"]).matrix)
+            val symbolPaint = resolvePaint(target, inner, container = true)
+                .copy(viewportWidth = vb?.get(2) ?: w, viewportHeight = vb?.get(3) ?: h)
+            val overflow = styleOrAttr(target, "overflow")?.trim()?.lowercase()
+            val clip = overflow != "visible" && overflow != "auto"
+            if (clip) canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, w, h) }.build(), moved, evenOdd = false)
+            try {
+                for (c in target.children) if (c is KiteXmlNode.Element) walk(c, content, symbolPaint, canvas, load, depth + 1, stop)
+            } finally {
+                if (clip) canvas.popClip()
+            }
         } else {
             walk(target, moved, inner, canvas, load, depth + 1, stop)
         }
