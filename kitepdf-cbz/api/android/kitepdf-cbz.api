@@ -25,6 +25,7 @@ public final class io/github/yuroyami/kitepdf/cbz/CbzDocument : io/github/yuroya
 }
 
 public final class io/github/yuroyami/kitepdf/cbz/CbzDocument$Companion {
+	public final fun archiveKindOf ([B)Ljava/lang/String;
 	public final fun open ([B)Lio/github/yuroyami/kitepdf/cbz/CbzDocument;
 	public final fun openOrNull ([B)Lio/github/yuroyami/kitepdf/cbz/CbzDocument;
 }

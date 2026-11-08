@@ -80,6 +80,8 @@ public class CbzDocument private constructor(
          */
         @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class)
         public fun open(bytes: ByteArray): CbzDocument {
+            // A CBR or a CB7 is another archive format, and says so, rather than a ZIP without images (#952).
+            archiveKindOf(bytes)?.let { throw KiteFormatException("$it archives are not supported: a comic opens from a ZIP archive (CBZ)") }
             val zip = runCatching { ZipReader(bytes) }.getOrNull()
                 ?: throw KiteFormatException("not a readable ZIP archive (${bytes.size} bytes)")
             val names = zip.names
@@ -88,6 +90,19 @@ public class CbzDocument private constructor(
                 .sortedWith(NaturalOrder)
             if (names.isEmpty()) throw KiteFormatException("ZIP archive holds no image entries")
             return CbzDocument(zip, names)
+        }
+
+        /**
+         * "RAR" for a RAR 4 or RAR 5 archive, "7z" for a 7z archive, the containers of `.cbr` and
+         * `.cb7` comics, by their signatures; null for any other bytes (#952).
+         */
+        public fun archiveKindOf(bytes: ByteArray): String? {
+            fun starts(vararg sig: Int) = bytes.size >= sig.size && sig.indices.all { (bytes[it].toInt() and 0xFF) == sig[it] }
+            return when {
+                starts(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00) || starts(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00) -> "RAR"
+                starts(0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C) -> "7z"
+                else -> null
+            }
         }
 
         /** [open], but null instead of an exception on anything unreadable. */

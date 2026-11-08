@@ -19,6 +19,7 @@ final class io.github.yuroyami.kitepdf.cbz/CbzDocument : io.github.yuroyami.kite
         final fun <get-pages>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KitePage> // io.github.yuroyami.kitepdf.cbz/CbzDocument.pages.<get-pages>|<get-pages>(){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.cbz/CbzDocument.Companion|null[0]
+        final fun archiveKindOf(kotlin/ByteArray): kotlin/String? // io.github.yuroyami.kitepdf.cbz/CbzDocument.Companion.archiveKindOf|archiveKindOf(kotlin.ByteArray){}[0]
         final fun open(kotlin/ByteArray): io.github.yuroyami.kitepdf.cbz/CbzDocument // io.github.yuroyami.kitepdf.cbz/CbzDocument.Companion.open|open(kotlin.ByteArray){}[0]
         final fun openOrNull(kotlin/ByteArray): io.github.yuroyami.kitepdf.cbz/CbzDocument? // io.github.yuroyami.kitepdf.cbz/CbzDocument.Companion.openOrNull|openOrNull(kotlin.ByteArray){}[0]
     }

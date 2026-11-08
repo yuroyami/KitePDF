@@ -750,6 +750,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the message, the document, the page index and a coarse kind; `PdfDocument.open(bytes, password, warnings)`
   also reports the warnings of the open. Drawing a page and reading its text report there through a
   `KiteWarningScope` of the thread, and a document without a listener reports to `KiteWarnings.sink`, as before.
+- A CBR or CB7 comic says what it is (#952): `CbzDocument.open` and `KiteDoc.open` throw "RAR archives are not
+  supported" or "7z archives are not supported" for the RAR 4, RAR 5 and 7z signatures, in place of a ZIP without
+  images or an unknown format. `CbzDocument.archiveKindOf` tells them.
 
 ## [0.13.0] - 2026-10-09
 
