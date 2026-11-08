@@ -242,6 +242,12 @@ internal class RedactionEngine(
      */
     val namedPropertyStrips = LinkedHashMap<Int, String>()
 
+    /** The MCIDs of the marked-content sequences that lost content, for the caller's structure tree (#1009). */
+    val lostMcids = LinkedHashSet<Int>()
+
+    /** The named property lists of the stream's resources, so a named sequence's MCID can be read (#1009). */
+    var namedPropertyLists: Map<String, PdfDictionary> = emptyMap()
+
     /** How many pieces of content the engine has removed or replaced so far: a glyph run, a path, an image. */
     private var removals = 0
 
@@ -380,7 +386,15 @@ internal class RedactionEngine(
      */
     private fun dropReplacementText(out: MutableList<Operation>, at: Int) {
         val op = out.getOrNull(at)?.takeIf { it.operator == "BDC" } ?: return
-        when (val props = op.operands.getOrNull(1)) {
+        val props = op.operands.getOrNull(1)
+        // The structure element that owns the sequence loses its replacement text too (#1009).
+        val mcid = when (props) {
+            is PdfDictionary -> props["MCID"]
+            is PdfName -> namedPropertyLists[props.value]?.get("MCID")
+            else -> null
+        }
+        (mcid as? io.github.yuroyami.kitepdf.core.parser.PdfInt)?.value?.toInt()?.let(lostMcids::add)
+        when (props) {
             is PdfDictionary -> if (REPLACEMENT_TEXT_KEYS.any { it in props.map }) {
                 val stripped = PdfDictionary(LinkedHashMap(props.map).apply { for (k in REPLACEMENT_TEXT_KEYS) remove(k) })
                 out[at] = Operation(op.operator, listOf(op.operands[0], stripped))

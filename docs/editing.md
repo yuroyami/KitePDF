@@ -273,6 +273,7 @@ Redaction removes more than the region in some cases, as it removes too much rat
 - An annotation whose `/Rect` the editor cannot read goes, as the renderer still draws it somewhere.
 - A file attachment in a region takes its file out of the catalog's `/Names /EmbeddedFiles` tree too, so the document loses that attachment.
 - A marked-content sequence that loses any of its content loses its `/ActualText`, `/Alt` and `/E` whole, inline or named, and so does every sequence around it, as that text spells out what the sequence drew.
+- In a tagged PDF, the structure element that owns such a sequence, through the page's `/StructParents` and the `/ParentTree`, loses its `/ActualText`, `/Alt` and `/E` too, and so does every element above it that has them.
 - A font that only the removed text used goes from the page or form's resources, with its program, or with every glyph procedure of a Type 3 font. A font the remaining text uses stays whole.
 - A redacted page loses its thumbnail (`/Thumb`), which shows the page as it was, and its page-piece data (`/PieceInfo`), where an application such as Illustrator can keep the whole page. A redacted form XObject loses its `/PieceInfo` too.
 

@@ -1014,3 +1014,57 @@ internal fun PdfEditor.withoutUnpaintedPatterns(resources: PdfDictionary?, ops: 
     if (kept.size == patterns.map.size) return resources
     return withEntry(resources, "Pattern", PdfDictionary(LinkedHashMap(kept)))
 }
+
+/** The property lists of [resources] by name (ISO 32000-1, 14.6.2). */
+internal fun PdfEditor.loadPropertyLists(resources: PdfDictionary?): Map<String, PdfDictionary> {
+    val properties = runCatching { resources?.getDict("Properties", effective) }.getOrNull() ?: return emptyMap()
+    return properties.map.mapNotNull { (name, v) -> (runCatching { v.resolve(effective) }.getOrNull() as? PdfDictionary)?.let { name to it } }.toMap()
+}
+
+/**
+ * Takes `/ActualText`, `/Alt` and `/E` off the structure elements that own the marked content
+ * [mcids] of the page [pageDict], found through its `/StructParents` in the `/ParentTree` of the
+ * structure tree root (ISO 32000-1, 14.7.4.4). They stand for that content (14.9.3 to 14.9.5), so
+ * they go once a redaction removed any of it, whole, as the engine removes too much rather than too
+ * little (#1009).
+ */
+internal fun PdfEditor.stripStructureText(pageDict: PdfDictionary, mcids: Set<Int>) {
+    if (mcids.isEmpty()) return
+    val key = (runCatching { pageDict["StructParents"]?.resolve(effective) }.getOrNull() as? PdfInt)?.value ?: return
+    val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return
+    val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return
+    val treeRoot = runCatching { catalog.getDict("StructTreeRoot", effective) }.getOrNull() ?: return
+    val parentTree = runCatching { treeRoot.getDict("ParentTree", effective) }.getOrNull() ?: return
+
+    /** The value of [key] in the number tree at [node] (7.9.7), or null. */
+    fun lookup(node: PdfDictionary, depth: Int): PdfObject? {
+        if (depth > 32) return null
+        runCatching { node.getArray("Nums", effective) }.getOrNull()?.let { nums ->
+            var i = 0
+            while (i + 1 < nums.size) {
+                if ((runCatching { nums[i].resolve(effective) }.getOrNull() as? PdfInt)?.value == key) return nums[i + 1]
+                i += 2
+            }
+        }
+        val kids = runCatching { node.getArray("Kids", effective) }.getOrNull() ?: return null
+        for (kid in kids) {
+            val kidDict = runCatching { kid.resolve(effective) }.getOrNull() as? PdfDictionary ?: continue
+            lookup(kidDict, depth + 1)?.let { return it }
+        }
+        return null
+    }
+
+    val parents = runCatching { lookup(parentTree, 0)?.resolve(effective) }.getOrNull() as? io.github.yuroyami.kitepdf.core.parser.PdfArray ?: return
+    val done = HashSet<Long>()
+    for (mcid in mcids) {
+        // The element, and every element above it, whose text stands for this content too.
+        var element = parents.getOrNull(mcid) as? PdfReference
+        while (element != null && done.add(element.objectNumber)) {
+            val dict = effectiveObject(element.objectNumber) as? PdfDictionary ?: break
+            if (REPLACEMENT_TEXT_KEYS.any { it in dict.map }) {
+                updateObject(element, PdfDictionary(LinkedHashMap(dict.map).apply { for (k in REPLACEMENT_TEXT_KEYS) remove(k) }))
+            }
+            element = dict["P"] as? PdfReference
+        }
+    }
+}

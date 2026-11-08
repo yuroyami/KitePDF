@@ -1032,6 +1032,7 @@ public class PdfEditor internal constructor(
         engine.formBBoxes = loadFormBBoxes(pageResources)
         engine.extGStates = loadExtGStates(pageResources)
         engine.tilingPatternNames = loadTilingPatternNames(pageResources)
+        engine.namedPropertyLists = loadPropertyLists(pageResources)
         val filtered = engine.run(ops)
         // Recurse into every intersecting form XObject first: it decides which `Do`
         // operands point at a redacted clone and which leave the stream altogether,
@@ -1099,6 +1100,7 @@ public class PdfEditor internal constructor(
         // field is only reachable through the /Annots this call just rewrote.
         updateObject(ref, newPage)
         unnameUndrawnXObjects(ref, pageDict, droppedImages)
+        stripStructureText(pageDict, engine.lostMcids)
         // Set before the field detach, which raises on a malformed /Parent chain: the
         // page is already rewritten, so a caller that catches must still be refused an
         // incremental save (it would leave the original bytes in the file).
