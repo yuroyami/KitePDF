@@ -153,6 +153,7 @@ public class TrueTypeFont private constructor(
     }
 
     /** Maximum composite-glyph nesting depth before we abort (malformed-font guard). */
+    // The depth bound covers the recursion; [GlyphBudget] covers the repetition.
     private val maxCompositeDepth = 8
 
     /**
@@ -181,13 +182,29 @@ public class TrueTypeFont private constructor(
      * nothing, as a broken CFF or Type 1 glyph does, and the page around it still draws (#582).
      */
     private fun parseOrEmpty(glyphId: Int): GlyphOutline? = try {
-        parseGlyph(glyphId, depth = 0, active = HashSet())
+        parseGlyph(glyphId, depth = 0, active = HashSet(), budget = GlyphBudget())
     } catch (e: PdfFormatException) {
         kiteWarn { "font: glyph $glyphId cannot be read: ${e.message}" }
         null
     }
 
-    private fun parseGlyph(glyphId: Int, depth: Int, active: HashSet<Int>): GlyphOutline? {
+    /**
+     * What one top-level glyph may cost. The depth bound and the cycle check let a composite that
+     * names one component ten times, level after level, parse its leaf 10^8 times within the font's
+     * own `maxp` limits, and a font of 1,220 bytes filled the heap (#980). So each component glyph
+     * parses once per top-level glyph, and the points that the composite collects have a ceiling.
+     */
+    private class GlyphBudget {
+        val parsed = HashMap<Int, GlyphOutline?>()
+        var points = 0L
+
+        fun spend(n: Int) {
+            points += n
+            if (points > MAX_GLYPH_POINTS) throw PdfFormatException("a composite glyph of more than $MAX_GLYPH_POINTS points")
+        }
+    }
+
+    private fun parseGlyph(glyphId: Int, depth: Int, active: HashSet<Int>, budget: GlyphBudget): GlyphOutline? {
         if (glyphId < 0 || glyphId >= maxp.numGlyphs) return null
         if (locaOffsets.size <= glyphId + 1) return null
         val start = locaOffsets[glyphId]
@@ -212,7 +229,7 @@ public class TrueTypeFont private constructor(
         return if (numberOfContours >= 0) {
             parseSimpleGlyph(r, numberOfContours, bbox)
         } else {
-            parseCompositeGlyph(r, glyphId, bbox, depth, active)
+            parseCompositeGlyph(r, glyphId, bbox, depth, active, budget)
         }
     }
 
@@ -290,6 +307,7 @@ public class TrueTypeFont private constructor(
         bbox: GlyphBbox,
         depth: Int,
         active: HashSet<Int>,
+        budget: GlyphBudget,
     ): GlyphOutline {
         // Cycle / runaway-recursion guard: a self-referencing or cyclic composite
         // (a malformed-font DoS) would otherwise recurse until StackOverflowError.
@@ -331,7 +349,16 @@ public class TrueTypeFont private constructor(
                     else -> arrayOf(1.0, 0.0, 0.0, 1.0)
                 }
 
-                val child = parseGlyph(childGlyphId, depth + 1, active)
+                // A component on the active chain is a cycle: parse it to get the empty outline,
+                // and do not keep that answer for a later reference that is not one.
+                val child = if (childGlyphId in active) {
+                    parseGlyph(childGlyphId, depth + 1, active, budget)
+                } else if (budget.parsed.containsKey(childGlyphId)) {
+                    budget.parsed[childGlyphId]
+                } else {
+                    parseGlyph(childGlyphId, depth + 1, active, budget).also { budget.parsed[childGlyphId] = it }
+                }
+                child?.let { c -> budget.spend(c.contours.sumOf { it.points.size }) }
 
                 child?.let { c ->
                     // Transform the child's points through the 2×2 scale first;
@@ -725,3 +752,6 @@ public data class GlyphOutline(val contours: List<Contour>, val bbox: GlyphBbox)
         if (curY.absoluteValue < 0) error("unreachable")
     }
 }
+
+/** The most points one glyph may collect from its components. `maxp` allows 65,535 a glyph (#980). */
+private const val MAX_GLYPH_POINTS = 262_144L

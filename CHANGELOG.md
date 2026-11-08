@@ -64,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   heap (#981). A Type 1 `seac` follows no `seac` of its base or accent, so a glyph that names itself no longer
   recurses until the stack runs out, which ends the process on a native target (#982).
 
+- A TrueType composite glyph parses each component once per glyph, and collects at most 262,144 points,
+  past which it is empty. A font of 1,220 bytes, within its own `maxp` limits, named one component ten
+  times on each of eight levels and ran a page render out of a 512 MB heap (#980).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
