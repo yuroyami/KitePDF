@@ -74,6 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A type 4 calculator program nests at most 100 braces, and its operand stack holds at most 100 entries, as
   MuPDF's does, so `copy` can no longer fill the heap from a program of 250 bytes (#975, #976).
 
+- A mesh shading whose `/BitsPerCoordinate`, `/BitsPerComponent` or `/BitsPerFlag` is not a width that
+  ISO 32000-1 allows paints nothing. Widths of 0 read no bits, so a lattice-form mesh of an empty stream
+  added triangles until memory ran out, and only had to sit in the page's resources. A lattice-form mesh
+  stops at 65,536 triangles, as a free-form one does (#974).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

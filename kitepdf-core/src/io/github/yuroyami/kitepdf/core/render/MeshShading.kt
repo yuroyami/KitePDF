@@ -51,6 +51,15 @@ internal object MeshShadingParser {
         val bpc = dict.getInt("BitsPerCoordinate")?.toInt() ?: 16
         val bpcomp = dict.getInt("BitsPerComponent")?.toInt() ?: 8
         val bpf = dict.getInt("BitsPerFlag")?.toInt() ?: 8
+
+        /**
+         * ISO 32000-1, 8.7.4.5.5 to 8.7.4.5.8: BitsPerCoordinate is 1, 2, 4, 8, 12, 16, 24 or 32,
+         * BitsPerComponent 1, 2, 4, 8, 12 or 16, and BitsPerFlag 2, 4 or 8. Any other width makes
+         * the shading unusable: widths of 0 read no bits, so a lattice of an empty stream added rows
+         * for ever (#974).
+         */
+        fun widthsValid(withFlag: Boolean): Boolean =
+            bpc in COORDINATE_BITS && bpcomp in COMPONENT_BITS && (!withFlag || bpf in FLAG_BITS)
         val function: KiteFunction? = KiteFunction.parse(dict["Function"], refs)
         val ncomp = if (function != null) 1 else cs.componentCount
         val decode: DoubleArray
@@ -107,6 +116,7 @@ internal object MeshShadingParser {
         cs: KiteColorSpace, bg: RgbColor?, bbox: KiteRectangle?, refs: IndirectResolver,
     ): KiteShading? {
         val layout = Layout(dict, refs, cs)
+        if (!layout.widthsValid(withFlag = type != 5)) return null
         val bs = BitStream(FilterChain.decode(stream))
         val minVertexBits = layout.bpc * 2L + layout.bpcomp * layout.ncomp
         val triangles = ArrayList<KiteShading.MeshTriangle>()
@@ -122,7 +132,8 @@ internal object MeshShadingParser {
             val perRow = dict.getInt("VerticesPerRow")?.toInt() ?: return null
             if (perRow < 2) return null
             var prev: List<Vertex>? = null
-            while (bs.remaining >= minVertexBits * perRow) {
+            // The same bound on the output as the free-form mesh.
+            while (bs.remaining >= minVertexBits * perRow && triangles.size < MAX_TRIANGLES) {
                 val row = (0 until perRow).map {
                     val (x, y) = layout.readPoint(bs)
                     Vertex(x, y, layout.readColor(bs))
@@ -185,6 +196,7 @@ internal object MeshShadingParser {
         cs: KiteColorSpace, bg: RgbColor?, bbox: KiteRectangle?, refs: IndirectResolver,
     ): KiteShading? {
         val layout = Layout(dict, refs, cs)
+        if (!layout.widthsValid(withFlag = true)) return null
         val bs = BitStream(FilterChain.decode(stream))
         val pointsPerPatch = if (type == 7) 16 else 12
         val patches = ArrayList<KiteShading.MeshPatch>()
@@ -300,6 +312,9 @@ internal object MeshShadingParser {
     )
 
     private const val MAX_TRIANGLES = 65_536
+    private val COORDINATE_BITS = setOf(1, 2, 4, 8, 12, 16, 24, 32)
+    private val COMPONENT_BITS = setOf(1, 2, 4, 8, 12, 16)
+    private val FLAG_BITS = setOf(2, 4, 8)
     private const val MAX_PATCHES = 65_536
 }
 

@@ -132,6 +132,30 @@ class MeshShadingTest {
         assertTrue(rgb(pulled, 45, 45).first < 170, "the interior points were ignored: ${rgb(pulled, 45, 45)}")
     }
 
+    @Test
+    fun a_lattice_whose_widths_are_zero_paints_nothing_and_ends() {
+        // Widths of 0 read no bits, so the rows never used up the empty stream (#974).
+        for ((bpc, bpcomp) in listOf(0 to 0, 0 to 8, 8 to 0, -8 to 8, 7 to 8, 8 to 7)) {
+            val lattice = PdfStream(
+                dict = PdfDictionary(mapOf(
+                    "ShadingType" to PdfInt(5), "ColorSpace" to PdfName("DeviceGray"),
+                    "BitsPerCoordinate" to PdfInt(bpc.toLong()), "BitsPerComponent" to PdfInt(bpcomp.toLong()),
+                    "VerticesPerRow" to PdfInt(2),
+                    "Decode" to PdfArray(listOf(0, 612, 0, 792, 0, 1).map { PdfInt(it.toLong()) }),
+                    "Length" to PdfInt(0),
+                )),
+                rawBytes = ByteArray(0),
+            )
+            val shading = KiteShading.parse(lattice, noResolver)
+            assertTrue(shading !is KiteShading.TriangleMesh || shading.triangles.isEmpty(), "$bpc, $bpcomp")
+        }
+        // A flag width outside 2, 4 and 8 makes a patch mesh unusable too.
+        val stream = patchStream(6, SQUARE_BOUNDARY)
+        val badFlag = PdfStream(PdfDictionary(stream.dict.entries.associate { (k, v) -> k to if (k == "BitsPerFlag") PdfInt(0) else v }), stream.rawBytes)
+        val patches = KiteShading.parse(badFlag, noResolver)
+        assertTrue(patches !is KiteShading.PatchMesh || patches.patches.isEmpty())
+    }
+
     private fun assertEquals(expected: Int, actual: Int, absoluteTolerance: Int) =
         assertTrue(kotlin.math.abs(expected - actual) <= absoluteTolerance, "expected $expected, got $actual")
 
