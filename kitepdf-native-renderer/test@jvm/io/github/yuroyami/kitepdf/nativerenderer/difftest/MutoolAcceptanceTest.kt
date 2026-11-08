@@ -77,6 +77,35 @@ class MutoolAcceptanceTest {
         }
     }
 
+    /**
+     * An incremental save over an undamaged file whose cross-reference is a stream and whose objects
+     * sit in object streams: a classic section whose /Prev points at the xref stream, with staged
+     * objects that replace packed ones (ISO 32000-1, 7.5.6 and 7.5.8; #757). The repaired case above
+     * takes another path, a standalone table with no /Prev.
+     */
+    @Test
+    fun an_incremental_save_over_a_cross_reference_stream_is_accepted() {
+        assumeTrue("mutool not found, skipping oracle validation.", MuPdfOracle.binary != null)
+        val tool = MuPdfOracle.binary!!
+        val plain = PdfBuilder().page { text(StandardFont.Helvetica, 24.0, 72.0, 700.0, "Base page") }.build()
+        val packed = PdfDocument.open(plain).edit().saveRewritten(useObjectStreams = true)
+        val doc = PdfDocument.open(packed)
+        val saved = doc.edit().apply {
+            setInfo(title = "Edited")
+            stampPage(doc.pages[0]) { text(StandardFont.CourierBold, 36.0, 150.0, 400.0, "STAMP") }
+        }.saveIncremental()
+        val file = File.createTempFile("kite-xrefstm-incremental-", ".pdf").apply { deleteOnExit(); writeBytes(saved) }
+        val png = File.createTempFile("kite-xrefstm-", ".png").apply { deleteOnExit() }
+        MutoolAcceptance.assertAccepted(
+            MutoolAcceptance.run(tool, "draw", "-r", "72", "-F", "png", "-o", png.absolutePath, file.absolutePath, "1"),
+            "the incremental save over an xref stream",
+        )
+        MutoolAcceptance.assertAccepted(MutoolAcceptance.run(tool, "show", file.absolutePath, "grep"), "every object of it")
+        val info = MutoolAcceptance.run(tool, "show", file.absolutePath, "trailer/Info/Title")
+        MutoolAcceptance.assertAccepted(info, "the title")
+        kotlin.test.assertTrue("Edited" in info.stdout, "the new title, not: ${info.stdout}")
+    }
+
     @Test
     fun the_lines_mutool_prints_for_a_repair_are_complaints() {
         // Recorded from mutool 1.27.2 drawing a file whose page offset was 37 bytes off.

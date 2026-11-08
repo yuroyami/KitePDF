@@ -51,4 +51,28 @@ class ObjectStreamWriteTest {
         assertEquals(2, reopened.pageCount)
         assertContains(reopened.pages[0].extractText(), "page one")
     }
+
+    @Test fun an_incremental_save_chains_to_the_cross_reference_stream_without_a_repair() {
+        // ISO 32000-1, 7.5.6 and 7.5.8: the update's /Prev names the xref stream, and its objects
+        // replace packed ones in place of a rewritten table (#757).
+        val plain = PdfBuilder().page { text(StandardFont.Helvetica, 24.0, 72.0, 700.0, "Base page") }.build()
+        val packed = PdfDocument.open(plain).edit().saveRewritten(useObjectStreams = true)
+        val baseXref = packed.decodeToString().substringAfterLast("startxref").trim().substringBefore('\n').trim().toLong()
+        val doc = PdfDocument.open(packed)
+        assertTrue(!doc.isRepaired, "the base opens without a repair")
+        val pageNumber = doc.pages[0].reference!!.objectNumber
+        val saved = doc.edit().apply {
+            setInfo(title = "Edited")
+            stampPage(doc.pages[0]) { text(StandardFont.CourierBold, 36.0, 150.0, 400.0, "STAMP") }
+        }.saveIncremental()
+        assertTrue(saved.copyOfRange(0, packed.size).contentEquals(packed), "the original bytes stay as they were")
+        val update = saved.copyOfRange(packed.size, saved.size).decodeToString()
+        assertContains(update, "/Prev $baseXref")
+        assertContains(update, "$pageNumber 0 obj", message = "the page, packed in the base, is written again")
+        val reopened = PdfDocument.open(saved)
+        assertTrue(!reopened.isRepaired, "the update opens without a repair")
+        assertEquals("Edited", reopened.info.title)
+        val text = reopened.pages[0].extractText()
+        assertTrue("Base page" in text && "STAMP" in text, text)
+    }
 }
