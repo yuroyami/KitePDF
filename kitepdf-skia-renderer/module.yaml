@@ -52,6 +52,8 @@ settings:
     optIns: [ kotlin.RequiresOptIn ]
   android:
     namespace: io.github.yuroyami.kitepdf.skia
+    # Skiko declares 24, so the merger names this artifact rather than Skiko (#721).
+    minSdk: 24
   publishing:
     pom:
       name: KitePDF Skia Renderer
