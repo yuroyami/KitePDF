@@ -667,7 +667,7 @@ public class PdfEditor internal constructor(
         )
         // Flattening to one /Pages node can strip attributes a leaf page inherited
         // from an intermediate node, so bake the resolved MediaBox/Resources/Rotate
-        // onto each base page that doesn't carry its own.
+        // onto each base page that doesn't carry its own, with /CropBox, the fourth inheritable entry.
         val baseByNum = base.pages.mapNotNull { p -> p.reference?.let { it.objectNumber to p } }.toMap()
         for (pref in order) {
             val pd = effectiveObject(pref.objectNumber) as? PdfDictionary ?: continue
@@ -675,6 +675,8 @@ public class PdfEditor internal constructor(
             m["Parent"] = pagesRef
             baseByNum[pref.objectNumber]?.let { bp ->
                 if ("MediaBox" !in m) m["MediaBox"] = rectToArray(bp.mediaBox)
+                // /CropBox inherits too (ISO 32000-1, 7.7.3.4, Table 30; #685).
+                if ("CropBox" !in m && bp.cropBox != bp.mediaBox) m["CropBox"] = rectToArray(bp.cropBox)
                 if ("Resources" !in m) bp.resources?.let { r -> m["Resources"] = r }
                 if ("Rotate" !in m && bp.rotation != 0) m["Rotate"] = PdfInt(bp.rotation.toLong())
             }
@@ -728,6 +730,7 @@ public class PdfEditor internal constructor(
         m.remove("Parent")
         m["Type"] = PdfName("Page")
         if ("MediaBox" !in m) m["MediaBox"] = rectToArray(page.mediaBox)
+        if ("CropBox" !in m && page.cropBox != page.mediaBox) m["CropBox"] = rectToArray(page.cropBox)
         if ("Resources" !in m) page.resources?.let { m["Resources"] = it }
         if ("Rotate" !in m && page.rotation != 0) m["Rotate"] = PdfInt(page.rotation.toLong())
         return PdfDictionary(m)

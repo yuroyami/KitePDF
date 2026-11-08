@@ -332,6 +332,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A second `setInfo` call keeps the values of the first, where it undid them or orphaned their object (#686).
 - Saving an edited document keeps the first `/ID` string and writes a new second one from the file as written,
   where both stayed as they were (#738).
+- A page that is removed around, reordered, inserted, copied or grafted keeps the `/CropBox` it inherited from
+  the page tree, where it showed its whole media box (#685).
 
 ## [0.13.0] - 2026-10-09
 

@@ -43,4 +43,30 @@ class SetInfoTest {
             kotlin.test.assertNotEquals(before[1], after[1], "the changing string changes")
         }
     }
+
+    /** Two pages that inherit /MediaBox and /CropBox from their /Pages root. */
+    private fun inheritedCropBox(): ByteArray {
+        val sb = StringBuilder("%PDF-1.5\n")
+        val offsets = IntArray(5)
+        fun obj(n: Int, body: String) { offsets[n] = sb.length; sb.append("$n 0 obj\n$body\nendobj\n") }
+        obj(1, "<< /Type /Catalog /Pages 2 0 R >>")
+        obj(2, "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 612 792] /CropBox [50 100 300 500] >>")
+        obj(3, "<< /Type /Page /Parent 2 0 R >>")
+        obj(4, "<< /Type /Page /Parent 2 0 R >>")
+        val xref = sb.length
+        sb.append("xref\n0 5\n0000000000 65535 f \n")
+        for (n in 1..4) sb.append(offsets[n].toString().padStart(10, '0') + " 00000 n \n")
+        sb.append("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        return sb.toString().encodeToByteArray()
+    }
+
+    @Test
+    fun aMovedPageKeepsTheCropBoxItInherited() {
+        // ISO 32000-1, 7.7.3.4 and Table 30: /CropBox inherits like /MediaBox (#685).
+        val crop = io.github.yuroyami.kitepdf.core.KiteRectangle(50.0, 100.0, 300.0, 500.0)
+        assertEquals(crop, PdfDocument.open(inheritedCropBox()).pages[1].cropBox)
+        val doc = PdfDocument.open(inheritedCropBox())
+        val removed = doc.edit().apply { removePage(doc.pages[0]) }.saveRewritten()
+        assertEquals(crop, PdfDocument.open(removed).pages[0].cropBox)
+    }
 }
