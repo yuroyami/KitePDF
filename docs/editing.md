@@ -198,7 +198,7 @@ val bytes = editor.saveIncremental()
 | `insertPageAt(position, pageRef)` | Puts a page reference from `graftPage` at a position, counted from 0. |
 | `setPageOrder(refs)` | Makes the pages exactly this list of references. Leave a page out to remove it. |
 
-A copied page brings everything that it uses (fonts, images and content) with it. After `saveIncremental()`, a removed page stays in the bytes of the file. `saveRewritten()` drops it.
+A copied page brings everything that it uses (fonts, images and content) with it. After `saveIncremental()`, a removed page stays in the bytes of the file. `saveRewritten()` drops it, even when a bookmark, a link, an action, `/OpenAction`, a named destination or a structure element still names it: each such reference is written as `null`, which readers take as no destination.
 
 ## Metadata
 

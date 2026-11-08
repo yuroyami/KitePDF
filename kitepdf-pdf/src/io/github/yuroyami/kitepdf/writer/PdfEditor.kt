@@ -1295,6 +1295,15 @@ public class PdfEditor internal constructor(
             }
         }
 
+        // A page taken out of the page tree is not written, whatever still names it: an outline
+        // item, a link, an action, /OpenAction, a named destination or a structure element's /Pg.
+        // A destination names a page of the document (ISO 32000-1, 12.3.2), so each reference to
+        // the removed page is written as null, which readers take as no destination (#1016).
+        val removedPages = pageOrderState?.let { order ->
+            val kept = order.mapTo(HashSet()) { it.objectNumber }
+            base.pages.mapNotNull { it.reference?.objectNumber }.filterNot { it in kept }.toHashSet()
+        } ?: emptySet()
+
         // Reachability BFS over effective (staged-or-original) objects.
         val reachable = LinkedHashSet<Long>()
         val queue = ArrayDeque<Long>()
@@ -1304,7 +1313,7 @@ public class PdfEditor internal constructor(
         while (queue.isNotEmpty()) {
             val obj = effectiveObject(queue.removeFirst()) ?: continue
             collectReferences(obj) { refNum ->
-                if (effectiveObject(refNum) != null && reachable.add(refNum)) queue.addLast(refNum)
+                if (refNum !in removedPages && effectiveObject(refNum) != null && reachable.add(refNum)) queue.addLast(refNum)
             }
         }
 
