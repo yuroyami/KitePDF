@@ -372,6 +372,8 @@ internal fun PdfEditor.redactFormXObject(
         engine.formBBoxes = loadFormBBoxes(formResources)
         engine.extGStates = loadExtGStates(formResources)
         engine.tilingPatternNames = loadTilingPatternNames(formResources)
+        engine.fontBands = loadFontBands(formResources)
+        engine.namedPropertyLists = loadPropertyLists(formResources)
         val filtered = engine.run(ops)
 
         val nested = recurseIntoForms(formResources, engine.formXObjectHits)
@@ -1067,4 +1069,40 @@ internal fun PdfEditor.stripStructureText(pageDict: PdfDictionary, mcids: Set<In
             element = dict["P"] as? PdfReference
         }
     }
+}
+
+/**
+ * How far each font of [resources] reaches below and above its baseline, in ems, where its box
+ * passes the default band: a Type 3 font's /FontBBox through its /FontMatrix (9.6.5), and another
+ * font's descriptor /FontBBox in thousandths of an em (9.8.1), a composite font's from its
+ * descendant (#1017). A font the default band covers is left out.
+ */
+internal fun PdfEditor.loadFontBands(resources: PdfDictionary?): Map<String, Pair<Double, Double>> {
+    val fonts = runCatching { resources?.getDict("Font", effective) }.getOrNull() ?: return emptyMap()
+    fun numbers(arr: io.github.yuroyami.kitepdf.core.parser.PdfArray?): List<Double>? = arr?.mapNotNull {
+        when (val v = runCatching { it.resolve(effective) }.getOrNull()) {
+            is PdfInt -> v.value.toDouble()
+            is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
+            else -> null
+        }
+    }?.takeIf { it.size >= 4 }
+    val out = LinkedHashMap<String, Pair<Double, Double>>()
+    for ((name, value) in fonts.map) {
+        val dict = runCatching { value.resolve(effective) }.getOrNull() as? PdfDictionary ?: continue
+        val (bottom, top) = if (dict.getName("Subtype") == "Type3") {
+            val box = numbers(runCatching { dict.getArray("FontBBox", effective) }.getOrNull()) ?: continue
+            val fm = numbers(runCatching { dict.getArray("FontMatrix", effective) }.getOrNull())?.takeIf { it.size >= 6 } ?: listOf(0.001, 0.0, 0.0, 0.001, 0.0, 0.0)
+            val ys = listOf(box[0] to box[1], box[2] to box[1], box[0] to box[3], box[2] to box[3]).map { (x, y) -> fm[1] * x + fm[3] * y + fm[5] }
+            ys.min() to ys.max()
+        } else {
+            val described = runCatching { dict.getArray("DescendantFonts", effective)?.getOrNull(0)?.resolve(effective) as? PdfDictionary }.getOrNull() ?: dict
+            val descriptor = runCatching { described.getDict("FontDescriptor", effective) }.getOrNull() ?: continue
+            val box = numbers(runCatching { descriptor.getArray("FontBBox", effective) }.getOrNull()) ?: continue
+            minOf(box[1], box[3]) / 1000.0 to maxOf(box[1], box[3]) / 1000.0
+        }
+        if (!bottom.isFinite() || !top.isFinite() || top - bottom > 100.0) continue
+        if (bottom >= DEFAULT_BAND_BOTTOM && top <= DEFAULT_BAND_TOP) continue
+        out[name] = minOf(bottom, DEFAULT_BAND_BOTTOM) to maxOf(top, DEFAULT_BAND_TOP)
+    }
+    return out
 }

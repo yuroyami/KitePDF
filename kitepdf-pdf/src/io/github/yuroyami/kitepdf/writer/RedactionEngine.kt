@@ -161,6 +161,11 @@ internal class RedactionEngine(
         val horizontalScaling: Double = 100.0,
         val leading: Double = 0.0,
         val rise: Double = 0.0,
+        /** How far below and above the baseline the font's ink reaches, in ems (#1017). */
+        val bandBottom: Double = DEFAULT_BAND_BOTTOM,
+        val bandTop: Double = DEFAULT_BAND_TOP,
+        /** `Tr`: modes 1, 2, 5 and 6 stroke the outlines, so the ink reaches half the pen past them (9.3.6). */
+        val renderMode: Int = 0,
     )
 
     /**
@@ -300,8 +305,10 @@ internal class RedactionEngine(
                 }
                 "Tf" -> {
                     val fontName = name(op, 0)
+                    val band = fontName?.let(fontBands::get)
                     gs = gs.copy(text = gs.text.copy(
                         font = fonts[fontName] ?: missingFont, type3 = type3Fonts[fontName], fontSize = num(op, 1),
+                        bandBottom = band?.first ?: DEFAULT_BAND_BOTTOM, bandTop = band?.second ?: DEFAULT_BAND_TOP,
                     ))
                     out.add(op)
                 }
@@ -310,6 +317,7 @@ internal class RedactionEngine(
                 "Tz" -> { gs = gs.copy(text = gs.text.copy(horizontalScaling = num(op, 0))); out.add(op) }
                 "TL" -> { gs = gs.copy(text = gs.text.copy(leading = num(op, 0))); out.add(op) }
                 "Ts" -> { gs = gs.copy(text = gs.text.copy(rise = num(op, 0))); out.add(op) }
+                "Tr" -> { gs = gs.copy(text = gs.text.copy(renderMode = num(op, 0).toInt())); out.add(op) }
 
                 "Td" -> { moveText(num(op, 0), num(op, 1), setLeading = false); out.add(op) }
                 "TD" -> { moveText(num(op, 0), num(op, 1), setLeading = true); out.add(op) }
@@ -634,6 +642,9 @@ internal class RedactionEngine(
         )
     }
 
+    /** How far each font of the stream's resources reaches below and above the baseline, in ems, by name (#1017). */
+    var fontBands: Map<String, Pair<Double, Double>> = emptyMap()
+
     /** The tiling patterns of the stream's resources by name (#1012). */
     var tilingPatternNames: Set<String> = emptySet()
 
@@ -783,11 +794,25 @@ internal class RedactionEngine(
     private fun runIntersectsRedaction(advance: Double): Boolean {
         if (rectangles.isEmpty()) return false
         val fs = gs.text.fontSize
-        val ascent = fs * 1.0
-        val descent = fs * 0.35
+        // The font's own reach, its /FontBBox or a Type 3 font's through /FontMatrix, where it
+        // passes the 0.35 em below and 1 em above the baseline that most fonts keep to (#1017).
+        val ascent = fs * gs.text.bandTop
+        val descent = -fs * gs.text.bandBottom
+        val pad = strokePadInTextSpace()
         // The rise is in text space too, under the text matrix (9.3.7).
         val m = gs.ctm.concat(gs.text.textMatrix).concat(KiteMatrix.translation(0.0, gs.text.rise))
-        return boxIntersects(m, x0 = 0.0, y0 = -descent, x1 = advance, y1 = ascent)
+        return boxIntersects(m, x0 = minOf(0.0, advance) - pad, y0 = -descent - pad, x1 = maxOf(0.0, advance) + pad, y1 = ascent + pad)
+    }
+
+    /**
+     * Half the line width in text space when the render mode strokes the glyph outlines (1, 2, 5
+     * and 6; ISO 32000-1, 9.3.6), as [pathIntersectsRedaction] pads a stroke; else 0 (#1017).
+     */
+    private fun strokePadInTextSpace(): Double {
+        if (gs.text.renderMode !in STROKING_RENDER_MODES) return 0.0
+        val t = gs.text.textMatrix
+        val scale = kotlin.math.sqrt(kotlin.math.abs(t.a * t.d - t.b * t.c)).takeIf { it > 1e-9 } ?: return gs.lineWidth
+        return gs.lineWidth * maxOf(1.0, gs.miterLimit) / 2.0 / scale
     }
 
     /**
@@ -937,3 +962,10 @@ private val CLOSING_PAINT_OPERATORS = setOf("s", "b", "b*")
 
 /** The entries of a marked-content property list that hold the text of its content (ISO 32000-1, 14.9.3 to 14.9.5; #1008). */
 internal val REPLACEMENT_TEXT_KEYS: List<String> = listOf("ActualText", "Alt", "E")
+
+/** The reach of a font's ink below and above its baseline, in ems, when its /FontBBox says no more (#1017). */
+internal const val DEFAULT_BAND_BOTTOM = -0.35
+internal const val DEFAULT_BAND_TOP = 1.0
+
+/** The text render modes that stroke the glyph outlines (ISO 32000-1, 9.3.6, Table 106). */
+private val STROKING_RENDER_MODES = setOf(1, 2, 5, 6)

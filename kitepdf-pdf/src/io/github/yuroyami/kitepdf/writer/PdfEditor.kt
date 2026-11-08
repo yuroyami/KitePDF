@@ -1033,6 +1033,7 @@ public class PdfEditor internal constructor(
         engine.extGStates = loadExtGStates(pageResources)
         engine.tilingPatternNames = loadTilingPatternNames(pageResources)
         engine.namedPropertyLists = loadPropertyLists(pageResources)
+        engine.fontBands = loadFontBands(pageResources)
         val filtered = engine.run(ops)
         // Recurse into every intersecting form XObject first: it decides which `Do`
         // operands point at a redacted clone and which leave the stream altogether,

@@ -608,6 +608,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a tagged PDF, a structure element whose marked content a redaction removes loses its `/ActualText`, `/Alt`
   and `/E`, so `readingOrder` no longer returns the removed paragraph or the description of the removed picture
   (#1009).
+- Redaction tests a text run by where its ink can reach: a font's `/FontBBox` (a Type 3 font's through its
+  `/FontMatrix`) where it passes the usual band, and half the pen past the outlines for a render mode that
+  strokes, so a high Type 3 glyph or wide stroked text in a region goes (#1017).
 
 ## [0.13.0] - 2026-10-09
 
