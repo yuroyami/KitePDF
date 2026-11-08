@@ -74,9 +74,13 @@ public class EpubFragmentBox internal constructor(
 /** SMIL 3.0 clock values (section 13): a full or a partial clock, or a count with a unit. */
 internal object SmilClock {
 
-    /** [value] in seconds, or null when it is not a clock value. */
+    /**
+     * [value] in seconds, or null when it is not a clock value. SMIL 3.0, Media Clipping, also lets
+     * a clip value carry the `npt=` metric, which books converted from older formats still write (#708).
+     */
     fun seconds(value: String): Double? {
-        val v = value.trim()
+        var v = value.trim()
+        if (v.length > 4 && v.substring(0, 4).equals("npt=", ignoreCase = true)) v = v.substring(4).trim()
         if (v.isEmpty()) return null
         if (':' in v) {
             val parts = v.split(':')
@@ -107,6 +111,7 @@ internal object SmilParser {
         val root = runCatching { KiteXml.parse(xml) }.getOrNull() ?: return emptyList()
         val body = find(root, "body") ?: return emptyList()
         val out = ArrayList<EpubOverlayClip>()
+        var warned = false
         // A list of elements to visit, and no recursion: sequences can nest deeper than a stack can follow (#450).
         val pending = arrayListOf<Pair<KiteXmlNode.Element, String?>>(body to null)
         while (pending.isNotEmpty()) {
@@ -114,7 +119,10 @@ internal object SmilParser {
             // The parser keeps local names, so epub:type reads as type.
             val own = el.attrs["type"]?.trim()?.takeIf { it.isNotEmpty() } ?: type
             if (el.tag == "par") {
-                clip(el, own, dir)?.let(out::add)
+                clip(el, own, dir) {
+                    if (!warned) io.github.yuroyami.kitepdf.core.kiteWarn { "media overlay $path: unreadable clip value $it, clip read without its audio" }
+                    warned = true
+                }?.let(out::add)
                 continue
             }
             for (i in el.children.indices.reversed()) (el.children[i] as? KiteXmlNode.Element)?.let { pending.add(it to own) }
@@ -122,16 +130,30 @@ internal object SmilParser {
         return out
     }
 
-    private fun clip(par: KiteXmlNode.Element, type: String?, dir: String): EpubOverlayClip? {
+    private fun clip(par: KiteXmlNode.Element, type: String?, dir: String, unreadable: (String) -> Unit): EpubOverlayClip? {
         val elements = par.children.filterIsInstance<KiteXmlNode.Element>()
         val text = elements.firstOrNull { it.tag == "text" }?.attrs?.get("src")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val audio = elements.firstOrNull { it.tag == "audio" }
-        val audioSrc = audio?.attrs?.get("src")?.trim()?.takeIf { it.isNotEmpty() }
+        var audioSrc = audio?.attrs?.get("src")?.trim()?.takeIf { it.isNotEmpty() }
+        val beginValue = audio?.attrs?.get("clipbegin")
+        val endValue = audio?.attrs?.get("clipend")
+        var begin = beginValue?.let(SmilClock::seconds)
+        var end = endValue?.let(SmilClock::seconds)
+        // A value that is there and cannot be read is an error in the book. Read as the start or the
+        // end of the file it turned a clip of seconds into the whole file, so the clip goes without
+        // its audio, as a clip with no audio element does (EPUB Media Overlays 3.3; #708).
+        val bad = listOfNotNull(beginValue?.takeIf { begin == null }, endValue?.takeIf { end == null })
+        if (audioSrc != null && bad.isNotEmpty()) {
+            unreadable(bad.joinToString(" and ") { "'$it'" })
+            audioSrc = null
+            begin = null
+            end = null
+        }
         return EpubOverlayClip(
             textHref = resolveWithFragment(dir, text),
             audioHref = audioSrc?.let { EpubDocument.resolvePath(dir, it) },
-            clipBegin = audio?.attrs?.get("clipbegin")?.let(SmilClock::seconds) ?: 0.0,
-            clipEnd = audio?.attrs?.get("clipend")?.let(SmilClock::seconds),
+            clipBegin = begin ?: 0.0,
+            clipEnd = end,
             epubType = type,
             id = par.attrs["id"],
         )

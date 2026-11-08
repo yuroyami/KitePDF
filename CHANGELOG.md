@@ -524,6 +524,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on every draw (#803).
 - A JPEG 2000 image of a PDF no longer decodes at an eighth when its page loads: the codestream and JP2 headers
   give its decoded space, and `ImageKodec.probe` its opacity channel (#744).
+- A media overlay clip value with the SMIL `npt=` metric reads, and a clip whose value cannot be read goes
+  without its audio instead of playing its whole file (#708).
 
 ## [0.13.0] - 2026-10-09
 

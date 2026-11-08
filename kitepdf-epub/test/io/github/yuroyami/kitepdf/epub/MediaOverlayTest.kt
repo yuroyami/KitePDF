@@ -99,6 +99,27 @@ class MediaOverlayTest {
     }
 
     @Test
+    fun an_npt_clip_value_reads_and_an_unreadable_one_drops_the_audio_of_its_clip() {
+        // SMIL 3.0, Media Clipping, allows the npt= metric; an unreadable value must not play the whole file (#708).
+        assertEquals(12.5, SmilClock.seconds("npt=12.5s"))
+        assertEquals(15.0, SmilClock.seconds("NPT=0:00:15"))
+        fun clip(begin: String, end: String) = SmilParser.clips(
+            "<smil xmlns=\"http://www.w3.org/ns/SMIL\"><body><par><text src=\"c1.xhtml#p1\"/>" +
+                "<audio src=\"c1.mp3\" clipBegin=\"$begin\" clipEnd=\"$end\"/></par></body></smil>",
+            "OEBPS/c1.smil",
+        ).single()
+        val npt = clip("npt=12.5s", "npt=15s")
+        assertEquals(Triple("OEBPS/c1.mp3", 12.5, 15.0), Triple(npt.audioHref, npt.clipBegin, npt.clipEnd))
+        val clock = clip("npt=0:00:12.5", "npt=0:00:15")
+        assertEquals(12.5 to 15.0, clock.clipBegin to clock.clipEnd)
+        for ((begin, end) in listOf("12.5s" to "fifteen", "soon" to "15s")) {
+            val bad = clip(begin, end)
+            assertNull(bad.audioHref, "$begin .. $end plays nothing, not the rest of the file")
+            assertEquals("OEBPS/c1.xhtml#p1", bad.textHref)
+        }
+    }
+
+    @Test
     fun a_fragment_gives_its_page_and_one_rectangle_per_line() {
         val filler = (1..12).joinToString("") { "<p>Filler paragraph number $it.</p>" }
         val doc = book(
