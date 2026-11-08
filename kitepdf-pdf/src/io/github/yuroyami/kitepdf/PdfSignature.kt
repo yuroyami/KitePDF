@@ -56,8 +56,9 @@ public class PdfSignature internal constructor(
      * [PdfCertificate.revocation] reports revocation from the CRLs and OCSP responses that the
      * document carries, in its document security store and in the signature, and from
      * [revocationData], each a DER CRL or OCSP response that the caller fetched. KitePDF fetches
-     * nothing from the network. It does not check that the certificates were valid at the time
-     * of signing: [PdfCertificate.notBefore] and [PdfCertificate.notAfter] give the dates.
+     * nothing from the network. [PdfSignatureValidation.certificatesValidAtSigning] says whether
+     * the chain was inside its validity period at the signing time, and a chain that was not is
+     * not trusted.
      */
     public fun validate(
         trustAnchors: List<ByteArray> = emptyList(),
@@ -154,7 +155,8 @@ public class PdfSignatureValidation internal constructor(
      * and the path from the signer to it holds by RFC 5280, 6.1: each issuer below the anchor is a
      * CA by its basicConstraints, its key usage, when it has one, allows certificate signing, its
      * path length constraint holds, and no certificate below the anchor has a critical extension
-     * KitePDF does not process. [detail] says which rule a path that fails breaks.
+     * KitePDF does not process. [detail] says which rule a path that fails breaks. A chain whose
+     * [certificatesValidAtSigning] is false is not trusted either.
      */
     public val isTrusted: Boolean,
     /**
@@ -177,6 +179,13 @@ public class PdfSignatureValidation internal constructor(
      * Null when KitePDF cannot read the signed revision to compare it.
      */
     public val changes: List<PdfRevisionChange>? = null,
+    /**
+     * Whether every certificate of [chain] below the trust anchor, or every one when none is an
+     * anchor, was inside its validity period at [signedTime] (RFC 5280, 6.1.3 (a)(2)). Null when
+     * the signature states no time. For a signature that time is the one its signer states, which
+     * nothing but a timestamp vouches for; for a document timestamp it is the authority's.
+     */
+    public val certificatesValidAtSigning: Boolean? = null,
 ) {
     /** True when [status] is [Status.Valid]. */
     public val isValid: Boolean get() = status == Status.Valid
@@ -185,7 +194,7 @@ public class PdfSignatureValidation internal constructor(
     public val areChangesPermitted: Boolean get() = changes?.all { it.isPermitted } ?: !isModifiedAfterSigning
 
     internal fun withChanges(changes: List<PdfRevisionChange>?): PdfSignatureValidation =
-        PdfSignatureValidation(status, signer, chain, isTrusted, isModifiedAfterSigning, signedTime, detail, changes)
+        PdfSignatureValidation(status, signer, chain, isTrusted, isModifiedAfterSigning, signedTime, detail, changes, certificatesValidAtSigning)
 
     /** Whether a signature matches the signed bytes and the signer's certificate. */
     public enum class Status {

@@ -216,13 +216,43 @@ internal class SignatureValidator(
         // Trust speaks for the signer only when the signature holds: an invalid one claims nothing.
         val anchorAt = chain.indexOfFirst { c -> anchors.any { it.der.contentEquals(c.der) } }
         val pathProblem = if (status == Status.Valid && anchorAt >= 0) pathProblem(chain, anchorAt) else null
-        val trusted = status == Status.Valid && anchorAt >= 0 && pathProblem == null
+        // RFC 5280, 6.1.3 (a)(2) at the signing time: every certificate below the anchor (#634).
+        val below = if (anchorAt >= 0) chain.subList(0, anchorAt) else chain
+        val expired = signedTime?.let { t -> below.firstOrNull { !validAt(it, t) } }
+        val validAtSigning = if (signedTime == null || chain.isEmpty()) null else expired == null
+        val dateProblem = expired?.let { "the chain is not trusted: ${it.commonName} was not valid at the signing time $signedTime" }
+        val trusted = status == Status.Valid && anchorAt >= 0 && pathProblem == null && validAtSigning != false
         // Revocation data counts only from an issuer that may issue: a false issuer signs no CRL.
         val certificates = chain.mapIndexed { i, cert ->
             val issuer = chain.getOrNull(i + 1)?.takeIf { pathProblem == null || i + 1 <= anchorAt && canIssue(chain, i + 1, anchorAt) == null }
             certificateOf(cert, revocationOf(cert, issuer))
         }
-        return PdfSignatureValidation(status, certificates.firstOrNull(), certificates, trusted, modified, signedTime, detail ?: pathProblem)
+        return PdfSignatureValidation(
+            status, certificates.firstOrNull(), certificates, trusted, modified, signedTime,
+            detail ?: pathProblem ?: dateProblem.takeIf { status == Status.Valid },
+            certificatesValidAtSigning = validAtSigning,
+        )
+    }
+
+    /** Whether [time] lies inside [cert]'s validity period; a date that does not read limits nothing. */
+    private fun validAt(cert: X509, time: PdfDate): Boolean {
+        val t = utcSeconds(time)
+        val from = asn1Date(cert.notBefore)?.let(::utcSeconds)
+        val until = asn1Date(cert.notAfter)?.let(::utcSeconds)
+        return (from == null || t >= from) && (until == null || t <= until)
+    }
+
+    /** [d] as seconds since 1970 in UTC, by the days-from-civil count of the proleptic Gregorian calendar. */
+    private fun utcSeconds(d: PdfDate): Long {
+        val y = d.year - if (d.month <= 2) 1 else 0
+        val era = (if (y >= 0) y else y - 399) / 400
+        val yoe = y - era * 400
+        val mp = (d.month + 9) % 12
+        val doy = (153 * mp + 2) / 5 + d.day - 1
+        val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        val days = era * 146097L + doe - 719468
+        val offset = if (d.tzSign == 'Z') 0 else (d.tzHour * 3600 + d.tzMinute * 60) * (if (d.tzSign == '-') -1 else 1)
+        return days * 86400 + d.hour * 3600 + d.minute * 60 + d.second - offset
     }
 
     /**

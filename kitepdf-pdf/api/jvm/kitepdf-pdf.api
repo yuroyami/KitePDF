@@ -1128,6 +1128,7 @@ public final class io/github/yuroyami/kitepdf/PdfSignature {
 
 public final class io/github/yuroyami/kitepdf/PdfSignatureValidation {
 	public final fun getAreChangesPermitted ()Z
+	public final fun getCertificatesValidAtSigning ()Ljava/lang/Boolean;
 	public final fun getChain ()Ljava/util/List;
 	public final fun getChanges ()Ljava/util/List;
 	public final fun getDetail ()Ljava/lang/String;

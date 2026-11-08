@@ -442,6 +442,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path length constraint, and no certificate below the anchor has a critical extension KitePDF does not process.
   A certificate issued by an end entity read as valid and trusted. `detail` names the rule a refused path breaks,
   and revocation data counts only from an issuer that may issue (#999).
+- `PdfSignatureValidation.certificatesValidAtSigning` says whether every certificate of the chain below the trust
+  anchor was inside its validity period at the signing time, null when the signature states no time. A chain that
+  was not is no longer trusted: `isTrusted` is false and `detail` names the certificate. This changes `isTrusted`
+  for a signature made with an expired certificate (#634).
 
 ## [0.13.0] - 2026-10-09
 

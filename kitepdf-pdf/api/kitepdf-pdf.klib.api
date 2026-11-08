@@ -1489,6 +1489,8 @@ final class io.github.yuroyami.kitepdf/PdfSignature { // io.github.yuroyami.kite
 final class io.github.yuroyami.kitepdf/PdfSignatureValidation { // io.github.yuroyami.kitepdf/PdfSignatureValidation|null[0]
     final val areChangesPermitted // io.github.yuroyami.kitepdf/PdfSignatureValidation.areChangesPermitted|{}areChangesPermitted[0]
         final fun <get-areChangesPermitted>(): kotlin/Boolean // io.github.yuroyami.kitepdf/PdfSignatureValidation.areChangesPermitted.<get-areChangesPermitted>|<get-areChangesPermitted>(){}[0]
+    final val certificatesValidAtSigning // io.github.yuroyami.kitepdf/PdfSignatureValidation.certificatesValidAtSigning|{}certificatesValidAtSigning[0]
+        final fun <get-certificatesValidAtSigning>(): kotlin/Boolean? // io.github.yuroyami.kitepdf/PdfSignatureValidation.certificatesValidAtSigning.<get-certificatesValidAtSigning>|<get-certificatesValidAtSigning>(){}[0]
     final val chain // io.github.yuroyami.kitepdf/PdfSignatureValidation.chain|{}chain[0]
         final fun <get-chain>(): kotlin.collections/List<io.github.yuroyami.kitepdf/PdfCertificate> // io.github.yuroyami.kitepdf/PdfSignatureValidation.chain.<get-chain>|<get-chain>(){}[0]
     final val changes // io.github.yuroyami.kitepdf/PdfSignatureValidation.changes|{}changes[0]
