@@ -735,6 +735,9 @@ public class PdfScriptRunner(
         }
         // The script runs as a function body, which is where a field's script lives in Acrobat,
         // so its own `var` declarations stay out of the global scope.
+        // A script that does not compile, or that the engine stops, never reports, so the event
+        // answers with its own values, not with what the event before it left (#751).
+        host.expectEvent(unchanged)
         evaluate("__kiteEvent(__kiteEventInfo, function () {\n$script\n})", name)
         return host.lastEventResult
     }

@@ -65,6 +65,14 @@ internal class PdfScriptHost(
 
     internal class EventResult(val rc: Boolean, val value: String, val change: String)
 
+    /**
+     * Sets what an event leaves when its script never reports: one that does not compile, or that
+     * the engine stops, which skips every `finally` (#751). The event's own values stand then.
+     */
+    internal fun expectEvent(unchanged: EventResult) {
+        lastEventResult = unchanged
+    }
+
     fun bind(engine: KiteScriptEngine) {
         engine.defineFunction("__kite.hasField") { args -> document.formField(args.str(0)) != null }
         engine.defineFunction("__kite.fieldProp") { args -> fieldProp(args.str(0), args.str(1)) }

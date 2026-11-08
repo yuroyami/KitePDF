@@ -362,6 +362,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for every name (#787).
 - Setting `this.calculate` or `app.calculate` to false stops a form's calculations, even midway through a round,
   until a script sets it back (#781).
+- A field script that does not compile, or that the engine stops, answers its event with the event's own values,
+  where it took the result of the event before it, often another field's value (#751).
 
 ## [0.13.0] - 2026-10-09
 

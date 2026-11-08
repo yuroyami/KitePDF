@@ -104,6 +104,19 @@ class FormScriptTest {
     }
 
     @Test
+    fun a_calculate_script_that_does_not_compile_keeps_the_fields_own_value(): TestResult = scriptTest {
+        // It answered with the result of the event before it, another field's value (#751).
+        val doc = PdfDocument.open(invoicePdf(calculate = "event.value = \\(;"))
+        PdfScriptRunner(doc).use { runner ->
+            // The keystroke script of digits runs first, and leaves its result behind.
+            runner.setFieldValue("digits", "42")
+            runner.setFieldValue("a", "2")
+            assertEquals("", runner.formState.value("total").orEmpty())
+            assertEquals("2", runner.formState.value("a"))
+        }
+    }
+
+    @Test
     fun a_total_recalculates_when_a_field_changes(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->
