@@ -103,7 +103,7 @@ internal class SvgStyles(root: KiteXmlNode.Element, host: ((KiteXmlNode.Element)
 
     companion object {
         private val CSS_SPACE = Regex("[ \\t\\r\\n\\u000c]+")
-        private val IMPORTANT = Regex("!\\s*important\\s*$", RegexOption.IGNORE_CASE)
+        private val IMPORTANT = Regex("![ \\t\\n\\u000C\\r]*important[ \\t\\n\\u000C\\r]*$", RegexOption.IGNORE_CASE)
         private val IDENT = Regex("-?[_a-zA-Z\\u0080-\\uffff][_a-zA-Z0-9\\u0080-\\uffff-]*")
         private val LENGTH = Regex("[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?(?:px|pt|pc|in|cm|mm|q|em|ex|%)?", RegexOption.IGNORE_CASE)
         private val BLEND_MODES = setOf(

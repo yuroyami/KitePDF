@@ -301,7 +301,7 @@ internal class ParsedEpub(
             }
         }
         walk(root)
-        return out.toString().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+        return out.toString().split(Regex("[ \\t\\n\\u000B\\u000C\\r]+")).filter { it.isNotEmpty() }.joinToString(" ")
     }
 
     /** Whether [chapter]'s document has been parsed yet. For tests and diagnostics. */
@@ -893,7 +893,7 @@ internal class ParsedEpub(
 
         private val URL_SCHEME = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
-        private val VIEWBOX_SEPARATOR = Regex("[\\s,]+")
+        private val VIEWBOX_SEPARATOR = Regex("[ \\t\\n\\u000B\\u000C\\r,]+")
 
 
         /**

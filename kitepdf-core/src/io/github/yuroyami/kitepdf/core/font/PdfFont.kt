@@ -518,7 +518,7 @@ public class PdfFont private constructor(
          */
         private fun encodingFromSpec(spec: String): Array<String?> {
             val out = arrayOfNulls<String>(256)
-            for (tok in spec.trim().split(Regex("\\s+"))) {
+            for (tok in spec.trim().split(Regex("[ \\t\\n\\u000B\\u000C\\r]+"))) {
                 if (tok.isEmpty()) continue
                 val eq = tok.indexOf('=')
                 if (eq <= 0) continue

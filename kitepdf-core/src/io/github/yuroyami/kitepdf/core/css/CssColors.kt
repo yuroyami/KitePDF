@@ -65,7 +65,7 @@ internal object CssColors {
                 }
                 val slash = text.split('/')
                 if (slash.size > 2) return null
-                val parts = slash[0].trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                val parts = slash[0].trim().split(Regex("[ \\t\\n\\u000B\\u000C\\r]+")).filter { it.isNotEmpty() }
                 val alpha = slash.getOrNull(1)?.trim()?.also { if (it.isEmpty() || it.any(Char::isWhitespace)) return null }
                 return Args(parts, alpha, legacy = false)
             }

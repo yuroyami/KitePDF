@@ -152,7 +152,7 @@ internal object MathParser {
             }
         }
         el.children.forEach(::walk)
-        return sb.toString().trim().replace(Regex("\\s+"), " ")
+        return sb.toString().trim().replace(Regex("[ \\t\\n\\u000B\\u000C\\r]+"), " ")
     }
 
     private fun table(el: KiteXmlNode.Element, depth: Int): MathNode.Table {

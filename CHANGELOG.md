@@ -272,6 +272,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one space wide. `tab-size` is read as a count of spaces or a length (#847).
 - The content of `template`, `noembed`, `noframes`, `datalist` and a `dialog` without `open` no longer shows on
   an EPUB page or in its text, as the HTML Standard's rendering section hides them (#931).
+- White space splits name the ASCII characters they mean, so `getPageNumWords`, `getPageNthWord`, ruby readings,
+  note text and the SVG, XPS and CSS lists treat a no-break space the same on Kotlin/JS as on the JVM (#883).
 
 ## [0.13.0] - 2026-10-09
 

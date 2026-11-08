@@ -211,7 +211,7 @@ internal class PdfScriptHost(
 
     /** The size in the field's `/DA` string, or 0 when it asks the viewer to fit the box. */
     private fun textSizeOf(field: PdfFormField): Double {
-        val parts = (field.defaultAppearance ?: return 0.0).trim().split(Regex("\\s+"))
+        val parts = (field.defaultAppearance ?: return 0.0).trim().split(Regex("[ \\t\\n\\u000B\\u000C\\r]+"))
         val index = parts.indexOf("Tf")
         return if (index > 0) parts[index - 1].toDoubleOrNull() ?: 0.0 else 0.0
     }
@@ -270,7 +270,7 @@ internal class PdfScriptHost(
 
     private fun pageWords(pageIndex: Int): List<String> {
         val page = document.pages.getOrNull(pageIndex) ?: return emptyList()
-        return page.extractText().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        return pageWordsOf(page.extractText())
     }
 
     private fun pageBox(pageIndex: Int): List<Double> {
@@ -431,3 +431,12 @@ internal class PdfScriptHost(
 
 /** The most timers one document may have set at once (#959). */
 private const val MAX_TIMERS = 1000
+
+/**
+ * The words of a page's text, as `getPageNumWords` and `getPageNthWord` count them: split at ASCII
+ * white space only, so a no-break space stays inside a word, as Acrobat counts it. `\s` also
+ * matches the Unicode spaces on Kotlin/JS, so it gave another count in a browser (#883).
+ */
+internal fun pageWordsOf(text: String): List<String> = text.split(ASCII_SPACES).filter { it.isNotEmpty() }
+
+private val ASCII_SPACES = Regex("[ \\t\\n\\u000B\\u000C\\r]+")

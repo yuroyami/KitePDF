@@ -250,4 +250,4 @@ private val SKIPPED_TAGS = setOf("rt", "rp", "script", "style", "title")
 /** Characters a return link is drawn with, variation selectors and brackets included. */
 private const val RETURN_MARKS = "↩↪↑⤴⤶↵⏎^[]()︎️ "
 
-private val WHITESPACE = Regex("\\s+")
+private val WHITESPACE = Regex("[ \\t\\n\\u000B\\u000C\\r]+")

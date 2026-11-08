@@ -21,7 +21,7 @@ internal data class XpsGeometry(
 /** XPS path markup and abbreviated geometry, ECMA-388 §§11.2, 11.3. */
 internal object XpsPaths {
     fun parse(data: String): XpsGeometry {
-        val evenOdd = !Regex("^\\s*F\\s*1").containsMatchIn(data)
+        val evenOdd = !Regex("^[ \\t\\n\\u000B\\u000C\\r]*F[ \\t\\n\\u000B\\u000C\\r]*1").containsMatchIn(data)
         return XpsGeometry(abbreviated(data), evenOdd)
     }
 
@@ -238,7 +238,7 @@ internal object XpsPaths {
     }
 }
 
-internal fun numbers(raw: String): List<Double> = raw.trim().split(Regex("[\\s,]+")).mapNotNull {
+internal fun numbers(raw: String): List<Double> = raw.trim().split(Regex("[ \\t\\n\\u000B\\u000C\\r,]+")).mapNotNull {
     it.toDoubleOrNull()?.takeIf(Double::isFinite)
 }
 

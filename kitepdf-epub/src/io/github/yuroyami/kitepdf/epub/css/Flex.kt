@@ -174,5 +174,5 @@ internal object FlexValues {
         )
     }
 
-    private val WHITESPACE = Regex("\\s+")
+    private val WHITESPACE = Regex("[ \\t\\n\\u000B\\u000C\\r]+")
 }

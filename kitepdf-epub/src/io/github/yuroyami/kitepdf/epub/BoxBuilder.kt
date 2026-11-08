@@ -1270,7 +1270,7 @@ internal class BoxBuilder(
 
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
-        val WHITESPACE = Regex("\\s+")
+        val WHITESPACE = Regex("[ \\t\\n\\u000B\\u000C\\r]+")
     }
 }
 

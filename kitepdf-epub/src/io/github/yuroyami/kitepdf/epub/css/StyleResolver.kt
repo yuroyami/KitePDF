@@ -1400,7 +1400,7 @@ internal class StyleResolver(
         )
         val POSITION_WORDS = setOf("left", "right", "top", "bottom", "center")
         const val INLINE_SPEC = 0xFFFFFF
-        val WHITESPACE = Regex("\\s+")
+        val WHITESPACE = Regex("[ \\t\\n\\u000B\\u000C\\r]+")
 
         /** The multi-column properties, read with or without the `-webkit-` prefix (#34). */
         /** The properties that inherit, without a prefix, which `unset` inherits (#579). */

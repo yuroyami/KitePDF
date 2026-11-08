@@ -1890,7 +1890,7 @@ public class SvgImage private constructor(
             }
         }
 
-        private val LIST_SEPARATOR = Regex("[\\s,]+")
+        private val LIST_SEPARATOR = Regex("[ \\t\\n\\u000B\\u000C\\r,]+")
 
         /** An `<image>` width or height in user units, or null for `auto` and for a value it cannot read. */
         private fun imageSizeOrNull(raw: String, fontSize: Double, reference: Double): Double? {

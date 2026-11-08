@@ -228,5 +228,5 @@ internal object GridValues {
     /** The most tracks one `repeat()` makes, which bounds a hostile count. */
     const val MAX_REPEAT = 1000
 
-    private val WHITESPACE = Regex("\\s+")
+    private val WHITESPACE = Regex("[ \\t\\n\\u000B\\u000C\\r]+")
 }

@@ -155,5 +155,5 @@ internal object RichText {
     private fun fmt(d: Double): String = PdfObjectWriter.formatReal(d)
 
     private const val MAX_DEPTH = 64
-    private val WHITESPACE = Regex("\\s+")
+    private val WHITESPACE = Regex("[ \\t\\n\\u000B\\u000C\\r]+")
 }
