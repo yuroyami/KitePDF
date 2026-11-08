@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.writer
 
+import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
@@ -107,7 +108,10 @@ internal object FieldText {
             var at = x
             for (run in line.runs) {
                 if (run.text.isEmpty()) continue
-                out.ascii("/${nameOf(run.font)} ${fmt(run.size)} Tf\n${run.color}\n")
+                // The /DA font name is decoded, so it is escaped again as the resources write it,
+                // or /F#20A became /F A, an unknown operator before a Tf short of operands (#728).
+                out.append(PdfObjectWriter.toBytes(PdfName(nameOf(run.font))))
+                out.ascii(" ${fmt(run.size)} Tf\n${run.color}\n")
                 PdfObjectWriter.writeObject(PdfString(PdfText.encodeContentString(run.text)), out)
                 out.ascii(" Tj\n")
                 if (run.underline) {

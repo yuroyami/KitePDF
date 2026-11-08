@@ -435,6 +435,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#878).
 - The writer writes a name that holds a character above U+00FF as its UTF-8 bytes, where it kept each character's
   low byte, so `/€` came out as `/#AC` and two names could write the same bytes (#742).
+- A field appearance writes the /DA font name with its escapes, as its resources write it, so a font named
+  `/F#20A` no longer becomes `/F A`, an unknown operator before a `Tf` short of operands (#728).
 
 ## [0.13.0] - 2026-10-09
 

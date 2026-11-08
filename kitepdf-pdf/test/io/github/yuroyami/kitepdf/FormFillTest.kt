@@ -72,6 +72,19 @@ class FormFillTest {
         assertTrue("s3cret" !in drawn, "the live appearance drew the password")
     }
 
+    @Test fun a_da_font_name_with_an_escape_is_escaped_again_in_the_appearance() {
+        // /F#20A is the name "F A"; written raw it read as an operator A and a Tf short of operands (#728).
+        val doc = KitePDF.open(buildFormPdf(font = "F#20A"))
+        val out = doc.edit().apply { setTextFieldValue(doc.formField("FullName")!!, "abc") }.saveIncremental()
+        val ap = KitePDF.open(out).pages[0].annotations.first().appearanceStream!!
+        val apText = FilterChain.decode(ap).decodeToString()
+        assertTrue("/F#20A 12 Tf" in apText, apText)
+        assertTrue("/F A " !in apText, apText)
+        // The content names the font its resources hold.
+        val fonts = (ap.dict["Resources"] as? io.github.yuroyami.kitepdf.core.parser.PdfDictionary)?.get("Font")
+        assertTrue(fonts.toString().contains("F A"), "resources: $fonts")
+    }
+
     /* ─── Fixture: a one-field AcroForm ──────────────────────────────────── */
 
     /**
@@ -79,7 +92,7 @@ class FormFillTest {
      * Object map: 1 Catalog, 2 Pages, 3 Page, 4 Helv font, 5 widget/field,
      * 6 AcroForm.
      */
-    private fun buildFormPdf(flags: Int = 0): ByteArray {
+    private fun buildFormPdf(flags: Int = 0, font: String = "Helv"): ByteArray {
         val buf = ByteArrayBuilder()
         val offsets = mutableListOf<Int>()
         fun write(s: String) = buf.append(s.encodeToByteArray())
@@ -94,9 +107,9 @@ class FormFillTest {
         offsets.add(buf.size())
         write("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
         offsets.add(buf.size())
-        write("5 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Tx /T (FullName) /Ff $flags /Rect [100 700 400 720] /DA (/Helv 12 Tf 0 g) /P 3 0 R /F 4 >>\nendobj\n")
+        write("5 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Tx /T (FullName) /Ff $flags /Rect [100 700 400 720] /DA (/$font 12 Tf 0 g) /P 3 0 R /F 4 >>\nendobj\n")
         offsets.add(buf.size())
-        write("6 0 obj\n<< /Fields [5 0 R] /DA (/Helv 12 Tf 0 g) /DR << /Font << /Helv 4 0 R >> >> >>\nendobj\n")
+        write("6 0 obj\n<< /Fields [5 0 R] /DA (/$font 12 Tf 0 g) /DR << /Font << /$font 4 0 R >> >> >>\nendobj\n")
 
         val size = offsets.size + 1
         val xref = buf.size()
