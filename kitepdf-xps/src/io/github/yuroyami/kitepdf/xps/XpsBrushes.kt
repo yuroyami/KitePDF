@@ -71,20 +71,31 @@ internal class XpsBrushes(
 
     private fun image(resource: XpsResource): Image? {
         var source = resource.node.attrs["imagesource"] ?: return null
-        if (source.startsWith("{ColorConvertedBitmap ")) source = source.removePrefix("{ColorConvertedBitmap ").substringBefore(' ')
+        // ECMA-388: {ColorConvertedBitmap image profile} names the ICC profile of the image's
+        // samples, which takes the place of a profile in the image file (#895).
+        var profilePart: String? = null
+        if (source.startsWith("{ColorConvertedBitmap ")) {
+            val operands = source.removePrefix("{ColorConvertedBitmap ").removeSuffix("}").trim().split(Regex("\\s+"))
+            source = operands[0]
+            profilePart = operands.getOrNull(1)?.let { resolvePart(resource.base, it) }
+        }
         val part = resolvePart(resource.base, source) ?: return null
-        if (part in unreadable) return null
+        val key = if (profilePart == null) part else "$part $profilePart"
+        if (key in unreadable) return null
         // The package keeps decoded brushes across renders, so a page drawn again does not decode again (#385).
-        return packageData.image(part) {
+        return packageData.image(key) {
             runCatching {
                 val bytes = packageData.read(part) ?: return@runCatching null
                 // An XPS image brush places its image by its own viewbox, with the samples as stored.
-                val decoded = KiteImageData.fromEncodedImage(bytes, applyOrientation = false) ?: return@runCatching null
+                val stored = KiteImageData.fromEncodedImage(bytes, applyOrientation = false) ?: return@runCatching null
+                val profile = profilePart?.let { packageData.read(it) }
+                if (profilePart != null && profile == null) kiteWarn { "xps: the colour profile $profilePart of $part is not in the package" }
+                val decoded = profile?.let { stored.withIccProfile(it) } ?: stored
                 val dpi = imageDpi(bytes)
                 Image(decoded, decoded.width * 96.0 / dpi.first, decoded.height * 96.0 / dpi.second)
             }.getOrNull()
         } ?: run {
-            unreadable += part
+            unreadable += key
             null
         }
     }

@@ -57,6 +57,7 @@ for (link in page.hyperlinks) {
 - Glyph runs, with embedded TrueType and OpenType CFF fonts, TTC faces and obfuscated font resources.
 - Resource dictionaries.
 - Solid color brushes, gradient brushes with each spread method (pad, reflect and repeat), image brushes and visual brushes, with transforms and clipping.
+- An image brush whose `ImageSource` names an ICC profile with `{ColorConvertedBitmap image profile}` reads its RGB samples through that profile. A profile for grey or CMYK samples is not applied yet.
 
 Sideways text, synthetic font styles and the text boxes of extracted text are approximations. Transparency and gradients also depend on what the renderer of each platform can do. The [API reference of `kitepdf-xps`](https://yuroyami.github.io/KitePDF/api/kitepdf-xps/index.html) describes each brush.
 

@@ -1309,6 +1309,7 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageData { // io.github.
         final fun <get-width>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.width.<get-width>|<get-width>(){}[0]
 
     final fun retainedBytes(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteImageData.retainedBytes|retainedBytes(){}[0]
+    final fun withIccProfile(kotlin/ByteArray): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withIccProfile|withIccProfile(kotlin.ByteArray){}[0]
     final fun withIdentity(io.github.yuroyami.kitepdf.core.render/KiteImageIdentity): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withIdentity|withIdentity(io.github.yuroyami.kitepdf.core.render.KiteImageIdentity){}[0]
     final fun withIntent(io.github.yuroyami.kitepdf.core.render/KiteRenderingIntent, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withIntent|withIntent(io.github.yuroyami.kitepdf.core.render.KiteRenderingIntent;kotlin.Boolean){}[0]
     final fun withInterpolate(kotlin/Boolean): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withInterpolate|withInterpolate(kotlin.Boolean){}[0]

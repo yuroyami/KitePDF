@@ -780,6 +780,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On Apple platforms a soft mask in force at the `Do` of a transparency group applies once, to what the group
   composites, instead of to each of its paints, so two overlapping opaque shapes under a half mask show half
   their colour where they overlap too (#897).
+- An XPS image brush whose `ImageSource` is `{ColorConvertedBitmap image profile}` reads its RGB samples through
+  the ICC profile it names, instead of drawing them as sRGB. `KiteImageData.withIccProfile` gives an image the
+  profile a container names for it (#895).
 
 ## [0.13.0] - 2026-10-09
 

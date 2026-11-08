@@ -235,6 +235,19 @@ public class KiteImageData internal constructor(
         ).also { all[slot] = it }
     }
 
+    /**
+     * This image with its samples read through the ICC [profile], the profile that a container
+     * names for an image apart from the file, such as an XPS `ColorConvertedBitmap` (ECMA-388; #895).
+     * It takes the place of a profile in the image file. This image itself comes back when the
+     * profile does not parse, does not describe three components, is sRGB, or the image holds no
+     * decoded RGB samples.
+     */
+    public fun withIccProfile(profile: ByteArray): KiteImageData {
+        if (kind != Kind.RAW || resolvedColorSpace !== KiteColorSpace.DeviceRGB || isImageMask) return this
+        val parsed = IccProfile.parse(profile)?.takeIf { it.componentCount == 3 && !it.isIdentity } ?: return this
+        return copy(resolvedColorSpace = KiteColorSpace.IccBased(parsed))
+    }
+
     /** The image that [themedLineArt] made for a theme, and that theme's colour map, or null before the first. */
     internal var lineArt: Pair<(RgbColor) -> RgbColor, KiteImageData>? = null
 
