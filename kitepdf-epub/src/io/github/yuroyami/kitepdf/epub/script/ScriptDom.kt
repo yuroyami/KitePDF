@@ -1199,6 +1199,7 @@ internal class ScriptDom(
         to: HashMap<KiteXmlNode.Element, KiteXmlNode.Element>,
         link: Boolean,
         commented: KiteXmlNode.Element? = null,
+        depth: Int = 0,
     ): KiteXmlNode.Element {
         val out = KiteXmlNode.Element(el.tag, el.attrs)
         out.parent = parent
@@ -1215,10 +1216,18 @@ internal class ScriptDom(
             out.children.add(child)
             if (link && child !is KiteXmlNode.Element) leafParents[child] = out
         }
+        // A snapshot is what the layout reads, and the layout recurses once per level, so it obeys the
+        // parser's limit: the elements below the last level move up to it, in order, each keeping its
+        // text, as HtmlParser moves them. A script could build a tree of any depth, and the snapshot
+        // and the layout of a 30,000-level chapter overflowed the stack (#955).
+        if (!link && depth >= io.github.yuroyami.kitepdf.epub.HtmlParser.MAX_DEPTH - 1) {
+            flattenInto(out, el, from, to)
+            return out
+        }
         val shape = commented?.children?.takeIf { sameExceptComments(it, el.children) }
         if (shape == null) {
             for (c in el.children) when (c) {
-                is KiteXmlNode.Element -> add(copy(c, out, from, to, link))
+                is KiteXmlNode.Element -> add(copy(c, out, from, to, link, depth = depth + 1))
                 is KiteXmlNode.Text -> add(KiteXmlNode.Text(c.text))
                 is KiteXmlNode.Comment -> if (link) add(KiteXmlNode.Comment(c.text))
             }
@@ -1231,6 +1240,44 @@ internal class ScriptDom(
             }
         }
         return out
+    }
+
+    /**
+     * The subtree below [el] copied into [cap] with no element deeper than it: each element becomes a
+     * child of [cap], in document order, and each text goes to the copy of its own parent. A loop and
+     * a stack of its own walk the tree, so its depth costs no call stack (#955).
+     */
+    private fun flattenInto(
+        cap: KiteXmlNode.Element,
+        el: KiteXmlNode.Element,
+        from: HashMap<KiteXmlNode.Element, KiteXmlNode.Element>,
+        to: HashMap<KiteXmlNode.Element, KiteXmlNode.Element>,
+    ) {
+        // Each entry is an original element, its copy, and the index of its next child to visit.
+        val stack = ArrayList<Triple<KiteXmlNode.Element, KiteXmlNode.Element, IntArray>>()
+        stack.add(Triple(el, cap, intArrayOf(0)))
+        while (stack.isNotEmpty()) {
+            val (original, copied, next) = stack.last()
+            if (next[0] >= original.children.size) { stack.removeAt(stack.lastIndex); continue }
+            when (val c = original.children[next[0]++]) {
+                is KiteXmlNode.Text -> copied.children.add(KiteXmlNode.Text(c.text))
+                is KiteXmlNode.Element -> {
+                    val moved = KiteXmlNode.Element(c.tag, c.attrs)
+                    moved.parent = cap
+                    from[moved] = c; to[c] = moved
+                    cap.children.add(moved)
+                    val canvas = canvasContent?.invoke(c)
+                    if (canvas != null) {
+                        moved.attrs = moved.attrs + (FormStates.STATE + CANVAS_STATE to "")
+                        canvas.parent = moved
+                        moved.children.add(canvas)
+                    } else {
+                        stack.add(Triple(c, moved, intArrayOf(0)))
+                    }
+                }
+                is KiteXmlNode.Comment -> {}
+            }
+        }
     }
 
     /** Whether [commented] is [plain] with comments among it: the same elements by tag and texts, in order. */

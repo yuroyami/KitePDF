@@ -191,6 +191,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accessibility node carries password semantics and no value, where a screen reader or any accessibility
   service read the password in clear (#953). `docs/editing.md` skips password fields when it saves.
 
+- The tree that a book's script builds is laid out within the parser's limit of 32 levels: the snapshot that
+  the layout reads moves deeper elements up to the last level, in order, as the parser does, and walks them
+  with a stack of its own. A chapter whose script nested 30,000 elements made `chapterOpened` throw
+  `StackOverflowError` (#955).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

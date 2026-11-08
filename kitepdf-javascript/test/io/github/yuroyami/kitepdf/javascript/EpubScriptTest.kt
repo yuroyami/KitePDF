@@ -1120,4 +1120,19 @@ class EpubScriptTest {
         val logged = console.single { it.startsWith("log: ") }.removePrefix("log: ")
         assertEquals("4 QuotaExceededError v", logged)
     }
+
+    @Test
+    fun a_tree_that_a_script_nests_deeply_is_laid_out_within_the_parsers_limit(): TestResult = scriptTest {
+        // A script could nest a tree of any depth, and the snapshot overflowed the stack (#955).
+        val book = ScriptBooks.chapter(
+            """<p>Markup.</p><script>document.body.innerHTML = '<div>'.repeat(30000) + 'deep' + '</div>'.repeat(30000);
+                var e = document.body; for (var i = 0; i < 2000; i++) { var d = document.createElement('div'); e.appendChild(d); e = d; }
+                e.textContent = 'deeper';</script>""",
+        )
+        val r = runner(book)
+        r.chapterOpened(0)
+        val text = book.page(io.github.yuroyami.kitepdf.core.KiteLocation(0, 0)).textContent().plainText
+        assertTrue("deep" in text, text)
+        assertTrue("deeper" in text, text)
+    }
 }
