@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.writer
 
 import io.github.yuroyami.kitepdf.crypto.Md5
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfString
 
 /**
@@ -17,5 +18,16 @@ internal object DocumentId {
         val h = Md5.hash(seed)
         val s = PdfString(h)
         return PdfArray(listOf(s, s))
+    }
+
+    /**
+     * The `/ID` of a file that an edit wrote: the first string of [existing], or one made from
+     * [original] when there is none, and a second string from [contents], the file as written.
+     * ISO 32000-1, 14.4: the first is permanent, and the file key of an encrypted document is made
+     * from it, while the second changes with each update (#738).
+     */
+    fun updated(existing: PdfObject?, original: ByteArray, contents: ByteArray): PdfArray {
+        val first = ((existing as? PdfArray)?.getOrNull(0) as? PdfString) ?: PdfString(Md5.hash(original))
+        return PdfArray(listOf(first, PdfString(Md5.hash(first.bytes + contents))))
     }
 }

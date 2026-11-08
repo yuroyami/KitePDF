@@ -330,6 +330,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ContentStreamBuilder.restore()` brings back the font that `showText` encodes for, as `Q` restores the PDF
   font, where text after `restore()` was written in the encoding of the inner font (#733).
 - A second `setInfo` call keeps the values of the first, where it undid them or orphaned their object (#686).
+- Saving an edited document keeps the first `/ID` string and writes a new second one from the file as written,
+  where both stayed as they were (#738).
 
 ## [0.13.0] - 2026-10-09
 

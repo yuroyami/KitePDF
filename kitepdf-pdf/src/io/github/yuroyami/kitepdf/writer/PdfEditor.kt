@@ -1066,8 +1066,9 @@ public class PdfEditor internal constructor(
         base.trailer["Root"]?.let { dict["Root"] = it }
         base.trailer["Info"]?.let { dict["Info"] = it }
         base.trailer["Encrypt"]?.let { dict["Encrypt"] = it }
-        // Preserve the original /ID (signing/encryption invariant) or synthesize one.
-        dict["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.rawBytes)
+        // Keep the permanent first /ID string (the encryption key is made from it) and write a new
+        // second one, as an update does (ISO 32000-1, 14.4; #738).
+        dict["ID"] = DocumentId.updated(base.trailer["ID"], base.rawBytes, out.toByteArray())
         prevXref?.let { dict["Prev"] = PdfInt(it.toLong()) }
         for ((k, v) in trailerOverrides) dict[k] = v
 
@@ -1152,7 +1153,7 @@ public class PdfEditor internal constructor(
         trailer["Size"] = PdfInt(ordered.size + 1L)
         newRootRef(remap, "Root")?.let { trailer["Root"] = it }
         newRootRef(remap, "Info")?.let { trailer["Info"] = it }
-        trailer["ID"] = base.trailer["ID"] ?: DocumentId.generate(base.rawBytes)
+        trailer["ID"] = DocumentId.updated(base.trailer["ID"], base.rawBytes, out.toByteArray())
         out.append("trailer\n".encodeToByteArray())
         PdfObjectWriter.writeObject(PdfDictionary(trailer), out)
         out.append("\nstartxref\n$xrefOffset\n%%EOF\n".encodeToByteArray())
@@ -1213,7 +1214,7 @@ public class PdfEditor internal constructor(
             ?: throw IllegalStateException("Cannot write document with no /Root")
         val xrefStream = XRefStreamWriter.build(
             entries, size = xrefStmNum + 1, root = root, info = newRootRef(remap, "Info"), prev = null,
-            id = base.trailer["ID"] ?: DocumentId.generate(base.rawBytes),
+            id = DocumentId.updated(base.trailer["ID"], base.rawBytes, out.toByteArray()),
         )
         out.append("$xrefStmNum 0 obj\n".encodeToByteArray())
         PdfObjectWriter.writeObject(xrefStream, out)

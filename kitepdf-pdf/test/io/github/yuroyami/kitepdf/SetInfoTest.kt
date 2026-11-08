@@ -28,4 +28,19 @@ class SetInfoTest {
             }
         }
     }
+
+    @Test
+    fun anEditKeepsTheFirstIdAndChangesTheSecond() {
+        // ISO 32000-1, 14.4 (#738).
+        val original = PdfDocument.open(built(true))
+        val before = original.trailer["ID"] as io.github.yuroyami.kitepdf.core.parser.PdfArray
+        for (incremental in listOf(true, false)) {
+            val editor = PdfDocument.open(built(true)).edit()
+            editor.setInfo(title = "New Title")
+            val out = PdfDocument.open(if (incremental) editor.saveIncremental() else editor.saveRewritten())
+            val after = out.trailer["ID"] as io.github.yuroyami.kitepdf.core.parser.PdfArray
+            assertEquals(before[0], after[0], "the permanent string stays")
+            kotlin.test.assertNotEquals(before[1], after[1], "the changing string changes")
+        }
+    }
 }
