@@ -531,6 +531,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A keystroke answer no longer replaces a value that the host or a script wrote to the text field while the
   keystroke script ran; the input moves onto the new value. `PdfFormState.setValue` takes an expected revision
   for this (#735).
+- When the host gives `KiteDocView` a new `scripts` handler while a text field has the caret, the field ends its
+  edit on the old handler and takes the caret again under the new one, so its keys, the form the page draws and
+  the commit go to one handler (#739).
 
 ## [0.13.0] - 2026-10-09
 

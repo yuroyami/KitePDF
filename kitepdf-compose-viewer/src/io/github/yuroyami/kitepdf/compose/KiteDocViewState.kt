@@ -525,6 +525,29 @@ public class KiteDocViewState(
     /** The document's script handler, when the host gave the viewer one. */
     internal var scripts: io.github.yuroyami.kitepdf.PdfScriptHandler? by mutableStateOf(null)
 
+    /**
+     * Gives the viewer [next] as its script handler. A text field with the caret ends its edit on
+     * the handler it began under, which takes the keys typed so far and the blur, and then takes
+     * the caret again under [next], which gets the focus. So the keys, the form the page draws and
+     * the commit go to one handler (#739). An open choice list is dropped without its draft, as
+     * before.
+     */
+    internal fun replaceScripts(next: io.github.yuroyami.kitepdf.PdfScriptHandler?) {
+        val previous = scripts
+        if (previous === next) return
+        val name = focusedField
+        val typing = previous != null && name != null && choiceSession == null
+        if (!typing) {
+            scripts = next
+            return
+        }
+        val widget = focusedWidget
+        val box = focusedWidgetBox
+        blurTextField()
+        scripts = next
+        if (next != null) focusField(name!!, widget, box)
+    }
+
     /** The book's script handler, when the host gave the viewer one (#41). */
     internal var epubScripts: io.github.yuroyami.kitepdf.epub.EpubScriptHandler? = null
 

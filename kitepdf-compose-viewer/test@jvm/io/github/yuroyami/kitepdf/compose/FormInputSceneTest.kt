@@ -323,4 +323,52 @@ class FormInputSceneTest {
             }
         }
     }
+
+    /** Keeps every key and counts them. */
+    private class CountingScripts(document: PdfDocument) : PdfScriptHandler {
+        override val formState: PdfFormState = PdfFormState(document)
+        @Volatile var keys = 0
+        @Volatile var focused = 0
+        override suspend fun focus(fieldName: String, widgetIndex: Int) { focused++ }
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+            keys++
+            val current = formState.value(fieldName) ?: ""
+            val start = selectionStart.coerceIn(0, current.length)
+            return current.substring(0, start) + change + current.substring(selectionEnd.coerceIn(start, current.length))
+        }
+    }
+
+    /** A new handler takes the keys, the focus and the form of a field that has the caret (#739). */
+    @Test
+    fun a_new_handler_takes_the_keys_of_the_field_with_the_caret() {
+        forBothEffectOrders { queued ->
+            val doc = formPdf()
+            val first = CountingScripts(doc)
+            val second = CountingScripts(doc)
+            val current = androidx.compose.runtime.mutableStateOf<PdfScriptHandler>(first)
+            lateinit var state: KiteDocViewState
+            val (scene, driver) = drivenScene(200, 200, queued) {
+                state = rememberKiteDocViewState(doc)
+                KiteDocView(
+                    state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0),
+                    zoomSpec = KiteZoomSpec(doubleTapEnabled = false), scripts = current.value,
+                )
+            }
+            scene.use {
+                driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+                focus(scene, driver, 100f, 35f)
+                type(scene, 'a')
+                driver.pumpUntilState { first.formState.value("name") == "a" }
+                onTestUiThread { current.value = second }
+                driver.pumpUntilState { second.focused > 0 && focusedInput(scene) != null }
+                driver.pumpFrames(2)
+                assertEquals("name", state.focusedField, "the field keeps the caret")
+                type(scene, 'b')
+                driver.pumpUntilState { second.keys > 0 }
+                driver.pumpUntilState { second.formState.value("name") == "b" }
+                assertEquals(1, first.keys, "the first handler got no key after the change")
+                assertEquals("a", first.formState.value("name"))
+            }
+        }
+    }
 }

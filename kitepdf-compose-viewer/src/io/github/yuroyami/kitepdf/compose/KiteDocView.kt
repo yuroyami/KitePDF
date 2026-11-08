@@ -267,7 +267,7 @@ public fun KiteDocView(
     val uriHandler = LocalUriHandler.current
     val scriptLane = remember { newScriptLane() }
     SideEffect {
-        state.scripts = scripts
+        state.replaceScripts(scripts)
         state.epubScripts = epubScripts
         state.scriptScope = scriptScope
         state.scriptLane = scriptLane
