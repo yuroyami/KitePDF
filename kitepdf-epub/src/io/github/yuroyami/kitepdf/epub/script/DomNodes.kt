@@ -510,6 +510,7 @@ def(Element.prototype, 'innerHTML', function () {
 }, function (v) {
   var id = idOf(this);
   checkMarkup(K.setHtml(id, v == null ? '' : String(v), inXmlDocument(id)), "Failed to set the 'innerHTML' property on 'Element'");
+  markMarkupScripts(id);
   startParsedImages(id);
 });
 def(Element.prototype, 'outerHTML', function () {
@@ -520,6 +521,7 @@ def(Element.prototype, 'outerHTML', function () {
   var what = "Failed to set the 'outerHTML' property on 'Element'";
   checkMarkup(K.insertHtml(id, 'beforebegin', v == null ? '' : String(v), inXmlDocument(id)), what);
   removeNode(p, this, what);
+  markMarkupScripts(p);
   startParsedImages(p);
 });
 var ADJACENT_POSITIONS = nameSet(['beforebegin', 'afterbegin', 'beforeend', 'afterend']);
@@ -530,6 +532,7 @@ Element.prototype.insertAdjacentHTML = function (position, html) {
     throw new DOMException(what + ": The value provided ('" + position + "') is not one of 'beforeBegin', 'afterBegin', 'beforeEnd', or 'afterEnd'.", 'SyntaxError');
   }
   checkMarkup(K.insertHtml(id, position, String(html), inXmlDocument(id)), what);
+  markMarkupScripts(K.parent(id) == null ? id : K.parent(id));
   startParsedImages(K.parent(id) == null ? id : K.parent(id));
 };
 /* Puts [node] at [position] of [el], as insertAdjacentElement does; null where el has no parent to put it by. */

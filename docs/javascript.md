@@ -265,7 +265,8 @@ EpubScriptRunner(book).use { scripts ->
 ### Chapters and engines
 
 - Each chapter is a window of its own, with an engine of its own.
-- The scripts of a chapter run the first time that it opens, inline and from files of the book, in the order of the document.
+- The scripts of a chapter run the first time that it opens, inline and from files of the book, in the order of the document. A script with a `src` and `defer` runs after the others, before `DOMContentLoaded`, and one with `async` right after the deferred ones.
+- A script element that a script inserts runs as in a browser. One with a `src` runs in a task and then fires `load`, or `error` when the book has no such file. An inline one runs when it is inserted, and setting the `src` of an empty one runs it then. A script that `document.write` writes runs too, but one that `innerHTML` or `insertAdjacentHTML` parses does not. The window's `load` waits for the inserted scripts.
 - A module script does not run, and a script at an address outside the book does not run.
 - After the scripts run, `noscript` content does not show.
 - A chapter without scripts takes no engine.

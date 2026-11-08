@@ -26,6 +26,7 @@ internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_GEOMETRY)
     append(DOM_PRELUDE_REFLECTION)
     append(DOM_PRELUDE_ELEMENTS)
+    append(DOM_PRELUDE_SCRIPTS)
     append(DOM_PRELUDE_FORMS)
     append(DOM_PRELUDE_CANVAS)
     append(DOM_PRELUDE_TAIL)
@@ -63,7 +64,7 @@ var ObjectCreate = Object.create, ObjectDefineProperty = Object.defineProperty, 
 var MathCeil = Math.ceil, MathFloor = Math.floor, MathMax = Math.max, MathMin = Math.min, MathRound = Math.round, MathPow = Math.pow;
 var MathSin = Math.sin, MathCos = Math.cos, MathTan = Math.tan, MathAtan2 = Math.atan2, MathSqrt = Math.sqrt, MathPI = Math.PI;
 var ArrayIndexOf = uncurry(Array.prototype.indexOf), ArrayJoin = uncurry(Array.prototype.join),
-  ArrayPush = uncurry(Array.prototype.push), ArrayShift = uncurry(Array.prototype.shift), ArraySort = uncurry(Array.prototype.sort);
+  ArrayPush = uncurry(Array.prototype.push), ArrayPop = uncurry(Array.prototype.pop), ArrayShift = uncurry(Array.prototype.shift), ArraySort = uncurry(Array.prototype.sort);
 /* The iteration methods of Array.prototype, which Web IDL makes the methods of an iterable list such as a NodeList. */
 var ArrayValues = Array.prototype[Symbol.iterator], ArrayEntries = Array.prototype.entries, ArrayKeys = Array.prototype.keys,
   ArrayForEach = Array.prototype.forEach;
@@ -524,7 +525,15 @@ function listenersOf(t) {
 }
 /* What the DOM's own algorithms do to the tree, on ids, where a script calls the methods. */
 function textNode(data) { return wrap(K.createText(String(data))); }
-function insertNode(parentId, node, before, what) { check(K.insert(parentId, idOf(node), before == null ? null : idOf(before)), what); return node; }
+function insertNode(parentId, node, before, what) {
+  // The script elements it brings, found before a fragment gives its children away (#935).
+  var scripts = scriptsMade > 0 ? scriptElementsAt(idOf(node)) : null;
+  check(K.insert(parentId, idOf(node), before == null ? null : idOf(before)), what);
+  if (scripts !== null) prepareScriptsAt(scripts);
+  // Text put into a script element that waited without any prepares it.
+  if (K.kind(parentId) === 1 && isHtml(parentId, 'script')) prepareScript(parentId);
+  return node;
+}
 function removeNode(parentId, node, what) { check(K.remove(parentId, idOf(node)), what); return node; }
 function elementIds(id) {
   var all = K.children(id), out = [];
@@ -865,6 +874,8 @@ function attributeChanged(el, name, set) {
   // async ends the forced async of a script element a script made (HTML, 4.12.1).
   if (name === 'nonce') WeakMapSet(nonces, el, set ? K.attr(el.__id, 'nonce') : '');
   if (name === 'async' && set) WeakMapSet(forceAsync, el, false);
+  // Setting the src of a script element that waited without one prepares it (#935).
+  if (name === 'src' && set && isHtml(el.__id, 'script')) prepareScript(el.__id);
   if (name === 'type') inputTypeChanged(el);
   if (name === 'src' && isImageElement(el.__id) && ownerDocId(el.__id) === rootId) {
     var r = MapGet(imageRequests, el.__id);
@@ -1735,7 +1746,7 @@ function madeBy(docId, id) {
   if (docId !== rootId) MapSet(nodeDocuments, id, docId);
   var node = wrap(id);
   // A script element that the parser did not make runs as if async until its async is set (HTML, 4.12.1).
-  if (K.kind(id) === 1 && isHtml(id, 'script')) WeakMapSet(forceAsync, node, true);
+  if (K.kind(id) === 1 && isHtml(id, 'script')) { WeakMapSet(forceAsync, node, true); scriptsMade++; }
   return node;
 }
 def(Document.prototype, 'documentElement', function () { return wrap(documentElementId(idOf(this))); });
@@ -1908,9 +1919,10 @@ Document.prototype.hasFocus = function () { return idOf(this) === rootId; };
 /* What document.write() writes: after the running script, or else at the end of the body. */
 function writeHtml(doc, html) {
   var at = doc.__script;
-  if (at) { K.write(at.__id, html); return; }
+  // A script element that the writing script writes runs, as the parser would run it (#935).
+  if (at) { K.write(at.__id, html); prepareScriptsAt(scriptElementsAt(rootId)); return; }
   var body = bodyOf(idOf(doc));
-  if (body !== null) { check(K.insertHtml(body.__id, 'beforeend', html), 'write'); startParsedImages(body.__id); }
+  if (body !== null) { check(K.insertHtml(body.__id, 'beforeend', html), 'write'); markMarkupScripts(body.__id); startParsedImages(body.__id); }
 }
 /* HTML, 8.4: an XML document, such as an XHTML chapter, refuses to be written, opened or closed (#603). */
 function htmlOnly(doc, method, what) {
@@ -2450,6 +2462,8 @@ function* loadedSteps() {
   // The images of the document load before the window does (HTML, 8.4.7).
   startParsedImages(rootId);
   for (var f = pendingImageSteps(); !GeneratorNext(f).done;) yield;
+  // So do the scripts that scripts inserted (#935).
+  for (var sc = pendingScriptSteps(); !GeneratorNext(sc).done;) yield;
   // So do its frames, whose documents loaded first (HTML, 4.8.5).
   for (var h = frameLoadSteps(); !GeneratorNext(h).done;) yield;
   document.__ready = 'complete';

@@ -668,7 +668,22 @@ public class EpubScriptSession(
             }
             walk(dom.root)
             if (handlers.isNotEmpty()) call("markup") { engine.evaluate("__kite_markup([${handlers.joinToString(",")}])", "markup") }
-            for ((script, reached) in scripts) runScript(script, reached)
+            // These are the parser's: a script that moves one does not make it run before its turn (#935).
+            if (scripts.isNotEmpty()) call("parser") { engine.evaluate("__kite_parser_scripts([${scripts.joinToString(",") { dom.idOf(it.first).toString() }}])", "parser") }
+            // HTML, 4.12.1.1: a classic script with a src and defer runs after the parse, in order, before
+            // DOMContentLoaded, and one with async when it is ready, which for a file of the book is then too.
+            val deferred = ArrayList<KiteXmlNode.Element>()
+            val async = ArrayList<KiteXmlNode.Element>()
+            for ((script, reached) in scripts) {
+                val external = !dom.attr(script, "src")?.trim().isNullOrEmpty()
+                when {
+                    external && dom.attr(script, "async") != null -> async += script
+                    external && dom.attr(script, "defer") != null -> deferred += script
+                    else -> runScript(script, reached)
+                }
+            }
+            for (script in deferred) runScript(script, handlers.size)
+            for (script in async) runScript(script, handlers.size)
             beforeLoad()
             steps("load", "__kite_loaded()")
             commit()
@@ -702,28 +717,38 @@ public class EpubScriptSession(
          * [reached] elements of the markup with handler attributes. A module and a data block do not run.
          */
         private suspend fun runScript(script: KiteXmlNode.Element, reached: Int) {
-            val type = dom.attr(script, "type")?.substringBefore(';')?.trim()?.lowercase().orEmpty()
-            if (type.isNotEmpty() && type !in SCRIPT_TYPES) return
-            val src = dom.attr(script, "src")?.trim()
-            val (name, source) = if (!src.isNullOrEmpty()) {
-                val at = EpubDocument.resolvePath(dir, src)
-                if (isRemoteUrl(at)) {
-                    recordFailure(KiteScriptException("$label: $src is outside the book, so it does not run"))
-                    return
-                }
-                val bytes = document.resource(at)
-                if (bytes == null) {
-                    recordFailure(KiteScriptException("$label: $src is not in the book"))
-                    return
-                }
-                at to bytes.decodeToString().removePrefix("﻿")
-            } else {
-                "$path#script" to dom.textOf(script)
-            }
+            if (!isClassic(script)) return
+            val (name, source) = scriptSource(script) ?: return
             val id = dom.idOf(script)
             call("current") { engine.evaluate("__kite_current($id, $reached)", "current") }
             call(name) { engine.evaluatePausing(withoutCommentMarks(source), name) }
             call("current") { engine.evaluate("__kite_current(null)", "current") }
+        }
+
+        /** Whether [script] is a classic script, which runs: no type, or a JavaScript one. A module and a data block do not. */
+        private fun isClassic(script: KiteXmlNode.Element): Boolean {
+            val type = dom.attr(script, "type")?.substringBefore(';')?.trim()?.lowercase().orEmpty()
+            return type.isEmpty() || type in SCRIPT_TYPES
+        }
+
+        /**
+         * The name and the source of [script]: its text, or the file of the book its src names. Null
+         * when the src is outside the book or not in it, which goes on the failure list (#935).
+         */
+        private fun scriptSource(script: KiteXmlNode.Element): Pair<String, String>? {
+            val src = dom.attr(script, "src")?.trim()
+            if (src.isNullOrEmpty()) return "$path#script" to dom.textOf(script)
+            val at = EpubDocument.resolvePath(dir, src)
+            if (isRemoteUrl(at)) {
+                recordFailure(KiteScriptException("$label: $src is outside the book, so it does not run"))
+                return null
+            }
+            val bytes = document.resource(at)
+            if (bytes == null) {
+                recordFailure(KiteScriptException("$label: $src is not in the book"))
+                return null
+            }
+            return at to bytes.decodeToString().removePrefix("\uFEFF")
         }
 
         private fun bind() {
@@ -832,6 +857,9 @@ public class EpubScriptSession(
                 null
             }
             def("connected") { args -> node(args, 0)?.let(dom::isConnected) ?: false }
+            // What a script element that a script inserted runs, and whether it is one that runs (#935).
+            def("classicScript") { args -> element(args, 0)?.let(::isClassic) ?: false }
+            def("scriptSource") { args -> element(args, 0)?.let(::scriptSource)?.let { (name, source) -> listOf(name, withoutCommentMarks(source)) } }
             def("rect") { args ->
                 val live = element(args, 0) ?: return@def null
                 // A browser lays the page out again when a script measures after a change (#499).

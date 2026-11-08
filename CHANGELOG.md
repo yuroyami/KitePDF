@@ -714,6 +714,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the page is in the viewport. A loop count stops on the last frame. `KiteDocViewState.animateImages` turns
   playback on or off, and by default it follows the platform reduced-motion setting. Renders outside the viewer
   keep the first frame.
+- A script element that a book's script inserts now runs (#935). One with a src runs in a task, as an async
+  script, then fires `load`, or `error` when the book lacks the file, which then goes on the failure list. An
+  inline one runs when it is inserted, and setting the `src` of an empty one runs it then. A script that
+  `document.write` writes runs too. Scripts that `innerHTML` and its kin parse never run, as in a browser. The
+  window's `load` waits for the inserted scripts. Parser scripts with `defer` run after the parse, in order,
+  before `DOMContentLoaded`, and those with `async` right after them.
 
 ## [0.13.0] - 2026-10-09
 
