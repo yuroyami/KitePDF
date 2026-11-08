@@ -1853,12 +1853,42 @@ public class PageRenderer(
         val pMinX = corners.minOf { it.first }; val pMaxX = corners.maxOf { it.first }
         val pMinY = corners.minOf { it.second }; val pMaxY = corners.maxOf { it.second }
         val axs = kotlin.math.abs(xs); val ays = kotlin.math.abs(ys)
-        val i0 = kotlin.math.floor((pMinX - pat.bbox.right) / axs).toInt()
-        val i1 = kotlin.math.ceil((pMaxX - pat.bbox.left) / axs).toInt()
-        val j0 = kotlin.math.floor((pMinY - pat.bbox.top) / ays).toInt()
-        val j1 = kotlin.math.ceil((pMaxY - pat.bbox.bottom) / ays).toInt()
-        val tiles = (i1 - i0 + 1).toLong() * (j1 - j0 + 1).toLong()
-        if (tiles <= 0 || tiles > MAX_TILES) return
+        // The lattice is unbounded (ISO 32000-1, 8.7.3.1), so the range is weighed in Double before
+        // any Int is taken: Int spans of a saturated range wrapped, two spans of -1 made a count of
+        // 1, and the loops then ran over 1.8e19 cells (#971).
+        val fi0 = kotlin.math.floor((pMinX - pat.bbox.right) / axs)
+        val fi1 = kotlin.math.ceil((pMaxX - pat.bbox.left) / axs)
+        val fj0 = kotlin.math.floor((pMinY - pat.bbox.top) / ays)
+        val fj1 = kotlin.math.ceil((pMaxY - pat.bbox.bottom) / ays)
+        val spanI = fi1 - fi0 + 1
+        val spanJ = fj1 - fj0 + 1
+        if (!(spanI >= 1.0 && spanJ >= 1.0 && spanI * spanJ <= MAX_TILES)) return
+        if (fi0 < Int.MIN_VALUE || fi1 > Int.MAX_VALUE || fj0 < Int.MIN_VALUE || fj1 > Int.MAX_VALUE) return
+        val i0 = fi0.toInt(); val i1 = fi1.toInt()
+        val j0 = fj0.toInt(); val j1 = fj1.toInt()
+        // A cell that paints with its own pattern, or a ring of patterns that name each other, is not
+        // in the spec, so it is salvage: a pattern already painting paints nothing when it comes round
+        // again, and cell nesting counts toward the form depth. Without this the render recursed until
+        // the stack ran out (#972).
+        if (formDepth >= MAX_FORM_DEPTH || !activeTilings.add(pat)) return
+        formDepth++
+        try {
+            renderTilingCells(pat, clipPath, s, evenOdd, alpha, color, patternCtm, i0, i1, j0, j1)
+        } finally {
+            formDepth--
+            activeTilings.remove(pat)
+        }
+    }
+
+    /** The tiling patterns whose cells are being painted, for the cycle check of [renderTilingPattern]. */
+    private val activeTilings = HashSet<KitePattern.Tiling>()
+
+    private fun renderTilingCells(
+        pat: KitePattern.Tiling, clipPath: KitePath, s: GraphicsState, evenOdd: Boolean, alpha: Double,
+        color: RgbColor, patternCtm: KiteMatrix, i0: Int, i1: Int, j0: Int, j1: Int,
+    ) {
+        val xs = pat.xStep
+        val ys = pat.yStep
 
         val res = pat.resources
         val fonts = loadFonts(res)
@@ -1894,7 +1924,10 @@ public class PageRenderer(
         val savedIgnore = type3IgnoreColor
         type3IgnoreColor = uncolored
         try {
-            for (j in j0..j1) for (i in i0..i1) {
+            cells@ for (j in j0..j1) for (i in i0..i1) {
+                // A spent operator budget or a cancelled render ends the lattice too: dispatch alone
+                // returns at once, but each cell still pushed a clip and built its state (#971).
+                if (cancelled || dispatchedOps > MAX_DISPATCHED_OPS) break@cells
                 val tileCtm = patternCtm.concat(KiteMatrix.translation(i * xs, j * ys))
                 patternBaseCtm = tileCtm
                 val tileState = GraphicsStack(
@@ -2104,10 +2137,30 @@ public class PageRenderer(
         // which a symmetric 72-dpi fixture hid and the 96-dpi harness caught);
         // the group's own /Matrix is applied by the form pipeline itself, so
         // pre-concatenating it here would double it.
+        // A group already rendering, whose content set its own mask again with gs, paints nothing
+        // when it comes round (ISO 32000-1, 11.6.5 has no such cycle, so this is salvage, as MuPDF's
+        // cycle list for xobjects is). The sub-renderer takes this one's form depth, operator budget
+        // and cancellation, so mask nesting counts as form nesting, a mask spends the page's budget,
+        // and a cancelled raster stops in its masks too (#973).
+        if (activeMaskGroups.any { it === formStream } || cancelled) return
+        activeMaskGroups.add(formStream)
         val sub = PageRenderer(target, resolver)
-        val parentState = GraphicsStack(GraphicsState(ctm = baseCtm))
-        sub.renderFormXObjectExternally(formStream, parentState)
+        sub.cancellation = cancellation
+        sub.formDepth = formDepth
+        sub.dispatchedOps = dispatchedOps
+        sub.activeMaskGroups = activeMaskGroups
+        try {
+            val parentState = GraphicsStack(GraphicsState(ctm = baseCtm))
+            sub.renderFormXObjectExternally(formStream, parentState)
+        } finally {
+            activeMaskGroups.removeAt(activeMaskGroups.lastIndex)
+            dispatchedOps = sub.dispatchedOps
+            if (sub.cancelled) cancelled = true
+        }
     }
+
+    /** The soft mask groups being rendered, shared with the sub-renderers of nested masks (#973). */
+    private var activeMaskGroups = ArrayList<PdfStream>()
 
     /**
      * Public entry to render a form xobject onto this renderer's canvas

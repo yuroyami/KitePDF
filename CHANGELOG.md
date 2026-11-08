@@ -96,6 +96,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which ends the process on a native target and crashed the viewer's outline panel (#964), and one that named
   itself twice made `attachments`, `documentJavaScripts` and signature validation run for good (#967).
 
+- A tiling pattern whose cell paints with itself, or a ring of patterns that name each other, paints nothing
+  when it comes round again, and pattern cells count toward the form depth limit. The render and the text
+  extraction threw `StackOverflowError`, which ends the process on a native target (#972). A soft mask
+  group whose content sets its own mask again paints nothing the second time, and a mask group's renderer
+  takes the page's form depth, operator budget and cancellation (#973).
+- A tiling pattern fill weighs its lattice in `Double`, so a fill whose cell range spans nearly the whole
+  `Int` range no longer wraps to a count of 1 and loops over 1.8e19 cells. The cell loop also stops once the
+  operator budget is spent or the render is cancelled (#971).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
