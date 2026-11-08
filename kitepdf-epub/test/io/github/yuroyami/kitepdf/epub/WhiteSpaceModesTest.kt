@@ -3,6 +3,7 @@ package io.github.yuroyami.kitepdf.epub
 import io.github.yuroyami.kitepdf.core.KiteTextLine
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** `nowrap` keeps its text on one line, and `pre-line` keeps only the line breaks (CSS Text 3, 3). */
 class WhiteSpaceModesTest {
@@ -32,5 +33,22 @@ class WhiteSpaceModesTest {
         val wide = EpubSettings(pageWidth = 400.0, pageHeight = 640.0)
         val text = lines("<p style=\"white-space:pre-line\">a     b\n   c\tq</p>", wide)
         assertEquals(listOf("a b", "c q"), text)
+    }
+
+    private fun starts(body: String): List<Double> =
+        EpubDocument.open(EpubFixtures.epub(body), EpubSettings(pageWidth = 400.0, pageHeight = 640.0)).pages[0]
+            .textContent().blocks.flatMap { b -> b.lines }
+            .map { line -> line.charEdges[line.text.indexOfFirst { !it.isWhitespace() }] }
+
+    @Test
+    fun aTabReachesTheNextTabStop() {
+        // A tab before x lines it up with the eight spaces before y (#847).
+        val lefts = starts("<pre>\tx\n        y</pre>")
+        assertEquals(2, lefts.size)
+        val plain = starts("<pre>x</pre>").single()
+        assertTrue(lefts[0] > plain + 30.0, "the tab moves x by eight spaces: ${lefts[0]} against $plain")
+        val sizes = starts("<pre style=\"tab-size:2\">\tx\n  y</pre>")
+        assertEquals(sizes[0], sizes[1], 0.01)
+        assertEquals(lefts[0], lefts[1], 0.01)
     }
 }

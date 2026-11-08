@@ -268,6 +268,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   break (#845).
 - `white-space: pre-line` collapses runs of spaces and tabs and keeps only the line breaks, where it kept every
   space as `pre` does (#846).
+- A tab in preformatted text advances to the next tab stop, every `tab-size` spaces (8 by default), where it was
+  one space wide. `tab-size` is read as a count of spaces or a length (#847).
 
 ## [0.13.0] - 2026-10-09
 

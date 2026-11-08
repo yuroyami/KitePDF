@@ -263,6 +263,12 @@ internal data class ComputedStyle(
      * 9.1, #508). Inherited.
      */
     val textCombineUpright: Boolean = false,
+    /**
+     * `tab-size` (CSS Text 3, 4.2): the distance between tab stops, as a count of spaces, or as
+     * [tabLengthPt] when that is set. Inherited.
+     */
+    val tabSpaces: Double = 8.0,
+    val tabLengthPt: Double? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

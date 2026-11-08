@@ -683,6 +683,15 @@ internal class StyleResolver(
                 if (v.trim().lowercase() == "normal") 0.0 else len(b.fontSizePt) ?: b.letterSpacingPt
             "word-spacing" -> b.wordSpacingPt =
                 if (v.trim().lowercase() == "normal") 0.0 else len(b.fontSizePt) ?: b.wordSpacingPt
+            // A count of spaces, or a length; neither may be negative (CSS Text 3, 4.2; #847).
+            "tab-size", "-moz-tab-size", "-o-tab-size" -> {
+                val n = v.trim().toDoubleOrNull()
+                if (n != null) {
+                    if (n >= 0.0 && n.isFinite()) { b.tabSpaces = n; b.tabLengthPt = null }
+                } else {
+                    len(b.fontSizePt)?.takeIf { it >= 0.0 && it.isFinite() }?.let { b.tabLengthPt = it }
+                }
+            }
             "font-variant", "font-variant-caps" -> when (v.trim().lowercase()) {
                 "small-caps" -> b.smallCaps = true
                 "normal", "none" -> b.smallCaps = false
@@ -740,6 +749,7 @@ internal class StyleResolver(
             "text-transform" -> { dst.textTransform = src.textTransform; dst.fullWidth = src.fullWidth }
             "letter-spacing" -> dst.letterSpacingPt = src.letterSpacingPt
             "word-spacing" -> dst.wordSpacingPt = src.wordSpacingPt
+            "tab-size", "-moz-tab-size", "-o-tab-size" -> { dst.tabSpaces = src.tabSpaces; dst.tabLengthPt = src.tabLengthPt }
             "hyphens" -> dst.hyphensAuto = src.hyphensAuto
             "direction" -> dst.direction = src.direction
             "writing-mode" -> dst.writingMode = src.writingMode
@@ -1216,6 +1226,8 @@ internal class StyleResolver(
         var fullWidth = parent.fullWidth // inherited
         var letterSpacingPt = parent.letterSpacingPt // inherited
         var wordSpacingPt = parent.wordSpacingPt // inherited
+        var tabSpaces = parent.tabSpaces // inherited
+        var tabLengthPt = parent.tabLengthPt // inherited
         var smallCaps = parent.smallCaps // inherited
         var minWidthPt: Double? = null; var minHeightPt: Double? = null; var maxHeightPt: Double? = null
         var borderCollapse = parent.borderCollapse // inherited
@@ -1362,6 +1374,8 @@ internal class StyleResolver(
                 emphasisColor = emphasisColor,
                 emphasisPosition = emphasisPosition,
                 textCombineUpright = textCombineUpright,
+                tabSpaces = tabSpaces,
+                tabLengthPt = tabLengthPt,
             )
         }
     }
@@ -1394,7 +1408,7 @@ internal class StyleResolver(
             "color", "font-family", "font-size", "font-style", "font-weight", "font-variant", "font-variant-caps",
             "text-align", "text-align-last", "text-indent", "line-height", "white-space", "overflow-wrap", "word-wrap",
             "word-break", "line-break", "text-transform", "letter-spacing", "word-spacing", "hyphens", "direction",
-            "writing-mode", "text-orientation", "text-combine-upright", "text-combine-horizontal", "text-combine",
+            "tab-size", "writing-mode", "text-orientation", "text-combine-upright", "text-combine-horizontal", "text-combine",
             "text-underline-position", "text-emphasis", "text-emphasis-style", "text-emphasis-color", "text-emphasis-position",
             "quotes", "visibility", "list-style-type", "list-style", "border-collapse", "border-spacing",
         )

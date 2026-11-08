@@ -2140,7 +2140,11 @@ internal class BoxLayout(
             /** The `line-break` of the word's text, which says where [breakAll] may break it (#508). */
             val lineBreak: LineBreak = LineBreak.AUTO,
         ) : Token()
-        class Space(val cell: Cell) : Token() {
+        /**
+         * [tab]: for a tab, the distance between tab stops, so where white space is kept its width is
+         * what reaches the next stop, known only once the line is placed (CSS Text 3, 4.2; #847).
+         */
+        class Space(val cell: Cell, val tab: Double = 0.0) : Token() {
             val width: Double get() = cell.width
         }
         object Break : Token()
@@ -2475,11 +2479,13 @@ internal class BoxLayout(
                         val sw = if (face != null) face.advance1000(face.gidFor(' '.code)) * fs / 1000.0
                         else FontMetrics.advancePt(' '.code, fs, run.bold, run.italic, run.family)
                         // word-spacing adds to spaces; letter-spacing to every advance.
+                        val spaceW = sw + run.wordSpacingPt + run.letterSpacingPt
+                        val tab = if (cp == '\t'.code) run.tabLengthPt ?: (run.tabSpaces * spaceW) else 0.0
                         tokens.add(Token.Space(Cell(
-                            ' '.code, sw + run.wordSpacingPt + run.letterSpacingPt, fs, spec, run.color, shift, run.underline,
+                            ' '.code, spaceW, fs, spec, run.color, shift, run.underline,
                             href = run.href, speech = run.speech, ids = run.ids, element = run.element,
                             lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level,
-                        )))
+                        ), tab))
                     }
                     // keep-all: CJK letters join the word like Latin ones. A break may still come
                     // before an opener and after a closer (#508).
@@ -2712,7 +2718,16 @@ internal class BoxLayout(
         for (tok in tokens) when (tok) {
             is Token.Break -> commit(KiteLineEnd.HARD)
             is Token.Space -> when {
-                preserve -> { line.add(tok.cell); lineW += tok.width }
+                preserve -> {
+                    if (tok.tab > 0.0) {
+                        // The next stop at least half a space on, as CSS Text 3, 4.2 asks.
+                        val half = tok.cell.width / 2
+                        var to = (kotlin.math.floor(lineW / tok.tab) + 1) * tok.tab
+                        if (to - lineW < half) to += tok.tab
+                        tok.cell.width = to - lineW
+                    }
+                    line.add(tok.cell); lineW += tok.width
+                }
                 line.isNotEmpty() -> pendingSpaces.add(tok.cell)
             }
             is Token.Word -> {
