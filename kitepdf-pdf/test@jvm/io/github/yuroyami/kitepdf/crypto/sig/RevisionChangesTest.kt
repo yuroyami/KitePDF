@@ -105,6 +105,22 @@ class RevisionChangesTest {
     }
 
     @Test
+    fun choosingAnOptionOrFillingRichTextIsFilling() {
+        // ISO 32000-1, Tables 231 and 222: /I, /TI and /RV are part of a field's value (#997).
+        for (entries in listOf("/V (b) /I [1] /TI 1", "/V (after) /RV (<body><p>after</p></body>)")) {
+            val o = PdfOptions(certification = 2, textField = "before")
+            val result = check(
+                SigFixtures.update(
+                    signed(o),
+                    mapOf(SigFixtures.numbers(o).textField to "<< /Type /Annot /Subtype /Widget /FT /Tx /T (Name) /Rect [20 150 180 170] /F 4 /P 3 0 R $entries >>"),
+                ),
+            )
+            assertEquals(Kind.FieldValue, result.changes!!.single().kind, entries)
+            assertTrue(result.areChangesPermitted, entries)
+        }
+    }
+
+    @Test
     fun anAnnotationIsPermittedAtLevel3() {
         for ((level, permitted) in listOf(1 to false, 2 to false, 3 to true, null to true)) {
             val change = check(annotated(PdfOptions(certification = level))).changes!!.single()

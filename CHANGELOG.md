@@ -615,6 +615,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/OpenAction` or another reference names it; those references are written as `null` (#1016).
 - `graftPage`, `appendPage` and `mergeDocument` copy a page with what it draws or shows, not the source's other
   pages: a link to an uncopied page loses its destination, and a widget becomes a field of its own (#1015).
+- Signature validation counts a choice field's `/I` and `/TI` and a rich text field's `/RV` as filling, so a
+  certified form filled with a choice or rich text keeps its permitted changes (#997).
 
 ## [0.13.0] - 2026-10-09
 

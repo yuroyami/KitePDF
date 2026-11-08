@@ -248,8 +248,12 @@ internal object RevisionChanges {
     private const val MAX_DEPTH = 64
     private const val MAX_REACH = 1_000_000
 
-    /** Keys that filling in a field changes: the value and how the widget shows it. */
-    private val FILLING_KEYS = setOf("V", "AS", "AP")
+    /**
+     * Keys that filling in a field changes: the value and how the widget shows it. A choice
+     * field's selected indices (`/I`) and first visible option (`/TI`, ISO 32000-1, 12.7.4.4,
+     * Table 231) and a rich text value (`/RV`, 12.7.3.3, Table 222) are part of filling it (#997).
+     */
+    private val FILLING_KEYS = setOf("V", "AS", "AP", "I", "TI", "RV")
 
     /** Keys that signing an empty signature field changes. */
     private val SIGNING_KEYS = setOf("V", "AP", "AS", "Lock", "SV")
