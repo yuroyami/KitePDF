@@ -14,6 +14,23 @@ import kotlin.test.assertTrue
  */
 class HyphenationLanguageTest {
 
+    private val narrow = EpubSettings(pageWidth = 110.0, pageHeight = 2000.0, margin = 10.0)
+    private val compounds = "Donaudampfschifffahrtsgesellschaft Kapitänsmütze"
+
+    private fun lines(body: String, language: String): List<String> =
+        EpubDocument.open(EpubFixtures.epub(body, language = language), narrow).pages
+            .flatMap { p -> p.textContent().blocks.flatMap { b -> b.lines.map { it.text } } }
+
+    @Test
+    fun a_german_span_in_an_english_book_breaks_as_german() {
+        // CSS Text 3, 5.4 and HTML, 3.2.6.2: the language of the element the text is in (#864).
+        val german = lines("""<p style="hyphens:auto">$compounds</p>""", "de")
+        val english = lines("""<p style="hyphens:auto">$compounds</p>""", "en")
+        assertTrue(german != english, "the two languages break these words apart")
+        val span = lines("""<p style="hyphens:auto"><span lang="de" xml:lang="de">$compounds</span></p>""", "en")
+        assertEquals(german, span)
+    }
+
     private fun open(body: String, language: String? = null, pageWidth: Double = 400.0): EpubDocument =
         EpubDocument.open(
             EpubFixtures.epub(body, language = language),

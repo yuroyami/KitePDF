@@ -2206,6 +2206,13 @@ internal class BoxLayout(
         var wordLineBreak = LineBreak.AUTO
         // Whether a nowrap run gave the word a character, so it is not hyphenated (#845).
         var wordNoWrap = false
+        // The language of the run that gave the word its first character, which picks its patterns (#864).
+        var wordLang: String? = null
+        var wordLangSet = false
+        fun joined(run: InlineRun) {
+            wordNoWrap = wordNoWrap || run.noWrap
+            if (!wordLangSet) { wordLang = run.language; wordLangSet = true }
+        }
         // The next character's place in the block's text; it counts what draws nothing too.
         var srcAt = 0
         fun endWord() {
@@ -2223,7 +2230,7 @@ internal class BoxLayout(
                 // Nor does a word that a nowrap run keeps on one line (#845).
                 val pts = if (ligated || isRuby || wordBreaksAll || wordNoWrap) emptyList() else {
                     val s = LinkedHashSet(softHyphens)
-                    val h = hyphenator
+                    val h = if (wordLangSet && wordLang != null) Hyphenator.forLanguage(wordLang) else hyphenator
                     if (hyphensAuto && h != null) s.addAll(hyphenPoints(word, h))
                     s.sorted()
                 }
@@ -2256,7 +2263,7 @@ internal class BoxLayout(
                     tokens.add(Token.Word(word, w, pts, wordWraps, wordBreaksAll, wordLineBreak))
                 }
                 word = ArrayList(); wordW = 0.0; softHyphens = ArrayList(); wordWraps = false; wordBreaksAll = false
-                wordNoWrap = false
+                wordNoWrap = false; wordLang = null; wordLangSet = false
                 wordLineBreak = LineBreak.AUTO
             }
         }
@@ -2357,7 +2364,7 @@ internal class BoxLayout(
                     combinedTo = end
                     if (run.rubyGroup >= 0) {
                         // A ruby base stays one word.
-                        word.add(cell); wordW += cell.width; wordNoWrap = wordNoWrap || run.noWrap
+                        word.add(cell); wordW += cell.width; joined(run)
                     } else {
                         endWord()
                         val last = tokens.lastOrNull()
@@ -2457,7 +2464,7 @@ internal class BoxLayout(
                     // A no-break space joins the characters on its two sides into one word (#577),
                     // and so does every space of a nowrap run (#845).
                     isGlueSpace(cp) || (run.noWrap && cp == ' '.code) -> {
-                        val c = spaceCell(cp, level, src); word.add(c); wordW += c.width; wordNoWrap = wordNoWrap || run.noWrap
+                        val c = spaceCell(cp, level, src); word.add(c); wordW += c.width; joined(run)
                         wordWraps = wordWraps || run.overflowWrap
                         wordBreaksAll = wordBreaksAll || run.breakAll || run.lineBreak == LineBreak.ANYWHERE
                         wordLineBreak = run.lineBreak
@@ -2491,7 +2498,7 @@ internal class BoxLayout(
                     // before an opener and after a closer (#508).
                     FontMetrics.isWide(cp) && run.rubyGroup < 0 && (run.keepAll || run.noWrap) && run.lineBreak != LineBreak.ANYWHERE -> {
                         if (isOpener(cp, run.lineBreak)) endWord()
-                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width; wordNoWrap = wordNoWrap || run.noWrap
+                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width; joined(run)
                         wordWraps = wordWraps || run.overflowWrap
                         wordLineBreak = run.lineBreak
                         if (isCloser(cp, run.lineBreak)) endWord()
@@ -2515,7 +2522,7 @@ internal class BoxLayout(
                         }
                     }
                     else -> {
-                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width; wordNoWrap = wordNoWrap || run.noWrap
+                        val c = cellFor(cp, level, src); word.add(c); wordW += c.width; joined(run)
                         wordWraps = wordWraps || run.overflowWrap
                         // line-break: anywhere breaks a word wherever its line ends, as break-all does (#508).
                         wordBreaksAll = wordBreaksAll || run.breakAll || run.lineBreak == LineBreak.ANYWHERE

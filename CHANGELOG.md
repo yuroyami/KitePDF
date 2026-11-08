@@ -307,6 +307,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `font-size: 10vw` was a tenth of the parent's font size (#849).
 - Search joins the lines of a reflowable block by how each line ended, as `copyText` does, so a Chinese word that
   wraps between two characters and a compound that wraps after its own hyphen are found (#919).
+- A word hyphenates by the language of the element it is in, so a `<span lang="de">` in an English chapter breaks
+  at German points, where the chapter's one language applied to all its text (#864).
 
 ## [0.13.0] - 2026-10-09
 

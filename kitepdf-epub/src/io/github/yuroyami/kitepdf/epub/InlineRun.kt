@@ -65,6 +65,8 @@ internal data class InlineRun(
     /** `tab-size` of the run's text: a count of spaces, or a length when [tabLengthPt] is set (#847). */
     val tabSpaces: Double = 8.0,
     val tabLengthPt: Double? = null,
+    /** The language of the run's element, or null for the chapter's, which hyphenation reads (#864). */
+    val language: String? = null,
     /** `line-break` (CSS Text 3, 5.3, #508). */
     val lineBreak: LineBreak = LineBreak.AUTO,
     /** `text-orientation`, which only vertical text reads (CSS Writing Modes 3, 5.1, #508). */

@@ -275,6 +275,11 @@ internal data class ComputedStyle(
      * a percentage or `normal`.
      */
     val lineHeightFactor: Double? = null,
+    /**
+     * The language of the element, from its own `lang` or `xml:lang` or its nearest ancestor's
+     * (HTML, 3.2.6.2), or null where the chapter says none. Inherited. Hyphenation reads it (#864).
+     */
+    val language: String? = null,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

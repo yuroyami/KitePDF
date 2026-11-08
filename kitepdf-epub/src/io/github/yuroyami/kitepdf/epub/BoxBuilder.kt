@@ -1237,6 +1237,7 @@ internal class BoxBuilder(
             noWrap = style.whiteSpace == WhiteSpaceMode.NOWRAP,
             tabSpaces = style.tabSpaces,
             tabLengthPt = style.tabLengthPt,
+            language = style.language,
             lineBreak = style.lineBreak,
             textOrientation = style.textOrientation,
             lineThrough = style.lineThrough,

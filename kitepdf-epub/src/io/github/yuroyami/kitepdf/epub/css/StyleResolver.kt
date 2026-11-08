@@ -85,7 +85,10 @@ internal class StyleResolver(
         }
         val root = ancestors.isEmpty()
         if (root) remPt = rootFontSizePt
-        val cs = build(parent, inCascadeOrder(offered))
+        // Names lose their prefix, so xml:lang reads as lang; an empty value means unknown (HTML, 3.2.6.2).
+        val lang = el.attrs["lang"]?.trim()
+        val built = build(parent, inCascadeOrder(offered))
+        val cs = if (lang == null) built else built.copy(language = lang.ifEmpty { null })
         if (root) remPt = cs.fontSizePt
         // The HTML `dir` attribute wins over the CSS `direction` property.
         return when (el.attrs["dir"]?.lowercase()) {
@@ -1206,6 +1209,7 @@ internal class StyleResolver(
         var textIndentPt = parent.textIndentPt
         var lineHeightPt = parent.lineHeightPt
         var lineHeightFactor = parent.lineHeightFactor
+        var language = parent.language
         var whiteSpace = parent.whiteSpace
         var listType = parent.listType
         // Non-inherited → initial values.
@@ -1389,6 +1393,7 @@ internal class StyleResolver(
                 tabSpaces = tabSpaces,
                 tabLengthPt = tabLengthPt,
                 lineHeightFactor = lineHeightFactor,
+                language = language,
             )
         }
     }
