@@ -188,14 +188,90 @@ internal class XpsRenderer(
         property(el, "fill", base, scope)?.let { brushes.fill(it, fillPath, geo.evenOdd, canvas, ctm, scope, depth + 1) }
         val stroke = property(el, "stroke", base, scope)?.let { brushes.solid(it) } ?: return
         val width = el.number("strokethickness", 1.0).coerceAtLeast(0.0)
+        val dashes = el.attrs["strokedasharray"]?.let(::numbers)?.map { it * width }?.takeIf { d -> d.any { it > 0.0 } }
+        // ECMA-388, 11.1: StrokeDashCap caps both ends of each dash, StrokeStartLineCap and
+        // StrokeEndLineCap the two ends of each open figure, each Flat by default (#747). A canvas
+        // takes one cap: a dashed stroke takes the dash cap, as most of its ends are dash ends, and a
+        // solid one strokes flat and adds the start and end caps where they are not one cap.
+        val start = el.attrs["strokestartlinecap"]
+        val end = el.attrs["strokeendlinecap"]
+        val oneCap = dashes != null || (start == end && start != "Triangle")
+        val lineCap = if (dashes != null) capCode(el.attrs["strokedashcap"]) else if (oneCap) capCode(start) else 0
         canvas.strokePath(
             strokePath, ctm, stroke.color, width, alpha = stroke.alpha,
-            dashArray = el.attrs["strokedasharray"]?.let(::numbers)?.map { it * width },
+            dashArray = dashes,
             dashPhase = el.number("strokedashoffset", 0.0) * width,
-            lineCap = when (el.attrs["strokestartlinecap"]) { "Round" -> 1; "Square" -> 2; else -> 0 },
+            lineCap = lineCap,
             lineJoin = when (el.attrs["strokelinejoin"]) { "Round" -> 1; "Bevel" -> 2; else -> 0 },
             miterLimit = el.number("strokemiterlimit", 10.0),
         )
+        if (!oneCap && width > 0.0) {
+            val caps = figureCaps(strokePath, width / 2, start, end)
+            if (caps.segments.isNotEmpty()) canvas.fillPath(caps, ctm, stroke.color, false, stroke.alpha)
+        }
+    }
+
+    /** The canvas cap of an XPS cap name: Round is 1, Square 2, Flat 0, and Triangle, which no canvas has, round. */
+    private fun capCode(name: String?): Int = when (name) { "Round", "Triangle" -> 1; "Square" -> 2; else -> 0 }
+
+    /** The start and end caps of each open figure of [path], as shapes to fill, for a stroke of half width [half]. */
+    private fun figureCaps(path: KitePath, half: Double, start: String?, end: String?): KitePath {
+        val b = KitePath.Builder()
+        var sx = 0.0; var sy = 0.0; var sdx = 0.0; var sdy = 0.0
+        var x = 0.0; var y = 0.0; var dx = 0.0; var dy = 0.0
+        var open = false
+        var started = false
+        fun finish() {
+            if (open && started) {
+                cap(b, sx, sy, -sdx, -sdy, half, start)
+                cap(b, x, y, dx, dy, half, end)
+            }
+            open = false; started = false
+        }
+        fun step(fromX: Double, fromY: Double, toX: Double, toY: Double, endDx: Double, endDy: Double) {
+            if (!started && (toX != fromX || toY != fromY)) { sdx = toX - fromX; sdy = toY - fromY; started = true }
+            if (endDx != 0.0 || endDy != 0.0) { dx = endDx; dy = endDy }
+        }
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> { finish(); sx = seg.x; sy = seg.y; x = seg.x; y = seg.y; open = true }
+            is KitePath.Segment.LineTo -> { step(x, y, seg.x, seg.y, seg.x - x, seg.y - y); x = seg.x; y = seg.y }
+            is KitePath.Segment.CurveTo -> {
+                val first = if (seg.x1 != x || seg.y1 != y) seg.x1 to seg.y1 else seg.x2 to seg.y2
+                step(x, y, first.first, first.second, seg.x3 - seg.x2, seg.y3 - seg.y2)
+                if (seg.x3 == seg.x2 && seg.y3 == seg.y2) { dx = seg.x3 - seg.x1; dy = seg.y3 - seg.y1 }
+                x = seg.x3; y = seg.y3
+            }
+            is KitePath.Segment.QuadTo -> {
+                val first = if (seg.x1 != x || seg.y1 != y) seg.x1 to seg.y1 else seg.x2 to seg.y2
+                step(x, y, first.first, first.second, seg.x2 - seg.x1, seg.y2 - seg.y1)
+                x = seg.x2; y = seg.y2
+            }
+            KitePath.Segment.Close -> { open = false; started = false; x = sx; y = sy }
+            else -> {}
+        }
+        finish()
+        return b.build()
+    }
+
+    /** A cap of [name] at ([x], [y]) facing ([dx], [dy]), added to [b]: nothing for Flat. */
+    private fun cap(b: KitePath.Builder, x: Double, y: Double, dx: Double, dy: Double, half: Double, name: String?) {
+        val len = kotlin.math.hypot(dx, dy)
+        if (len == 0.0 || !len.isFinite()) return
+        val ux = dx / len * half; val uy = dy / len * half
+        val nx = -uy; val ny = ux
+        when (name) {
+            "Square" -> {
+                b.moveTo(x + nx, y + ny); b.lineTo(x + nx + ux, y + ny + uy); b.lineTo(x - nx + ux, y - ny + uy); b.lineTo(x - nx, y - ny); b.close()
+            }
+            "Triangle" -> { b.moveTo(x + nx, y + ny); b.lineTo(x + ux, y + uy); b.lineTo(x - nx, y - ny); b.close() }
+            "Round" -> {
+                val k = 0.5522847498
+                b.moveTo(x + nx, y + ny)
+                b.curveTo(x + nx + ux * k, y + ny + uy * k, x + ux + nx * k, y + uy + ny * k, x + ux, y + uy)
+                b.curveTo(x + ux - nx * k, y + uy - ny * k, x - nx + ux * k, y - ny + uy * k, x - nx, y - ny)
+                b.close()
+            }
+        }
     }
 
     private fun drawGlyphs(

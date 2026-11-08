@@ -149,7 +149,9 @@ internal class XpsBrushes(
         var stops = (holder?.elements() ?: node.elements()).filter { it.tag == "gradientstop" }.mapNotNull {
             val color = xpsColor(it.attrs["color"].orEmpty()) ?: return@mapNotNull null
             Stop(it.number("offset", 0.0).coerceIn(0.0, 1.0), color)
-        }.sortedBy { it.offset }.distinctBy { it.offset }
+        // Stops at one offset stay in markup order, so two of them make a hard edge, as WPF and
+        // SVG 1.1, 13.2.4 draw it (#749). sortedBy is stable.
+        }.sortedBy { it.offset }
         if (stops.isEmpty()) return
         if (stops.first().offset > 0) stops = listOf(stops.first().copy(offset = 0.0)) + stops
         if (stops.last().offset < 1) stops = stops + stops.last().copy(offset = 1.0)
@@ -170,7 +172,8 @@ internal class XpsBrushes(
                 val offset = i / 128.0
                 val next = originals.indexOfFirst { it.offset >= offset }.coerceAtLeast(1)
                 val a = originals[next - 1]; val b = originals[next]
-                val t = ((offset - a.offset) / (b.offset - a.offset)).coerceIn(0.0, 1.0)
+                val span = b.offset - a.offset
+                val t = if (span > 0.0) ((offset - a.offset) / span).coerceIn(0.0, 1.0) else 1.0
                 fun channel(from: Double, to: Double) = encodeSrgb(decodeSrgb(from) * (1 - t) + decodeSrgb(to) * t)
                 Stop(offset, XpsColor(RgbColor(channel(a.color.color.r, b.color.color.r),
                     channel(a.color.color.g, b.color.color.g), channel(a.color.color.b, b.color.color.b)),
@@ -233,7 +236,29 @@ internal fun xpsColor(raw: String): XpsColor? {
         val color = CssValues.color("#" + hex.drop(if (hex.length == 4) 1 else 2)) ?: return null
         return XpsColor(color, (alpha.toIntOrNull(16) ?: return null) / 255.0)
     }
+    if (value.startsWith("ContextColor", ignoreCase = true)) return contextColor(value)
     return CssValues.color(value)?.let { XpsColor(it, 1.0) }
+}
+
+/**
+ * `ContextColor <profile> <alpha>,<c1>,...` (ECMA-388, 15.1): without colour management the values
+ * map by their count, as MuPDF maps them: one is gray, three RGB and four CMYK (#743).
+ */
+private fun contextColor(value: String): XpsColor? {
+    val rest = value.substring("ContextColor".length).trim()
+    val space = rest.indexOfFirst { it == ' ' || it == '\t' }
+    if (space < 0) return null
+    val parts = rest.substring(space + 1).split(',').map { it.trim().toDoubleOrNull()?.takeIf(Double::isFinite) ?: return null }
+    if (parts.size < 2) return null
+    val alpha = parts[0].coerceIn(0.0, 1.0)
+    val c = parts.drop(1).map { it.coerceIn(0.0, 1.0) }.toDoubleArray()
+    val rgb = when (c.size) {
+        1 -> RgbColor(c[0], c[0], c[0])
+        3 -> RgbColor(c[0], c[1], c[2])
+        4 -> KiteColorSpace.DeviceCMYK.toRgb(c)
+        else -> return null
+    }
+    return XpsColor(rgb, alpha)
 }
 
 private fun encodeSrgb(v: Double): Double = (if (v <= 0.0031308) v * 12.92 else 1.055 * v.pow(1.0 / 2.4) - 0.055).coerceIn(0.0, 1.0)

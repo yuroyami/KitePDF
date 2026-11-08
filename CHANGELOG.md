@@ -342,6 +342,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alpha, and `fill="transparent"` paints nothing instead of the inherited fill (#723).
 - An SVG filter list attribute with a number that is not finite, such as `1e400`, is in error and passes the
   input through, where it made NaN pixels that failed the page (#737).
+- XPS gradient stops that share an offset are kept in markup order, so two of them draw a hard colour edge
+  instead of a ramp (#749).
+- An XPS dashed stroke takes `StrokeDashCap`, so XAML's dotted lines draw, and `StrokeEndLineCap` caps the end of
+  each open figure where it differs from `StrokeStartLineCap` (#747).
+- An XPS colour written as `ContextColor` paints, read by its channel count as gray, RGB or CMYK, where the path,
+  stroke or glyph run painted nothing (#743).
 
 ## [0.13.0] - 2026-10-09
 
