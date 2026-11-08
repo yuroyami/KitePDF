@@ -51,7 +51,10 @@ internal object Woff {
         val payloads = arrayOfNulls<ByteArray>(numTables)
         for (i in entries.indices) {
             val e = entries[i]
-            if (e.woffOffset < 0 || e.woffOffset + e.compLen > b.size || e.origLen < 0) return null
+            // WOFF 1.0, 5: the offset and both lengths are UInt32, so a value of 2^31 or more reads
+            // as negative here, and the range check runs in Long (#828).
+            if (e.woffOffset < 0 || e.compLen < 0 || e.origLen < 0) return null
+            if (e.woffOffset.toLong() + e.compLen > b.size) return null
             val comp = b.copyOfRange(e.woffOffset, e.woffOffset + e.compLen)
             payloads[i] = if (e.compLen >= e.origLen) {
                 comp // stored uncompressed

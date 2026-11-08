@@ -40,4 +40,19 @@ class WoffBudgetTest {
         assertNull(Woff.toSfnt(woff(zeros, 100L shl 20, count = 4)))
         assertNull(Woff.toSfnt(woff(zeros, 0xFFFFFFF0L)))
     }
+
+    @Test
+    fun aTableLengthOf2To31OrMoreIsAnInvalidFont() {
+        // compLength 0xFFFFFFF0 read as a negative Int and passed the range check (#828).
+        val b = ByteArray(64)
+        "wOFF".encodeToByteArray().copyInto(b, 0)
+        b[13] = 1
+        "cmap".encodeToByteArray().copyInto(b, 44)
+        b[51] = 44
+        for (i in 52..54) b[i] = 0xFF.toByte()
+        b[55] = 0xF0.toByte()
+        b[59] = 1
+        assertNull(Woff.toSfnt(b))
+        assertNull(FontProgram.parse(b))
+    }
 }

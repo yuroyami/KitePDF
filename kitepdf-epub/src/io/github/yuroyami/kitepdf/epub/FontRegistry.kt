@@ -39,7 +39,7 @@ internal class FontProgram(
             // WOFF is a wrapped SFNT: unwrap first (1.0 = zlib tables, 2.0 = brotli
             // stream + glyf/loca transform).
             val sfnt = when {
-                Woff.isWoff(bytes) -> Woff.toSfnt(bytes) ?: return null
+                Woff.isWoff(bytes) -> runCatching { Woff.toSfnt(bytes) }.getOrNull() ?: return null
                 Woff2.isWoff2(bytes) -> Woff2.toSfnt(bytes) ?: return null
                 else -> bytes
             }

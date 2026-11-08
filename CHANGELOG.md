@@ -260,6 +260,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where it painted nothing (#788).
 - A mesh shading reads past 65,536 triangles or patches. The bound is now on the memory of the parsed mesh, the
   same for all three forms, and a mesh it cuts off says so through `kiteWarn` (#791).
+- A WOFF font whose table length is 2^31 or more is skipped as invalid, where it threw and stopped every chapter
+  of the book from laying out (#828).
 
 ## [0.13.0] - 2026-10-09
 
