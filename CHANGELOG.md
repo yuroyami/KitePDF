@@ -547,6 +547,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   links, the table of contents and bookmarks still open them (#928).
 - `AwtCanvas` draws through its own copy of the host's `Graphics2D`, so the host's font, colour, stroke, paint
   and rendering hints are the same after a page as before it (#866).
+- `AwtCanvas` wraps an image's packed pixels in its bitmap instead of copying them one at a time through
+  `setRGB`, which took 280 to 590 ms for 20 megapixels (#870).
 
 ## [0.13.0] - 2026-10-09
 

@@ -638,9 +638,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
             argb[i] = (a shl 24) or (r shl 16) or (g2 shl 8) or b
             s += 4
         }
-        val img = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-        img.setRGB(0, 0, width, height, argb, 0, width)
-        return img
+        return packedArgbImage(argb, width, height)
     }
 
     /** A light grey box with a thin outline, as the other canvases draw an image they cannot decode (#184). */
@@ -1661,3 +1659,14 @@ internal fun awtDash(dashArray: List<Double>?, scale: Double): FloatArray? {
     val d = dashArray?.map { v -> (v * scale).toFloat().let { if (it.isFinite()) it.coerceAtLeast(0f) else 0f } } ?: return null
     return d.takeIf { it.isNotEmpty() && it.any { v -> v > 0f } }?.toFloatArray()
 }
+
+/**
+ * A TYPE_INT_ARGB image over [argb] itself, with no copy: setRGB copied every pixel through the
+ * colour model, 280 to 590 ms for 20 megapixels (#870). The default ARGB colour model over a
+ * packed raster with its masks is the layout Java2D knows as TYPE_INT_ARGB.
+ */
+internal fun packedArgbImage(argb: IntArray, width: Int, height: Int): BufferedImage = BufferedImage(
+    ColorModel.getRGBdefault(),
+    Raster.createPackedRaster(DataBufferInt(argb, argb.size), width, height, width, intArrayOf(0xFF0000, 0xFF00, 0xFF, -0x1000000), null),
+    false, null,
+)

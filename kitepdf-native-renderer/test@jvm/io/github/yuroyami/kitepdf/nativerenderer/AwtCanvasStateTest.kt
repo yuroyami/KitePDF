@@ -111,4 +111,14 @@ class AwtCanvasStateTest {
         assertTrue((0 until 300).any { x -> (0 until 300).any { y -> img.getRGB(x, y) ushr 24 != 0 } }, "the page drew into the host's image")
         g.dispose()
     }
+
+    @Test
+    fun a_packed_image_wraps_its_pixels_as_an_int_argb_image() {
+        // setRGB copied every pixel through the colour model (#870).
+        val argb = intArrayOf(0xFFFF0000.toInt(), 0x8000FF00.toInt(), 0x000000FF, -1)
+        val image = packedArgbImage(argb, 2, 2)
+        assertEquals(BufferedImage.TYPE_INT_ARGB, image.type, "Java2D draws it through its own ARGB loops")
+        assertEquals(listOf(0xFFFF0000.toInt(), 0x8000FF00.toInt(), 0x000000FF, -1), listOf(image.getRGB(0, 0), image.getRGB(1, 0), image.getRGB(0, 1), image.getRGB(1, 1)))
+        assertSame(argb, (image.raster.dataBuffer as java.awt.image.DataBufferInt).data, "no copy")
+    }
 }
