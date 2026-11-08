@@ -288,6 +288,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#825).
 - A simple font with an embedded CFF or Type 1 program and no `/Widths` advances each glyph by the width its
   charstring gives, as it already did for TrueType, where every glyph took the default width (#916).
+- An `@font-face` tries its sources in the order the author wrote them, where they were sorted by file extension,
+  so a remote first source is fetched again (#882).
+- An `@font-face` whose first source is missing or no usable font goes on to its later sources, where the rule
+  gave up (#880).
+- A style sheet imported twice by sheets that form no cycle takes its place in the cascade at each import, where
+  every import after the first expanded to nothing (#884).
 
 ## [0.13.0] - 2026-10-09
 

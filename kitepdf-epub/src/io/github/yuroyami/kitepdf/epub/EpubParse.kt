@@ -574,31 +574,23 @@ internal class ParsedEpub(
     }
 
     /**
-     * The face of [rule], from the first of its sources in [sourceOrder] that is in the book, or
-     * from a remote one before it whose bytes [remoteBytes] has (#38). A remote source without
-     * bytes yields to the next source, as a browser tries the list in turn (CSS Fonts 4, 4.3).
+     * The face of [rule], from the first of its sources that gives a usable font: one in the book,
+     * or a remote one whose bytes [remoteBytes] has (#38). A source that is missing, unreadable or
+     * no font yields to the next, as a browser tries the list in turn (CSS Fonts 4, 4.3; #880).
      */
     fun loadFace(rule: FontFaceRule, dir: String, remoteBytes: (String) -> ByteArray?): EmbeddedFace? {
         for (url in sourceOrder(rule)) {
-            val program = if (isRemoteUrl(url)) remoteProgram(url, remoteBytes(url)) ?: continue else programAt(fontPath(dir, url))
-            return program?.let { EmbeddedFace(rule.family, rule.bold, rule.italic, it) }
+            val program = (if (isRemoteUrl(url)) remoteProgram(url, remoteBytes(url)) else programAt(fontPath(dir, url))) ?: continue
+            return EmbeddedFace(rule.family, rule.bold, rule.italic, program)
         }
         return null
     }
 
     /**
-     * [rule]'s sources, the cheapest format to unpack first: raw SFNT (.ttf/.otf), then WOFF 1.0
-     * (zlib tables), then WOFF2 (brotli + glyf transform), then the rest as declared, which
-     * signature sniffing in [FontProgram.parse] sorts out.
+     * [rule]'s sources in the author's order: `src` is a prioritized list, and its sources need
+     * not hold the same font (CSS Fonts 4, 4.3; #882).
      */
-    private fun sourceOrder(rule: FontFaceRule): List<String> = rule.srcUrls.sortedBy { url ->
-        when {
-            url.endsWith(".ttf", true) || url.endsWith(".otf", true) -> 0
-            url.endsWith(".woff", true) -> 1
-            url.endsWith(".woff2", true) -> 2
-            else -> 3
-        }
-    }
+    private fun sourceOrder(rule: FontFaceRule): List<String> = rule.srcUrls
 
     /** Whether [rule] tries a remote source before any source in the book (#38). */
     private fun remoteFirst(rule: FontFaceRule): Boolean = sourceOrder(rule).firstOrNull()?.let(::isRemoteUrl) == true
@@ -648,12 +640,27 @@ internal class ParsedEpub(
      * cycle guard). Media conditions after the target are ignored, matching
      * the parser's always-on `@media` flattening.
      */
-    private fun inlineImports(css: String, baseDir: String, depth: Int, visited: MutableSet<String>): String {
+    private fun inlineImports(
+        css: String,
+        baseDir: String,
+        depth: Int,
+        visited: MutableSet<String>,
+        budget: IntArray = intArrayOf(MAX_IMPORTED_CHARS),
+    ): String {
         if (depth >= 8 || "@import" !in css) return css
         return CssScan.replaceImports(css) { target ->
             val path = EpubDocument.resolvePath(baseDir, target)
-            if (!visited.add(path)) ""
-            else readTextAt(path)?.let { absoluteUrls(inlineImports(it, dirOf(path), depth + 1, visited), dirOf(path)) } ?: ""
+            // [visited] holds the sheets on the way here, so only an import of one of them is a
+            // cycle; a sheet imported again elsewhere takes its place in the cascade there too
+            // (CSS Cascading 4, 2; #884). The budget bounds what repeated imports may add.
+            if (budget[0] <= 0 || !visited.add(path)) ""
+            else try {
+                val text = readTextAt(path)?.let { absoluteUrls(inlineImports(it, dirOf(path), depth + 1, visited, budget), dirOf(path)) } ?: ""
+                budget[0] -= text.length
+                if (budget[0] < 0) "" else text
+            } finally {
+                visited.remove(path)
+            }
         }
     }
 
@@ -997,3 +1004,9 @@ private val SWITCH_NAMESPACES = setOf("http://www.w3.org/1999/xhtml", "http://ww
 /** Whether [el] or an element under it is a `script` element (#41). */
 internal fun containsScript(el: KiteXmlNode.Element): Boolean =
     el.tag.substringAfterLast(':') == "script" || el.children.any { it is KiteXmlNode.Element && containsScript(it) }
+
+/**
+ * The most text one style sheet's imports may add. A sheet may be imported in many places, and a
+ * tree of imports eight deep that names each sheet twice would otherwise grow 256-fold (#884).
+ */
+private const val MAX_IMPORTED_CHARS = 8 shl 20

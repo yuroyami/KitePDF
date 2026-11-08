@@ -113,6 +113,27 @@ class BoxModelCompletenessTest {
     }
 
     @Test
+    fun a_sheet_imported_twice_takes_both_places_in_the_cascade() {
+        // main imports a and b, both import c; c's blue comes again after a's red (#884).
+        val body = """<head><link rel="stylesheet" href="main.css"/></head><body><p>x</p></body>"""
+        val doc = EpubDocument.open(
+            EpubFixtures.epub(
+                body,
+                listOf(
+                    "OEBPS/main.css" to "@import \"a.css\";\n@import \"b.css\";".encodeToByteArray(),
+                    "OEBPS/a.css" to "@import \"c.css\";\np{color:red}".encodeToByteArray(),
+                    "OEBPS/b.css" to "@import \"c.css\";".encodeToByteArray(),
+                    "OEBPS/c.css" to "p{color:blue}".encodeToByteArray(),
+                ),
+            ),
+        )
+        val runs = doc.pages.flatMap { page ->
+            RecordingCanvas().also { page.renderTo(it) }.calls.filterIsInstance<RecordingCanvas.Call.Glyphs>()
+        }
+        assertEquals(RgbColor(0.0, 0.0, 1.0), runs.first { "x" in it.text }.color)
+    }
+
+    @Test
     fun object_fit_cover_scales_to_fill_and_clips() {
         // A 2x1 image in a 50x50 box: cover scale = 50 -> drawn 100x50, clipped.
         val body = """<body><p><img src="i.png" style="display:block;width:50pt;height:50pt;object-fit:cover"/></p></body>"""
