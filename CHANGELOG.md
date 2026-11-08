@@ -358,6 +358,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value of another length stayed as typed (#776).
 - `AFNumber_Keystroke` refuses an exponent and the decimal mark of the other separator style, on a keystroke and
   on commit (#785).
+- `getPageBox` answers the box a script names, Media, Crop, Bleed, Trim or Art, where it answered the crop box
+  for every name (#787).
+- Setting `this.calculate` or `app.calculate` to false stops a form's calculations, even midway through a round,
+  until a script sets it back (#781).
 
 ## [0.13.0] - 2026-10-09
 

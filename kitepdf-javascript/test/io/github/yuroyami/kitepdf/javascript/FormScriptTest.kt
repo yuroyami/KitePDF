@@ -89,6 +89,21 @@ class FormScriptTest {
     }
 
     @Test
+    fun calculate_false_stops_the_calculations(): TestResult = scriptTest {
+        // The Acrobat reference, Doc.calculate (#781).
+        for (flag in listOf("this.calculate", "app.calculate")) {
+            val doc = PdfDocument.open(invoicePdf())
+            PdfScriptRunner(doc).use { runner ->
+                runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript("$flag = false;", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())))
+                runner.setFieldValue("a", "2")
+                assertEquals("", runner.formState.value("total").orEmpty(), flag)
+                runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript("$flag = true; this.calculateNow();", io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap())))
+                assertEquals("2", runner.formState.value("total"), flag)
+            }
+        }
+    }
+
+    @Test
     fun a_total_recalculates_when_a_field_changes(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->

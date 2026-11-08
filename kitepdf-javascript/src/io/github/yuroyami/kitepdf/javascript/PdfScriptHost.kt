@@ -78,7 +78,7 @@ internal class PdfScriptHost(
         engine.defineFunction("__kite.deleteItem") { args -> deleteItem(args.str(0), args.int(1)); null }
         engine.defineFunction("__kite.docProp") { args -> docProp(args.str(0)) }
         engine.defineFunction("__kite.pageWords") { args -> pageWords(args.int(0)) }
-        engine.defineFunction("__kite.pageBox") { args -> pageBox(args.int(1)) }
+        engine.defineFunction("__kite.pageBox") { args -> pageBox(args.str(0), args.int(1)) }
         engine.defineFunction("__kite.console") { args -> hooks.onConsole(args.str(0)); null }
         engine.defineFunction("__kite.alert") { args -> alert(args.map(0)).toDouble() }
         engine.defineFunction("__kite.response") { args -> response(args.map(0)) }
@@ -273,9 +273,20 @@ internal class PdfScriptHost(
         return pageWordsOf(page.extractText())
     }
 
-    private fun pageBox(pageIndex: Int): List<Double> {
+    /**
+     * `getPageBox(cBox, nPage)`: the Art, Bleed, BBox, Crop, Media or Trim box, Crop for any other
+     * name, as `[left, top, right, bottom]`. Each box takes its defaults from ISO 32000-1, 14.11.2,
+     * and BBox is the bounds of what the page draws, the crop box here (#787).
+     */
+    private fun pageBox(which: String, pageIndex: Int): List<Double> {
         val page = document.pages.getOrNull(pageIndex) ?: return listOf(0.0, 0.0, 0.0, 0.0)
-        val box = page.cropBox
+        val box = when (which.lowercase()) {
+            "media" -> page.mediaBox
+            "bleed" -> page.bleedBox
+            "trim" -> page.trimBox
+            "art" -> page.artBox
+            else -> page.cropBox
+        }
         return listOf(box.left, box.top, box.right, box.bottom)
     }
 

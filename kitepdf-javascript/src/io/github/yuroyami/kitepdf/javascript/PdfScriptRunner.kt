@@ -561,6 +561,9 @@ public class PdfScriptRunner(
     /** True while a calculation round runs, so a calculateNow inside it does nothing (#962). */
     private var calculating = false
 
+    /** Whether the document's scripts leave calculations on: `this.calculate` and `app.calculate` (#781). */
+    private suspend fun calculationsOn(): Boolean = evaluate("__kiteCalculateOn()", "calculate-flag") != "false"
+
     private suspend fun calculateAll() {
         // A calculate script that calls calculateNow() started a round inside the running one, and
         // two such fields branched at every level. PDFium and pdf.js ignore such a call, and so does
@@ -578,6 +581,8 @@ public class PdfScriptRunner(
         for (name in calculationOrder()) {
             val field = document.formField(name) ?: continue
             val action = field.additionalActions?.calculate as? PdfAction.JavaScript ?: continue
+            // A script that set this.calculate or app.calculate to false stops the round, even midway (#781).
+            if (!calculationsOn()) return
             val result = dispatch(
                 action.script, "calculate",
                 mapOf(

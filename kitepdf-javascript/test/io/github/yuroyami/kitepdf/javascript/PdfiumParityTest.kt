@@ -31,7 +31,7 @@ class PdfiumParityTest {
         buf.append("%PDF-1.7\n%Äå\n".encodeToByteArray())
         obj(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>")
         obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
-        obj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [4 0 R] >>")
+        obj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /CropBox [10 10 190 190] /TrimBox [20 20 180 180] /Annots [4 0 R] >>")
         obj(4, "<< /Type /Annot /Subtype /Widget /FT /Tx /T (field) /V (x) /Rect [10 10 90 30] >>")
         val xref = buf.size()
         val maxN = offsets.keys.max()
@@ -206,5 +206,13 @@ class PdfiumParityTest {
         assertEquals("(123) 456-7890", special(2, "1234567890"))
         assertEquals("123-4567", special(2, "12345678"))
         assertEquals("123-45-678", special(3, "12345678"))
+    }
+
+    @Test
+    fun get_page_box_answers_the_box_it_is_asked_for(): TestResult = scriptTest {
+        // The Acrobat reference, Doc.getPageBox, as [left, top, right, bottom] (#787).
+        assertEquals("0,200,200,0|10,190,190,10|20,180,180,20|10,190,190,10|10,190,190,10", eval(
+            "['Media', 'Crop', 'Trim', 'Art', 'Bleed'].map(function (b) { return this.getPageBox(b, 0).join(','); }, this).join('|')",
+        ))
     }
 }

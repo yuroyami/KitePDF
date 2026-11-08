@@ -639,6 +639,10 @@ internal object AcrobatApi {
   }
   g.event = emptyEvent();
 
+  // Doc.calculate and app.calculate: false stops every calculation of the document, as PDFium's
+  // EnableCalculate and pdf.js's doc.calculate do. The runner asks before each calculate script (#781).
+  g.__kiteCalculateOn = function () { return g.calculate !== false && g.app.calculate !== false; };
+
   /** Builds the event object for one trigger, runs [body], and reports what the script left. */
   g.__kiteEvent = function (info, body) {
     var previous = g.event;
