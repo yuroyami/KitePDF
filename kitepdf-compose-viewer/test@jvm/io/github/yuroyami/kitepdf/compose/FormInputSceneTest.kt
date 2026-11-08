@@ -93,6 +93,20 @@ class FormInputSceneTest {
         override suspend fun commit(fieldName: String, value: String): Boolean = false
     }
 
+    /** Keeps every key, but only once [release] completes. */
+    private class SlowScripts(document: PdfDocument) : PdfScriptHandler {
+        override val formState: PdfFormState = PdfFormState(document)
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        @Volatile var asked = 0
+        override suspend fun keystroke(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): String {
+            val current = formState.value(fieldName) ?: ""
+            asked++
+            release.await()
+            val start = selectionStart.coerceIn(0, current.length)
+            return current.substring(0, start) + change + current.substring(selectionEnd.coerceIn(start, current.length))
+        }
+    }
+
     private fun tap(scene: ImageComposeScene, x: Float, y: Float) {
         scene.sendPointerEvent(PointerEventType.Press, Offset(x, y), type = PointerType.Touch)
         scene.sendPointerEvent(PointerEventType.Release, Offset(x, y), type = PointerType.Touch)
@@ -281,6 +295,31 @@ class FormInputSceneTest {
                 driver.pumpFrames(10)
                 assertEquals(null, state().focusedField)
                 assertEquals("", scripts.formState.value("name").orEmpty(), "the unanswered key is not in the form")
+            }
+        }
+    }
+
+    /** A keystroke answer does not replace a value the host wrote while the script ran (#735). */
+    @Test
+    fun a_value_written_while_a_keystroke_runs_wins_over_its_answer() {
+        forBothEffectOrders { queued ->
+            val doc = formPdf()
+            val scripts = SlowScripts(doc)
+            scripts.formState.setValue("name", "old")
+            val (scene, driver, state) = viewer(doc, queued, scripts)
+            scene.use {
+                focus(scene, driver, 100f, 35f)
+                type(scene, 'x')
+                driver.pumpUntilState { scripts.asked > 0 }
+                scripts.formState.setValue("name", "host")
+                scripts.release.complete(Unit)
+                driver.pumpFrames(10)
+                assertEquals("host", scripts.formState.value("name"), "the host's value stays")
+                driver.pumpUntilState { state().editingText == null || state().editingText == "host" }
+                // The next key goes onto the host's value, not onto the old one.
+                type(scene, 'y')
+                driver.pumpUntilState { scripts.formState.value("name") != "host" }
+                assertEquals("hosty", scripts.formState.value("name"))
             }
         }
     }

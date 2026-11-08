@@ -205,7 +205,14 @@ private fun FieldInput(
                 if (flushing) break
                 inFlight = null
                 val before = pipeline.screen
-                pipeline.answered(kept)
+                val stored = if (field?.isEditableCombo == true) null else scripts.formState.value(fieldName).orEmpty()
+                if (kept == null && stored != null && stored != pipeline.confirmed) {
+                    // A write from outside the input: the keys typed against the old value go, and
+                    // the input takes the new one (#735).
+                    pipeline.finish(stored)
+                } else {
+                    pipeline.answered(kept)
+                }
                 val after = pipeline.screen
                 if (after != before) {
                     value = value.movedTo(after, editOf(before, after))
@@ -276,6 +283,9 @@ private suspend fun askScript(
 ): String? {
     val revision = scripts.formState.fieldRevision(fieldName)
     if (editableChoice && (session == null || session.cancelled || revision != session.expectedRevision)) return null
+    // The key was measured against [confirmed]. A value written from outside the input since then
+    // wins, and the input moves onto it (#735).
+    if (!editableChoice && scripts.formState.value(fieldName).orEmpty() != confirmed) return null
     val previous = if (editableChoice) scripts.formState.choiceSelection(fieldName) else null
     val kept = try {
         scripts.keystroke(fieldName, edit.change, edit.start, edit.end)
@@ -295,7 +305,10 @@ private suspend fun askScript(
         if (scripts.formState.fieldRevision(fieldName) != session.expectedRevision) return null
         session.draft = selection
         session.dirty = true
-    } else scripts.formState.setValue(fieldName, kept)
+    } else if (!scripts.formState.setValue(fieldName, kept, revision)) {
+        // The host or a script wrote the field while the keystroke script ran (#735).
+        return null
+    }
     return kept
 }
 

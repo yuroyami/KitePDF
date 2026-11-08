@@ -212,6 +212,29 @@ public class PdfFormState(private val document: PdfDocument) {
         if (changed) publish(Change(fieldName, value))
     }
 
+    /**
+     * Sets the value of the text field [fieldName] only while its [fieldRevision] is still
+     * [expectedRevision], so an answer worked out for an older value does not replace a value
+     * the host or a script wrote meanwhile (#735). Returns false, and changes nothing, when the
+     * field changed since, is not a text or button field of the document, or is a choice field,
+     * which takes [setChoiceSelection].
+     */
+    public fun setValue(fieldName: String, value: String, expectedRevision: Int): Boolean {
+        val field = document.formField(fieldName) ?: return false
+        if (field.type == PdfFormField.FieldType.Choice) return false
+        val changed = lock.withLock {
+            if ((fieldChanges[fieldName] ?: 0) != expectedRevision) return false
+            if (values[fieldName] == value) false else {
+                values[fieldName] = value
+                formatted.remove(fieldName)
+                changed(fieldName)
+                true
+            }
+        }
+        if (changed) publish(Change(fieldName, value))
+        return true
+    }
+
     /** Drops this state's value for [fieldName], so the file's own value shows again. */
     public fun reset(fieldName: String) {
         if (document.formField(fieldName) == null) return
