@@ -637,8 +637,8 @@ internal class ParsedEpub(
      */
     private fun inlineImports(css: String, baseDir: String, depth: Int, visited: MutableSet<String>): String {
         if (depth >= 8 || "@import" !in css) return css
-        return IMPORT_RE.replace(css) { m ->
-            val path = EpubDocument.resolvePath(baseDir, m.groupValues[1])
+        return CssScan.replaceImports(css) { target ->
+            val path = EpubDocument.resolvePath(baseDir, target)
             if (!visited.add(path)) ""
             else readTextAt(path)?.let { absoluteUrls(inlineImports(it, dirOf(path), depth + 1, visited), dirOf(path)) } ?: ""
         }
@@ -855,21 +855,20 @@ internal class ParsedEpub(
          */
         internal fun absoluteUrls(css: String, baseDir: String): String {
             if (!css.contains("url(", ignoreCase = true)) return css
-            return URL_RE.replace(css) { m ->
-                val raw = m.groupValues[2].trim()
-                if (raw.isEmpty() || raw.startsWith('/') || raw.startsWith('#') || URL_SCHEME.containsMatchIn(raw)) m.value
+            return CssScan.replaceUrls(css) { whole, content ->
+                val raw = content.trim()
+                if (raw.isEmpty() || raw.startsWith('/') || raw.startsWith('#') || URL_SCHEME.containsMatchIn(raw)) whole
                 else "url(\"/" + EpubDocument.resolvePath(baseDir, raw) + "\")"
             }
         }
 
-        private val URL_RE = Regex("""url\(\s*(["']?)([^"')]*)\1\s*\)""", RegexOption.IGNORE_CASE)
-
         /** Adds each http or https `url()` of the CSS [text] to [into] (#38). */
         private fun remoteCssUrls(text: String, into: MutableSet<String>) {
             if (!text.contains("url(", ignoreCase = true)) return
-            for (m in URL_RE.findAll(text)) {
-                val url = m.groupValues[2].trim()
+            CssScan.replaceUrls(text) { whole, content ->
+                val url = content.trim()
                 if (isRemoteUrl(url)) into += url.substringBefore('#')
+                whole
             }
         }
 
@@ -877,10 +876,6 @@ internal class ParsedEpub(
 
         private val VIEWBOX_SEPARATOR = Regex("[\\s,]+")
 
-        private val IMPORT_RE = Regex(
-            """@import\s+(?:url\(\s*)?["']?([^"')\s;]+)["']?\s*\)?[^;{]*;""",
-            RegexOption.IGNORE_CASE,
-        )
 
         /**
          * Fixed-layout page size. An SVG document gives it in its root `viewBox` (EPUB 3.3,

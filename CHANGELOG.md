@@ -135,6 +135,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cache counts every operand. Five million numbers before one operator held 134 MB that the cache counted
   as 104 bytes, so an 11 KB file kept 874 MB after its six pages rendered (#977).
 
+- The `url()` and `@import` rewrites of a book's style sheets take time linear in the sheet. Two regular
+  expressions backtracked on text that almost matched, so a 160 KB sheet of `url(` repeated held up the
+  layout of a chapter for 45 seconds (#989).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
