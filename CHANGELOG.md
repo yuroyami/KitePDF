@@ -309,6 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wraps between two characters and a compound that wraps after its own hyphen are found (#919).
 - A word hyphenates by the language of the element it is in, so a `<span lang="de">` in an English chapter breaks
   at German points, where the chapter's one language applied to all its text (#864).
+- `text-transform` uses the full case mappings, so `Straße` uppercases to `STRASSE`, a capital sigma that ends a
+  word lowercases to `ς`, and a Turkish or Azeri `i` keeps its dot as `İ` (#873).
 
 ## [0.13.0] - 2026-10-09
 

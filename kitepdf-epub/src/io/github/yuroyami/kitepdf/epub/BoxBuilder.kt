@@ -1107,11 +1107,12 @@ internal class BoxBuilder(
             if (style.whiteSpace == WhiteSpaceMode.PRE || style.whiteSpace == WhiteSpaceMode.PRE_WRAP || style.whiteSpace == WhiteSpaceMode.PRE_LINE) {
                 val kept = if (style.whiteSpace == WhiteSpaceMode.PRE_LINE) collapsePreLine(raw, lineStart = !blockHasContent || lastWasBreak) else raw
                 if (kept.isEmpty()) return
-                runs.add(makeRun(transformPre(kept, style.textTransform, style.fullWidth), style))
+                runs.add(makeRun(transformPre(kept, style.textTransform, style.fullWidth, style.language), style))
                 blockHasContent = true; pendingSpace = false; lastWasBreak = false
                 return
             }
             val b = StringBuilder(raw.length)
+            val sigmas = ArrayList<Int>(0)
             var at = 0
             while (at < raw.length) {
                 val cp = codePointAt(raw, at)
@@ -1138,25 +1139,51 @@ internal class BoxBuilder(
                         else b.append(' ')
                     }
                     pendingSpace = false; lastWasBreak = false
-                    appendCodePoint(b, transform(cp, style.textTransform, style.fullWidth, boundary)); blockHasContent = true
+                    if (cp == CAPITAL_SIGMA && style.textTransform == TextTransform.LOWERCASE) sigmas.add(b.length)
+                    b.append(transform(cp, style.textTransform, style.fullWidth, boundary, style.language)); blockHasContent = true
                 }
             }
+            finalSigmas(b, sigmas)
             if (b.isNotEmpty()) runs.add(makeRun(b.toString(), style))
         }
 
         /**
-         * The case of [cp] that [tt] asks for, one code point at a time, so a letter outside the BMP
-         * changes too (#322), then its full-width form when [wide] asks for it (#508).
+         * Where [b] holds a lowered capital sigma, at [at]: one that ends a word after a letter is
+         * the final form ς (Unicode, 3.13, Final_Sigma; CSS Text 3, 2.1.1; #873).
          */
-        private fun transform(cp: Int, tt: TextTransform, wide: Boolean, wordBoundary: Boolean): Int {
-            val cased = when (tt) {
-                TextTransform.NONE -> cp
-                TextTransform.UPPERCASE -> CaseMapping.uppercase(cp)
-                TextTransform.LOWERCASE -> CaseMapping.lowercase(cp)
-                TextTransform.CAPITALIZE -> if (wordBoundary) CaseMapping.titlecase(cp) else cp
+        private fun finalSigmas(b: StringBuilder, at: List<Int>) {
+            for (i in at) {
+                val before = i > 0 && b[i - 1].isLetter()
+                val after = i + 1 < b.length && b[i + 1].isLetter()
+                if (before && !after) b[i] = '\u03C2'
             }
-            return if (wide) FullWidth.of(cased) else cased
         }
+
+        /**
+         * The case of [cp] that [tt] asks for, by the full mappings and those of [language], so a
+         * letter outside the BMP changes too (#322) and `ß` becomes `SS` (#873), then its
+         * full-width form when [wide] asks for it (#508).
+         */
+        private fun transform(cp: Int, tt: TextTransform, wide: Boolean, wordBoundary: Boolean, language: String?): String {
+            val cased = when (tt) {
+                TextTransform.NONE -> null
+                TextTransform.UPPERCASE -> CaseMapping.uppercaseFull(cp, language)
+                TextTransform.LOWERCASE -> CaseMapping.lowercaseFull(cp, language)
+                TextTransform.CAPITALIZE -> if (wordBoundary) CaseMapping.titlecaseFull(cp, language) else null
+            }
+            if (cased == null) return if (wide) codePointText(FullWidth.of(cp)) else codePointText(cp)
+            if (!wide) return cased
+            val sb = StringBuilder(cased.length)
+            var k = 0
+            while (k < cased.length) {
+                val c = codePointAt(cased, k)
+                k += charCount(c)
+                appendCodePoint(sb, FullWidth.of(c))
+            }
+            return sb.toString()
+        }
+
+        private fun codePointText(cp: Int): String = StringBuilder(2).also { appendCodePoint(it, cp) }.toString()
 
         /**
          * True for white space that collapses: U+0020, the tab and the line breaks (CSS Text 3,
@@ -1198,17 +1225,20 @@ internal class BoxBuilder(
             cp in 0x1100..0x11FF || cp in 0x3130..0x318F || cp in 0xA960..0xA97F || cp in 0xAC00..0xD7FF || cp in 0xFFA0..0xFFDC
 
         /** Transform preserved-whitespace text: word boundaries follow whitespace. */
-        private fun transformPre(raw: String, tt: TextTransform, wide: Boolean): String {
+        private fun transformPre(raw: String, tt: TextTransform, wide: Boolean, language: String?): String {
             if (tt == TextTransform.NONE && !wide) return raw
             val sb = StringBuilder(raw.length)
+            val sigmas = ArrayList<Int>(0)
             var boundary = true
             var at = 0
             while (at < raw.length) {
                 val cp = codePointAt(raw, at)
                 at += charCount(cp)
-                appendCodePoint(sb, transform(cp, tt, wide, boundary))
+                if (cp == CAPITAL_SIGMA && tt == TextTransform.LOWERCASE) sigmas.add(sb.length)
+                sb.append(transform(cp, tt, wide, boundary, language))
                 boundary = cp < 0x10000 && cp.toChar().isWhitespace()
             }
+            finalSigmas(sb, sigmas)
             return sb.toString()
         }
 
@@ -1290,6 +1320,7 @@ internal class BoxBuilder(
 
     private companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
+        const val CAPITAL_SIGMA = 0x3A3
         val WHITESPACE = Regex("[ \\t\\n\\u000B\\u000C\\r]+")
     }
 }

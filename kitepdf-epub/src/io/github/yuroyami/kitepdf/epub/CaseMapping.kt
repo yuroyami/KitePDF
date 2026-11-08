@@ -1,11 +1,47 @@
 package io.github.yuroyami.kitepdf.epub
 
 /**
- * The simple case mappings of a code point (#322): the Basic Multilingual Plane through `Char`,
+ * The case mappings of a code point (#322): the Basic Multilingual Plane through `Char`,
  * and the cased scripts outside it through the runs of UnicodeData.txt of Unicode 17, which
  * give the same result on every platform.
  */
 internal object CaseMapping {
+
+    /**
+     * The full uppercase of [cp] (CSS Text 3, 2.1.1): `ß` is `SS` and the ligature `ﬁ` is `FI`, and
+     * in Turkish and Azeri, [language], `i` is `İ` (SpecialCasing.txt). A mapping may give more than
+     * one character.
+     */
+    fun uppercaseFull(cp: Int, language: String?): String = when {
+        cp == 'i'.code && dotted(language) -> "\u0130"
+        cp < 0x10000 -> cp.toChar().uppercase()
+        else -> codePointString(uppercase(cp))
+    }
+
+    /** The full lowercase of [cp]; in Turkish and Azeri `I` is `ı` and `İ` is `i`. A final sigma is the caller's, which sees the next letter. */
+    fun lowercaseFull(cp: Int, language: String?): String = when {
+        cp == 'I'.code && dotted(language) -> "\u0131"
+        cp == 0x130 && dotted(language) -> "i"
+        cp < 0x10000 -> cp.toChar().lowercase()
+        else -> codePointString(lowercase(cp))
+    }
+
+    /** The full titlecase of [cp], with Turkish and Azeri's dotted capital I. */
+    fun titlecaseFull(cp: Int, language: String?): String = when {
+        cp == 'i'.code && dotted(language) -> "\u0130"
+        cp < 0x10000 -> cp.toChar().titlecase()
+        else -> codePointString(titlecase(cp))
+    }
+
+    /** Turkish and Azeri, whose i keeps its dot in capitals. */
+    private fun dotted(language: String?): Boolean {
+        val primary = language?.substringBefore('-')?.substringBefore('_')?.lowercase() ?: return false
+        return primary == "tr" || primary == "az"
+    }
+
+    private fun codePointString(cp: Int): String =
+        if (cp < 0x10000) cp.toChar().toString()
+        else charArrayOf((0xD800 + ((cp - 0x10000) ushr 10)).toChar(), (0xDC00 + ((cp - 0x10000) and 0x3FF)).toChar()).concatToString()
 
     fun uppercase(cp: Int): Int = if (cp < 0x10000) cp.toChar().uppercaseChar().code else shift(cp, LOWERCASE, -1)
 
