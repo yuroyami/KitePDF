@@ -148,6 +148,21 @@ class KiteXmlTest {
     }
 
     @Test
+    fun entities_that_expand_to_nothing_still_spend_the_budget() {
+        // An empty leaf and an external one cost nothing by length: 10^11 expansions of a 600-byte file (#963).
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        for (leaf in listOf("""<!ENTITY a "">""", """<!ENTITY a SYSTEM "x.dtd">""")) {
+            val subset = buildString {
+                append(leaf)
+                for (k in 1 until 12) append("""<!ENTITY ${'a' + k} "${"&${'a' + k - 1};".repeat(10)}">""")
+            }
+            val text = KiteXml.parse("<!DOCTYPE b [$subset]><b>&l;</b>").first("b")!!.text()
+            assertTrue(text.length < 2_000_000, "expanded to ${text.length} characters")
+        }
+        assertTrue(start.elapsedNow().inWholeSeconds < 10, "took ${start.elapsedNow()}")
+    }
+
+    @Test
     fun a_doctype_whose_subset_never_ends_leaves_the_document_as_before() {
         val root = KiteXml.parse("""<!DOCTYPE html [ <!ENTITY me "Kite"> <p>text</p>""")
         assertEquals("text", root.first("p")!!.text())

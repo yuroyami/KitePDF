@@ -105,6 +105,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Int` range no longer wraps to a count of 1 and loops over 1.8e19 cells. The cell loop also stops once the
   operator budget is spent or the render is cancelled (#971).
 
+- Every entity expansion of an XML document spends at least one unit of its budget, an external one too. An
+  entity that expanded to nothing cost nothing, so a 600-byte SVG, or an EPUB whose `container.xml` carried
+  the same subset, kept `open` busy for hours (#963).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

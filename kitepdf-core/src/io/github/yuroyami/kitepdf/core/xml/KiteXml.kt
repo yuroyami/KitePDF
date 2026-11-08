@@ -355,9 +355,15 @@ public object KiteXml {
 
         /** What `&name;` stands for, or null when the subset does not declare it or it may expand no further. */
         fun expand(name: String, depth: Int): String? {
+            // Every expansion costs at least one unit, an external one too. Charged by length alone, an
+            // entity that expands to nothing cost nothing, so ten references to the level below at each
+            // of twelve levels ran 10^11 expansions with the budget untouched (#963). XML 1.0 sets no
+            // limit; the JDK's parser counts expansions as well (jdk.xml.entityExpansionLimit).
+            if (budget <= 0) return null
+            budget--
             if (name in external) return ""
             val text = internal[name] ?: return null
-            if (depth >= MAX_EXPANSION_DEPTH || budget <= 0) return null
+            if (depth >= MAX_EXPANSION_DEPTH) return null
             return decodeEntities(text, this, depth + 1).also { budget -= it.length }
         }
     }
