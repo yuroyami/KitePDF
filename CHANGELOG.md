@@ -663,6 +663,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   progress and read marks (#901).
 - KiteDocViewState.dropCaches frees the viewer's caches for a low-memory signal: the bitmaps of pages off screen,
   the vector images, the glyph masks, and the PDF's own caches (#903).
+- Arabic and Hebrew text from a PDF reads in logical order: extractText, structured text lines, search and copied
+  text turn a right-to-left line from the order its glyphs stand on the page into the order it is read in (#913).
 
 ## [0.13.0] - 2026-10-09
 

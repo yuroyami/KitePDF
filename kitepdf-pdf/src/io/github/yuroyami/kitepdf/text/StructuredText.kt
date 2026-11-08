@@ -87,10 +87,11 @@ public data class PdfTextLine(
                 )
                 if (gap > threshold && sb.isNotEmpty() && sb.last() != ' ') sb.append(' ')
             }
-            sb.append(s.text)
+            sb.append(s.visualText)
             prevSpan = s
         }
-        sb.toString().trimEnd()
+        // A right-to-left line stands in visual order; it reads in logical order (#913).
+        LogicalOrder.fromVisual(sb.toString().trimEnd())
     }
 }
 
@@ -121,6 +122,22 @@ public data class PdfTextSpan(
      */
     val charEdgePoints: List<Pair<Double, Double>>? = null,
 )
+
+/**
+ * True when the glyphs of this horizontal span stand right to left, as a producer that writes
+ * right-to-left text in logical order places them. Its text then reads in logical order already,
+ * and [visualText] turns it into the left-to-right order of the page that a line puts together.
+ */
+internal val PdfTextSpan.runsLeft: Boolean
+    get() {
+        val edges = charEdgePoints ?: return false
+        val dx = edges.last().first - edges.first().first
+        val dy = edges.last().second - edges.first().second
+        return dx < 0.0 && -dx > kotlin.math.abs(dy)
+    }
+
+/** The span's text as its glyphs stand on the page, left to right (#913). */
+internal val PdfTextSpan.visualText: String get() = if (runsLeft) text.reversed() else text
 
 /**
  * True when this span's baseline runs down the page: vertical writing, or text
@@ -219,7 +236,9 @@ internal object StructuredTextExtractor {
             val run = runs[i]
             val scope = run.actualText
             if (scope == null) { out += run; i++; continue }
-            val parts = codePoints(scope.text)
+            // The replacement is in logical order and joins a line of visual characters, which
+            // reads in logical order when it ends, so it stands in visual order meanwhile (#913).
+            val parts = codePoints(LogicalOrder.toVisual(scope.text))
             val n = run.glyphs.size
             out += run.copy(glyphs = run.glyphs.mapIndexed { k, g ->
                 g.copy(text = parts.subList(parts.size * k / n, parts.size * (k + 1) / n).joinToString(""))

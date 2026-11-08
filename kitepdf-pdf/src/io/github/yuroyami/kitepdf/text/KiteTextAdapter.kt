@@ -42,7 +42,10 @@ internal object KiteTextAdapter {
         var prev: PdfTextSpan? = null
         val down = line.spans.isNotEmpty() && line.spans.all { it.runsDown }
         for (s in line.spans) {
-            val edges = s.charEdgePoints ?: evenEdges(s)
+            // A span whose glyphs stand right to left joins the line in the order of the page (#913).
+            val left = s.runsLeft
+            val edges = (s.charEdgePoints ?: evenEdges(s)).let { if (left) it.reversed() else it }
+            val spanText = if (left) s.text.reversed() else s.text
             if (prev != null) {
                 val gap = if (down) prev.bounds.bottom - s.bounds.top else s.bounds.left - prev.bounds.right
                 val threshold = kotlin.math.max(
@@ -54,11 +57,14 @@ internal object KiteTextAdapter {
                 }
             }
             if (lineStart == null) lineStart = edges.first()
-            for (k in s.text.indices) chars.add(Ch(s.text[k], edges[k + 1]))
+            for (k in spanText.indices) chars.add(Ch(spanText[k], edges[k + 1]))
             prev = s
         }
         while (chars.isNotEmpty() && chars.last().c.isWhitespace()) chars.removeAt(chars.size - 1)
-        val text = buildString { for (c in chars) append(c.c) }
+        val visual = buildString { for (c in chars) append(c.c) }
+        // A right-to-left line reads in logical order, as PdfTextLine.text does (#913).
+        val logical = LogicalOrder.of(visual)
+        val text = if (logical == null) visual else buildString { for (i in logical.first) append(visual[i]) }
 
         // Display-space bounds: the user-space hull mapped corner-wise.
         val corners = listOf(
@@ -104,6 +110,18 @@ internal object KiteTextAdapter {
                 val p = display.transformPoint(chars[i].end.first, chars[i].end.second)
                 if (p.first > x) x = p.first
                 edges[i + 1] = x
+            }
+            if (logical != null) {
+                // The edges follow the logical order: a character of a right-to-left run starts at
+                // its right edge. Inside a run each character ends where the next starts (#913).
+                val (order, levels) = logical
+                val visualEdges = edges.copyOf()
+                for (j in order.indices) {
+                    val k = order[j]
+                    edges[j] = if (levels[k] % 2 == 1) visualEdges[k + 1] else visualEdges[k]
+                }
+                val k = order.last()
+                edges[order.size] = if (levels[k] % 2 == 1) visualEdges[k] else visualEdges[k + 1]
             }
         } else {
             for (i in 0..text.length) {

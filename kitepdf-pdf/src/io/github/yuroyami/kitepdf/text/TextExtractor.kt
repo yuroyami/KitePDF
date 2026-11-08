@@ -67,7 +67,7 @@ public object TextExtractor {
         val colorSpaces = ContentStreamParser.colorSpaces(page.resources, page.internalDocument)
         val ops = page.operations(colorSpaces)
         val sb = StringBuilder()
-        Walk(page.internalDocument, page.resources, sb).run(ops, page.resources, depth = 0, Pen(Placement()))
+        Walk(page.internalDocument, page.resources, sb).apply { run(ops, page.resources, depth = 0, Pen(Placement())); finishLine() }
         return tidy(sb)
     }
 
@@ -77,7 +77,7 @@ public object TextExtractor {
      */
     public fun extract(ops: List<Operation>): String {
         val sb = StringBuilder()
-        Walk(null, null, sb).run(ops, null, depth = 0, Pen(Placement()))
+        Walk(null, null, sb).apply { run(ops, null, depth = 0, Pen(Placement())); finishLine() }
         return tidy(sb)
     }
 
@@ -115,6 +115,48 @@ public object TextExtractor {
         private var breaks = 0
         private var heldBreaks = 0
         private var skippedSinceText = false
+
+        /**
+         * The line being written: where it starts in the text, and how its shows move along it. A
+         * producer that writes right-to-left text in logical order places each glyph left of the
+         * one before; one that writes it in visual order, as most do, places the glyphs left to
+         * right, and such a line is turned into logical order when it ends (#913).
+         */
+        private var lineStart = 0
+        private var leftward = 0
+        private var rightward = 0
+        private var lastStart = Double.NaN
+
+        /** Whether an `/ActualText` wrote on this line: its text reads in logical order already. */
+        private var lineReplaced = false
+
+        /** Ends the line being written: a right-to-left one in visual order turns into logical order. */
+        fun finishLine() {
+            val start = lineStart.coerceAtMost(sb.length)
+            if (!lineReplaced && leftward <= rightward && LogicalOrder.hasRtl(sb.subSequence(start, sb.length))) {
+                val line = sb.substring(start)
+                // Spaces at either end stay where they are.
+                val body = line.trim()
+                val lead = line.indexOf(body)
+                val reordered = line.substring(0, lead) + LogicalOrder.fromVisual(body) + line.substring(lead + body.length)
+                sb.setLength(start)
+                sb.append(reordered)
+            }
+            lineStart = sb.length
+            leftward = 0
+            rightward = 0
+            lastStart = Double.NaN
+            lineReplaced = false
+        }
+
+        /** Counts which way the show at [at] moved along the line from the one before. */
+        private fun track(at: Shown) {
+            val along = at.x0 * at.ux + at.y0 * at.uy
+            val end = at.x1 * at.ux + at.y1 * at.uy
+            if (end < along) leftward++
+            if (!lastStart.isNaN()) { if (along < lastStart) leftward++ else rightward++ }
+            lastStart = along
+        }
 
         /** The shows that stayed, by their text, the latest first. */
         private val shown = HashMap<String, Shown>()
@@ -316,12 +358,14 @@ public object TextExtractor {
             }
             if (at != null && !blank) remember(text, at)
             write(text)
+            if (at != null && !blank) track(at)
         }
 
         /** Writes the `/ActualText` [text] of a sequence that opens, and keeps what its end needs to take it back. */
         private fun replace(text: String) {
             val r = if (RedrawnText.blank(text)) null else Replacement(text, sb.length, breaks, heldBreaks)
             write(text)
+            lineReplaced = true
             r?.end = sb.length
             replacement = r
         }
@@ -416,7 +460,9 @@ public object TextExtractor {
         private fun write(text: String) {
             if (text.isEmpty()) return
             val count = if (skippedSinceText) max(heldBreaks, breaks) else breaks
+            if (count > 0) finishLine()
             repeat(count) { sb.append('\n') }
+            if (count > 0) lineStart = sb.length
             breaks = 0
             heldBreaks = 0
             skippedSinceText = false
