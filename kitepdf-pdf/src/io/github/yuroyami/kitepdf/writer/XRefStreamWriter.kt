@@ -36,6 +36,7 @@ internal object XRefStreamWriter {
         info: PdfReference?,
         prev: Int?,
         id: PdfObject? = null,
+        encrypt: PdfReference? = null,
     ): PdfStream {
         val byNum = entries.associateBy { it.objNum }
         // Field widths sized to the largest value actually present.
@@ -60,6 +61,7 @@ internal object XRefStreamWriter {
         extra["Root"] = root
         info?.let { extra["Info"] = it }
         id?.let { extra["ID"] = it }
+        encrypt?.let { extra["Encrypt"] = it }
         prev?.let { extra["Prev"] = PdfInt(it.toLong()) }
         extra["W"] = PdfArray(listOf(PdfInt(w1.toLong()), PdfInt(w2.toLong()), PdfInt(w3.toLong())))
         extra["Index"] = PdfArray(listOf(PdfInt(0), PdfInt(size)))

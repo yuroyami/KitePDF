@@ -53,8 +53,8 @@ import kotlin.math.abs
  * password authenticated: every staged object is encrypted with the SAME
  * parameters as the base document at [saveIncremental] time and the trailer
  * keeps the original `/Encrypt`. Legacy RC4 documents are refused (read-only).
- * Note [saveRewritten] instead emits a DECRYPTED file: the rewrite drops the
- * `/Encrypt` dictionary and writes the resolved plain-text objects.
+ * [saveRewritten] keeps the encryption too, every object encrypted again under its
+ * new number; its overload with `keepEncryption = false` writes a decrypted copy.
  */
 public class PdfEditor internal constructor(
     internal val base: PdfDocument,
@@ -1352,8 +1352,23 @@ public class PdfEditor internal constructor(
      * are NOT retained and unreachable objects (e.g. content streams replaced by
      * an edit) are dropped, which is what makes it the correct method for
      * **redaction** (the removed content is truly gone, not just superseded).
+     *
+     * An encrypted document stays encrypted, as [saveIncremental] keeps it: the same security
+     * handler and file key, every string and stream encrypted again with a new IV under its new
+     * object number, the encryption dictionary written in clear and named by `/Encrypt`, and the
+     * first `/ID` string kept, because the file key of a V4 handler is made from it (ISO 32000-1,
+     * 7.6.1 and 7.6.3.3). With [useObjectStreams], the object stream is encrypted as one stream and
+     * the cross-reference stream is not (7.5.8.2). Pass `keepEncryption = false` to the other
+     * overload for a decrypted copy (#1006).
      */
-    public fun saveRewritten(useObjectStreams: Boolean = false): ByteArray {
+    public fun saveRewritten(useObjectStreams: Boolean = false): ByteArray = saveRewritten(useObjectStreams, keepEncryption = true)
+
+    /**
+     * [saveRewritten], with [keepEncryption] deciding whether an encrypted document stays
+     * encrypted. False writes every object in clear, with no `/Encrypt`, so the copy opens with
+     * no password and loses its permissions.
+     */
+    public fun saveRewritten(useObjectStreams: Boolean, keepEncryption: Boolean): ByteArray {
         val roots = buildList {
             for (key in listOf("Root", "Info")) {
                 ((trailerOverrides[key] ?: base.trailer[key]) as? PdfReference)?.let { add(it) }
@@ -1387,12 +1402,22 @@ public class PdfEditor internal constructor(
         val remap = HashMap<Long, Long>(ordered.size)
         ordered.forEachIndexed { i, old -> remap[old] = (i + 1).toLong() }
 
-        return if (useObjectStreams) {
-            writeWithObjectStreams(ordered, remap)
+        val encryption = if (keepEncryption && encryptor != null) {
+            // The encryption dictionary goes in clear (7.6.1), and never in an object stream (7.5.7).
+            // As the file stores it: the document's own resolver would decrypt its strings.
+            base.securityHandler?.encryptDictionary?.let { Encryption(encryptor, it) }
         } else {
-            writeWithClassicXref(ordered, remap)
+            null
+        }
+        return if (useObjectStreams) {
+            writeWithObjectStreams(ordered, remap, encryption)
+        } else {
+            writeWithClassicXref(ordered, remap, encryption)
         }
     }
+
+    /** What a rewrite of an encrypted document encrypts with, and the encryption dictionary it writes. */
+    private class Encryption(val encryptor: io.github.yuroyami.kitepdf.crypto.Encryptor, val dictionary: PdfDictionary)
 
     private fun fileHeader(out: ByteArrayBuilder, version: String) {
         out.append("%PDF-$version\n".encodeToByteArray())
@@ -1407,7 +1432,7 @@ public class PdfEditor internal constructor(
     }
 
     /** Full rewrite with a classic xref table (PDF 1.4-shaped output). */
-    private fun writeWithClassicXref(ordered: List<Long>, remap: Map<Long, Long>): ByteArray {
+    private fun writeWithClassicXref(ordered: List<Long>, remap: Map<Long, Long>, encryption: Encryption?): ByteArray {
         val out = ByteArrayBuilder(base.rawBytes.size)
         fileHeader(out, "1.7")
 
@@ -1417,7 +1442,15 @@ public class PdfEditor internal constructor(
             val newNum = remap.getValue(old)
             xrefEntries.add(ClassicXrefWriter.Entry(newNum, out.size(), 0))
             out.append("$newNum 0 obj\n".encodeToByteArray())
-            PdfObjectWriter.writeObject(remapReferences(obj, remap), out)
+            val remapped = remapReferences(obj, remap)
+            PdfObjectWriter.writeObject(encryption?.encryptor?.encryptIndirect(newNum, 0, remapped) ?: remapped, out)
+            out.append("\nendobj\n".encodeToByteArray())
+        }
+        val encryptNum = ordered.size + 1L
+        if (encryption != null) {
+            xrefEntries.add(ClassicXrefWriter.Entry(encryptNum, out.size(), 0))
+            out.append("$encryptNum 0 obj\n".encodeToByteArray())
+            PdfObjectWriter.writeObject(encryption.dictionary, out)
             out.append("\nendobj\n".encodeToByteArray())
         }
 
@@ -1425,9 +1458,10 @@ public class PdfEditor internal constructor(
         ClassicXrefWriter.write(out, xrefEntries)
 
         val trailer = LinkedHashMap<String, PdfObject>()
-        trailer["Size"] = PdfInt(ordered.size + 1L)
+        trailer["Size"] = PdfInt(if (encryption != null) encryptNum + 1 else ordered.size + 1L)
         newRootRef(remap, "Root")?.let { trailer["Root"] = it }
         newRootRef(remap, "Info")?.let { trailer["Info"] = it }
+        if (encryption != null) trailer["Encrypt"] = PdfReference(encryptNum, 0)
         trailer["ID"] = DocumentId.updated(base.trailer["ID"], base.rawBytes, out.toByteArray())
         out.append("trailer\n".encodeToByteArray())
         PdfObjectWriter.writeObject(PdfDictionary(trailer), out)
@@ -1441,7 +1475,7 @@ public class PdfEditor internal constructor(
      * objects stay in-file, and a single `/Type /XRef` stream replaces the
      * classic table and trailer.
      */
-    private fun writeWithObjectStreams(ordered: List<Long>, remap: Map<Long, Long>): ByteArray {
+    private fun writeWithObjectStreams(ordered: List<Long>, remap: Map<Long, Long>, encryption: Encryption?): ByteArray {
         // Partition: stream objects must stay in-file; everything else is packable.
         val streamObjs = ArrayList<Long>()
         val packable = ArrayList<Long>()
@@ -1451,6 +1485,8 @@ public class PdfEditor internal constructor(
         val maxNew = (ordered.size).toLong()
         val objStmNum = maxNew + 1
         val xrefStmNum = maxNew + 2
+        val encryptNum = maxNew + 3
+        val encryptor = encryption?.encryptor
 
         val out = ByteArrayBuilder(base.rawBytes.size)
         fileHeader(out, "1.5")
@@ -1463,7 +1499,8 @@ public class PdfEditor internal constructor(
             val newNum = remap.getValue(old)
             entries.add(XRefStreamWriter.XEntry(newNum, 1, out.size().toLong(), 0))
             out.append("$newNum 0 obj\n".encodeToByteArray())
-            PdfObjectWriter.writeObject(remapReferences(obj, remap), out)
+            val remapped = remapReferences(obj, remap)
+            PdfObjectWriter.writeObject(encryptor?.encryptIndirect(newNum, 0, remapped) ?: remapped, out)
             out.append("\nendobj\n".encodeToByteArray())
         }
 
@@ -1475,10 +1512,17 @@ public class PdfEditor internal constructor(
             members.forEachIndexed { index, (newNum, _) ->
                 entries.add(XRefStreamWriter.XEntry(newNum, 2, objStmNum, index.toLong()))
             }
+            // The object stream is encrypted as one stream, and its members are not encrypted again (7.6.1).
             val objStm = ObjectStreamWriter.build(members)
             entries.add(XRefStreamWriter.XEntry(objStmNum, 1, out.size().toLong(), 0))
             out.append("$objStmNum 0 obj\n".encodeToByteArray())
-            PdfObjectWriter.writeObject(objStm, out)
+            PdfObjectWriter.writeObject(encryptor?.encryptIndirect(objStmNum, 0, objStm) ?: objStm, out)
+            out.append("\nendobj\n".encodeToByteArray())
+        }
+        if (encryption != null) {
+            entries.add(XRefStreamWriter.XEntry(encryptNum, 1, out.size().toLong(), 0))
+            out.append("$encryptNum 0 obj\n".encodeToByteArray())
+            PdfObjectWriter.writeObject(encryption.dictionary, out)
             out.append("\nendobj\n".encodeToByteArray())
         }
 
@@ -1488,8 +1532,9 @@ public class PdfEditor internal constructor(
         val root = newRootRef(remap, "Root")
             ?: throw IllegalStateException("Cannot write document with no /Root")
         val xrefStream = XRefStreamWriter.build(
-            entries, size = xrefStmNum + 1, root = root, info = newRootRef(remap, "Info"), prev = null,
+            entries, size = if (encryption != null) encryptNum + 1 else xrefStmNum + 1, root = root, info = newRootRef(remap, "Info"), prev = null,
             id = DocumentId.updated(base.trailer["ID"], base.rawBytes, out.toByteArray()),
+            encrypt = if (encryption != null) PdfReference(encryptNum, 0) else null,
         )
         out.append("$xrefStmNum 0 obj\n".encodeToByteArray())
         PdfObjectWriter.writeObject(xrefStream, out)

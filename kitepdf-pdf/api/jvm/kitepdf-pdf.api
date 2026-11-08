@@ -1687,6 +1687,7 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun rotatePage (Lio/github/yuroyami/kitepdf/PdfPage;I)V
 	public final fun saveIncremental ()[B
 	public final fun saveRewritten (Z)[B
+	public final fun saveRewritten (ZZ)[B
 	public static synthetic fun saveRewritten$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;ZILjava/lang/Object;)[B
 	public final fun setButtonValue (Lio/github/yuroyami/kitepdf/PdfFormField;Ljava/lang/String;)V
 	public final fun setCheckbox (Lio/github/yuroyami/kitepdf/PdfFormField;Z)V

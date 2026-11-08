@@ -385,6 +385,7 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
     final fun rotatePage(io.github.yuroyami.kitepdf/PdfPage, kotlin/Int) // io.github.yuroyami.kitepdf.writer/PdfEditor.rotatePage|rotatePage(io.github.yuroyami.kitepdf.PdfPage;kotlin.Int){}[0]
     final fun saveIncremental(): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveIncremental|saveIncremental(){}[0]
     final fun saveRewritten(kotlin/Boolean = ...): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveRewritten|saveRewritten(kotlin.Boolean){}[0]
+    final fun saveRewritten(kotlin/Boolean, kotlin/Boolean): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveRewritten|saveRewritten(kotlin.Boolean;kotlin.Boolean){}[0]
     final fun setButtonValue(io.github.yuroyami.kitepdf/PdfFormField, kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfEditor.setButtonValue|setButtonValue(io.github.yuroyami.kitepdf.PdfFormField;kotlin.String){}[0]
     final fun setCheckbox(io.github.yuroyami.kitepdf/PdfFormField, kotlin/Boolean) // io.github.yuroyami.kitepdf.writer/PdfEditor.setCheckbox|setCheckbox(io.github.yuroyami.kitepdf.PdfFormField;kotlin.Boolean){}[0]
     final fun setChoiceValue(io.github.yuroyami.kitepdf/PdfFormField, kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfEditor.setChoiceValue|setChoiceValue(io.github.yuroyami.kitepdf.PdfFormField;kotlin.String){}[0]

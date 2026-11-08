@@ -24,6 +24,9 @@ public class StandardSecurityHandler(
     ownerPassword: ByteArray = byteArrayOf(),
 ) {
 
+    /** The encryption dictionary as the file stores it, which a rewrite writes again in clear (#1006). */
+    internal val encryptDictionary: PdfDictionary = encryptDict
+
     private val v: Int = encryptDict.getInt("V")?.toInt() ?: 1
     /** Revision number, exposed so the public permissions API can pick the right bit semantics. */
     public val r: Int = encryptDict.getInt("R")?.toInt() ?: 2

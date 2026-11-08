@@ -300,12 +300,11 @@ The calls add up. A second region does not undo the first. A stamp or a content 
 - A signature does not stay valid, because the signed bytes change.
 - `saveRewritten(useObjectStreams = true)` packs the objects into compressed object streams.
 
-!!! warning
-    `saveRewritten()` writes an encrypted document without encryption. Encrypt the file again before you share it, or use `saveIncremental()` when you did not redact.
+- An encrypted document stays encrypted with its own password and permissions. `saveRewritten(useObjectStreams, keepEncryption = false)` writes a decrypted copy instead.
 
 ## Encrypted documents
 
-You can edit a document with AES encryption (AES-128 or AES-256) after you open it with its password. Pass a secure random source to `edit()`, because the editor encrypts each new object with a new random IV. `saveIncremental()` writes the changes with the encryption of the document, so the same password opens the result:
+You can edit a document with AES encryption (AES-128 or AES-256) after you open it with its password. Pass a secure random source to `edit()`, because the editor encrypts each new object with a new random IV. `saveIncremental()` and `saveRewritten()` write the changes with the encryption of the document, so the same password opens the result:
 
 ```kotlin
 import kotlin.random.asKotlinRandom

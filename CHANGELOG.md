@@ -630,6 +630,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - redactRegion and redactRegions take RedactImages.Pixels, which keeps an image that a region meets and blanks
   only the pixels under the region, its soft mask too, so redacting a line of a scanned page no longer removes
   the scan (#926).
+- saveRewritten keeps the encryption of an encrypted document, its password and its permissions, also with object
+  streams and after a redaction; saveRewritten(useObjectStreams, keepEncryption = false) writes a decrypted copy
+  (#1006).
 
 ## [0.13.0] - 2026-10-09
 
