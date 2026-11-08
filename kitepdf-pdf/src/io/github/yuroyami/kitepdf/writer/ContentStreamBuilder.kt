@@ -39,8 +39,23 @@ public class ContentStreamBuilder internal constructor(
 
     /* ─── Graphics state ─────────────────────────────────────────────────── */
 
-    public fun save(): ContentStreamBuilder = op("q")
-    public fun restore(): ContentStreamBuilder = op("Q")
+    /**
+     * `q`. The text font is graphics state, which `q` saves and `Q` restores (ISO 32000-1, 8.4.2
+     * and 9.3.1), so the font that [showText] encodes for is saved with it (#733). A font that
+     * [raw] content sets is outside what the builder tracks.
+     */
+    public fun save(): ContentStreamBuilder {
+        savedEmbedded.add(currentEmbedded)
+        return op("q")
+    }
+
+    /** `Q`, back to the font that the matching [save] saw; with no matching save, the font stays. */
+    public fun restore(): ContentStreamBuilder {
+        if (savedEmbedded.isNotEmpty()) currentEmbedded = savedEmbedded.removeAt(savedEmbedded.lastIndex)
+        return op("Q")
+    }
+
+    private val savedEmbedded = ArrayList<EmbeddedBinding?>()
 
     /** Concatenate [a b c d e f] onto the current transformation matrix (`cm`). */
     public fun transform(a: Double, b: Double, c: Double, d: Double, e: Double, f: Double): ContentStreamBuilder {
@@ -149,7 +164,10 @@ public class ContentStreamBuilder internal constructor(
         beginText(); setFont(font, size); moveText(x, y); showText(text); return endText()
     }
 
-    /** Escape hatch: append literal content-stream source, followed by a newline. */
+    /**
+     * Escape hatch: append literal content-stream source, followed by a newline. A `Tf`, `q` or `Q`
+     * in it is outside what the builder tracks, so [showText] keeps encoding for the font it set.
+     */
     public fun raw(content: String): ContentStreamBuilder {
         out.append(content.encodeToByteArray()); return nl()
     }

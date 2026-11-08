@@ -152,9 +152,12 @@ public class PdfEditor internal constructor(
         creator: String? = null,
         producer: String? = null,
     ): PdfReference {
-        val existingRef = base.trailer.getRef("Info")
-        val existing = when (val raw = base.trailer["Info"]) {
-            is PdfReference -> base.resolve(raw) as? PdfDictionary
+        // The /Info as it stands in this editor: an earlier call's object and values count, so each
+        // call changes only the entries it is given (ISO 32000-1, 14.3.3; #686).
+        val raw = trailerOverrides["Info"] ?: base.trailer["Info"]
+        val existingRef = raw as? PdfReference
+        val existing = when (raw) {
+            is PdfReference -> effectiveObject(raw.objectNumber) as? PdfDictionary
             is PdfDictionary -> raw
             else -> null
         }

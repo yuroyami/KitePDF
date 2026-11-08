@@ -327,6 +327,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A text string without a byte order mark reads as PDFDocEncoding, so a title's em dash, euro sign, curly quotes
   and `fi` ligature come back as themselves instead of C1 controls; a UTF-8 mark is recognised, and a date stored
   as a UTF-16 text string is read (#690).
+- `ContentStreamBuilder.restore()` brings back the font that `showText` encodes for, as `Q` restores the PDF
+  font, where text after `restore()` was written in the encoding of the inner font (#733).
+- A second `setInfo` call keeps the values of the first, where it undid them or orphaned their object (#686).
 
 ## [0.13.0] - 2026-10-09
 
