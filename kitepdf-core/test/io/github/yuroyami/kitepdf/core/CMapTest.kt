@@ -96,4 +96,44 @@ class CMapTest {
         )
         assertNull(cmap.decode(byteArrayOf(0x99.toByte()), 0))
     }
+
+    private fun hex(code: Int) = "<" + code.toString(16).padStart(4, '0') + ">"
+
+    @Test
+    fun many_ranges_in_any_order_map_each_code_by_its_own_range() {
+        // A CJK ToUnicode as one bfrange per code, in reverse order, with every third code left out (#797).
+        val codes = (1..3000).filter { it % 3 != 0 }.reversed()
+        val ranges = codes.joinToString("\n") { "${hex(it)} ${hex(it)} ${hex(0x4E00 + it)}" }
+        val cmap = CMap.parse(
+            "1 begincodespacerange <0000> <FFFF> endcodespacerange\n${codes.size} beginbfrange\n$ranges\nendbfrange".encodeToByteArray(),
+        )
+        for (code in listOf(1, 2, 1000, 2999, 2998)) {
+            val bytes = byteArrayOf((code shr 8).toByte(), code.toByte())
+            assertEquals(charArrayOf((0x4E00 + code).toChar()).concatToString(), cmap.decode(bytes, 0)?.first, "code $code")
+        }
+        assertNull(cmap.decode(byteArrayOf(0, 3), 0), "a code between ranges maps to nothing")
+        assertNull(cmap.decode(byteArrayOf(0x20, 0), 0), "a code past the last range maps to nothing")
+    }
+
+    @Test
+    fun the_first_of_two_overlapping_ranges_in_the_file_maps_a_code() {
+        val ranges = (0 until 10).joinToString("\n") { "${hex(it * 16)} ${hex(it * 16 + 15)} <0041>" } +
+            "\n<0000> <00FF> <0061>"
+        val cmap = CMap.parse(
+            "1 begincodespacerange <0000> <FFFF> endcodespacerange\n11 beginbfrange\n$ranges\nendbfrange".encodeToByteArray(),
+        )
+        assertEquals("A", cmap.decode(byteArrayOf(0, 0x10), 0)?.first)
+        assertEquals("\u0101", cmap.decode(byteArrayOf(0, 0xA0.toByte()), 0)?.first, "only the last range holds it")
+    }
+
+    @Test
+    fun many_cid_ranges_in_any_order_give_each_code_its_cid() {
+        val codes = (0 until 500).map { it * 4 }.shuffled(kotlin.random.Random(7))
+        val ranges = codes.joinToString("\n") { "${hex(it)} ${hex(it + 1)} ${it * 10}" }
+        val cmap = CMap.parse(
+            "1 begincodespacerange <0000> <FFFF> endcodespacerange\n${codes.size} begincidrange\n$ranges\nendcidrange".encodeToByteArray(),
+        )
+        assertEquals(1201, cmap.codeUnits(byteArrayOf(0, 121)).single().cid, "code 121 is the second of the range from 120")
+        assertEquals(19960, cmap.codeUnits(byteArrayOf(0x07, 0xCC.toByte())).single().cid)
+    }
 }

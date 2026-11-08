@@ -204,8 +204,22 @@ public class CMap private constructor(
 
     public data class CodeUnit(val cid: Int, val code: Int, val byteOffset: Int, val byteCount: Int)
 
+    /*
+     * ISO 32000-1, 9.7.5.3 and 9.10.3 leave the ranges in any order, and the first one in the file
+     * that holds a code maps it. Ranges that do not overlap, which is nearly every CMap, hold a code
+     * in one range at most, so a binary search over them sorted by their first code finds it. A CJK
+     * ToUnicode written as one bfrange per character walked thousands of ranges per glyph (#797).
+     * Overlapping ranges keep the scan in file order.
+     */
+    private val cidIndex: RangeIndex? by lazy { RangeIndex.of(cidRanges.size, { cidRanges[it].lo }, { cidRanges[it].hi }) }
+    private val bfIndex: RangeIndex? by lazy { RangeIndex.of(bfRanges.size, { bfRanges[it].lo }, { bfRanges[it].hi }) }
+
     private fun lookupCid(code: Int): Int? {
         cidChars[code]?.let { return it }
+        cidIndex?.let { index ->
+            val r = cidRanges.getOrNull(index.find(code)) ?: return null
+            return r.baseCid + (code - r.lo)
+        }
         for (r in cidRanges) {
             if (code in r.lo..r.hi) return r.baseCid + (code - r.lo)
         }
@@ -217,15 +231,57 @@ public class CMap private constructor(
 
     private fun lookup(code: Int): String? {
         bfChars[code]?.let { return it }
+        bfIndex?.let { index -> return bfRanges.getOrNull(index.find(code))?.let { textIn(it, code) } }
         for (r in bfRanges) {
             if (code !in r.lo..r.hi) continue
-            if (r.replacements != null) return r.replacements.getOrNull(code - r.lo)
-            val base = r.base ?: continue
-            // The last code point of the destination counts up across the range.
-            val cp = base + (code - r.lo)
-            if (cp in 0..0x10FFFF) return r.prefix + charArrayOfCodepoint(cp).concatToString()
+            textIn(r, code)?.let { return it }
+            if (r.replacements != null) return null
         }
         return null
+    }
+
+    private fun textIn(r: BfRange, code: Int): String? {
+        if (r.replacements != null) return r.replacements.getOrNull(code - r.lo)
+        val base = r.base ?: return null
+        // The last code point of the destination counts up across the range.
+        val cp = base + (code - r.lo)
+        return if (cp in 0..0x10FFFF) r.prefix + charArrayOfCodepoint(cp).concatToString() else null
+    }
+
+    /** Ranges that do not overlap, sorted by their first code, for a binary search. */
+    private class RangeIndex(private val los: IntArray, private val his: IntArray, private val order: IntArray) {
+        /** The index of the range that holds [code], or -1. */
+        fun find(code: Int): Int {
+            var low = 0
+            var high = los.size - 1
+            while (low <= high) {
+                val mid = (low + high) ushr 1
+                when {
+                    code < los[mid] -> high = mid - 1
+                    code > his[mid] -> low = mid + 1
+                    else -> return order[mid]
+                }
+            }
+            return -1
+        }
+
+        companion object {
+            /** Fewer ranges than this are as quick to scan. */
+            private const val MIN_RANGES = 8
+
+            /** An index of the ranges, or null when there are few or two of them overlap. */
+            fun of(count: Int, lo: (Int) -> Int, hi: (Int) -> Int): RangeIndex? {
+                if (count < MIN_RANGES) return null
+                val order = (0 until count).sortedBy(lo).toIntArray()
+                val los = IntArray(count) { lo(order[it]) }
+                val his = IntArray(count) { hi(order[it]) }
+                for (i in 0 until count) {
+                    if (his[i] < los[i]) return null
+                    if (i > 0 && los[i] <= his[i - 1]) return null
+                }
+                return RangeIndex(los, his, order)
+            }
+        }
     }
 
     private fun charArrayOfCodepoint(cp: Int): CharArray = when {
