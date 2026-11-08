@@ -262,6 +262,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same for all three forms, and a mesh it cuts off says so through `kiteWarn` (#791).
 - A WOFF font whose table length is 2^31 or more is skipped as invalid, where it threw and stopped every chapter
   of the book from laying out (#828).
+- `rem` resolves against the computed font size of the root element, so `html { font-size: 62.5% } body { font-
+  size: 1.6rem }` gives body text the reader's size, where it came out 1.6 times larger (#850).
 
 ## [0.13.0] - 2026-10-09
 

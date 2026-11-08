@@ -41,6 +41,13 @@ internal class StyleResolver(
     fun initial(): ComputedStyle = ComputedStyle.initial(rootFontSizePt, direction = baseDirection)
 
     /**
+     * What `rem` means: the computed font size of the root element, once it is styled, and the
+     * initial font size, the reader's, inside the root's own `font-size` (CSS Values and Units 4,
+     * 6.1.1; #850).
+     */
+    private var remPt: Double = rootFontSizePt
+
+    /**
      * The style of an anonymous box with [display] inside a box styled [parent]: inherited
      * properties come from [parent], the others take their initial values (CSS 2.1, 17.2.1).
      */
@@ -66,7 +73,10 @@ internal class StyleResolver(
             val decls = CssParser.parse("*{$inline}", Origin.INLINE).firstOrNull()?.declarations.orEmpty()
             for (d in decls) offer(d.property, d.value, weight(Origin.INLINE, d.important, INLINE_SPEC, rules.size + 1))
         }
+        val root = ancestors.isEmpty()
+        if (root) remPt = rootFontSizePt
         val cs = build(parent, inCascadeOrder(offered))
+        if (root) remPt = cs.fontSizePt
         // The HTML `dir` attribute wins over the CSS `direction` property.
         return when (el.attrs["dir"]?.lowercase()) {
             "rtl" -> cs.copy(direction = Direction.RTL)
@@ -352,10 +362,10 @@ internal class StyleResolver(
     }
 
     /** The transform parser, with lengths in this element's font. */
-    private fun transforms(b: Builder) = TransformParser { CssValues.length(it, b.fontSizePt, rootFontSizePt, 0.0) }
+    private fun transforms(b: Builder) = TransformParser { CssValues.length(it, b.fontSizePt, remPt, 0.0) }
 
     /** The background parser, with lengths in this element's font. */
-    private fun backgrounds(b: Builder) = BackgroundParser { CssValues.length(it, b.fontSizePt, rootFontSizePt, 0.0) }
+    private fun backgrounds(b: Builder) = BackgroundParser { CssValues.length(it, b.fontSizePt, remPt, 0.0) }
 
     /**
      * The layer part of the `background` shorthand: for each layer, its image, position, size
@@ -411,7 +421,7 @@ internal class StyleResolver(
     private fun radiusValue(b: Builder, raw: String): CssRadius? {
         val t = raw.trim()
         if (t.endsWith('%')) return t.dropLast(1).trim().toDoubleOrNull()?.takeIf { it >= 0.0 }?.let { CssRadius(it / 100.0, percent = true) }
-        return CssValues.length(t, b.fontSizePt, rootFontSizePt, 0.0)?.takeIf { it >= 0.0 }?.let { CssRadius(it, percent = false) }
+        return CssValues.length(t, b.fontSizePt, remPt, 0.0)?.takeIf { it >= 0.0 }?.let { CssRadius(it, percent = false) }
     }
 
     /** A `border-*-radius` longhand: one radius, or a horizontal and a vertical one. */
@@ -459,7 +469,7 @@ internal class StyleResolver(
             for (token in CssParser.splitTopLevel(part.trim().replace(WHITESPACE, " "), ' ')) {
                 val t = token.trim()
                 if (t.isEmpty()) continue
-                val length = CssValues.length(t, b.fontSizePt, rootFontSizePt, 0.0)
+                val length = CssValues.length(t, b.fontSizePt, remPt, 0.0)
                 when {
                     t.equals("inset", ignoreCase = true) -> inset = true
                     length != null && lengths.size < 4 -> lengths += length
@@ -493,7 +503,7 @@ internal class StyleResolver(
                 return
             }
         }
-        fun len(ref: Double) = CssValues.length(v, b.fontSizePt, rootFontSizePt, ref)
+        fun len(ref: Double) = CssValues.length(v, b.fontSizePt, remPt, ref)
         when (prop) {
             "display" -> parseDisplay(v)?.let { b.display = it }
             "font-weight" -> parseBold(v)?.let { b.bold = it }
@@ -684,11 +694,11 @@ internal class StyleResolver(
             "border-spacing" -> len(b.fontSizePt)?.let { b.borderSpacingPt = it.coerceAtLeast(0.0) }
             "table-layout" -> b.tableLayoutFixed = v.trim().lowercase() == "fixed"
             else -> if (prop.removePrefix("-webkit-") in FlexValues.PROPERTIES) {
-                FlexValues.apply(b.flex, prop, v) { CssValues.length(it, b.fontSizePt, rootFontSizePt, refWidthPt) }?.let { b.flex = it }
+                FlexValues.apply(b.flex, prop, v) { CssValues.length(it, b.fontSizePt, remPt, refWidthPt) }?.let { b.flex = it }
             } else if (prop.removePrefix("-webkit-") in COLUMN_PROPERTIES) {
                 columnValue(b, prop.removePrefix("-webkit-"), v)
             } else if (prop in GridValues.PROPERTIES) {
-                GridValues.apply(b.grid, prop, v) { CssValues.length(it, b.fontSizePt, rootFontSizePt, refWidthPt) }?.let { b.grid = it }
+                GridValues.apply(b.grid, prop, v) { CssValues.length(it, b.fontSizePt, remPt, refWidthPt) }?.let { b.grid = it }
             }
         }
     }
@@ -853,7 +863,7 @@ internal class StyleResolver(
         "thin" -> 0.75
         "medium" -> 2.25
         "thick" -> 3.75
-        else -> CssValues.length(v, b.fontSizePt, rootFontSizePt, refWidthPt)
+        else -> CssValues.length(v, b.fontSizePt, remPt, refWidthPt)
     }
 
     /** A `border-style` value, or null for one that is not a style, which leaves the declaration out. */
@@ -875,7 +885,7 @@ internal class StyleResolver(
     private fun columnValue(b: Builder, prop: String, v: String) {
         val t = v.trim().lowercase()
         fun count(w: String): Int? = w.toIntOrNull()?.takeIf { it >= 1 }
-        fun width(w: String): Double? = CssValues.length(w, b.fontSizePt, rootFontSizePt, refWidthPt)?.takeIf { it > 0.0 && it.isFinite() }
+        fun width(w: String): Double? = CssValues.length(w, b.fontSizePt, remPt, refWidthPt)?.takeIf { it > 0.0 && it.isFinite() }
         fun rule(w: String): Boolean {
             borderStyle(w)?.let { b.ruleStyle = it; return true }
             CssValues.color(w)?.let { b.ruleColor = it; return true }
@@ -913,7 +923,7 @@ internal class StyleResolver(
 
     private fun sizeValue(b: Builder, v: String, ref: Double): Double? = when (v.trim().lowercase()) {
         "auto", "none" -> null
-        else -> CssValues.length(v, b.fontSizePt, rootFontSizePt, ref)
+        else -> CssValues.length(v, b.fontSizePt, remPt, ref)
     }
 
     /** Vertical size: percentages against [refHeightPt] (null when it is 0). */
@@ -932,7 +942,7 @@ internal class StyleResolver(
         if (s == "inherit" || s == "unset") return parentPt
         if (s == "initial") return rootFontSizePt
         CssValues.fontSizeKeyword(s, parentPt, rootFontSizePt)?.let { return it }
-        return CssValues.length(s, parentPt, rootFontSizePt, parentPt)
+        return CssValues.length(s, parentPt, remPt, parentPt)
     }
 
     private fun resolveLineHeight(b: Builder, v: String) {
@@ -940,7 +950,7 @@ internal class StyleResolver(
         when {
             s == "normal" -> b.lineHeightPt = null
             s.toDoubleOrNull() != null -> b.lineHeightPt = s.toDouble() * b.fontSizePt // unitless multiplier
-            else -> CssValues.length(s, b.fontSizePt, rootFontSizePt, b.fontSizePt)?.let { b.lineHeightPt = it }
+            else -> CssValues.length(s, b.fontSizePt, remPt, b.fontSizePt)?.let { b.lineHeightPt = it }
         }
     }
 
