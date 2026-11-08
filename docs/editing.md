@@ -352,6 +352,7 @@ val signed = PdfSigner.embedSignature(target.bytes, target.byteRange, cms)
 
 - `prepareSignature` takes a `rect` and a `pageIndex` for a visible field.
 - `PdfSigner.Options` sets what the signature says about itself: `name`, `reason`, `location`, `contactInfo`, and `signingTime` as `/M`. Validators trust the signing time inside the CMS, so `/M` is optional.
+- `certificationLevel` in the options makes a certification signature, which says what may change after it: 1 nothing, 2 filling in forms and signing, 3 also annotations. KitePDF writes the DocMDP reference and the catalog's `/Perms /DocMDP`, and refuses a certification for a document that is already signed, since it must be the first signature.
 - A visible signature draws "Digitally signed by" the name, then the date, the reason and the location, in Helvetica. Pass `appearance` in the options to draw your own, in a box from (0, 0) to the width and height it gets:
 
 ```kotlin

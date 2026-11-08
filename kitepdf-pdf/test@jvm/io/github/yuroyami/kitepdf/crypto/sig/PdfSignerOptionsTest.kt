@@ -100,4 +100,52 @@ class PdfSignerOptionsTest {
         assertContains(output, "Signer Certificate Common Name: Options Signer")
         assertTrue("Reason" !in output || "I approve" in output, output)
     }
+
+    /** A one-page form with a text field Name, certified at [level]. */
+    private fun certified(level: Int): ByteArray {
+        val sb = StringBuilder("%PDF-1.7\n")
+        val offsets = IntArray(5)
+        fun obj(n: Int, body: String) { offsets[n] = sb.length; sb.append("$n 0 obj\n$body\nendobj\n") }
+        obj(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>")
+        obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        obj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Annots [4 0 R] >>")
+        obj(4, "<< /Type /Annot /Subtype /Widget /FT /Tx /T (Name) /Rect [20 200 200 220] /F 4 /P 3 0 R /V (before) >>")
+        val xref = sb.length
+        sb.append("xref\n0 5\n0000000000 65535 f \n")
+        for (n in 1..4) sb.append(offsets[n].toString().padStart(10, '0') + " 00000 n \n")
+        sb.append("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        return sign(sb.toString().encodeToByteArray(), "Certification", null, PdfSigner.Options(name = "Author", certificationLevel = level))
+    }
+
+    @Test
+    fun aCertificationReadsBackAtEachLevel() {
+        for (level in 1..3) {
+            val doc = PdfDocument.open(certified(level))
+            val signature = doc.signatures.single()
+            assertEquals(level, signature.certificationLevel)
+            assertEquals(Status.Valid, signature.validate(listOf(root.cert)).status)
+            val perms = assertNotNull(doc.catalog.getDict("Perms", doc))
+            assertEquals(doc.formFields.single { it.fullyQualifiedName == "Certification" }.fieldDict["V"], perms["DocMDP"])
+        }
+    }
+
+    @Test
+    fun aFormFillAfterACertificationIsJudgedByItsLevel() {
+        for ((level, permitted) in listOf(1 to false, 2 to true)) {
+            val doc = PdfDocument.open(certified(level))
+            val filled = doc.edit().apply { setTextFieldValue(doc.formFields.single { it.fullyQualifiedName == "Name" }, "after") }.saveIncremental()
+            val result = PdfDocument.open(filled).signatures.single().validate(listOf(root.cert))
+            assertEquals(Status.Valid, result.status, result.detail)
+            assertEquals(permitted, result.areChangesPermitted, "level $level: ${result.changes}")
+        }
+    }
+
+    @Test
+    fun aSignedDocumentCannotBeCertified() {
+        val signed = sign(plain(), "Approval", null, options)
+        val doc = PdfDocument.open(signed)
+        val signer = PdfSigner(doc, doc.edit(), placeholderSize = 8192)
+        kotlin.test.assertFailsWith<IllegalArgumentException> { signer.prepareSignature("Late", null, 0, PdfSigner.Options(certificationLevel = 2)) }
+        kotlin.test.assertFailsWith<IllegalArgumentException> { PdfSigner.Options(certificationLevel = 4) }
+    }
 }

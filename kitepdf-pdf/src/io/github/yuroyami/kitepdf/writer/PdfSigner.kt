@@ -43,6 +43,12 @@ public class PdfSigner(
      * height it is given, as a form XObject in `/AP /N` (12.7.4.5). Null draws the default, as
      * Acrobat does: "Digitally signed by" the name, then the date, the reason and the location, in
      * Helvetica. An invisible signature, one without a rectangle, has no appearance.
+     *
+     * [certificationLevel] makes a certification signature (ISO 32000-1, 12.8.2.2, Tables 252 to
+     * 254): 1 allows no change after it, 2 allows filling in forms and signing, and 3 also allows
+     * annotations. Null makes an approval signature. A certification signature must be the first
+     * one, so [prepareSignature] refuses one for a document that is already signed or certified
+     * (#923).
      */
     public class Options(
         public val name: String? = null,
@@ -51,7 +57,12 @@ public class PdfSigner(
         public val contactInfo: String? = null,
         public val signingTime: io.github.yuroyami.kitepdf.PdfDate? = null,
         public val appearance: (ContentStreamBuilder.(width: Double, height: Double) -> Unit)? = null,
-    )
+        public val certificationLevel: Int? = null,
+    ) {
+        init {
+            require(certificationLevel == null || certificationLevel in 1..3) { "A certification level is 1, 2 or 3, not $certificationLevel" }
+        }
+    }
 
     /** The signed bytes plus the exact `/ByteRange` the CMS must cover. */
     public class SigningTarget(public val bytes: ByteArray, public val byteRange: IntArray)
@@ -71,6 +82,11 @@ public class PdfSigner(
     public fun prepareSignature(fieldName: String, rect: KiteRectangle?, pageIndex: Int, options: Options) {
         check(!prepared) { "prepareSignature was already called" }
         require(!doc.isEncrypted) { "Signing encrypted documents is not supported." }
+        val level = options.certificationLevel
+        if (level != null) {
+            require(doc.signatures.isEmpty()) { "A certification signature must be the first signature of the document." }
+            require(doc.catalog.getDict("Perms", doc)?.get("DocMDP") == null) { "The document is already certified (/Perms /DocMDP)." }
+        }
         val page = doc.pages.getOrNull(pageIndex)
             ?: throw IllegalArgumentException("No page $pageIndex")
         val pageRef = page.reference
@@ -90,6 +106,22 @@ public class PdfSigner(
         options.location?.let { sigDict["Location"] = PdfString(PdfText.encodeTextString(it)) }
         options.contactInfo?.let { sigDict["ContactInfo"] = PdfString(PdfText.encodeTextString(it)) }
         options.signingTime?.let { sigDict["M"] = PdfString(it.toString().encodeToByteArray()) }
+        if (level != null) {
+            // The DocMDP transform (Table 253 and 254): the level, at version 1.2.
+            sigDict["Reference"] = PdfArray(
+                listOf(
+                    PdfDictionary(
+                        linkedMapOf(
+                            "Type" to PdfName("SigRef"),
+                            "TransformMethod" to PdfName("DocMDP"),
+                            "TransformParams" to PdfDictionary(
+                                linkedMapOf("Type" to PdfName("TransformParams"), "P" to PdfInt(level.toLong()), "V" to PdfName("1.2")),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        }
         val sigRef = editor.addObject(PdfDictionary(sigDict))
 
         val r = (rect ?: KiteRectangle(0.0, 0.0, 0.0, 0.0)).normalized()
@@ -157,6 +189,14 @@ public class PdfSigner(
                 catalog["AcroForm"] = newAcro
                 editor.updateObject(rootRef, PdfDictionary(catalog))
             }
+        }
+        if (level != null) {
+            // The catalog names the certification signature in /Perms /DocMDP (Table 258).
+            val now = LinkedHashMap((current(rootRef) as? PdfDictionary ?: doc.catalog).map)
+            val perms = LinkedHashMap((now["Perms"]?.resolve(editor.effective) as? PdfDictionary)?.map ?: emptyMap())
+            perms["DocMDP"] = sigRef
+            now["Perms"] = PdfDictionary(perms)
+            editor.updateObject(rootRef, PdfDictionary(now))
         }
         prepared = true
     }

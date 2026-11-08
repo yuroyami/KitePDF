@@ -1752,9 +1752,10 @@ public final class io/github/yuroyami/kitepdf/writer/PdfSigner$Companion {
 
 public final class io/github/yuroyami/kitepdf/writer/PdfSigner$Options {
 	public fun <init> ()V
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfDate;Lkotlin/jvm/functions/Function3;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfDate;Lkotlin/jvm/functions/Function3;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfDate;Lkotlin/jvm/functions/Function3;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfDate;Lkotlin/jvm/functions/Function3;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAppearance ()Lkotlin/jvm/functions/Function3;
+	public final fun getCertificationLevel ()Ljava/lang/Integer;
 	public final fun getContactInfo ()Ljava/lang/String;
 	public final fun getLocation ()Ljava/lang/String;
 	public final fun getName ()Ljava/lang/String;

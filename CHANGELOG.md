@@ -642,6 +642,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PdfSigner.prepareSignature takes PdfSigner.Options: the signer's name, reason, location, contact and signing
   time, and the appearance of a visible signature, with a default that prints them; saveForSigning finds its
   placeholders only in the revision it wrote (#922).
+- PdfSigner.Options.certificationLevel makes a certification signature at level 1, 2 or 3, with its DocMDP
+  reference and the catalog's /Perms /DocMDP (#923).
 
 ## [0.13.0] - 2026-10-09
 
