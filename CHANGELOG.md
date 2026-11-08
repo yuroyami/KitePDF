@@ -679,6 +679,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PdfDocument.layers lets an app switch the layers that rendering and text extraction follow, with radio-button
   groups, locked groups, alternate configurations and print states; KiteDocViewState.setLayerVisible redraws the
   pages (#938).
+- SVG markers draw: marker-start, marker-mid, marker-end and marker on paths, lines, polylines and polygons,
+  sized by markerUnits and the viewBox, placed by refX and refY, turned by orient (#941).
 
 ## [0.13.0] - 2026-10-09
 

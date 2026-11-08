@@ -129,13 +129,15 @@ public class SvgImage private constructor(
         val budget = stop as? RenderBudget ?: RenderBudget(stop)
         val vb = viewBox
         if (vb == null || vb[2] <= 0 || vb[3] <= 0) {
-            walk(root, ctm, Paint(viewport = ctm, viewportWidth = width, viewportHeight = height), canvas, loadResource, depth = 0, stop = budget)
+            rootPaint = Paint(viewport = ctm, viewportWidth = width, viewportHeight = height)
+            walk(root, ctm, rootPaint, canvas, loadResource, depth = 0, stop = budget)
             return
         }
         val fit = viewBoxFit(vb, width, height, root.attrs["preserveAspectRatio"] ?: root.attrs["preserveaspectratio"])
         if (fit.slice) canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, width, height) }.build(), ctm, evenOdd = false)
         try {
-            walk(root, compose(ctm, fit.matrix), Paint(viewport = ctm, viewportWidth = vb[2], viewportHeight = vb[3]), canvas, loadResource, depth = 0, stop = budget)
+            rootPaint = Paint(viewport = ctm, viewportWidth = vb[2], viewportHeight = vb[3])
+            walk(root, compose(ctm, fit.matrix), rootPaint, canvas, loadResource, depth = 0, stop = budget)
         } finally {
             if (fit.slice) canvas.popClip()
         }
@@ -176,6 +178,9 @@ public class SvgImage private constructor(
         val shift = KiteMatrix.translation((w - vb[2] * scale) * fx, (h - vb[3] * scale) * fy)
         return Fit(compose(shift, compose(KiteMatrix.scaling(scale, scale), toOrigin)), slice)
     }
+
+    /** The paint the render began with, which a marker's content inherits through the marker's own ancestors. */
+    private var rootPaint = Paint()
 
     private data class Paint(
         val fill: RgbColor? = RgbColor.BLACK,
@@ -317,7 +322,7 @@ public class SvgImage private constructor(
             "use" -> drawUse(el, ctm, paint, canvas, load, depth, stop)
             "image" -> drawImage(el, ctm, paint, canvas, load)
             "text" -> drawText(el, ctm, paint, canvas, depth)
-            "path" -> el.attrs["d"]?.let { paintShape(parsePath(it), ctm, paint, canvas, load = load, depth = depth, stop = stop) }
+            "path" -> el.attrs["d"]?.let { val path = parsePath(it); paintShape(path, ctm, paint, canvas, load = load, depth = depth, stop = stop); drawMarkers(el, path, ctm, paint, canvas, load, depth, stop) }
             "rect" -> paintShape(rect(el.attrs, paint), ctm, paint, canvas, load = load, depth = depth, stop = stop)
             "circle" -> paintShape(
                 ellipse(num(el, "cx", paint), num(el, "cy", paint), num(el, "r", paint), num(el, "r", paint)),
@@ -327,15 +332,146 @@ public class SvgImage private constructor(
                 ellipse(num(el, "cx", paint), num(el, "cy", paint), num(el, "rx", paint), num(el, "ry", paint)),
                 ctm, paint, canvas, load = load, depth = depth, stop = stop,
             )
-            "line" -> paintShape(
-                KitePath.Builder().apply {
+            "line" -> {
+                val path = KitePath.Builder().apply {
                     moveTo(num(el, "x1", paint), num(el, "y1", paint))
                     lineTo(num(el, "x2", paint), num(el, "y2", paint))
-                }.build(),
-                ctm, paint, canvas, forceStroke = true, load = load, depth = depth, stop = stop,
-            )
-            "polyline" -> el.attrs["points"]?.let { paintShape(polyline(it, close = false), ctm, paint, canvas, load = load, depth = depth, stop = stop) }
-            "polygon" -> el.attrs["points"]?.let { paintShape(polyline(it, close = true), ctm, paint, canvas, load = load, depth = depth, stop = stop) }
+                }.build()
+                paintShape(path, ctm, paint, canvas, forceStroke = true, load = load, depth = depth, stop = stop)
+                drawMarkers(el, path, ctm, paint, canvas, load, depth, stop)
+            }
+            "polyline" -> el.attrs["points"]?.let { val path = polyline(it, close = false); paintShape(path, ctm, paint, canvas, load = load, depth = depth, stop = stop); drawMarkers(el, path, ctm, paint, canvas, load, depth, stop) }
+            "polygon" -> el.attrs["points"]?.let { val path = polyline(it, close = true); paintShape(path, ctm, paint, canvas, load = load, depth = depth, stop = stop); drawMarkers(el, path, ctm, paint, canvas, load, depth, stop) }
+        }
+    }
+
+    /** A vertex of a shape, where a marker stands, with the directions in and out of it in degrees, or null at an end (#941). */
+    private class Vertex(val x: Double, val y: Double, val inAngle: Double?, val outAngle: Double?)
+
+    /** The vertices of [path] (SVG 2, 13.7.3): each segment's end, a subpath's start, and the start again where a subpath closes. */
+    private fun verticesOf(path: KitePath): List<Vertex> {
+        val points = ArrayList<DoubleArray>()      // x, y, angle in, angle out (NaN when none)
+        var cx = 0.0; var cy = 0.0; var sx = 0.0; var sy = 0.0
+        fun angle(dx: Double, dy: Double): Double = if (dx == 0.0 && dy == 0.0) Double.NaN else kotlin.math.atan2(dy, dx) * 180.0 / kotlin.math.PI
+        fun segment(x: Double, y: Double, start: Double, end: Double) {
+            points.lastOrNull()?.let { if (it[3].isNaN()) it[3] = start }
+            points += doubleArrayOf(x, y, end, Double.NaN)
+            cx = x; cy = y
+        }
+        for (seg in path.segments) when (seg) {
+            is KitePath.Segment.MoveTo -> { points += doubleArrayOf(seg.x, seg.y, Double.NaN, Double.NaN); cx = seg.x; cy = seg.y; sx = seg.x; sy = seg.y }
+            is KitePath.Segment.LineTo -> { val a = angle(seg.x - cx, seg.y - cy); segment(seg.x, seg.y, a, a) }
+            is KitePath.Segment.CurveTo -> {
+                val start = angle(seg.x1 - cx, seg.y1 - cy).takeIf { !it.isNaN() } ?: angle(seg.x2 - cx, seg.y2 - cy)
+                val end = angle(seg.x3 - seg.x2, seg.y3 - seg.y2).takeIf { !it.isNaN() } ?: angle(seg.x3 - seg.x1, seg.y3 - seg.y1)
+                segment(seg.x3, seg.y3, start, end)
+            }
+            is KitePath.Segment.QuadTo -> segment(seg.x2, seg.y2, angle(seg.x1 - cx, seg.y1 - cy), angle(seg.x2 - seg.x1, seg.y2 - seg.y1))
+            KitePath.Segment.Close -> { val a = angle(sx - cx, sy - cy); segment(sx, sy, a, a) }
+        }
+        // A zero-length segment takes the direction of the segment before it, or after it (SVG 2, 13.7.4).
+        for (i in points.indices) {
+            if (points[i][2].isNaN()) points[i][2] = points[i][3]
+            if (points[i][3].isNaN()) points[i][3] = points.getOrNull(i + 1)?.get(2)?.takeIf { !it.isNaN() } ?: points[i][2]
+            if (points[i][2].isNaN()) points[i][2] = points[i][3]
+        }
+        return points.map { Vertex(it[0], it[1], it[2].takeIf { a -> !a.isNaN() }, it[3].takeIf { a -> !a.isNaN() }) }
+    }
+
+    /** The marker that [el] or its nearest ancestor names for [property], `marker` standing for all three (marker properties inherit). */
+    private fun markerFor(el: KiteXmlNode.Element, property: String): KiteXmlNode.Element? {
+        var at: KiteXmlNode.Element? = el
+        while (at != null) {
+            val value = styleOrAttr(at, property) ?: styleOrAttr(at, "marker")
+            if (value != null) {
+                if (value.trim().lowercase() == "none") return null
+                return urlRef(value)?.let { byId[it] }?.takeIf { it.tag.lowercase() == "marker" }
+            }
+            at = at.parent
+        }
+        return null
+    }
+
+    /**
+     * The markers of a `path`, `line`, `polyline` or `polygon` (SVG 2, 13.7; SVG 1.1, 11.6): `marker-start`
+     * at the first vertex, `marker-mid` at each between and `marker-end` at the last (#941).
+     */
+    private fun drawMarkers(
+        el: KiteXmlNode.Element, path: KitePath, ctm: KiteMatrix, paint: Paint, canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?, depth: Int, stop: KiteCancellation?,
+    ) {
+        val start = markerFor(el, "marker-start")
+        val mid = markerFor(el, "marker-mid")
+        val end = markerFor(el, "marker-end")
+        if (start == null && mid == null && end == null) return
+        val vertices = verticesOf(path)
+        if (vertices.isEmpty()) return
+        for ((i, v) in vertices.withIndex()) {
+            val marker = when (i) {
+                0 -> start
+                vertices.lastIndex -> end
+                else -> mid
+            } ?: continue
+            drawMarker(marker, v, i == 0, ctm, paint, canvas, load, depth, stop)
+        }
+    }
+
+    private fun drawMarker(
+        marker: KiteXmlNode.Element, v: Vertex, first: Boolean, ctm: KiteMatrix, shapePaint: Paint, canvas: KiteCanvas,
+        load: ((String) -> ByteArray?)?, depth: Int, stop: KiteCancellation?,
+    ) {
+        // A marker that a shape inside it uses again is cut off, as a use cycle is.
+        if (shapePaint.useTargets.any { it === marker }) return
+        fun attr(name: String) = marker.attrs[name] ?: marker.attrs[name.lowercase()]
+        val mw = attr("markerWidth")?.let { parseLen(it, shapePaint.fontSize, shapePaint.viewportWidth) } ?: 3.0
+        val mh = attr("markerHeight")?.let { parseLen(it, shapePaint.fontSize, shapePaint.viewportHeight) } ?: 3.0
+        if (!(mw > 0.0 && mh > 0.0)) return
+        val units = if (attr("markerUnits")?.trim() == "userSpaceOnUse") 1.0 else shapePaint.strokeW
+        // The bisector of the two directions at a corner, the one direction at an end (SVG 2, 13.7.4).
+        val orient = attr("orient")?.trim()?.lowercase() ?: "0"
+        val angle = when (orient) {
+            "auto", "auto-start-reverse" -> {
+                val a = v.inAngle; val b = v.outAngle
+                val dir = when {
+                    a != null && b != null -> {
+                        var d = b - a
+                        while (d > 180) d -= 360
+                        while (d < -180) d += 360
+                        a + d / 2
+                    }
+                    else -> a ?: b ?: 0.0
+                }
+                if (orient == "auto-start-reverse" && first) dir + 180.0 else dir
+            }
+            else -> orient.removeSuffix("deg").toDoubleOrNull() ?: 0.0
+        }
+        val vb = attr("viewBox")?.let { numbers(it) }?.takeIf { it.size >= 4 && it[2] > 0 && it[3] > 0 }
+        val view = vb?.let { viewBoxFit(it, mw, mh, attr("preserveAspectRatio")).matrix } ?: KiteMatrix.IDENTITY
+        val refX = attr("refX")?.toDoubleOrNull() ?: 0.0
+        val refY = attr("refY")?.toDoubleOrNull() ?: 0.0
+        val ref = view.transformPoint(refX, refY)
+        val r = angle * kotlin.math.PI / 180.0
+        val placed = compose(
+            compose(
+                compose(ctm, KiteMatrix(kotlin.math.cos(r), kotlin.math.sin(r), -kotlin.math.sin(r), kotlin.math.cos(r), v.x, v.y)),
+                KiteMatrix.scaling(units, units),
+            ),
+            KiteMatrix.translation(-ref.first, -ref.second),
+        )
+        // The content inherits from the marker's ancestors, not from the shape (SVG 2, 13.7.2).
+        val chain = generateSequence(marker.parent) { it.parent }.toList().reversed()
+        var inherited = rootPaint
+        for (a in chain) inherited = resolvePaint(a, inherited, container = true)
+        val markerPaint = resolvePaint(marker, inherited, container = true)
+            .copy(viewportWidth = vb?.get(2) ?: mw, viewportHeight = vb?.get(3) ?: mh, useTargets = shapePaint.useTargets + marker)
+        val overflow = styleOrAttr(marker, "overflow")?.trim()?.lowercase()
+        val clip = overflow != "visible" && overflow != "auto"
+        if (clip) canvas.pushClip(KitePath.Builder().apply { rectangle(0.0, 0.0, mw, mh) }.build(), placed, evenOdd = false)
+        try {
+            val content = compose(placed, view)
+            for (c in marker.children) if (c is KiteXmlNode.Element) walk(c, content, markerPaint, canvas, load, depth + 1, stop)
+        } finally {
+            if (clip) canvas.popClip()
         }
     }
 
