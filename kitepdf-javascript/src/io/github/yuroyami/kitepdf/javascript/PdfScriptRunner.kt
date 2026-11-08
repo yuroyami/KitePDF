@@ -162,18 +162,40 @@ public class PdfScriptRunner(
     private val timerLock = io.github.yuroyami.kitepdf.core.KiteLock()
     private val timerListeners = ArrayList<() -> Unit>()
 
-    /** Every script that failed since the runner opened, newest last. */
+    /**
+     * The scripts that failed since the runner opened, newest last: the last [MAX_FAILURES] of them,
+     * each message cut to [MAX_FAILURE_MESSAGE] characters and with no cause, so a timer that throws
+     * a large message every frame cannot fill the heap (#960). [droppedFailures] counts the older ones.
+     */
     public val failures: List<KiteScriptException> get() = failureCopy
 
-    private val failureList = ArrayList<KiteScriptException>()
+    /** How many failures [failures] no longer holds, because newer ones took their place (#960). */
+    public val droppedFailures: Long get() = (recordedFailures - failureList.size).coerceAtLeast(0)
+
+    private val failureList = ArrayDeque<KiteScriptException>()
+
+    /** Every failure ever recorded, so a caller can take the ones after a point (#960). */
+    @kotlin.concurrent.Volatile
+    private var recordedFailures = 0L
 
     /** [failureList] as the other threads may read it: a new list after every failure. */
     @kotlin.concurrent.Volatile
     private var failureCopy: List<KiteScriptException> = emptyList()
 
     private fun recordFailure(failure: KiteScriptException) {
-        failureList.add(failure)
+        val message = failure.message.orEmpty()
+        val kept = if (message.length > MAX_FAILURE_MESSAGE) message.take(MAX_FAILURE_MESSAGE) + "..." else message
+        // The cause holds the engine's value, a handle that keeps the thrown object alive.
+        failureList.addLast(KiteScriptException(kept))
+        while (failureList.size > MAX_FAILURES) failureList.removeFirst()
+        recordedFailures++
         failureCopy = failureList.toList()
+    }
+
+    /** The failures recorded since [before] failures had been, as many as [failures] still holds. */
+    private fun failuresSince(before: Long): List<KiteScriptException> {
+        val count = (recordedFailures - before).coerceIn(0L, failureList.size.toLong()).toInt()
+        return failureList.toList().takeLast(count)
     }
     /** True once an engine opened, so timers may be waiting and a closed engine is opened again. */
     private var started = false
@@ -320,10 +342,10 @@ public class PdfScriptRunner(
     public fun runDocumentOpen(): List<KiteScriptException> = onScriptThread { documentOpenHere() }
 
     private suspend fun documentOpenHere(): List<KiteScriptException> {
-        val before = failureList.size
+        val before = recordedFailures
         documentScriptsHere()
         (document.openAction as? PdfAction.JavaScript)?.let { runAction(it, "openAction") }
-        return failureList.drop(before)
+        return failuresSince(before)
     }
 
     /**
@@ -333,12 +355,12 @@ public class PdfScriptRunner(
     public fun runDocumentScripts(): List<KiteScriptException> = onScriptThread { documentScriptsHere() }
 
     private suspend fun documentScriptsHere(): List<KiteScriptException> {
-        val before = failureList.size
+        val before = recordedFailures
         documentScriptsRan = true
         for ((name, source) in document.documentJavaScripts.entries.sortedBy { it.key }) {
             evaluate(source, name)
         }
-        return failureList.drop(before)
+        return failuresSince(before)
     }
 
     /** Runs the page's open script, its `/AA /O` entry (ISO 32000-1 §12.6.3, Table 195). */
@@ -369,9 +391,9 @@ public class PdfScriptRunner(
     private suspend fun runAction(action: PdfAction.JavaScript, name: String): KiteScriptException? {
         ensureEngine()
         if (!policy.enabled) return null
-        val before = failureList.size
+        val before = recordedFailures
         evaluate(action.script, name)
-        return failureList.getOrNull(before)
+        return failuresSince(before).firstOrNull()
     }
 
     /* ─── the form ──────────────────────────────────────────────────────── */
@@ -536,7 +558,23 @@ public class PdfScriptRunner(
         if (policy.enabled) calculateAll()
     }
 
+    /** True while a calculation round runs, so a calculateNow inside it does nothing (#962). */
+    private var calculating = false
+
     private suspend fun calculateAll() {
+        // A calculate script that calls calculateNow() started a round inside the running one, and
+        // two such fields branched at every level. PDFium and pdf.js ignore such a call, and so does
+        // this (CPDFSDK_InteractiveForm::OnCalculate's busy flag, pdf.js's #isCalculating).
+        if (calculating) return
+        calculating = true
+        try {
+            calculateRound()
+        } finally {
+            calculating = false
+        }
+    }
+
+    private suspend fun calculateRound() {
         for (name in calculationOrder()) {
             val field = document.formField(name) ?: continue
             val action = field.additionalActions?.calculate as? PdfAction.JavaScript ?: continue
@@ -658,7 +696,12 @@ public class PdfScriptRunner(
      */
     override suspend fun pumpTimers(nowMillis: Long): Long? = pausingCall {
         if (!started || !policy.enabled) return@pausingCall null
-        for (code in host.dueTimers(now())) {
+        // One pump has a slice of time, and runs each timer at most once; the timers it does not
+        // reach stay due, in order, for the next pump, so a document cannot hold the thread (#959).
+        val sliceStart = now()
+        val ran = HashSet<Int>()
+        while (now() - sliceStart < PUMP_SLICE_MILLIS) {
+            val code = host.takeDue(now(), ran) ?: break
             evaluate(code, "timer")
         }
         host.nextTimerDue()?.let { next -> (next - now()).coerceAtLeast(0) }
@@ -695,16 +738,31 @@ public class PdfScriptRunner(
         if (!ensureEngine()) return null
         if (!policy.enabled) return null
         val engine = openEngine ?: return null
-        eventStartedAt = now()
+        // Only the outermost evaluation starts the clocks: a nested one, as a calculateNow inside a
+        // calculate script, restarted the deadline of the event around it, so the budget never fired
+        // (#962). The document's clock is apart from the event's, which a grant moves (#961).
+        val outermost = evaluationDepth == 0
+        if (outermost) {
+            eventStartedAt = now()
+            documentEventStartedAt = eventStartedAt
+        }
+        evaluationDepth++
         return try {
             if (pausing) engine.evaluatePausing(source, name) else engine.evaluate(source, name)
         } catch (e: KiteScriptException) {
             recordFailure(e)
             null
         } finally {
-            documentSpent += (now() - eventStartedAt).coerceAtLeast(0)
+            evaluationDepth--
+            if (outermost) documentSpent += (now() - documentEventStartedAt).coerceAtLeast(0)
         }
     }
+
+    /** How many evaluations are running, one inside another (#962). */
+    private var evaluationDepth = 0
+
+    /** When the running outermost event started, for the document's budget, which no grant moves (#961). */
+    private var documentEventStartedAt: Long = 0
 
     /**
      * True when this event, or the whole document, has used the time the policy allows.
@@ -725,7 +783,10 @@ public class PdfScriptRunner(
             if (!keepGoing) return true
             eventStartedAt = now
         }
-        if (policy.documentBudgetMillis > 0 && documentSpent > policy.documentBudgetMillis) return true
+        // The running event counts too, so an event that never ends stops once the document's time
+        // is used (#961).
+        val running = if (evaluationDepth > 0) (now - documentEventStartedAt).coerceAtLeast(0) else 0
+        if (policy.documentBudgetMillis > 0 && documentSpent + running > policy.documentBudgetMillis) return true
         return false
     }
 
@@ -809,3 +870,12 @@ public class PdfScriptRunner(
         }
     }
 }
+
+/** How many failures a PDF runner keeps, as the EPUB session does (#960). */
+private const val MAX_FAILURES = 100
+
+/** How many characters of a failure's message a runner keeps (#960). */
+private const val MAX_FAILURE_MESSAGE = 2000
+
+/** How long one pump of the timers may run before it leaves the rest for the next pump (#959). */
+private const val PUMP_SLICE_MILLIS = 50L

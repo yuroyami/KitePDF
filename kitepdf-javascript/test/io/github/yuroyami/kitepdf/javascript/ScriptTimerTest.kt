@@ -89,4 +89,39 @@ class ScriptTimerTest {
             assertEquals(afterStop, told, "a listener that stopped hears nothing")
         }
     }
+
+    @Test
+    fun a_pump_runs_within_a_slice_and_a_document_has_a_bounded_number_of_timers(): TestResult = scriptTest {
+        // A loop of setInterval made every pump take hundreds of milliseconds, for good (#959).
+        PdfScriptRunner(PdfDocument.open(pdf())).use { runner ->
+            runner.run(script("var set = 0; try { for (var i = 0; i < 100000; i++) { app.setInterval('1', 0); set++; } } catch (e) {} getField('a').value = String(set);"))
+            assertEquals("1000", runner.formState.value("a"))
+            val start = kotlin.time.TimeSource.Monotonic.markNow()
+            repeat(5) { runner.pumpTimers(0) }
+            assertTrue(start.elapsedNow().inWholeSeconds < 10, "five pumps took ${start.elapsedNow()}")
+        }
+    }
+
+    @Test
+    fun a_timer_that_throws_every_pump_keeps_a_bounded_list_of_failures(): TestResult = scriptTest {
+        var now = 0L
+        PdfScriptRunner(PdfDocument.open(pdf()), clock = { now }).use { runner ->
+            runner.run(script("var big = 'x'.repeat(100000); app.setInterval('throw new Error(big)', 10)"))
+            repeat(150) { now += 10; runner.pumpTimers(now) }
+            assertEquals(100, runner.failures.size)
+            assertEquals(50L, runner.droppedFailures)
+            assertTrue(runner.failures.all { it.message!!.length < 3000 && it.cause == null })
+        }
+    }
+
+    @Test
+    fun the_document_budget_stops_an_event_that_never_ends(): TestResult = scriptTest {
+        // The running event did not count, so a document budget alone never stopped a loop (#961).
+        val policy = PdfScriptPolicy(budgetMillis = 0, documentBudgetMillis = 300)
+        PdfScriptRunner(PdfDocument.open(pdf()), policy = policy).use { runner ->
+            val start = kotlin.time.TimeSource.Monotonic.markNow()
+            runner.run(script("while (true) {}"))
+            assertTrue(start.elapsedNow().inWholeSeconds < 20, "the loop ran for ${start.elapsedNow()}")
+        }
+    }
 }

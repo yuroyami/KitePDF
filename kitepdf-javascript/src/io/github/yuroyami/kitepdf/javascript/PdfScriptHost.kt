@@ -343,6 +343,10 @@ internal class PdfScriptHost(
     /* ─── timers ────────────────────────────────────────────────────────── */
 
     private fun setTimer(code: String, period: Long, repeats: Boolean): Int {
+        // A document has a bounded number of timers, past which a set fails in the script that asked,
+        // as a RangeError that the API raises for -1: without it a loop of setInterval made every
+        // pump take hundreds of milliseconds (#959).
+        if (timers.size >= MAX_TIMERS) return -1
         val id = nextTimerId++
         // Acrobat takes the period in milliseconds and a zero means "as often as you can", which
         // a viewer answers at its own frame rate rather than in a loop. The delay counts from
@@ -358,6 +362,19 @@ internal class PdfScriptHost(
         if (timers.remove(id) == null) return
         hasTimers = timers.isNotEmpty()
         timersChanged?.invoke()
+    }
+
+    /**
+     * The code of the oldest timer due at [now] whose id is not in [ran], and that timer moves on to
+     * its next round, or null when none is due. A pump takes them one at a time, so the timers it
+     * does not reach in its slice stay due, in order, for the next pump (#959).
+     */
+    fun takeDue(now: Long, ran: MutableSet<Int>): String? {
+        val timer = timers.values.filter { it.dueAt <= now && it.id !in ran }.minByOrNull { it.dueAt } ?: return null
+        ran += timer.id
+        if (timer.repeats) timer.dueAt = now + timer.period else timers.remove(timer.id)
+        hasTimers = timers.isNotEmpty()
+        return timer.code
     }
 
     /** The timers due at [now], oldest first, and the queue is updated for the next round. */
@@ -411,3 +428,6 @@ internal class PdfScriptHost(
         const val COMB = 1 shl 24
     }
 }
+
+/** The most timers one document may have set at once (#959). */
+private const val MAX_TIMERS = 1000

@@ -87,6 +87,23 @@ class FormScriptTest {
     }
 
     @Test
+    fun a_calculate_script_that_calls_calculate_now_does_not_nest_rounds(): TestResult = scriptTest {
+        // Each calculateNow() started a round inside the running one, without end (#962).
+        val doc = PdfDocument.open(
+            invoicePdf(
+                calculate = "this.calculateNow\\(\\); event.value = this.getField\\('a'\\).value + this.getField\\('b'\\).value",
+            ),
+        )
+        PdfScriptRunner(doc).use { runner ->
+            val start = kotlin.time.TimeSource.Monotonic.markNow()
+            runner.setFieldValue("a", "2")
+            runner.setFieldValue("b", "3")
+            assertEquals("5", runner.formState.value("total"))
+            kotlin.test.assertTrue(start.elapsedNow().inWholeSeconds < 20, "took ${start.elapsedNow()}")
+        }
+    }
+
+    @Test
     fun the_format_script_decides_what_the_field_shows(): TestResult = scriptTest {
         val doc = PdfDocument.open(invoicePdf())
         PdfScriptRunner(doc).use { runner ->

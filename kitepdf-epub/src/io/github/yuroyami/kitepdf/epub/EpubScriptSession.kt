@@ -378,7 +378,10 @@ public class EpubScriptSession(
     }
 
     private fun recordFailure(failure: KiteScriptException) {
-        failureList.add(failure)
+        // A message is cut, and the cause, which holds the engine's value, is not kept, so 100
+        // failures of a megabyte each cannot hold 200 MB (#960).
+        val message = failure.message.orEmpty()
+        failureList.add(KiteScriptException(if (message.length > MAX_FAILURE_MESSAGE) message.take(MAX_FAILURE_MESSAGE) + "..." else message))
         if (failureList.size > MAX_FAILURES) failureList.removeAt(0)
         failureCopy = failureList.toList()
     }
@@ -1063,6 +1066,9 @@ public class EpubScriptSession(
     public companion object {
         /** How many failures [failures] keeps. */
         public const val MAX_FAILURES: Int = 100
+
+        /** How many characters of a failure's message [failures] keeps (#960). */
+        private const val MAX_FAILURE_MESSAGE = 2000
 
         /**
          * The UTF-16 code units the keys and values of one storage area may hold, about the 5 MB a

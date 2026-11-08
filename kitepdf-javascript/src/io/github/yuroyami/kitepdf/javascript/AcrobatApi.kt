@@ -26,6 +26,11 @@ internal object AcrobatApi {
 
   /* ─── util ────────────────────────────────────────────────────────────── */
 
+  // A document whose timers are all taken gets -1 from the host, and the set fails here (#959).
+  function timerId(id) {
+    if (id < 0) throw new RangeError('app: a document may set at most 1000 timers');
+    return id;
+  }
   function pad(n, width) {
     var s = String(n);
     while (s.length < width) s = '0' + s;
@@ -475,10 +480,10 @@ internal object AcrobatApi {
       });
     },
     setInterval: function (code, period) {
-      return { __timer: host.setTimer(String(code), Number(period === undefined ? 1000 : period), true) };
+      return { __timer: timerId(host.setTimer(String(code), Number(period === undefined ? 1000 : period), true)) };
     },
     setTimeOut: function (code, delay) {
-      return { __timer: host.setTimer(String(code), Number(delay === undefined ? 1000 : delay), false) };
+      return { __timer: timerId(host.setTimer(String(code), Number(delay === undefined ? 1000 : delay), false)) };
     },
     clearInterval: function (timer) { if (timer) host.clearTimer(timer.__timer); },
     clearTimeOut: function (timer) { if (timer) host.clearTimer(timer.__timer); },

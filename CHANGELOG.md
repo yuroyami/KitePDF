@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The PDF parser and `kitepdf-net` still read one array (#906).
 - `KiteXmlNode.Element.indexInParent()`: an element's index among its parent's children, remembered and
   checked on the next call, so the selector matcher's sibling steps cost O(1) (#990).
+- `PdfScriptRunner.droppedFailures`: how many failures `failures` no longer holds, since it keeps the last
+  100 (#960).
 
 ### Changed
 
@@ -173,6 +175,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A book's `localStorage` and `sessionStorage` each hold up to 5 Mi UTF-16 code units of keys and values, and
   `setItem` throws `QuotaExceededError` past that, as the HTML Standard asks. A chapter script that stored in
   a loop filled the host's heap within its five-second budget (#957).
+
+- A PDF document may set at most 1,000 timers, past which `app.setInterval` and `app.setTimeOut` throw, and
+  one pump of the timers runs each due timer once within a slice of 50 ms, leaving the rest for the next
+  pump, so a document cannot take the script thread for good (#959). The PDF runner keeps its last 100
+  failures, as the EPUB session does, and both cut a failure's message to 2,000 characters and drop its
+  cause, so a timer that throws a large message every frame cannot fill the heap (#960). The document
+  budget counts the running event, and a grant of more time no longer erases time spent, so a document
+  budget alone stops an endless loop (#961). A `calculateNow()` during a calculation round does nothing, as
+  in PDFium and pdf.js, and a nested script no longer restarts the deadline of the event around it, so a
+  calculate script that calls `calculateNow()` no longer runs without end (#962).
 
 ## [0.13.0] - 2026-10-09
 
