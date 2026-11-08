@@ -208,8 +208,9 @@ public data class KiteZoomSpec(
     val resetZoomOnPageChange: Boolean = true,
 ) {
     init {
-        require(minZoom > 0f) { "minZoom must be > 0 (was $minZoom)" }
-        require(maxZoom >= minZoom) { "maxZoom ($maxZoom) must be >= minZoom ($minZoom)" }
+        // An infinite bound let the zoom itself become infinite (#667).
+        require(minZoom.isFinite() && minZoom > 0f) { "minZoom must be finite and > 0 (was $minZoom)" }
+        require(maxZoom.isFinite() && maxZoom >= minZoom) { "maxZoom ($maxZoom) must be finite and >= minZoom ($minZoom)" }
         require(doubleTapZoom.isFinite() && doubleTapZoom > 0f) { "doubleTapZoom must be finite and > 0 (was $doubleTapZoom)" }
     }
 
@@ -282,8 +283,10 @@ public sealed interface KiteRenderSpec {
         val canvasDecorator: KiteCanvasDecorator? = null,
     ) : KiteRenderSpec {
         init {
-            require(quality > 0f) { "quality must be > 0 (was $quality)" }
+            // An infinite quality made every page tiled at more than two billion pixels (#667).
+            require(quality.isFinite() && quality > 0f) { "quality must be finite and > 0 (was $quality)" }
             require(maxBitmapLongSide > 0) { "maxBitmapLongSide must be > 0" }
+            require(cacheBudgetBytes >= 0L) { "cacheBudgetBytes must be >= 0 (was $cacheBudgetBytes)" }
         }
     }
 
@@ -339,7 +342,7 @@ public sealed interface KiteRenderSpec {
         ): Vectorized = Vectorized(hairlineWidthPx, canvasDecorator, imageCacheBudgetBytes)
 
         init {
-            require(hairlineWidthPx > 0f) { "hairlineWidthPx must be > 0 (was $hairlineWidthPx)" }
+            require(hairlineWidthPx.isFinite() && hairlineWidthPx > 0f) { "hairlineWidthPx must be finite and > 0 (was $hairlineWidthPx)" }
             require(imageCacheBudgetBytes >= 0L) { "imageCacheBudgetBytes must be >= 0 (was $imageCacheBudgetBytes)" }
         }
     }

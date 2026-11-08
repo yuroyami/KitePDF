@@ -457,6 +457,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   follows them locked the owner out (#998).
 - A page operation of the editor that throws leaves the page order as it was. A refused `removePage` of the last
   page emptied the tracked order, so the next page operation dropped that page (#736).
+- `KiteZoomSpec` refuses an infinite `minZoom` or `maxZoom`, `KiteRenderSpec.Rasterized` an infinite `quality` or
+  a negative `cacheBudgetBytes`, and `KiteRenderSpec.Vectorized` an infinite `hairlineWidthPx`, with
+  `IllegalArgumentException`. An infinite zoom bound left the viewer at an infinite zoom (#667).
 
 ## [0.13.0] - 2026-10-09
 

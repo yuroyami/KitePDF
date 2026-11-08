@@ -100,6 +100,12 @@ class ViewerInputLimitsSceneTest {
         assertFailsWith<IllegalArgumentException> { KiteZoomSpec(doubleTapZoom = 0f) }
         assertFailsWith<IllegalArgumentException> { KiteDocLayout.Paged(offscreenPages = -1) }
         assertFailsWith<IllegalArgumentException> { KiteDocLayout.Spread(offscreenPages = -1) }
+        // Infinite bounds, quality and hairline, and a negative cache budget (#667).
+        assertFailsWith<IllegalArgumentException> { KiteZoomSpec(minZoom = Float.POSITIVE_INFINITY, maxZoom = Float.POSITIVE_INFINITY) }
+        assertFailsWith<IllegalArgumentException> { KiteZoomSpec(maxZoom = Float.POSITIVE_INFINITY) }
+        assertFailsWith<IllegalArgumentException> { KiteRenderSpec.Rasterized(quality = Float.POSITIVE_INFINITY) }
+        assertFailsWith<IllegalArgumentException> { KiteRenderSpec.Rasterized(cacheBudgetBytes = -1) }
+        assertFailsWith<IllegalArgumentException> { KiteRenderSpec.Vectorized(hairlineWidthPx = Float.POSITIVE_INFINITY) }
         // A double tap past the range is clamped, as every zoom change is.
         KiteZoomSpec(maxZoom = 4f, doubleTapZoom = 10f)
     }
