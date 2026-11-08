@@ -77,6 +77,20 @@ class WriterTest {
         assertEquals("<FEFF0041>", PdfObjectWriter.toBytes(PdfString(binary)).decodeToString())
     }
 
+    @Test
+    fun a_name_above_latin1_is_written_as_its_utf8_bytes() {
+        fun written(name: String) = PdfObjectWriter.toBytes(PdfName(name)).decodeToString()
+        // ISO 32000-1, 7.3.5: the low byte alone made U+20AC 0xAC and U+012C a comma (#742).
+        assertEquals("/#E2#82#AC", written("\u20AC"))
+        assertEquals("/#C4#AC", written("\u012C"))
+        assertTrue(written("\u012C") != written(","))
+        // A name of Latin-1 characters, as the lexer reads every name, keeps a byte for each.
+        assertEquals("/Gr#F6#DFe", written("Gr\u00F6\u00DFe"))
+        assertEquals(PdfName("Gr\u00F6\u00DFe"), roundTrip(PdfName("Gr\u00F6\u00DFe")))
+        // The UTF-8 form reads back as its bytes, one character each.
+        assertEquals(PdfName("\u00E2\u0082\u00AC"), roundTrip(PdfName("\u20AC")))
+    }
+
     @Test fun serializes_nested_array_and_dict() {
         val obj = PdfDictionary(
             linkedMapOf(

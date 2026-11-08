@@ -433,6 +433,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A book or a document that declares a legacy single-byte encoding of the WHATWG Encoding Standard, such as
   windows-1251, KOI8-R or ISO-8859-7, decodes with that encoding's own table, where it decoded as windows-1252
   (#878).
+- The writer writes a name that holds a character above U+00FF as its UTF-8 bytes, where it kept each character's
+  low byte, so `/€` came out as `/#AC` and two names could write the same bytes (#742).
 
 ## [0.13.0] - 2026-10-09
 

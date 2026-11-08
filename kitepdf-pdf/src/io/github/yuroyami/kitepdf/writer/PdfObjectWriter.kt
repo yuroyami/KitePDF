@@ -113,10 +113,18 @@ public object PdfObjectWriter {
 
     /* ─── Names (§7.3.5) ─────────────────────────────────────────────────── */
 
+    /**
+     * A name is a sequence of bytes (ISO 32000-1, 7.3.5). One of characters up to U+00FF, as the
+     * lexer reads every name, is written a byte for each character, so a parsed name comes back
+     * as it was. One with a character above U+00FF is text, and is written as its UTF-8 bytes,
+     * where keeping each character's low byte changed the name (#742).
+     */
     private fun writeName(value: String, out: ByteArrayBuilder) {
         out.byte('/'.code)
-        for (ch in value) {
-            val c = ch.code and 0xFF
+        val bytes = if (value.any { it.code > 0xFF }) value.encodeToByteArray() else null
+        val count = bytes?.size ?: value.length
+        for (i in 0 until count) {
+            val c = if (bytes != null) bytes[i].toInt() and 0xFF else value[i].code
             if (c in 0x21..0x7E && !Lexer.isDelimiter(c) && c != '#'.code) {
                 out.byte(c)
             } else {

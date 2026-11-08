@@ -91,7 +91,13 @@ public data class PdfString(val bytes: ByteArray) : PdfObject() {
     override fun toString(): String = "(${asAsciiOrNull() ?: "<${bytes.size} bytes>"})"
 }
 
-/** PDF Name (always starts with "/"). Stored without the leading slash. */
+/**
+ * PDF Name (always starts with "/"). Stored without the leading slash.
+ *
+ * A name is bytes (ISO 32000-1, 7.3.5), and a parsed name holds one character per byte, U+0000
+ * to U+00FF. The writer gives such a name back byte for byte; a name built with a character above
+ * U+00FF is written as its UTF-8 bytes, the form the standard asks for a name that stands for text.
+ */
 public data class PdfName(val value: String) : PdfObject() {
     override fun toString(): String = "/$value"
 }
