@@ -27,7 +27,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *     throws on them; [FilterChain.decodeToTerminal] stops at them instead, for a
  *     stream that wraps one in transport filters (ISO 32000-1 §7.4), e.g.
  *     `[/ASCII85Decode /DCTDecode]`.
- *   - Crypt: throws [UnsupportedFilterException] (unimplemented).
+ *   - Crypt: passes the data through, since the decryption that it names happens as the stream is read (7.4.10, #817).
  */
 public class UnsupportedFilterException(public val filterName: String) :
     RuntimeException("Filter not yet implemented: /$filterName")
@@ -138,6 +138,9 @@ public object FilterChain {
     private val registry: Map<String, PdfFilter> = mapOf(
         "FlateDecode" to FlateFilter,
         "Fl" to FlateFilter,
+        // ISO 32000-1, 7.4.10: the crypt filter is applied with the decryption, before the stream
+        // reaches the chain, and /Identity passes the data through, so here it does nothing (#817).
+        "Crypt" to CryptFilter,
         "ASCIIHexDecode" to AsciiHexFilter,
         "AHx" to AsciiHexFilter,
         "ASCII85Decode" to Ascii85Filter,
@@ -151,13 +154,22 @@ public object FilterChain {
     )
 }
 
+/* ─── Crypt ───────────────────────────────────────────────────────────────── */
+
+/** `/Crypt`: decryption happens as the stream is read, so in the chain the data passes through (7.4.10). */
+internal object CryptFilter : PdfFilter {
+    override val name: String = "Crypt"
+
+    override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray = input
+}
+
 /* ─── FlateDecode ─────────────────────────────────────────────────────────── */
 
 public object FlateFilter : PdfFilter {
     override val name: String = "FlateDecode"
 
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
-        val inflated = Zlib.decode(input, verifyChecksum = false, maxOutputBytes = FilterChain.MAX_DECODED_STREAM)
+        val inflated = Zlib.decode(input, verifyChecksum = false, maxOutputBytes = FilterChain.MAX_DECODED_STREAM, salvage = true)
         val predictor = (params?.getInt("Predictor")?.toInt()) ?: 1
         if (predictor == 1) return inflated
         val columns = (params?.getInt("Columns")?.toInt()) ?: 1

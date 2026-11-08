@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core.filters
 
-import io.github.yuroyami.kitepdf.core.PdfFormatException
+import io.github.yuroyami.kitepdf.core.kiteWarn
 import kotlin.math.abs
 
 /**
@@ -31,56 +31,77 @@ internal object Predictors {
         bitsPerComponent: Int,
     ): ByteArray {
         if (predictor == 1) return input
+        // ISO 32000-1, 7.4.4.3, Table 8: /Colors and /Columns are 1 or more and /BitsPerComponent
+        // is 1, 2, 4, 8 or 16. Outside them a value takes its default, as MuPDF's filter-predict.c
+        // does, where /Columns 0 divided by zero and a large one wrapped the Int row size (#814).
+        val colorCount = if (colors < 1) 1 else colors
+        val bits = if (bitsPerComponent in VALID_BITS) bitsPerComponent else 8
+        val columnCount = if (columns < 1) 1 else columns
 
         // Bytes per pixel (clamped to 1 for sub-byte components).
-        val bpp = maxOf(1, (colors * bitsPerComponent + 7) / 8)
-        val bytesPerRow = (columns * colors * bitsPerComponent + 7) / 8
+        val bpp = maxOf(1, (colorCount * bits + 7) / 8)
+        // A row never holds more than the input does, so the row size is weighed in Long and cut there.
+        val bytesPerRow = minOf((columnCount.toLong() * colorCount * bits + 7) / 8, input.size.toLong()).toInt()
+        if (bytesPerRow == 0) return input
 
         if (predictor == 2) {
-            return applyTiff(input, columns, colors, bitsPerComponent)
+            return applyTiff(input, bytesPerRow, colorCount, bits)
         }
         if (predictor !in 10..15) {
-            throw PdfFormatException("Unsupported predictor $predictor")
+            kiteWarn { "filter: predictor $predictor is not one of 1, 2 or 10 to 15, so the data reads as is" }
+            return input
         }
 
-        // PNG: each row has a leading filter byte + bytesPerRow data bytes.
+        // PNG: each row has a leading filter byte + bytesPerRow data bytes. A short last row decodes
+        // as far as it goes (#814).
         val rowStride = bytesPerRow + 1
-        val rows = input.size / rowStride
-        if (input.size % rowStride != 0) {
-            throw PdfFormatException("PNG predictor: input size ${input.size} not a multiple of row stride $rowStride")
-        }
-
-        val out = ByteArray(bytesPerRow * rows)
+        val rows = (input.size + rowStride - 1) / rowStride
+        val outSize = input.size - rows
+        val out = ByteArray(outSize.coerceAtLeast(0))
+        var warned = false
 
         for (r in 0 until rows) {
             val rowStart = r * rowStride
             val inData = rowStart + 1
             val outRow = r * bytesPerRow
+            val rowLength = minOf(bytesPerRow, input.size - inData)
             // The previous decoded row lives contiguously in `out` directly above
             // this one, so read "up"/"upLeft" from there, with no separate prevRow
             // buffer and no per-row copy. The first row's predecessor is all zeros.
             val prevRow = outRow - bytesPerRow
-            val filterType = input[rowStart].toInt() and 0xFF
-            val effectiveFilter = if (predictor == 15) filterType else predictor - 10
+            // 7.4.4.4: for every value from 10 to 15 the function "is explicitly encoded in the
+            // incoming data", one filter byte a row, so the row's own byte selects it. Reading the
+            // value of /Predictor for 10 to 14 decoded rows tagged otherwise to garbage (#815).
+            var filter = input[rowStart].toInt() and 0xFF
+            if (filter > 4) {
+                // An unknown row filter reads as none, as MuPDF reads it.
+                if (!warned) {
+                    warned = true
+                    kiteWarn { "filter: a PNG predictor row has filter $filter, read as none" }
+                }
+                filter = 0
+            }
 
-            for (c in 0 until bytesPerRow) {
+            for (c in 0 until rowLength) {
                 val raw = input[inData + c].toInt() and 0xFF
                 val left = if (c >= bpp) (out[outRow + c - bpp].toInt() and 0xFF) else 0
                 val up = if (r > 0) (out[prevRow + c].toInt() and 0xFF) else 0
                 val upLeft = if (r > 0 && c >= bpp) (out[prevRow + c - bpp].toInt() and 0xFF) else 0
-                val decoded = when (effectiveFilter) {
+                val decoded = when (filter) {
                     0 -> raw
                     1 -> (raw + left) and 0xFF                  // Sub
                     2 -> (raw + up) and 0xFF                    // Up
                     3 -> (raw + (left + up) / 2) and 0xFF       // Average
-                    4 -> (raw + paeth(left, up, upLeft)) and 0xFF // Paeth
-                    else -> throw PdfFormatException("Unknown PNG filter byte $effectiveFilter at row $r")
+                    else -> (raw + paeth(left, up, upLeft)) and 0xFF // Paeth
                 }
                 out[outRow + c] = decoded.toByte()
             }
         }
         return out
     }
+
+    /** The bit depths a predictor's components may have (Table 8). */
+    private val VALID_BITS = setOf(1, 2, 4, 8, 16)
 
     private fun paeth(a: Int, b: Int, c: Int): Int {
         val p = a + b - c
@@ -94,22 +115,36 @@ internal object Predictors {
         }
     }
 
-    /** TIFF predictor 2: each component is encoded as a delta from the same component to its left. */
-    private fun applyTiff(input: ByteArray, columns: Int, colors: Int, bits: Int): ByteArray {
-        if (bits != 8) {
+    /**
+     * TIFF predictor 2: each component is encoded as a delta from the same component to its left. A
+     * short last row decodes as far as it goes (#814).
+     */
+    private fun applyTiff(input: ByteArray, rowBytes: Int, colors: Int, bits: Int): ByteArray {
+        if (bits != 8 && bits != 16) {
             // Sub-byte support would require careful bit packing; rare for PDF.
-            throw PdfFormatException("TIFF predictor with bitsPerComponent=$bits not supported")
+            kiteWarn { "filter: TIFF predictor with $bits bits a component reads as is" }
+            return input
         }
         val out = input.copyOf()
-        val rowBytes = columns * colors
-        val rows = input.size / rowBytes
-        for (r in 0 until rows) {
-            val base = r * rowBytes
-            for (c in colors until rowBytes) {
-                val cur = out[base + c].toInt() and 0xFF
-                val left = out[base + c - colors].toInt() and 0xFF
-                out[base + c] = ((cur + left) and 0xFF).toByte()
+        val step = colors * (bits / 8)
+        var base = 0
+        while (base < input.size) {
+            val end = minOf(base + rowBytes, input.size)
+            if (bits == 8) {
+                for (c in base + step until end) {
+                    out[c] = (((out[c].toInt() and 0xFF) + (out[c - step].toInt() and 0xFF)) and 0xFF).toByte()
+                }
+            } else {
+                var c = base + step
+                while (c + 1 < end) {
+                    val cur = ((out[c].toInt() and 0xFF) shl 8) or (out[c + 1].toInt() and 0xFF)
+                    val left = ((out[c - step].toInt() and 0xFF) shl 8) or (out[c - step + 1].toInt() and 0xFF)
+                    val v = (cur + left) and 0xFFFF
+                    out[c] = (v shr 8).toByte(); out[c + 1] = v.toByte()
+                    c += 2
+                }
             }
+            base += rowBytes
         }
         return out
     }

@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf.core.compression
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
+import io.github.yuroyami.kitepdf.core.kiteWarn
 
 /**
  * zlib (RFC 1950) wrapper around [Inflate]/[Deflate].
@@ -43,8 +44,21 @@ public object Zlib {
         input: ByteArray,
         verifyChecksum: Boolean = true,
         maxOutputBytes: Int = Int.MAX_VALUE,
+    ): ByteArray = decode(input, verifyChecksum, maxOutputBytes, salvage = false)
+
+    /**
+     * [decode] for a PDF stream. With [salvage], a stream that ends early, lacks its Adler-32
+     * trailer or has a corrupt block gives what it inflated before the damage, with a warning, as
+     * MuPDF's "premature end of data in flate filter" does, where it gave nothing and a page of
+     * content read as empty (#813). The cap still throws.
+     */
+    internal fun decode(
+        input: ByteArray,
+        verifyChecksum: Boolean,
+        maxOutputBytes: Int,
+        salvage: Boolean,
     ): ByteArray {
-        if (input.size < 6) throw InflateException("Zlib stream too short: ${input.size} bytes")
+        if (input.size < (if (salvage) 2 else 6)) throw InflateException("Zlib stream too short: ${input.size} bytes")
 
         val cmf = input[0].toInt() and 0xFF
         val flg = input[1].toInt() and 0xFF
@@ -60,6 +74,19 @@ public object Zlib {
         // falls through to the pure-Kotlin path for its lenient behaviour and
         // proper error messages.
         PlatformFlate.inflateOrNull(input, 0, input.size, maxOutputBytes)?.let { return it }
+
+        if (salvage) {
+            // The inflater stops at the end of its final block, wherever the trailer is, so it reads
+            // to the end of the input; what follows the final block is ignored.
+            val out = ByteArrayBuilder(initialCapacity = input.size * 2)
+            try {
+                Inflater(input, 2, input.size, maxOutputBytes).inflateTo(out)
+            } catch (e: InflateException) {
+                if (out.size() > maxOutputBytes) throw e
+                kiteWarn { "flate: ${e.message}; keeping the ${out.size()} bytes inflated before it" }
+            }
+            return out.toByteArray()
+        }
 
         // Inflate the DEFLATE payload that sits between the 2-byte header and the
         // 4-byte Adler trailer, reading in place with no slice.

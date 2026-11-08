@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.crypto
 
 import io.github.yuroyami.kitepdf.core.parser.PdfArray
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
+import io.github.yuroyami.kitepdf.core.parser.PdfName
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
@@ -41,8 +42,28 @@ public object Decryptor {
         if (type == "XRef") return stream
         if (type == "Metadata" && !handler.encryptMetadata) return stream
         val decryptedDict = decryptDict(objNum, genNum, stream.dict, handler)
+        // ISO 32000-1, 7.4.10 and 7.6.5: a stream whose filters start with /Crypt is decrypted by the
+        // crypt filter that its /DecodeParms /Name names, /Identity by default, not by /StmF. An
+        // /Identity stream is stored in clear, and decrypting it with /StmF scrambled it (#817).
+        if (cryptFilterName(stream.dict) == "Identity") return PdfStream(decryptedDict, stream.rawBytes)
         val decryptedBytes = handler.decryptStream(objNum, genNum, stream.rawBytes)
         return PdfStream(decryptedDict, decryptedBytes)
+    }
+
+    /** The crypt filter that a stream names with a leading /Crypt filter, or null when it names none. */
+    private fun cryptFilterName(dict: PdfDictionary): String? {
+        val first = when (val f = dict["Filter"]) {
+            is PdfName -> f.value
+            is PdfArray -> (f.getOrNull(0) as? PdfName)?.value
+            else -> null
+        }
+        if (first != "Crypt") return null
+        val parms = when (val p = dict["DecodeParms"]) {
+            is PdfDictionary -> p
+            is PdfArray -> p.getOrNull(0) as? PdfDictionary
+            else -> null
+        }
+        return parms?.getName("Name") ?: "Identity"
     }
 
     private fun decryptDict(

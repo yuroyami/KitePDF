@@ -196,6 +196,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a stack of its own. A chapter whose script nested 30,000 elements made `chapterOpened` throw
   `StackOverflowError` (#955).
 
+- A FlateDecode stream that ends early, lacks its Adler-32 trailer or has a corrupt block keeps what it
+  inflated before the damage, with a warning, as MuPDF does. A page whose content had no trailer read as
+  empty (#813). A PNG predictor decodes a short last row as far as it goes, reads an unknown row filter or
+  an unknown `/Predictor` as none, and gives `/Columns`, `/Colors` and `/BitsPerComponent` outside Table 8
+  their defaults, where each of these lost the whole stream and `/Columns 0` divided by zero (#814). For
+  every `/Predictor` from 10 to 15 each row's own filter byte selects its function, as 7.4.4.4 says, so a
+  stream whose rows are tagged otherwise than `/Predictor` names no longer decodes to garbage (#815). A
+  `/Crypt` filter passes the data through, and a stream whose crypt filter is `/Identity` is not decrypted
+  with the document's default filter, where both lost the stream (#817).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added
