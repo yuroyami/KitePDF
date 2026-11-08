@@ -563,6 +563,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is a centred block (#843).
 - `@font-face` matches by numeric weight as CSS Fonts 4, 5.2 does, takes weight ranges such as `300 700`, and
   honours `unicode-range`, so a Thin face declared before the Regular one no longer draws normal text (#929).
+- The reader's `justify` setting reaches body text only, so centred headings and table headers keep their
+  alignment, and a reader font family leaves `pre`, `code`, `kbd`, `samp` and `tt` monospace (#855).
 
 ## [0.13.0] - 2026-10-09
 

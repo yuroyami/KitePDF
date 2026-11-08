@@ -626,11 +626,14 @@ public class EpubDocument internal constructor(
                     ReaderFontFamily.MONOSPACE -> "monospace"
                 }
                 append("*{font-family:$fam}")
+                // Code keeps its monospace face and columns; what is inside it follows it (#855).
+                if (it != ReaderFontFamily.MONOSPACE) append("pre,code,kbd,samp,tt{font-family:monospace}pre *,code *,kbd *,samp *{font-family:inherit}")
             }
             // A forced text colour could sit on an author background of the same
             // lightness, so the reader drops backgrounds with it (#253).
             settings.textColor?.let { append("*{color:${cssColor(it)};background-color:transparent;background:transparent}") }
-            settings.justify?.let { append("*{text-align:${if (it) "justify" else "start"};text-align-last:auto}") }
+            // Body text only: a heading, a table cell or a centred block keeps its own alignment (#855).
+            settings.justify?.let { append("body,p,li,dd,dt,blockquote{text-align:${if (it) "justify" else "start"};text-align-last:auto}") }
             settings.hyphenate?.let { append("*{hyphens:${if (it) "auto" else "manual"}}") }
         }
         if (css.isEmpty()) emptyList() else CssParser.parse(css, Origin.READER)
@@ -1845,7 +1848,10 @@ public data class EpubSettings(
     val fontSize: Double = 12.0,
     /** Uniform page margin in points (reflowable books only). */
     val margin: Double = 36.0,
-    /** Force every run onto a generic family (null = publisher fonts). */
+    /**
+     * Force the book's text onto a generic family (null = publisher fonts). `pre`, `code`, `kbd`,
+     * `samp` and `tt`, and what is inside them, stay monospace, so code keeps its columns (#855).
+     */
     val fontFamily: ReaderFontFamily? = null,
     /** Multiplies every line's height (1.0 = as authored). */
     val lineHeightScale: Double = 1.0,
@@ -1853,7 +1859,11 @@ public data class EpubSettings(
     val textColor: RgbColor? = null,
     /** Painted under everything on every page; null = no page background. */
     val backgroundColor: RgbColor? = null,
-    /** true forces justify, false forces start alignment; null = as authored. */
+    /**
+     * true forces justify, false forces start alignment; null = as authored. It reaches body text:
+     * the body, paragraphs, list items, definitions and block quotes. Headings, table cells and
+     * centred blocks keep the alignment the book gives them, as Readium CSS does (#855).
+     */
     val justify: Boolean? = null,
     /** False drops the publisher's CSS (author rules + inline styles): UA + reader layers only. */
     val usePublisherCss: Boolean = true,

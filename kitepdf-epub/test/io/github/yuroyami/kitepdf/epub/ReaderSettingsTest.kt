@@ -95,6 +95,20 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun justify_and_a_font_family_leave_centred_headings_and_code_alone() {
+        // Readium CSS: the reader's body text settings reach body text only (#855).
+        val chapter = "<body><h1 style=\"text-align:center\">T</h1><pre>a    b</pre><p>Body text</p></body>"
+        fun titleStart(settings: EpubSettings) = glyphCalls(open(settings, chapter)).first { it.text == "T" }.textToDevice.e
+        val centred = titleStart(EpubSettings())
+        assertTrue(centred > 100.0, "the fixture centres the title: $centred")
+        assertEquals(centred, titleStart(EpubSettings(justify = true)), 1e-6, "justify keeps the centred heading")
+        assertEquals(centred, titleStart(EpubSettings(justify = false)), 1e-6)
+        val serif = glyphCalls(open(EpubSettings(fontFamily = ReaderFontFamily.SERIF), chapter))
+        assertTrue(serif.filter { "a" in it.text && "b" in it.text }.all { it.fontSpec.family == KiteFontFamily.Monospace }, "pre stays monospace")
+        assertTrue(serif.first { "Body" in it.text }.fontSpec.family == KiteFontFamily.Serif, "body text takes the reader's family")
+    }
+
+    @Test
     fun use_publisher_css_false_drops_author_rules_and_inline_styles() {
         val styled = """<body><p style="color:#ff0000; font-family:monospace">Styled text here</p></body>"""
         val default = glyphCalls(open(EpubSettings(), styled))
