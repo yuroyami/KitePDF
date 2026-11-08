@@ -173,6 +173,10 @@ public class PdfEditor internal constructor(
         put("Keywords", keywords)
         put("Creator", creator)
         put("Producer", producer)
+        // ISO 32000-1, 14.3.3, Table 317: the date of the most recent change (#692).
+        val now = XmpSync.now()
+        merged["ModDate"] = PdfString(now.toString().encodeToByteArray())
+        syncXmp(title, author, subject, keywords, creator, producer, now)
 
         val dict = PdfDictionary(merged)
         return if (existingRef != null) {
@@ -183,6 +187,35 @@ public class PdfEditor internal constructor(
             setTrailerEntry("Info", ref)
             ref
         }
+    }
+
+    /**
+     * Rewrites the catalog's XMP packet with the values that [setInfo] was given, so it agrees
+     * with `/Info` (ISO 32000-2, 14.3.3; #692). A packet that does not decode is left as it is.
+     */
+    private fun syncXmp(
+        title: String?, author: String?, subject: String?, keywords: String?, creator: String?, producer: String?,
+        date: io.github.yuroyami.kitepdf.PdfDate,
+    ) {
+        val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return
+        val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return
+        val raw = catalog["Metadata"] ?: return
+        val stream = (if (raw is PdfReference) effectiveObject(raw.objectNumber) else raw) as? PdfStream ?: return
+        val bytes = runCatching { io.github.yuroyami.kitepdf.core.filters.FilterChain.decode(stream) }.getOrNull() ?: return
+        val start = if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) 3 else 0
+        val xml = bytes.decodeToString(start)
+        val updated = XmpSync.update(xml, title, author, subject, keywords, creator, producer, date)
+        if (updated == xml) return
+        // A metadata stream stays uncompressed, so a reader that does not decode filters reads it (14.3.2).
+        val dict = LinkedHashMap(stream.dict.map).apply {
+            remove("Filter"); remove("DecodeParms")
+            this["Type"] = PdfName("Metadata"); this["Subtype"] = PdfName("XML")
+        }
+        val body = updated.encodeToByteArray()
+        dict["Length"] = PdfInt(body.size.toLong())
+        val newStream = PdfStream(PdfDictionary(dict), body)
+        if (raw is PdfReference) updateObject(raw, newStream)
+        else updateObject(rootRef, PdfDictionary(LinkedHashMap(catalog.map).apply { this["Metadata"] = newStream }))
     }
 
     /* ─── Page content editing ───────────────────────────────────────────── */

@@ -413,6 +413,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `setButtonValue` selects the radio button that an `/Opt` export value stands for, by its index name, and
   refuses a value that names no button with `IllegalArgumentException`, where both turned every button off
   (#695).
+- `setInfo` sets `/ModDate` to the time of the edit and rewrites the catalog's XMP packet to match, `dc:title`,
+  `dc:creator`, `dc:description`, `pdf:Keywords`, `xmp:CreatorTool`, `pdf:Producer` and the two XMP dates, where
+  the packet kept the old title (#692).
 
 ## [0.13.0] - 2026-10-09
 

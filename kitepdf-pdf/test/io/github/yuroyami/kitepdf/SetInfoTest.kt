@@ -69,4 +69,47 @@ class SetInfoTest {
         val removed = doc.edit().apply { removePage(doc.pages[0]) }.saveRewritten()
         assertEquals(crop, PdfDocument.open(removed).pages[0].cropBox)
     }
+
+    /** A page with /Info and an XMP packet that both say Old Title. */
+    private fun withXmp(): ByteArray {
+        val xmp = """<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/">""" +
+            """<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" """ +
+            """xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmp:ModifyDate="2020-01-01T00:00:00Z">""" +
+            """<dc:title><rdf:Alt><rdf:li xml:lang="x-default">Old Title</rdf:li></rdf:Alt></dc:title>""" +
+            """</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>"""
+        val sb = StringBuilder("%PDF-1.7\n")
+        val offsets = IntArray(6)
+        fun obj(n: Int, body: String) { offsets[n] = sb.length; sb.append("$n 0 obj\n$body\nendobj\n") }
+        obj(1, "<< /Type /Catalog /Pages 2 0 R /Metadata 4 0 R >>")
+        obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        obj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>")
+        obj(4, "<< /Type /Metadata /Subtype /XML /Length ${xmp.length} >>\nstream\n$xmp\nendstream")
+        obj(5, "<< /Title (Old Title) /ModDate (D:20200101000000Z) >>")
+        val xref = sb.length
+        sb.append("xref\n0 6\n0000000000 65535 f \n")
+        for (n in 1..5) sb.append(offsets[n].toString().padStart(10, '0') + " 00000 n \n")
+        sb.append("trailer\n<< /Size 6 /Root 1 0 R /Info 5 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        return sb.toString().encodeToByteArray()
+    }
+
+    @Test
+    fun setInfoKeepsTheXmpPacketAndTheModificationDateInStep() {
+        // ISO 32000-2, 14.3.3 and ISO 32000-1, Table 317 (#692).
+        for (incremental in listOf(true, false)) {
+            val editor = PdfDocument.open(withXmp()).edit()
+            editor.setInfo(title = "New Title", author = "Ada")
+            val out = PdfDocument.open(if (incremental) editor.saveIncremental() else editor.saveRewritten())
+            assertEquals("New Title", out.info.title)
+            assertEquals("New Title", out.xmp!!.title)
+            kotlin.test.assertNotEquals("2020-01-01T00:00:00Z", out.xmp!!.modifyDate)
+            kotlin.test.assertNotEquals(2020, out.info.modDate?.year)
+        }
+    }
+
+    @Test
+    fun aDateFromEpochSecondsIsTheCivilDate() {
+        assertEquals("D:19700101000000Z", io.github.yuroyami.kitepdf.writer.XmpSync.dateOf(0).toString())
+        assertEquals("D:20000229120000Z", io.github.yuroyami.kitepdf.writer.XmpSync.dateOf(951_825_600).toString())
+        assertEquals("D:19691231235959Z", io.github.yuroyami.kitepdf.writer.XmpSync.dateOf(-1).toString())
+    }
 }
