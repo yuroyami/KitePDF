@@ -93,6 +93,7 @@ public fun EpubResourceFetcher(
  * @throws io.github.yuroyami.kitepdf.core.KiteWrongPasswordException when a
  *   downloaded PDF is encrypted and [password] does not authenticate.
  */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class, kotlin.coroutines.cancellation.CancellationException::class)
 public suspend fun KiteDoc.openUrl(
     url: String,
     client: HttpClient,
@@ -105,6 +106,7 @@ public suspend fun KiteDoc.openUrl(
  * [openUrl] with an explicit [maxBytes] ceiling. Raise the default only when
  * the caller has an independent trust boundary and enough process memory.
  */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class, kotlin.coroutines.cancellation.CancellationException::class)
 public suspend fun KiteDoc.openUrl(
     url: String,
     client: HttpClient,
@@ -153,6 +155,7 @@ public suspend fun KiteDoc.openUrlOrNull(
  *
  * @throws KiteFormatException when the server answers with a non-2xx status.
  */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, kotlin.coroutines.cancellation.CancellationException::class)
 public suspend fun KiteDoc.downloadBytes(
     url: String,
     client: HttpClient,
@@ -160,6 +163,7 @@ public suspend fun KiteDoc.downloadBytes(
 ): ByteArray = fetch(url, client, configure)
 
 /** [downloadBytes] with an explicit response-body [maxBytes] ceiling. */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, kotlin.coroutines.cancellation.CancellationException::class)
 public suspend fun KiteDoc.downloadBytes(
     url: String,
     client: HttpClient,

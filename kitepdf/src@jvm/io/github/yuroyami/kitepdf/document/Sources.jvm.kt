@@ -18,6 +18,7 @@ import java.io.InputStream
  * @throws io.github.yuroyami.kitepdf.core.KiteFormatException when it is
  *   neither a PDF nor an EPUB.
  */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class, java.io.IOException::class)
 public fun KiteDoc.openFile(
     path: String,
     password: String = "",
@@ -28,6 +29,7 @@ public fun KiteDoc.openFile(
  * [openFile], refusing a file longer than [maxBytes] with a
  * [io.github.yuroyami.kitepdf.core.KiteFormatException] before it reads a byte (#829).
  */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class, java.io.IOException::class)
 public fun KiteDoc.openFile(
     path: String,
     password: String,
@@ -36,6 +38,7 @@ public fun KiteDoc.openFile(
 ): KiteDocument = open(readBounded(File(path), maxBytes), password, epubSettings)
 
 /** [openFile] for a [File] you already hold. */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class, java.io.IOException::class)
 public fun KiteDoc.open(
     file: File,
     password: String = "",
@@ -43,6 +46,7 @@ public fun KiteDoc.open(
 ): KiteDocument = open(file, password, epubSettings, DEFAULT_MAX_LOCAL_DOCUMENT_BYTES)
 
 /** [open] for a [File], refusing one longer than [maxBytes]. */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class, java.io.IOException::class)
 public fun KiteDoc.open(
     file: File,
     password: String,
@@ -56,6 +60,7 @@ public fun KiteDoc.open(
  * Use it for a classpath resource, a servlet upload, a decrypted stream: any
  * source that is already an [InputStream].
  */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class, java.io.IOException::class)
 public fun KiteDoc.open(
     stream: InputStream,
     password: String = "",
@@ -63,6 +68,7 @@ public fun KiteDoc.open(
 ): KiteDocument = open(stream, password, epubSettings, DEFAULT_MAX_LOCAL_DOCUMENT_BYTES)
 
 /** [open] for a stream, stopping with a [io.github.yuroyami.kitepdf.core.KiteFormatException] once it passes [maxBytes]. */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class, java.io.IOException::class)
 public fun KiteDoc.open(
     stream: InputStream,
     password: String,

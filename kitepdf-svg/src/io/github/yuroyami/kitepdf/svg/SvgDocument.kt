@@ -39,6 +39,7 @@ public class SvgDocument private constructor(
          *
          * @throws KiteFormatException when there is no `<svg>` element to draw.
          */
+        @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class)
         public fun open(bytes: ByteArray): SvgDocument {
             val image = SvgImage.parse(bytes)
                 ?: throw KiteFormatException("no <svg> element in ${bytes.size} bytes")

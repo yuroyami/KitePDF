@@ -78,6 +78,7 @@ public class CbzDocument private constructor(
          * @throws KiteFormatException when the bytes are not a readable ZIP or
          *   the archive holds no image entries.
          */
+        @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class)
         public fun open(bytes: ByteArray): CbzDocument {
             val zip = runCatching { ZipReader(bytes) }.getOrNull()
                 ?: throw KiteFormatException("not a readable ZIP archive (${bytes.size} bytes)")

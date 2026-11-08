@@ -1059,6 +1059,7 @@ public class PdfDocument private constructor(
          */
         private const val DEFERRED_PAGE_LIST_ABOVE = 200
 
+        @Throws(io.github.yuroyami.kitepdf.core.PdfFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
         public fun open(
             bytes: ByteArray,
             password: ByteArray = byteArrayOf(),
@@ -1128,6 +1129,7 @@ public class PdfDocument private constructor(
          * PDFDocEncoding rule legacy R<=4 files expect. The ByteArray
          * overload remains the escape hatch for exotic encodings.
          */
+        @Throws(io.github.yuroyami.kitepdf.core.PdfFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
         public fun open(
             bytes: ByteArray,
             password: String,

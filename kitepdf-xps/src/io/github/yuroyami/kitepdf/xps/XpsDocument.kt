@@ -46,6 +46,7 @@ public class XpsDocument private constructor(
          * @throws KiteFormatException when no fixed document sequence or page
          * references can be recovered from the package.
          */
+        @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class)
         public fun open(bytes: ByteArray): XpsDocument {
             val packageData = XpsPackage(bytes)
             val sequencePart = packageData.sequencePart()

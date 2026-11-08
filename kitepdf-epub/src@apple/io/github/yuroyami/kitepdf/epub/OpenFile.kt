@@ -16,6 +16,7 @@ import platform.posix.memcpy
  *   readable EPUB.
  */
 @OptIn(ExperimentalForeignApi::class)
+@Throws(io.github.yuroyami.kitepdf.epub.EpubFormatException::class)
 public fun EpubDocument.Companion.openFile(
     path: String,
     settings: EpubSettings = EpubSettings(),

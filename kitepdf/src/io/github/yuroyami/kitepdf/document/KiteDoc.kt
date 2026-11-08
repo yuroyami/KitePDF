@@ -94,6 +94,7 @@ public object KiteDoc {
      * @throws io.github.yuroyami.kitepdf.core.KiteWrongPasswordException when
      *   a PDF is encrypted and [password] does not authenticate.
      */
+    @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
     public fun open(
         bytes: ByteArray,
         password: String = "",
@@ -140,6 +141,7 @@ public object KiteDoc {
      * @throws KiteFormatException when the text is not valid Base64, or
      *   decodes to something that is neither format.
      */
+    @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
     public fun openBase64(
         text: String,
         password: String = "",

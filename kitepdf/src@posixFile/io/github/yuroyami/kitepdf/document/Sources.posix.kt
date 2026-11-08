@@ -14,6 +14,7 @@ import io.github.yuroyami.kitepdf.epub.EpubSettings
  * @throws KiteFormatException when the file cannot be read, or is neither a
  *   PDF nor an EPUB.
  */
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
 public fun KiteDoc.openFile(
     path: String,
     password: String = "",

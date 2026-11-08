@@ -18,6 +18,7 @@ import platform.posix.memcpy
  *   [password] doesn't authenticate.
  */
 @OptIn(ExperimentalForeignApi::class)
+@Throws(io.github.yuroyami.kitepdf.core.PdfFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
 public fun PdfDocument.Companion.openFile(
     path: String,
     password: ByteArray = byteArrayOf(),

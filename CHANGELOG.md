@@ -655,6 +655,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   KiteFormatException instead of running out of memory, and take a maxBytes to raise it (#829).
 - On Apple platforms a file over 2 GB is refused with the documented format exception, instead of a negative size
   or the first bytes of the file opened as the file (#832).
+- The open functions declare @Throws, so a Swift or Objective-C caller gets an error it can catch for a wrong
+  password or a broken file instead of the app ending (#706).
 
 ## [0.13.0] - 2026-10-09
 

@@ -20,6 +20,7 @@ import platform.posix.memcpy
  *   PDF nor an EPUB.
  */
 @OptIn(ExperimentalForeignApi::class)
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
 public fun KiteDoc.openFile(
     path: String,
     password: String = "",
@@ -40,6 +41,7 @@ public fun KiteDoc.openFile(
  *   format.
  */
 @OptIn(ExperimentalForeignApi::class)
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
 public fun KiteDoc.open(
     url: NSURL,
     password: String = "",
@@ -52,6 +54,7 @@ public fun KiteDoc.open(
 
 /** Opens [data] you already hold, e.g. from a network call or the pasteboard. */
 @OptIn(ExperimentalForeignApi::class)
+@Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
 public fun KiteDoc.open(
     data: NSData,
     password: String = "",

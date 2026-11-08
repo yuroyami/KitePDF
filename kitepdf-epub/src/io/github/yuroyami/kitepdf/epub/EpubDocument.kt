@@ -1740,6 +1740,7 @@ public class EpubDocument internal constructor(
         /** A floor for what a page holds besides its glyphs and images: the page and its lists. An estimate. */
         private const val BYTES_PER_PAGE = 2048L
 
+        @Throws(io.github.yuroyami.kitepdf.epub.EpubFormatException::class)
         public fun open(
             bytes: ByteArray,
             pageWidth: Double = 400.0,
@@ -1756,6 +1757,7 @@ public class EpubDocument internal constructor(
          *   with a message naming the first structural failure (missing
          *   container.xml, missing OPF, empty spine, no readable documents).
          */
+        @Throws(io.github.yuroyami.kitepdf.epub.EpubFormatException::class)
         public fun open(bytes: ByteArray, settings: EpubSettings): EpubDocument =
             EpubDocument(ParsedEpub.parse(bytes), settings)
 
