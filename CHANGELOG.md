@@ -305,6 +305,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `width`, `height`, `orientation` and `prefers-color-scheme` are read (#841).
 - `vw` and `vh` measure the page's content area whatever the property, and `vmin` and `vmax` are read, where
   `font-size: 10vw` was a tenth of the parent's font size (#849).
+- Search joins the lines of a reflowable block by how each line ended, as `copyText` does, so a Chinese word that
+  wraps between two characters and a compound that wraps after its own hyphen are found (#919).
 
 ## [0.13.0] - 2026-10-09
 

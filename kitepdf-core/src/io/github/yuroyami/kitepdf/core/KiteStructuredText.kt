@@ -51,15 +51,25 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
             val sb = StringBuilder()
             val refLine = ArrayList<Int>()  // -1 for a joiner space
             val refChar = ArrayList<Int>()
+            // A line that says how it ended joins the next as copyText joins them: a space, nothing
+            // after a hyphen the layout added, which goes, or nothing at all. A HARD line, as every
+            // line of a fixed page is, keeps the old guess from a trailing hyphen (#919).
+            fun dropsHyphen(line: KiteTextLine): Boolean = when (line.end) {
+                KiteLineEnd.HARD -> line.text.endsWith("-")
+                KiteLineEnd.HYPHEN -> line.text.endsWith("-")
+                KiteLineEnd.SPACE, KiteLineEnd.NONE -> false
+            }
+            fun joinsDirectly(line: KiteTextLine): Boolean = when (line.end) {
+                KiteLineEnd.HARD -> line.text.endsWith("-")
+                KiteLineEnd.HYPHEN, KiteLineEnd.NONE -> true
+                KiteLineEnd.SPACE -> false
+            }
             for ((li, line) in block.lines.withIndex()) {
-                val hyphenJoin = li + 1 < block.lines.size && line.text.endsWith("-")
-                if (li > 0 && sb.isNotEmpty()) {
-                    // A previous line ending in '-' already joined directly (its
-                    // hyphen was dropped); otherwise the break reads as one space.
-                    val prevJoined = block.lines[li - 1].text.endsWith("-")
-                    if (!prevJoined) { sb.append(' '); refLine.add(-1); refChar.add(-1) }
+                val last = li + 1 == block.lines.size
+                if (li > 0 && sb.isNotEmpty() && !joinsDirectly(block.lines[li - 1])) {
+                    sb.append(' '); refLine.add(-1); refChar.add(-1)
                 }
-                val keep = if (hyphenJoin) line.text.length - 1 else line.text.length
+                val keep = if (!last && dropsHyphen(line)) line.text.length - 1 else line.text.length
                 for (k in 0 until keep) { sb.append(line.text[k]); refLine.add(li); refChar.add(k) }
             }
             val text = sb.toString()
