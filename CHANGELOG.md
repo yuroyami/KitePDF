@@ -584,6 +584,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pages each time (#874).
 - Redaction judges an annotation by the rectangle the renderer draws it at, with indirect entries resolved, and
   removes one whose `/Rect` cannot be read instead of keeping it over the black box (#630).
+- Redaction reads the `/LW` and `/ML` that an ExtGState sets at `gs`, so a wide line whose ink reaches a region
+  is removed as one widened by `w` is (#633).
 
 ## [0.13.0] - 2026-10-09
 

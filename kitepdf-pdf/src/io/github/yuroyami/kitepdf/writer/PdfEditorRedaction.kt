@@ -257,6 +257,7 @@ internal fun PdfEditor.redactFormXObject(
         )
         engine.formMatrices = loadFormMatrices(formResources)
         engine.formBBoxes = loadFormBBoxes(formResources)
+        engine.extGStates = loadExtGStates(formResources)
         val filtered = engine.run(ops)
 
         val nested = recurseIntoForms(formResources, engine.formXObjectHits)
@@ -669,6 +670,17 @@ internal fun PdfEditor.loadFormMatrices(resources: PdfDictionary?): Map<String, 
  * the map, and [RedactionEngine] then treats every invocation of it as
  * intersecting, which over-redacts rather than trusting a malformed form (R6).
  */
+/** The ExtGState resources of [resources] by name, parsed as the renderer parses them (#633). */
+internal fun PdfEditor.loadExtGStates(resources: PdfDictionary?): Map<String, io.github.yuroyami.kitepdf.core.render.ExtGState> {
+    val states = runCatching { resources?.getDict("ExtGState", effective) }.getOrNull() ?: return emptyMap()
+    val out = LinkedHashMap<String, io.github.yuroyami.kitepdf.core.render.ExtGState>()
+    for ((name, value) in states.map) {
+        val dict = runCatching { value.resolve(effective) }.getOrNull() as? PdfDictionary ?: continue
+        runCatching { io.github.yuroyami.kitepdf.core.render.ExtGState.parse(dict, effective) }.getOrNull()?.let { out[name] = it }
+    }
+    return out
+}
+
 internal fun PdfEditor.loadFormBBoxes(resources: PdfDictionary?): Map<String, KiteRectangle> {
     val xobjects = resources?.getDict("XObject", effective) ?: return emptyMap()
     val out = LinkedHashMap<String, KiteRectangle>()

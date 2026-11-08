@@ -972,6 +972,7 @@ public class PdfEditor internal constructor(
         )
         engine.formMatrices = loadFormMatrices(pageResources)
         engine.formBBoxes = loadFormBBoxes(pageResources)
+        engine.extGStates = loadExtGStates(pageResources)
         val filtered = engine.run(ops)
         // Recurse into every intersecting form XObject first: it decides which `Do`
         // operands point at a redacted clone and which leave the stream altogether,

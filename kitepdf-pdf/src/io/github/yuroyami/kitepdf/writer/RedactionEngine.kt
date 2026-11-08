@@ -51,11 +51,10 @@ import io.github.yuroyami.kitepdf.render.Type3Data
  * or `re` edge on its own), not one bounding box for the whole path: a box for
  * the whole path would call a page-spanning rectangle a hit for any region on
  * the page, since its own bounding box covers the entire page (see
- * [pathIntersectsRedaction]). Two documented limits remain: a path that also
- * sets a clip keeps its coordinates (see [paintPath] for why), and a line width
- * set through an ExtGState `/LW` rather than the `w` operator is not seen, so a
- * stroke's ink is padded by the last `w` (or the inherited default, see below)
- * and the last `M` (or the inherited default) instead.
+ * [pathIntersectsRedaction]). One documented limit remains: a path that also
+ * sets a clip keeps its coordinates (see [paintPath] for why). A stroke's ink is
+ * padded by the pen of the last `w` and `M`, or of an ExtGState's `/LW` and `/ML`
+ * at a `gs` (#633), or the inherited default (see below).
  *
  * A form XObject invocation is a save/restore around the form's content (ISO
  * 32000-1, 8.10.2): every graphics state parameter in effect at the `Do`,
@@ -121,6 +120,13 @@ internal class RedactionEngine(
      * before [run] so the reported [FormHit.formRects] are in the form's space.
      */
     var formMatrices: Map<String, KiteMatrix> = emptyMap()
+
+    /**
+     * The ExtGState resources of the stream by name, parsed as the renderer parses them, so a `gs`
+     * that sets `/LW` or `/ML` widens the pen here as it widens the drawn line (ISO 32000-1, 8.4.5,
+     * Table 58; #633).
+     */
+    var extGStates: Map<String, io.github.yuroyami.kitepdf.core.render.ExtGState> = emptyMap()
 
     /**
      * Optional per-form `/BBox`, in the form's own space. Populated by the caller
@@ -236,6 +242,12 @@ internal class RedactionEngine(
                 // under-cover: [pathIntersectsRedaction] floors the miter factor at
                 // 1, so the pad never drops below the plain lineWidth/2 body pad.
                 "M" -> { gs = gs.copy(miterLimit = num(op, 0)); out.add(op) }
+                "gs" -> {
+                    (op.operands.firstOrNull() as? PdfName)?.value?.let(extGStates::get)?.let { e ->
+                        gs = gs.copy(lineWidth = e.lineWidth ?: gs.lineWidth, miterLimit = e.miterLimit ?: gs.miterLimit)
+                    }
+                    out.add(op)
+                }
 
                 "BT" -> {
                     // BT resets only the two matrices. Tc, Tw, Tz, TL, Ts and the font
