@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.text
 
+import io.github.yuroyami.kitepdf.core.parser.PdfObject
+import io.github.yuroyami.kitepdf.render.OptionalContentVisibility
 import io.github.yuroyami.kitepdf.PageContents
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfPage
@@ -101,6 +103,12 @@ public object TextExtractor {
         private var replacing = 0
 
         /**
+         * Open marked-content sequences of an optional content group that the default configuration
+         * turns off. Their text is not drawn, so it is not read either (ISO 32000-1, 8.11.2; #822).
+         */
+        private var hidden = 0
+
+        /**
          * Line breaks not written yet. A break waits for the next text, so a skipped show leaves
          * no blank line: the breaks on each side of it make one run, as long as the longer side.
          */
@@ -131,6 +139,8 @@ public object TextExtractor {
             val fonts = loadFonts(resources)
             // Each entry says whether that marked-content sequence opened an ActualText replacement.
             val marked = ArrayList<Boolean>()
+            // Each entry says whether that marked-content sequence hides its content.
+            val hiding = ArrayList<Boolean>()
             var inText = false
             // The font and its size are graphics state, which q and Q save and restore and a form
             // starts from (ISO 32000-1, 8.4.2, 9.3.1 and 8.10.1), so they live in the pen (#825).
@@ -154,7 +164,7 @@ public object TextExtractor {
                     "Do" -> {
                         val name = (op.operands.firstOrNull() as? PdfName)?.value
                         chain++
-                        if (name != null && depth < MAX_FORM_DEPTH) form(name, resources, depth, pen)
+                        if (name != null && depth < MAX_FORM_DEPTH && hidden == 0) form(name, resources, depth, pen)
                         chain++
                     }
                     "BDC" -> {
@@ -162,9 +172,15 @@ public object TextExtractor {
                         if (actual != null && replacing == 0) replace(actual)
                         marked.add(actual != null)
                         if (actual != null) replacing++
+                        val off = (op.operands.firstOrNull() as? PdfName)?.value == "OC" && isHidden(op.operands.getOrNull(1), resources)
+                        hiding.add(off)
+                        if (off) hidden++
                     }
-                    "BMC" -> marked.add(false)
-                    "EMC" -> if (marked.isNotEmpty() && marked.removeAt(marked.lastIndex) && --replacing == 0) replaced()
+                    "BMC" -> { marked.add(false); hiding.add(false) }
+                    "EMC" -> {
+                        if (hiding.isNotEmpty() && hiding.removeAt(hiding.lastIndex)) hidden--
+                        if (marked.isNotEmpty() && marked.removeAt(marked.lastIndex) && --replacing == 0) replaced()
+                    }
                     "BT" -> {
                         inText = true
                         lineY = 0.0
@@ -225,6 +241,7 @@ public object TextExtractor {
                     "Tj" -> {
                         val s = op.operands.firstOrNull() as? PdfString ?: continue
                         val at = pen.show(s, chain)
+                        if (hidden > 0) continue
                         if (replacing == 0) show(decode(s, pen.placement.font), at) else enclosed(at)
                     }
                     "'" -> {
@@ -233,6 +250,7 @@ public object TextExtractor {
                         chain++
                         val s = op.operands.firstOrNull() as? PdfString ?: continue
                         val at = pen.show(s, chain)
+                        if (hidden > 0) continue
                         if (replacing == 0) show(decode(s, pen.placement.font), at) else enclosed(at)
                     }
                     "\"" -> {
@@ -244,11 +262,13 @@ public object TextExtractor {
                         // operands: aw ac string. The string is last.
                         val s = op.operands.lastOrNull() as? PdfString ?: continue
                         val at = pen.show(s, chain)
+                        if (hidden > 0) continue
                         if (replacing == 0) show(decode(s, pen.placement.font), at) else enclosed(at)
                     }
                     "TJ" -> {
                         val arr = op.operands.firstOrNull() as? PdfArray ?: continue
                         val at = pen.show(arr, chain)
+                        if (hidden > 0) continue
                         if (replacing > 0) {
                             enclosed(at)
                             continue
@@ -416,6 +436,9 @@ public object TextExtractor {
             val entry = resources?.getDict("XObject", doc)?.get(name) ?: return
             val stream = runCatching { entry.resolve(doc) }.getOrNull() as? PdfStream ?: return
             if (stream.dict.getName("Subtype") != "Form") return
+            // A form whose own /OC is off is not drawn (ISO 32000-1, 8.11.3.3).
+            val oc = doc.optionalContent
+            if (oc != null) stream.dict["OC"]?.let { if (!OptionalContentVisibility.isVisible(it, oc, doc)) return }
             val number = (entry as? PdfReference)?.objectNumber
             if (number != null && !openForms.add(number)) return
             try {
@@ -431,6 +454,20 @@ public object TextExtractor {
             } finally {
                 if (number != null) openForms.remove(number)
             }
+        }
+
+        /** Whether the `/OC` operand of a `BDC`, a group or membership dictionary given inline or named in `/Properties`, is off. */
+        private fun isHidden(operand: Any?, resources: PdfDictionary?): Boolean {
+            val doc = document ?: return false
+            val oc = doc.optionalContent ?: return false
+            val target = when (operand) {
+                // A form without the name in its own resources reads the page's, as the renderer does (#56).
+                is PdfName -> resources?.getDict("Properties", doc)?.get(operand.value)
+                    ?: pageResources?.getDict("Properties", doc)?.get(operand.value)
+                is PdfObject -> operand
+                else -> null
+            } ?: return false
+            return !OptionalContentVisibility.isVisible(target, oc, doc)
         }
 
         /** The `/ActualText` of a `BDC` property list, given inline or named in `/Properties`, or null. */

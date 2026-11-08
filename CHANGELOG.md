@@ -472,6 +472,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the inner half of the stroke no longer stacks on the translucent fill into a darker band (#720).
 - GPOS pair kerning stored behind an Extension lookup (type 9), as large fonts store it, applies in EPUB layout.
   It was skipped, so such a font set with no kerning (#784).
+- `PdfPage.extractText()` leaves out the text of an optional content group that the default configuration turns
+  off, in marked content and in a form XObject whose `/OC` is off, by the renderer's own rules. It read that
+  text, while the page, structured text and search left it out (#822).
 
 ## [0.13.0] - 2026-10-09
 
