@@ -153,7 +153,9 @@ public class PdfScriptRunner(
     private val host = PdfScriptHost(
         document,
         formState,
-        PdfScriptHost.Hooks(onAlert, onConsole, onRequest, onResponse),
+        // The time the reader takes to answer a dialog is no script time, so the event's clock
+        // moves on by it: a reply after the budget stopped the script that asked (#872).
+        PdfScriptHost.Hooks({ waiting { onAlert(it) } }, onConsole, onRequest, { waiting { onResponse(it) } }),
     ).also { host ->
         host.clock = { now() }
         host.timersChanged = { timerLock.withLock { timerListeners.toList() }.forEach { it() } }
@@ -801,6 +803,18 @@ public class PdfScriptRunner(
      * test that fixes the clock so its run is repeatable would otherwise see it move faster the
      * more instructions the engine ran.
      */
+    /** Runs [block], a wait for the reader, and moves the event's clocks on by the time it took (#872). */
+    private fun <T> waiting(block: () -> T): T {
+        val started = now()
+        try {
+            return block()
+        } finally {
+            val waited = (now() - started).coerceAtLeast(0)
+            eventStartedAt += waited
+            documentEventStartedAt += waited
+        }
+    }
+
     /** True while [ensureEngine] loads the Acrobat API, which no budget counts (#869). */
     private var settingUp = false
 

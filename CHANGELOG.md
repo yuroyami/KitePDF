@@ -428,6 +428,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   call tries again (#869).
 - Where the QuickJS library of KiteJS cannot load, a PDF's or a book's first script is a recorded failure, where
   the `UnsatisfiedLinkError` or `NoClassDefFoundError` left the runner and could end the app (#830).
+- The time an `app.alert` or `app.response` dialog waits for the reader no longer counts against a script's
+  budget, where a reply after five seconds stopped the script that asked (#872).
 
 ## [0.13.0] - 2026-10-09
 

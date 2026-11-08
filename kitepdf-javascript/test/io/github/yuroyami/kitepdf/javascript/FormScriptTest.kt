@@ -314,6 +314,21 @@ class FormScriptTest {
         }
     }
 
+    @Test
+    fun the_time_a_dialog_waits_for_the_reader_is_no_script_time(): TestResult = scriptTest {
+        // PdfScriptPolicy.budgetMillis measures the script's own work (#872).
+        var now = 0L
+        val doc = PdfDocument.open(invoicePdf())
+        PdfScriptRunner(doc, clock = { now }, onResponse = { now += 6_000; "Ada" }).use { runner ->
+            runner.run(io.github.yuroyami.kitepdf.PdfAction.JavaScript(
+                "var r = app.response('Name?'); for (var i = 0; i < 5000; i++) {} getField('a').value = r;",
+                io.github.yuroyami.kitepdf.core.parser.PdfDictionary(emptyMap()),
+            ))
+            assertEquals("Ada", runner.formState.value("a"))
+            assertEquals(emptyList(), runner.failures)
+        }
+    }
+
     /** What a script asks for outside the document reaches the host, and nothing else happens. */
     @Test
     fun a_request_to_leave_the_document_reaches_the_host(): TestResult = scriptTest {
