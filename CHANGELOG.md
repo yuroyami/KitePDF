@@ -617,6 +617,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pages: a link to an uncopied page loses its destination, and a widget becomes a field of its own (#1015).
 - Signature validation counts a choice field's `/I` and `/TI` and a rich text field's `/RV` as filling, so a
   certified form filled with a choice or rich text keeps its permitted changes (#997).
+- A signature's changes are judged by the certification level and the field lock of the signed revision: a later
+  revision can no longer raise the level with a signature of its own, loosen a signed field's lock, or re-point a
+  signed field's /V (#1002).
 
 ## [0.13.0] - 2026-10-09
 

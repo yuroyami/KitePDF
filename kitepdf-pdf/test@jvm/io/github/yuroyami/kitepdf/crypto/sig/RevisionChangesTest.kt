@@ -232,4 +232,73 @@ class RevisionChangesTest {
         assertEquals(emptyList(), result.changes)
         assertTrue(result.areChangesPermitted)
     }
+
+    private fun signatureField(lock: String? = null, value: Int = 5): String =
+        "<< /Type /Annot /Subtype /Widget /FT /Sig /T (Signature1) /Rect [0 0 0 0] /F 132 /P 3 0 R /V $value 0 R" + (lock?.let { " /Lock $it" } ?: "") + " >>"
+
+    @Test
+    fun aSignatureThatALaterRevisionAddsDoesNotRaiseTheLevel() {
+        // ISO 32000-1, 12.8.2.2: the level is that of the signature /Perms /DocMDP names, as it was signed (#1002).
+        val o = PdfOptions(certification = 1)
+        val n = SigFixtures.numbers(o)
+        val raised = SigFixtures.update(
+            signed(o),
+            mapOf(
+                n.next to "<< /Type /Annot /Subtype /Text /Rect [10 10 30 30] /Contents (A note) /P 3 0 R >>",
+                n.next + 1 to "<< /Type /Annot /Subtype /Widget /FT /Sig /T (Fake) /Rect [0 0 0 0] /F 132 /P 3 0 R /V ${n.next + 2} 0 R >>",
+                n.next + 2 to "<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached " +
+                    "/Reference [<< /Type /SigRef /TransformMethod /DocMDP /TransformParams << /Type /TransformParams /P 3 /V /1.2 >> >>] " +
+                    "/ByteRange [0 1 2 1] /Contents <00> >>",
+                n.page to page(o, "4 0 R ${n.next} 0 R ${n.next + 1} 0 R"),
+                n.catalog to catalog(o, "${n.next + 1} 0 R 4 0 R"),
+            ),
+        )
+        val document = PdfDocument.open(raised)
+        val result = document.signatures.single { it.field.fullyQualifiedName == "Signature1" }.validate(listOf(root.cert))
+        assertEquals(Status.Valid, result.status, result.detail)
+        assertTrue(result.changes!!.none { it.isPermitted }, result.changes.toString())
+        assertFalse(result.areChangesPermitted)
+    }
+
+    @Test
+    fun aLooserLockInALaterRevisionDoesNotFreeTheField() {
+        // ISO 32000-1, 12.8.2.4: the lock is the field's lock as it was signed (#1002).
+        val o = PdfOptions(lock = "<< /Type /SigFieldLock /Action /All >>", textField = "before")
+        val n = SigFixtures.numbers(o)
+        val loosened = SigFixtures.update(
+            signed(o),
+            mapOf(
+                n.textField to "<< /Type /Annot /Subtype /Widget /FT /Tx /T (Name) /Rect [20 150 180 170] /F 4 /P 3 0 R /V (after) >>",
+                n.signatureField to signatureField(lock = "<< /Type /SigFieldLock /Action /Include /Fields [(Nothing)] >>"),
+            ),
+        )
+        val result = check(loosened)
+        assertEquals(listOf("a change to signed field Signature1", "the value of field Name"), result.changes!!.map { it.subject })
+        assertTrue(result.changes.none { it.isPermitted })
+        assertFalse(result.areChangesPermitted)
+    }
+
+    @Test
+    fun aSignedFieldPointedAtAnotherSignatureIsNotSigning() {
+        val o = PdfOptions(certification = 1)
+        val n = SigFixtures.numbers(o)
+        val original = signed(o)
+        val text = String(original, Charsets.ISO_8859_1)
+        val body = text.substring(text.indexOf("5 0 obj\n") + "5 0 obj\n".length, text.indexOf("\nendobj", text.indexOf("5 0 obj\n")))
+        val copy = body.replace(Regex("""/Reference \[.*?\] """), "")
+        assertTrue(copy != body && "/ByteRange [0 " in copy)
+        val repointed = SigFixtures.update(
+            original,
+            mapOf(
+                n.next to "<< /Type /Annot /Subtype /Text /Rect [10 10 30 30] /Contents (A note) /P 3 0 R >>",
+                n.next + 1 to copy,
+                n.signatureField to signatureField(value = n.next + 1),
+                n.page to page(o, "4 0 R ${n.next} 0 R"),
+            ),
+        )
+        val result = check(repointed)
+        assertTrue("a change to signed field Signature1" in result.changes!!.map { it.subject }, result.changes.toString())
+        assertTrue(result.changes.none { it.isPermitted }, result.changes.toString())
+        assertFalse(result.areChangesPermitted)
+    }
 }

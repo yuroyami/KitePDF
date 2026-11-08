@@ -98,6 +98,9 @@ internal object RevisionChanges {
                 before == null && isSignatureField(after) -> PdfRevisionChange.Kind.Signature to "the new signature field ${place.field}"
                 before == null -> PdfRevisionChange.Kind.Other to "the new form field ${place.field}"
                 after == null -> PdfRevisionChange.Kind.Other to "the removal of form field ${place.field}"
+                // A field signed in the signed revision is signed once: a new /V, /Lock or /SV is not signing it (#1002).
+                isSignatureField(before) && (before as? PdfDictionary)?.get("V") != null && changed.any { it in SIGNED_FIELD_KEYS } ->
+                    PdfRevisionChange.Kind.Other to "a change to signed field ${place.field}"
                 isSignatureField(after) && changed.all { it in SIGNING_KEYS } -> PdfRevisionChange.Kind.Signature to "the signing of field ${place.field}"
                 changed.all { it in FILLING_KEYS } -> PdfRevisionChange.Kind.FieldValue to "the value of field ${place.field}"
                 else -> PdfRevisionChange.Kind.Other to "field ${place.field}"
@@ -257,6 +260,9 @@ internal object RevisionChanges {
 
     /** Keys that signing an empty signature field changes. */
     private val SIGNING_KEYS = setOf("V", "AP", "AS", "Lock", "SV")
+
+    /** Keys of a signed field that no later revision may change (ISO 32000-1, 12.8.2.4 and Table 232). */
+    private val SIGNED_FIELD_KEYS = setOf("V", "Lock", "SV")
 
     private val WIDGET_KEYS = setOf("AS", "AP", "MK")
     private val FORM_KEYS = setOf("Fields", "SigFlags", "NeedAppearances")

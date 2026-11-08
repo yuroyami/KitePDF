@@ -70,16 +70,22 @@ public class PdfSignature internal constructor(
 
     /**
      * The changes that later revisions made, judged at the document's certification level, or
-     * null when the signed revision cannot be read (#448). A document has one certification
-     * signature at most, and it comes first, so its level holds for every later signature.
+     * null when the signed revision cannot be read (#448). The level and the lock come from the
+     * signed revision, so the revision under judgement cannot set its own rules (#1002): the
+     * certification signature is the one that the catalog's `/Perms /DocMDP` names (ISO 32000-1,
+     * 12.8.2.2 and Table 258), and the FieldMDP lock is the one of the field as it was signed
+     * (12.8.2.4).
      */
     private fun changesAfterSigning(): List<PdfRevisionChange>? {
         if (byteRange.size < 2) return null
         val end = byteRange[byteRange.size - 2] + byteRange[byteRange.size - 1]
         if (end > Int.MAX_VALUE) return null
         val signed = document.revisionEndingAt(end.toInt()) ?: return null
-        val level = document.signatures.firstNotNullOfOrNull { it.certificationLevel }
-        return runCatching { RevisionChanges.between(signed, document, level, lock) }.getOrNull()
+        return runCatching {
+            val level = certificationLevelOf(signed)
+            val signedLock = signed.signatures.firstOrNull { it.field.fullyQualifiedName == field.fullyQualifiedName }?.lock
+            RevisionChanges.between(signed, document, level, signedLock)
+        }.getOrNull()
     }
 
     private fun check(trustAnchors: List<ByteArray>, revocationData: List<ByteArray>): PdfSignatureValidation = SignatureValidator(
@@ -106,9 +112,7 @@ public class PdfSignature internal constructor(
             val dict = field.fieldDict.getDict("V", document) ?: return null
             fun text(key: String) = (dict[key]?.resolve(document) as? PdfString)?.asText()
             // The signature references (ISO 32000-1, Table 253): a DocMDP one certifies, a FieldMDP one locks fields.
-            val references = dict.getArray("Reference", document).orEmpty().mapNotNull { it.resolve(document) as? PdfDictionary }
-            fun params(method: String) = references.firstOrNull { it.getName("TransformMethod") == method }?.getDict("TransformParams", document)
-            val docMdp = references.any { it.getName("TransformMethod") == "DocMDP" }
+            fun params(method: String) = transformParams(dict, method, document)
             PdfSignature(
                 field = field,
                 subFilter = dict.getName("SubFilter"),
@@ -119,13 +123,35 @@ public class PdfSignature internal constructor(
                 contactInfo = text("ContactInfo"),
                 signingTime = (dict["M"]?.resolve(document) as? PdfString)?.asText()?.let(PdfDate::parse),
                 byteRange = dict.getArray("ByteRange", document)?.mapNotNull { (it.resolve(document) as? PdfInt)?.value }.orEmpty(),
-                // A DocMDP reference without /P means level 2.
-                certificationLevel = if (docMdp) ((params("DocMDP")?.get("P") as? PdfInt)?.value?.toInt() ?: 2).coerceIn(1, 3) else null,
+                certificationLevel = docMdpLevel(dict, document),
                 document = document,
                 dictionary = dict,
                 lock = RevisionChanges.FieldLock.of(field.fieldDict.getDict("Lock", document) ?: params("FieldMDP"), document),
             )
         }.getOrNull()
+
+        /** The signature references of [dict] (ISO 32000-1, Table 253): a DocMDP one certifies, a FieldMDP one locks fields. */
+        private fun transformParams(dict: PdfDictionary, method: String, document: PdfDocument): PdfDictionary? =
+            dict.getArray("Reference", document).orEmpty()
+                .mapNotNull { it.resolve(document) as? PdfDictionary }
+                .firstOrNull { it.getName("TransformMethod") == method }
+                ?.let { it.getDict("TransformParams", document) ?: PdfDictionary(emptyMap()) }
+
+        /** The certification level of the signature dictionary [dict], or null when it has no DocMDP reference. A DocMDP reference without /P means level 2. */
+        private fun docMdpLevel(dict: PdfDictionary, document: PdfDocument): Int? =
+            transformParams(dict, "DocMDP", document)?.let { ((it["P"] as? PdfInt)?.value?.toInt() ?: 2).coerceIn(1, 3) }
+
+        /**
+         * The certification level of [document]: that of the signature the catalog's `/Perms
+         * /DocMDP` names (ISO 32000-1, 12.8.4, Table 258). A file without `/Perms` falls back to a
+         * signature of [document] with a DocMDP reference; [document] is a signed revision, so
+         * nothing a later revision adds is in it.
+         */
+        private fun certificationLevelOf(document: PdfDocument): Int? {
+            val perms = document.catalog.getDict("Perms", document)
+            if (perms?.get("DocMDP") != null) return perms.getDict("DocMDP", document)?.let { docMdpLevel(it, document) }
+            return document.signatures.firstNotNullOfOrNull { it.certificationLevel }
+        }
 
         /**
          * The streams of the document security store under [key]: `Certs`, `CRLs` or `OCSPs`
