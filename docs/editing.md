@@ -109,6 +109,22 @@ val saved = editor.saveIncremental()
 
 A password field draws one asterisk a character, never its value, in the appearance that `setTextFieldValue` writes, on the page in the viewer, and in the viewer's accessibility tree. `setTextFieldValue` still stores the value in `/V` when you call it, so the loop above skips such fields, as the note to Table 228 advises.
 
+### Flatten a form
+
+`flatten()` draws the appearance of each field and annotation into the page content and takes it off the page, so a filled form is final and looks the same in every reader:
+
+```kotlin
+val out = doc.edit().apply {
+    setTextFieldValue(doc.formField("Name")!!, "Ada")
+    flatten()                       // every page, what prints
+}.saveRewritten()
+```
+
+- `FlattenMode.Print`, the default, draws what prints; `FlattenMode.Display` draws what shows on screen. A hidden annotation, and one the mode leaves out, stays an annotation.
+- `widgetsOnly = true` flattens only the form; links and popups always stay.
+- A field whose widgets are all flattened leaves the form, and a form with no field left goes. An annotation with no appearance stays, since nothing would draw it.
+- `flatten(page)` flattens one page.
+
 ## Stamps and watermarks
 
 `stampPage` draws over a page and keeps what the page already draws. The block uses the same drawing calls as [`PdfBuilder`](writing.md#shapes-and-colors), in the same coordinates:

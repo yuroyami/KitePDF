@@ -1662,6 +1662,14 @@ public final class io/github/yuroyami/kitepdf/writer/EmbeddedFont$Companion {
 	public static synthetic fun load$default (Lio/github/yuroyami/kitepdf/writer/EmbeddedFont$Companion;[BLjava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/EmbeddedFont;
 }
 
+public final class io/github/yuroyami/kitepdf/writer/FlattenMode : java/lang/Enum {
+	public static final field Display Lio/github/yuroyami/kitepdf/writer/FlattenMode;
+	public static final field Print Lio/github/yuroyami/kitepdf/writer/FlattenMode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/writer/FlattenMode;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/writer/FlattenMode;
+}
+
 public final class io/github/yuroyami/kitepdf/writer/PdfBuilder {
 	public fun <init> ()V
 	public final fun addPage (DDLio/github/yuroyami/kitepdf/writer/ContentStreamBuilder;)Lio/github/yuroyami/kitepdf/writer/PdfBuilder;
@@ -1693,6 +1701,10 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun editPageContent (Lio/github/yuroyami/kitepdf/PdfPage;Lkotlin/jvm/functions/Function1;)V
 	public final fun encrypt (Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfPermissions;ZLkotlin/random/Random;)V
 	public static synthetic fun encrypt$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfPermissions;ZLkotlin/random/Random;ILjava/lang/Object;)V
+	public final fun flatten (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/writer/FlattenMode;Z)V
+	public final fun flatten (Lio/github/yuroyami/kitepdf/writer/FlattenMode;Z)V
+	public static synthetic fun flatten$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/writer/FlattenMode;ZILjava/lang/Object;)V
+	public static synthetic fun flatten$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;Lio/github/yuroyami/kitepdf/writer/FlattenMode;ZILjava/lang/Object;)V
 	public final fun getPendingObjectCount ()I
 	public final fun graftPage (Lio/github/yuroyami/kitepdf/PdfDocument;I)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public final fun insertPageAt (ILio/github/yuroyami/kitepdf/core/parser/PdfReference;)V

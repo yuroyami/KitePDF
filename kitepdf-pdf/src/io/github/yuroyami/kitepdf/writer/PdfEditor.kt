@@ -598,6 +598,162 @@ public class PdfEditor internal constructor(
         updateObject(ref, newPage)
     }
 
+    /* ─── Flattening (#949) ──────────────────────────────────────────────── */
+
+    /** [flatten] on every page of the document. */
+    public fun flatten(mode: FlattenMode = FlattenMode.Print, widgetsOnly: Boolean = false) {
+        for (page in base.pages) flatten(page, mode, widgetsOnly)
+    }
+
+    /**
+     * Draws the normal appearance of each annotation of [page] that [mode] selects into the page
+     * content and takes the annotation off the page, so the result looks the same in every reader
+     * and its fields can no longer be edited. With [widgetsOnly] only form widgets go; otherwise
+     * every annotation does, except links and popups, which stay.
+     *
+     * The appearance is drawn where the renderer draws it (ISO 32000-1, 12.5.5): its `/BBox`
+     * through its `/Matrix`, fitted to `/Rect`, at its own size for NoZoom, the `/AS` state of a
+     * check box or radio button, and `/CA` as the opacity of its paints. It becomes a form XObject
+     * of the page's resources, drawn with `q cm Do Q` after the page's own content, which stays as
+     * it was. With the form's `/NeedAppearances` set, a text or choice widget is drawn from its
+     * value rather than from its stored appearance (12.7.2). An annotation that has no appearance
+     * stays on the page, since nothing would draw it.
+     *
+     * A widget that goes takes its field with it, as a redaction does, and a form left with no
+     * field loses `/AcroForm`.
+     */
+    public fun flatten(page: PdfPage, mode: FlattenMode = FlattenMode.Print, widgetsOnly: Boolean = false) {
+        val ref = pageReference(page)
+        val pageDict = effectivePageDict(ref)
+        val annots = runCatching { pageDict.getArray("Annots", effective) }.getOrNull()?.items ?: return
+        val needs = runCatching { base.acroForm?.needAppearances == true }.getOrDefault(false)
+        val resources = LinkedHashMap(effectiveResources(ref, page)?.map ?: emptyMap())
+        val xobjects = LinkedHashMap((resources["XObject"]?.resolve(effective) as? PdfDictionary)?.map ?: emptyMap())
+        val states = LinkedHashMap((resources["ExtGState"]?.resolve(effective) as? PdfDictionary)?.map ?: emptyMap())
+        val drawn = StringBuilder()
+        val kept = ArrayList<PdfObject>()
+        val flattened = ArrayList<PdfReference>()
+        fun fresh(prefix: String, taken: Map<String, PdfObject>): String {
+            var i = 1
+            while ("$prefix$i" in taken) i++
+            return "$prefix$i"
+        }
+        for (item in annots) {
+            val dict = runCatching { item.resolve(effective) }.getOrNull() as? PdfDictionary
+            if (dict == null) { kept += item; continue }
+            val annot = runCatching { io.github.yuroyami.kitepdf.PdfAnnotation.parse(dict, effective) }.getOrNull()
+            if (annot == null) { kept += item; continue }
+            val flags = annot.flags
+            val selected = when {
+                annot.subtype == io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Link || annot.subtype == io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Popup -> false
+                widgetsOnly && annot.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget -> false
+                flags and FLAG_HIDDEN != 0 -> false
+                mode == FlattenMode.Print -> flags and FLAG_PRINT != 0
+                else -> flags and FLAG_NOVIEW == 0
+            }
+            if (!selected) { kept += item; continue }
+            val appearance = flattenAppearance(annot, dict, needs)
+            if (appearance == null) {
+                // A state-keyed appearance whose /AS names no entry draws nothing, and goes; one with none at all stays.
+                if (dict.getDict("AP", effective)?.get("N")?.resolve(effective) is PdfDictionary) {
+                    (item as? PdfReference)?.let(flattened::add)
+                } else {
+                    kept += item
+                }
+                continue
+            }
+            val name = fresh("KFl", xobjects)
+            xobjects[name] = appearance
+            val stream = appearance.resolve(effective) as PdfStream
+            val m = appearanceMatrix(stream, annot.rect, annot.isNoZoom)
+            drawn.append("q ")
+            val opacity = when (val ca = dict["CA"]?.resolve(effective)) {
+                is io.github.yuroyami.kitepdf.core.parser.PdfReal -> ca.value
+                is PdfInt -> ca.value.toDouble()
+                else -> 1.0
+            }.coerceIn(0.0, 1.0)
+            if (opacity < 1.0) {
+                val gs = fresh("KGs", states)
+                states[gs] = PdfDictionary(linkedMapOf("CA" to io.github.yuroyami.kitepdf.core.parser.PdfReal(opacity), "ca" to io.github.yuroyami.kitepdf.core.parser.PdfReal(opacity)))
+                drawn.append("/$gs gs ")
+            }
+            drawn.append("${fmtNum(m.a)} ${fmtNum(m.b)} ${fmtNum(m.c)} ${fmtNum(m.d)} ${fmtNum(m.e)} ${fmtNum(m.f)} cm /$name Do Q\n")
+            (item as? PdfReference)?.let(flattened::add)
+        }
+        if (drawn.isEmpty() && flattened.isEmpty()) return
+
+        val content = effectiveContentBytes(ref)
+        val out = ByteArrayBuilder(content.size + drawn.length + 16)
+        val wrap = SaveRestoreWrap.of(runCatching { ContentStreamParser.parse(content) }.getOrDefault(emptyList()))
+        out.append(wrap.open.encodeToByteArray())
+        out.append(content)
+        out.append("\n${wrap.close}".encodeToByteArray())
+        out.append(drawn.toString().encodeToByteArray())
+        resources["XObject"] = PdfDictionary(xobjects)
+        if (states.isNotEmpty()) resources["ExtGState"] = PdfDictionary(states)
+        var newPage = withEntry(pageDict, "Contents", addObject(PdfStreams.flate(out.toByteArray())))
+        newPage = withEntry(newPage, "Resources", PdfDictionary(resources))
+        newPage = if (kept.isEmpty()) withoutKeys(newPage, listOf("Annots")) else withEntry(newPage, "Annots", io.github.yuroyami.kitepdf.core.parser.PdfArray(kept))
+        updateObject(ref, newPage)
+        // A flattened widget takes its field along, and a form with no field left goes (12.7.2).
+        detachRedactedFields(flattened.filter { (effectiveObject(it.objectNumber) as? PdfDictionary)?.getName("Subtype") == "Widget" })
+        dropEmptyForm()
+    }
+
+    /** The appearance [flatten] draws for [annot], as an indirect stream, or null when it has none. */
+    private fun flattenAppearance(annot: io.github.yuroyami.kitepdf.PdfAnnotation, dict: PdfDictionary, needs: Boolean): PdfReference? {
+        if (needs && annot.subtype == io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget) {
+            val type = FieldAppearance.fieldTypeOf(dict, effective)
+            if (type == "Tx" || type == "Ch") {
+                FieldAppearance.synthesize(dict, annot.rect.width, annot.rect.height, effective)?.let { return addObject(it) }
+            }
+        }
+        val n = dict.getDict("AP", effective)?.get("N") ?: return null
+        val chosen = when (val resolved = n.resolve(effective)) {
+            is PdfStream -> n
+            is PdfDictionary -> dict.getName("AS")?.let { resolved[it] } ?: return null
+            else -> return null
+        }
+        return when (chosen) {
+            is PdfReference -> chosen.takeIf { effectiveObject(it.objectNumber) is PdfStream }
+            is PdfStream -> addObject(chosen)
+            else -> null
+        }
+    }
+
+    /** The matrix that puts [appearance] on [rect], as ISO 32000-1, 12.5.5 asks and the renderer does. */
+    private fun appearanceMatrix(appearance: PdfStream, rect: io.github.yuroyami.kitepdf.core.KiteRectangle, noZoom: Boolean): io.github.yuroyami.kitepdf.core.render.KiteMatrix {
+        fun nums(key: String) = (appearance.dict[key]?.resolve(effective) as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.map {
+            when (val v = it.resolve(effective)) {
+                is PdfInt -> v.value.toDouble()
+                is io.github.yuroyami.kitepdf.core.parser.PdfReal -> v.value
+                else -> 0.0
+            }
+        }
+        val b = nums("BBox")?.takeIf { it.size == 4 } ?: listOf(0.0, 0.0, rect.width, rect.height)
+        val mv = nums("Matrix")?.takeIf { it.size == 6 }
+        val matrix = mv?.let { io.github.yuroyami.kitepdf.core.render.KiteMatrix(it[0], it[1], it[2], it[3], it[4], it[5]) } ?: io.github.yuroyami.kitepdf.core.render.KiteMatrix.IDENTITY
+        val corners = listOf(matrix.transformPoint(b[0], b[1]), matrix.transformPoint(b[2], b[1]), matrix.transformPoint(b[2], b[3]), matrix.transformPoint(b[0], b[3]))
+        val left = corners.minOf { it.first }; val right = corners.maxOf { it.first }
+        val bottom = corners.minOf { it.second }; val top = corners.maxOf { it.second }
+        if (noZoom) return io.github.yuroyami.kitepdf.core.render.KiteMatrix(1.0, 0.0, 0.0, 1.0, rect.left - left, rect.top - top)
+        val sx = if (right - left != 0.0) rect.width / (right - left) else 1.0
+        val sy = if (top - bottom != 0.0) rect.height / (top - bottom) else 1.0
+        return io.github.yuroyami.kitepdf.core.render.KiteMatrix(sx, 0.0, 0.0, sy, rect.left - left * sx, rect.bottom - bottom * sy)
+    }
+
+    /** Takes `/AcroForm` out of the catalog once its `/Fields` is empty. */
+    private fun dropEmptyForm() {
+        val rootRef = (trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference ?: return
+        val catalog = effectiveObject(rootRef.objectNumber) as? PdfDictionary ?: return
+        val form = catalog["AcroForm"]?.resolve(effective) as? PdfDictionary ?: return
+        val fields = (form["Fields"]?.resolve(effective) as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.items.orEmpty()
+        if (fields.isNotEmpty()) return
+        updateObject(rootRef, withoutKeys(catalog, listOf("AcroForm")))
+    }
+
+    private fun fmtNum(v: Double): String = PdfObjectWriter.formatReal(v)
+
     /* ─── Form filling ───────────────────────────────────────────────────── */
 
     /**
@@ -1864,6 +2020,11 @@ public class PdfEditor internal constructor(
         private val INHERITED_FIELD_KEYS = listOf("FT", "Ff", "V", "DV", "DA", "Q", "DS", "RV", "MaxLen", "Opt", "TI", "I", "TU", "TM", "AA")
         /** The font subtypes whose single-byte codes the writer's WinAnsi text encoder writes. */
         private val SIMPLE_FONTS = setOf("Type1", "TrueType", "MMType1")
+
+        /** The annotation flags [flatten] reads (ISO 32000-1, 12.5.3, Table 165). */
+        private const val FLAG_HIDDEN = 1 shl 1
+        private const val FLAG_PRINT = 1 shl 2
+        private const val FLAG_NOVIEW = 1 shl 5
 
         /** Text-showing operators (§9.4.3). */
         val TEXT_SHOW_OPERATORS = setOf("Tj", "TJ", "'", "\"")

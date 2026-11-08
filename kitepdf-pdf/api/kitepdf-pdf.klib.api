@@ -7,6 +7,17 @@
 // - Show declarations: true
 
 // Library unique name: <io.github.yuroyami:kitepdf-pdf>
+final enum class io.github.yuroyami.kitepdf.writer/FlattenMode : kotlin/Enum<io.github.yuroyami.kitepdf.writer/FlattenMode> { // io.github.yuroyami.kitepdf.writer/FlattenMode|null[0]
+    enum entry Display // io.github.yuroyami.kitepdf.writer/FlattenMode.Display|null[0]
+    enum entry Print // io.github.yuroyami.kitepdf.writer/FlattenMode.Print|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.writer/FlattenMode.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.writer/FlattenMode> // io.github.yuroyami.kitepdf.writer/FlattenMode.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.writer/FlattenMode // io.github.yuroyami.kitepdf.writer/FlattenMode.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.writer/FlattenMode> // io.github.yuroyami.kitepdf.writer/FlattenMode.values|values#static(){}[0]
+}
+
 final enum class io.github.yuroyami.kitepdf.writer/RedactImages : kotlin/Enum<io.github.yuroyami.kitepdf.writer/RedactImages> { // io.github.yuroyami.kitepdf.writer/RedactImages|null[0]
     enum entry Pixels // io.github.yuroyami.kitepdf.writer/RedactImages.Pixels|null[0]
     enum entry Remove // io.github.yuroyami.kitepdf.writer/RedactImages.Remove|null[0]
@@ -379,6 +390,8 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
     final fun appendPage(io.github.yuroyami.kitepdf/PdfDocument, kotlin/Int): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.appendPage|appendPage(io.github.yuroyami.kitepdf.PdfDocument;kotlin.Int){}[0]
     final fun editPageContent(io.github.yuroyami.kitepdf/PdfPage, kotlin/Function1<kotlin.collections/List<io.github.yuroyami.kitepdf.content/Operation>, kotlin.collections/List<io.github.yuroyami.kitepdf.content/Operation>>) // io.github.yuroyami.kitepdf.writer/PdfEditor.editPageContent|editPageContent(io.github.yuroyami.kitepdf.PdfPage;kotlin.Function1<kotlin.collections.List<io.github.yuroyami.kitepdf.content.Operation>,kotlin.collections.List<io.github.yuroyami.kitepdf.content.Operation>>){}[0]
     final fun encrypt(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf/PdfPermissions = ..., kotlin/Boolean = ..., kotlin.random/Random) // io.github.yuroyami.kitepdf.writer/PdfEditor.encrypt|encrypt(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.PdfPermissions;kotlin.Boolean;kotlin.random.Random){}[0]
+    final fun flatten(io.github.yuroyami.kitepdf.writer/FlattenMode = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.writer/PdfEditor.flatten|flatten(io.github.yuroyami.kitepdf.writer.FlattenMode;kotlin.Boolean){}[0]
+    final fun flatten(io.github.yuroyami.kitepdf/PdfPage, io.github.yuroyami.kitepdf.writer/FlattenMode = ..., kotlin/Boolean = ...) // io.github.yuroyami.kitepdf.writer/PdfEditor.flatten|flatten(io.github.yuroyami.kitepdf.PdfPage;io.github.yuroyami.kitepdf.writer.FlattenMode;kotlin.Boolean){}[0]
     final fun graftPage(io.github.yuroyami.kitepdf/PdfDocument, kotlin/Int): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.graftPage|graftPage(io.github.yuroyami.kitepdf.PdfDocument;kotlin.Int){}[0]
     final fun insertPageAt(kotlin/Int, io.github.yuroyami.kitepdf.core.parser/PdfReference) // io.github.yuroyami.kitepdf.writer/PdfEditor.insertPageAt|insertPageAt(kotlin.Int;io.github.yuroyami.kitepdf.core.parser.PdfReference){}[0]
     final fun mergeDocument(io.github.yuroyami.kitepdf/PdfDocument) // io.github.yuroyami.kitepdf.writer/PdfEditor.mergeDocument|mergeDocument(io.github.yuroyami.kitepdf.PdfDocument){}[0]

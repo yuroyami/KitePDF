@@ -670,6 +670,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#933).
 - EPUB layout honours inline direction: dir="auto", <bdi>, <bdo> and the unicode-bidi property open the
   embeddings, overrides and isolates of UAX #9 around their content (#932).
+- PdfEditor.flatten draws the fields and annotations of a page or the whole document into the page content and
+  takes them off, for what prints or what shows, as a final copy of a filled form (#949).
 
 ## [0.13.0] - 2026-10-09
 
