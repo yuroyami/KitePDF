@@ -693,6 +693,15 @@ public class PdfDocument private constructor(
     @kotlin.concurrent.Volatile
     private var layerOverride: PdfOptionalContent? = null
 
+    /**
+     * Where this document's salvage warnings go, each with the page it came from (#899), or null
+     * for the process's [io.github.yuroyami.kitepdf.core.KiteWarnings.sink]. Drawing a page and
+     * reading its text report here, and so does opening the document with the [open] overload
+     * that takes a listener. It must be thread-safe: pages may render at once.
+     */
+    @kotlin.concurrent.Volatile
+    public var warnings: io.github.yuroyami.kitepdf.core.KiteWarningListener? = null
+
     /** Moves each time [layers] is set, so a page's text follows the new states. */
     @kotlin.concurrent.Volatile
     internal var layersVersion: Int = 0
@@ -1165,6 +1174,14 @@ public class PdfDocument private constructor(
          * PDFDocEncoding rule legacy R<=4 files expect. The ByteArray
          * overload remains the escape hatch for exotic encodings.
          */
+        /**
+         * [open] with [warnings] as the document's [PdfDocument.warnings], which also receives the
+         * warnings of the open itself, such as a repaired cross-reference table (#899).
+         */
+        @Throws(io.github.yuroyami.kitepdf.core.PdfFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
+        public fun open(bytes: ByteArray, password: String, warnings: io.github.yuroyami.kitepdf.core.KiteWarningListener?): PdfDocument =
+            io.github.yuroyami.kitepdf.core.KiteWarningScope.with(warnings, null, null) { open(bytes, password) }.also { it.warnings = warnings }
+
         @Throws(io.github.yuroyami.kitepdf.core.PdfFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
         public fun open(
             bytes: ByteArray,

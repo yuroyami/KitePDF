@@ -198,6 +198,9 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
         final fun <get-settings>(): io.github.yuroyami.kitepdf.epub/EpubSettings // io.github.yuroyami.kitepdf.epub/EpubDocument.settings.<get-settings>|<get-settings>(){}[0]
     final val tableOfContents // io.github.yuroyami.kitepdf.epub/EpubDocument.tableOfContents|{}tableOfContents[0]
         final fun <get-tableOfContents>(): io.github.yuroyami.kitepdf.epub/TableOfContents // io.github.yuroyami.kitepdf.epub/EpubDocument.tableOfContents.<get-tableOfContents>|<get-tableOfContents>(){}[0]
+    final var warnings // io.github.yuroyami.kitepdf.epub/EpubDocument.warnings|{}warnings[0]
+        final fun <get-warnings>(): io.github.yuroyami.kitepdf.core/KiteWarningListener? // io.github.yuroyami.kitepdf.epub/EpubDocument.warnings.<get-warnings>|<get-warnings>(){}[0]
+        final fun <set-warnings>(io.github.yuroyami.kitepdf.core/KiteWarningListener?) // io.github.yuroyami.kitepdf.epub/EpubDocument.warnings.<set-warnings>|<set-warnings>(io.github.yuroyami.kitepdf.core.KiteWarningListener?){}[0]
 
     final fun bookmarkOf(io.github.yuroyami.kitepdf.core/KiteLocation): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(io.github.yuroyami.kitepdf.core.KiteLocation){}[0]
     final fun bookmarkOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteBookmark.Flow? // io.github.yuroyami.kitepdf.epub/EpubDocument.bookmarkOf|bookmarkOf(kotlin.String){}[0]

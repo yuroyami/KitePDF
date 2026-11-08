@@ -1053,6 +1053,9 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
     final var operationCacheBudgetBytes // io.github.yuroyami.kitepdf/PdfDocument.operationCacheBudgetBytes|{}operationCacheBudgetBytes[0]
         final fun <get-operationCacheBudgetBytes>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.operationCacheBudgetBytes.<get-operationCacheBudgetBytes>|<get-operationCacheBudgetBytes>(){}[0]
         final fun <set-operationCacheBudgetBytes>(kotlin/Long) // io.github.yuroyami.kitepdf/PdfDocument.operationCacheBudgetBytes.<set-operationCacheBudgetBytes>|<set-operationCacheBudgetBytes>(kotlin.Long){}[0]
+    final var warnings // io.github.yuroyami.kitepdf/PdfDocument.warnings|{}warnings[0]
+        final fun <get-warnings>(): io.github.yuroyami.kitepdf.core/KiteWarningListener? // io.github.yuroyami.kitepdf/PdfDocument.warnings.<get-warnings>|<get-warnings>(){}[0]
+        final fun <set-warnings>(io.github.yuroyami.kitepdf.core/KiteWarningListener?) // io.github.yuroyami.kitepdf/PdfDocument.warnings.<set-warnings>|<set-warnings>(io.github.yuroyami.kitepdf.core.KiteWarningListener?){}[0]
 
     final fun dropDecodedImageCache() // io.github.yuroyami.kitepdf/PdfDocument.dropDecodedImageCache|dropDecodedImageCache(){}[0]
     final fun dropFontCache() // io.github.yuroyami.kitepdf/PdfDocument.dropFontCache|dropFontCache(){}[0]
@@ -1078,6 +1081,7 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
 
         final fun open(kotlin/ByteArray, kotlin/ByteArray = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.ByteArray;kotlin.Boolean){}[0]
         final fun open(kotlin/ByteArray, kotlin/String, kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.String;kotlin.Boolean){}[0]
+        final fun open(kotlin/ByteArray, kotlin/String, io.github.yuroyami.kitepdf.core/KiteWarningListener?): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.String;io.github.yuroyami.kitepdf.core.KiteWarningListener?){}[0]
         final fun openOrNull(kotlin/ByteArray, kotlin/ByteArray = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument? // io.github.yuroyami.kitepdf/PdfDocument.Companion.openOrNull|openOrNull(kotlin.ByteArray;kotlin.ByteArray;kotlin.Boolean){}[0]
     }
 }

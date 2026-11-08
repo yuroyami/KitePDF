@@ -745,6 +745,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Two reading themes whose colour functions share a hash code no longer share their recoloured line-art bitmaps
   (#844). A theme keys its images by the colours its function gives a set of greys and hues, not by the hash code
   of the function.
+- A document can have its own warning listener, with the page each salvage warning came from (#899).
+  `PdfDocument.warnings` and `EpubDocument.warnings` take a `KiteWarningListener`, which gets a `KiteWarning`
+  with the message, the document, the page index and a coarse kind; `PdfDocument.open(bytes, password, warnings)`
+  also reports the warnings of the open. Drawing a page and reading its text report there through a
+  `KiteWarningScope` of the thread, and a document without a listener reports to `KiteWarnings.sink`, as before.
 
 ## [0.13.0] - 2026-10-09
 

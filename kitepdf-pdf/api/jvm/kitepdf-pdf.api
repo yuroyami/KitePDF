@@ -632,6 +632,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun getTrailer ()Lio/github/yuroyami/kitepdf/core/parser/PdfDictionary;
 	public final fun getVersion ()Ljava/lang/String;
 	public final fun getViewerPreferences ()Lio/github/yuroyami/kitepdf/PdfViewerPreferences;
+	public final fun getWarnings ()Lio/github/yuroyami/kitepdf/core/KiteWarningListener;
 	public final fun getXmp ()Lio/github/yuroyami/kitepdf/PdfXmpMetadata;
 	public final fun getXmpMetadataXml ()Ljava/lang/String;
 	public final fun getXref ()Ljava/util/Map;
@@ -655,12 +656,14 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun setImageCacheBudgetBytes (J)V
 	public final fun setLayers (Lio/github/yuroyami/kitepdf/PdfOptionalContent;)V
 	public final fun setOperationCacheBudgetBytes (J)V
+	public final fun setWarnings (Lio/github/yuroyami/kitepdf/core/KiteWarningListener;)V
 	public fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;Lio/github/yuroyami/kitepdf/core/KiteBookmark$Flow;)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
 	public fun textRangeOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;II)Lio/github/yuroyami/kitepdf/core/KiteTextRange;
 	public fun topOf (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfDocument$Companion {
+	public final fun open ([BLjava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteWarningListener;)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public final fun open ([BLjava/lang/String;Z)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public final fun open ([B[BZ)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/PdfDocument$Companion;[BLjava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfDocument;

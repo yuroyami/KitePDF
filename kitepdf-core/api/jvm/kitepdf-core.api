@@ -425,6 +425,38 @@ public final class io/github/yuroyami/kitepdf/core/KiteTextRangeHits {
 	public final fun getRepaired ()Z
 }
 
+public final class io/github/yuroyami/kitepdf/core/KiteWarning {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Integer;Lio/github/yuroyami/kitepdf/core/KiteWarningKind;)V
+	public final fun getDocument ()Ljava/lang/Object;
+	public final fun getKind ()Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getPageIndex ()Ljava/lang/Integer;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/core/KiteWarningKind : java/lang/Enum {
+	public static final field Filter Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+	public static final field Font Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+	public static final field Image Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+	public static final field Other Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+	public static final field Parse Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+	public static final field Script Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+	public static fun values ()[Lio/github/yuroyami/kitepdf/core/KiteWarningKind;
+}
+
+public abstract interface class io/github/yuroyami/kitepdf/core/KiteWarningListener {
+	public abstract fun warn (Lio/github/yuroyami/kitepdf/core/KiteWarning;)V
+}
+
+public final class io/github/yuroyami/kitepdf/core/KiteWarningScope {
+	public static final field INSTANCE Lio/github/yuroyami/kitepdf/core/KiteWarningScope;
+	public final fun enter (Lio/github/yuroyami/kitepdf/core/KiteWarningListener;Ljava/lang/Object;Ljava/lang/Integer;)Ljava/lang/Object;
+	public final fun exit (Ljava/lang/Object;)V
+	public final fun with (Lio/github/yuroyami/kitepdf/core/KiteWarningListener;Ljava/lang/Object;Ljava/lang/Integer;Lkotlin/jvm/functions/Function0;)Ljava/lang/Object;
+}
+
 public abstract interface class io/github/yuroyami/kitepdf/core/KiteWarningSink {
 	public abstract fun warn (Ljava/lang/String;)V
 }
@@ -436,6 +468,7 @@ public final class io/github/yuroyami/kitepdf/core/KiteWarnings {
 }
 
 public final class io/github/yuroyami/kitepdf/core/KiteWarningsKt {
+	public static final fun kiteWarn (Lio/github/yuroyami/kitepdf/core/KiteWarningKind;Lkotlin/jvm/functions/Function0;)V
 	public static final fun kiteWarn (Lkotlin/jvm/functions/Function0;)V
 }
 

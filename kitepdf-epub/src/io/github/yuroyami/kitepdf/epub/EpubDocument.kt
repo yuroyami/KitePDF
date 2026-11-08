@@ -1487,6 +1487,14 @@ public class EpubDocument internal constructor(
         parsed.layoutSpine(chapter).linkKinds[href] ?: EpubLinkKind.LINK
 
     /**
+     * Where this book's salvage warnings go, each with the page it came from (#899), or null for the
+     * process's [io.github.yuroyami.kitepdf.core.KiteWarnings.sink]. Drawing a page and reading its
+     * text report here. It must be thread-safe: pages may render at once.
+     */
+    @kotlin.concurrent.Volatile
+    public var warnings: io.github.yuroyami.kitepdf.core.KiteWarningListener? = null
+
+    /**
      * A reading position for an internal href (`chapter3.xhtml#part-two`), built
      * without laying anything out. Resolve it with [locate], which prepares that
      * one chapter. This is the cheap half of following a link.
@@ -2445,11 +2453,17 @@ public class EpubPage internal constructor(
      */
     private fun displayY(page: PageRender, docY: Double): Double = page.margin + (docY - page.startY)
 
-    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix): Unit = render(canvas, deviceCtm, null)
+    override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix): Unit = scoped { render(canvas, deviceCtm, null) }
 
     /** [renderTo] that stops between two paint steps, such as two lines, once [cancellation] reads true (#370). */
     override fun renderTo(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation): Unit =
-        render(canvas, deviceCtm, cancellation)
+        scoped { render(canvas, deviceCtm, cancellation) }
+
+    /** Runs [block] with its warnings going to the book's listener, with this page's index in the book when it is known (#899). */
+    private inline fun <T> scoped(block: () -> T): T {
+        val listener = doc.warnings ?: return block()
+        return io.github.yuroyami.kitepdf.core.KiteWarningScope.with(listener, doc, doc.pageIndexOf(KiteLocation(chapter, index)), block)
+    }
 
     private fun render(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         val page = laidOut()
@@ -3701,7 +3715,7 @@ public class EpubPage internal constructor(
 
     /** Built once per live chapter and dropped with its pages, so search over a book stays bounded. */
     override fun textContent(): KiteStructuredText =
-        doc.structuredTextOf(chapter, index) { page -> buildStructuredText(page) }
+        scoped { doc.structuredTextOf(chapter, index) { page -> buildStructuredText(page) } }
 
     /**
      * Blocks = consecutive page lines sharing one owning [TextBlockBox];

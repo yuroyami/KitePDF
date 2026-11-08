@@ -273,6 +273,17 @@ public class PageRenderer(
         deviceCtm: KiteMatrix = defaultDeviceCtm(page),
         annotations: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean = { true },
     ) {
+        // Its warnings reach the document's listener, with the page (#899).
+        io.github.yuroyami.kitepdf.core.KiteWarningScope.with(page.internalDocument.warnings, page.internalDocument, page.index) {
+            renderAnnotationsScoped(page, deviceCtm, annotations)
+        }
+    }
+
+    private fun renderAnnotationsScoped(
+        page: PdfPage,
+        deviceCtm: KiteMatrix,
+        annotations: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean,
+    ) {
         if (pageResources !== page.resources) pageFormResourceCache.clear()
         pageResources = page.resources
         optionalContent = page.internalDocument.layers
@@ -304,6 +315,17 @@ public class PageRenderer(
         page: PdfPage,
         deviceCtm: KiteMatrix = defaultDeviceCtm(page),
         annotations: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean = { true },
+    ) {
+        // Its warnings reach the document's listener, with the page (#899).
+        io.github.yuroyami.kitepdf.core.KiteWarningScope.with(page.internalDocument.warnings, page.internalDocument, page.index) {
+            renderScoped(page, deviceCtm, annotations)
+        }
+    }
+
+    private fun renderScoped(
+        page: PdfPage,
+        deviceCtm: KiteMatrix,
+        annotations: (io.github.yuroyami.kitepdf.PdfAnnotation) -> Boolean,
     ) {
         if (pageResources !== page.resources) pageFormResourceCache.clear()
         pageResources = page.resources

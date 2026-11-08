@@ -243,7 +243,11 @@ public class PdfPage internal constructor(
      * earlier string drew the same text at the same size and in the same direction, with both of
      * its ends less than a tenth of an em away, as the renderer places them (9.4.4, #644).
      */
-    public fun extractText(): String = TextExtractor.extract(this)
+    public fun extractText(): String = scoped { TextExtractor.extract(this) }
+
+    /** Runs [block] with its warnings going to the document's listener, with this page (#899). */
+    private inline fun <T> scoped(block: () -> T): T =
+        io.github.yuroyami.kitepdf.core.KiteWarningScope.with(document.warnings, document, index, block)
 
     /**
      * Structured text: spans clustered into lines, lines clustered into
@@ -266,7 +270,7 @@ public class PdfPage internal constructor(
 
     private fun textFor(version: Int): Pair<io.github.yuroyami.kitepdf.text.PdfStructuredText, Lazy<KiteStructuredText>> {
         textCache?.let { (v, st, kite) -> if (v == version) return st to kite }
-        val st = io.github.yuroyami.kitepdf.text.StructuredTextExtractor.extract(this)
+        val st = scoped { io.github.yuroyami.kitepdf.text.StructuredTextExtractor.extract(this) }
         val kite = lazy { io.github.yuroyami.kitepdf.text.KiteTextAdapter.toKite(st, pageToDeviceBase()) }
         textCache = Triple(version, st, kite)
         return st to kite

@@ -147,6 +147,20 @@ final enum class io.github.yuroyami.kitepdf.core/KiteRole : kotlin/Enum<io.githu
     final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteRole // io.github.yuroyami.kitepdf.core/KiteRole.valueOf|valueOf#static(kotlin.String){}[0]
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core/KiteRole> // io.github.yuroyami.kitepdf.core/KiteRole.values|values#static(){}[0]
 }
+final enum class io.github.yuroyami.kitepdf.core/KiteWarningKind : kotlin/Enum<io.github.yuroyami.kitepdf.core/KiteWarningKind> { // io.github.yuroyami.kitepdf.core/KiteWarningKind|null[0]
+    enum entry Filter // io.github.yuroyami.kitepdf.core/KiteWarningKind.Filter|null[0]
+    enum entry Font // io.github.yuroyami.kitepdf.core/KiteWarningKind.Font|null[0]
+    enum entry Image // io.github.yuroyami.kitepdf.core/KiteWarningKind.Image|null[0]
+    enum entry Other // io.github.yuroyami.kitepdf.core/KiteWarningKind.Other|null[0]
+    enum entry Parse // io.github.yuroyami.kitepdf.core/KiteWarningKind.Parse|null[0]
+    enum entry Script // io.github.yuroyami.kitepdf.core/KiteWarningKind.Script|null[0]
+
+    final val entries // io.github.yuroyami.kitepdf.core/KiteWarningKind.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.core/KiteWarningKind> // io.github.yuroyami.kitepdf.core/KiteWarningKind.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteWarningKind // io.github.yuroyami.kitepdf.core/KiteWarningKind.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core/KiteWarningKind> // io.github.yuroyami.kitepdf.core/KiteWarningKind.values|values#static(){}[0]
+}
 
 abstract fun interface io.github.yuroyami.kitepdf.core.parser/IndirectResolver { // io.github.yuroyami.kitepdf.core.parser/IndirectResolver|null[0]
     abstract fun resolve(io.github.yuroyami.kitepdf.core.parser/PdfReference): io.github.yuroyami.kitepdf.core.parser/PdfObject? // io.github.yuroyami.kitepdf.core.parser/IndirectResolver.resolve|resolve(io.github.yuroyami.kitepdf.core.parser.PdfReference){}[0]
@@ -162,6 +176,9 @@ abstract fun interface io.github.yuroyami.kitepdf.core/KiteCancellation { // io.
 
 abstract fun interface io.github.yuroyami.kitepdf.core/KiteWarningSink { // io.github.yuroyami.kitepdf.core/KiteWarningSink|null[0]
     abstract fun warn(kotlin/String) // io.github.yuroyami.kitepdf.core/KiteWarningSink.warn|warn(kotlin.String){}[0]
+}
+abstract fun interface io.github.yuroyami.kitepdf.core/KiteWarningListener { // io.github.yuroyami.kitepdf.core/KiteWarningListener|null[0]
+    abstract fun warn(io.github.yuroyami.kitepdf.core/KiteWarning) // io.github.yuroyami.kitepdf.core/KiteWarningListener.warn|warn(io.github.yuroyami.kitepdf.core.KiteWarning){}[0]
 }
 
 abstract interface io.github.yuroyami.kitepdf.core.filters/PdfFilter { // io.github.yuroyami.kitepdf.core.filters/PdfFilter|null[0]
@@ -2321,6 +2338,20 @@ final class io.github.yuroyami.kitepdf.core/KiteTextRangeHits { // io.github.yur
     final val repaired // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.repaired|{}repaired[0]
         final fun <get-repaired>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.repaired.<get-repaired>|<get-repaired>(){}[0]
 }
+final class io.github.yuroyami.kitepdf.core/KiteWarning { // io.github.yuroyami.kitepdf.core/KiteWarning|null[0]
+    constructor <init>(kotlin/String, kotlin/Any?, kotlin/Int?, io.github.yuroyami.kitepdf.core/KiteWarningKind) // io.github.yuroyami.kitepdf.core/KiteWarning.<init>|<init>(kotlin.String;kotlin.Any?;kotlin.Int?;io.github.yuroyami.kitepdf.core.KiteWarningKind){}[0]
+
+    final val document // io.github.yuroyami.kitepdf.core/KiteWarning.document|{}document[0]
+        final fun <get-document>(): kotlin/Any? // io.github.yuroyami.kitepdf.core/KiteWarning.document.<get-document>|<get-document>(){}[0]
+    final val kind // io.github.yuroyami.kitepdf.core/KiteWarning.kind|{}kind[0]
+        final fun <get-kind>(): io.github.yuroyami.kitepdf.core/KiteWarningKind // io.github.yuroyami.kitepdf.core/KiteWarning.kind.<get-kind>|<get-kind>(){}[0]
+    final val message // io.github.yuroyami.kitepdf.core/KiteWarning.message|{}message[0]
+        final fun <get-message>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteWarning.message.<get-message>|<get-message>(){}[0]
+    final val pageIndex // io.github.yuroyami.kitepdf.core/KiteWarning.pageIndex|{}pageIndex[0]
+        final fun <get-pageIndex>(): kotlin/Int? // io.github.yuroyami.kitepdf.core/KiteWarning.pageIndex.<get-pageIndex>|<get-pageIndex>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteWarning.toString|toString(){}[0]
+}
 final class io.github.yuroyami.kitepdf.core/KiteWrongPasswordException : kotlin/RuntimeException { // io.github.yuroyami.kitepdf.core/KiteWrongPasswordException|null[0]
     constructor <init>(kotlin/String, kotlin/Throwable? = ...) // io.github.yuroyami.kitepdf.core/KiteWrongPasswordException.<init>|<init>(kotlin.String;kotlin.Throwable?){}[0]
 }
@@ -3345,6 +3376,11 @@ final object io.github.yuroyami.kitepdf.core.zip/Crc32 { // io.github.yuroyami.k
     final fun of(kotlin/ByteArray, kotlin/Int = ..., kotlin/Int = ...): kotlin/Long // io.github.yuroyami.kitepdf.core.zip/Crc32.of|of(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
 }
 
+final object io.github.yuroyami.kitepdf.core/KiteWarningScope { // io.github.yuroyami.kitepdf.core/KiteWarningScope|null[0]
+    final fun enter(io.github.yuroyami.kitepdf.core/KiteWarningListener?, kotlin/Any?, kotlin/Int?): kotlin/Any? // io.github.yuroyami.kitepdf.core/KiteWarningScope.enter|enter(io.github.yuroyami.kitepdf.core.KiteWarningListener?;kotlin.Any?;kotlin.Int?){}[0]
+    final fun exit(kotlin/Any?) // io.github.yuroyami.kitepdf.core/KiteWarningScope.exit|exit(kotlin.Any?){}[0]
+    final inline fun <#A1: kotlin/Any?> with(io.github.yuroyami.kitepdf.core/KiteWarningListener?, kotlin/Any?, kotlin/Int?, kotlin/Function0<#A1>): #A1 // io.github.yuroyami.kitepdf.core/KiteWarningScope.with|with(io.github.yuroyami.kitepdf.core.KiteWarningListener?;kotlin.Any?;kotlin.Int?;kotlin.Function0<0:0>){0§<kotlin.Any?>}[0]
+}
 final object io.github.yuroyami.kitepdf.core/KiteWarnings { // io.github.yuroyami.kitepdf.core/KiteWarnings|null[0]
     final var sink // io.github.yuroyami.kitepdf.core/KiteWarnings.sink|{}sink[0]
         final fun <get-sink>(): io.github.yuroyami.kitepdf.core/KiteWarningSink? // io.github.yuroyami.kitepdf.core/KiteWarnings.sink.<get-sink>|<get-sink>(){}[0]
@@ -3381,4 +3417,5 @@ final fun io.github.yuroyami.kitepdf.core.render/strokePen(io.github.yuroyami.ki
 final fun io.github.yuroyami.kitepdf.core.render/twoCircleParameter(kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double): kotlin/Double? // io.github.yuroyami.kitepdf.core.render/twoCircleParameter|twoCircleParameter(kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double){}[0]
 final fun io.github.yuroyami.kitepdf.core/currentThreadId(): kotlin/Long // io.github.yuroyami.kitepdf.core/currentThreadId|currentThreadId(){}[0]
 final fun io.github.yuroyami.kitepdf.core/kiteWarn(kotlin/Function0<kotlin/String>) // io.github.yuroyami.kitepdf.core/kiteWarn|kiteWarn(kotlin.Function0<kotlin.String>){}[0]
+final fun io.github.yuroyami.kitepdf.core/kiteWarn(io.github.yuroyami.kitepdf.core/KiteWarningKind, kotlin/Function0<kotlin/String>) // io.github.yuroyami.kitepdf.core/kiteWarn|kiteWarn(io.github.yuroyami.kitepdf.core.KiteWarningKind;kotlin.Function0<kotlin.String>){}[0]
 final inline fun <#A: kotlin/Any?> (io.github.yuroyami.kitepdf.core/KiteLock).io.github.yuroyami.kitepdf.core/withLock(kotlin/Function0<#A>): #A // io.github.yuroyami.kitepdf.core/withLock|withLock@io.github.yuroyami.kitepdf.core.KiteLock(kotlin.Function0<0:0>){0§<kotlin.Any?>}[0]
