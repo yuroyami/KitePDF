@@ -387,6 +387,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KiteDoc` recognises a comic that mixes them with other images (#755).
 - An XPS image brush reads the resolution of a TIFF from its tags, and of a camera JPEG from its EXIF segment, so
   its `Viewbox` shows the right part of the image, where both counted as 96 dpi (#752).
+- On Kotlin/Native each thread gets a lock owner id of its own from a counter, where a 32-bit hash of
+  `pthread_self` let two threads share an id and enter one `KiteLock` together, and `unlock` from a thread that
+  does not hold the lock fails, as on the JVM (#773).
 
 ## [0.13.0] - 2026-10-09
 

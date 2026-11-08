@@ -2,7 +2,6 @@ package io.github.yuroyami.kitepdf.core
 
 import kotlin.concurrent.AtomicLong
 import kotlinx.cinterop.ExperimentalForeignApi
-import platform.posix.pthread_self
 import platform.posix.sched_yield
 import platform.posix.usleep
 
@@ -39,7 +38,9 @@ public actual class KiteLock actual constructor() {
         depth = 1
     }
 
+    /** Fails for a thread that does not hold the lock, as the JVM's ReentrantLock does (#773). */
     public actual fun unlock() {
+        check(owner.value == currentThreadId()) { "KiteLock.unlock from a thread that does not hold it" }
         if (--depth == 0) owner.value = 0
     }
 
@@ -59,12 +60,20 @@ public actual class KiteLock actual constructor() {
     }
 }
 
-// pthread_t is a pointer on Apple and an integer elsewhere; hashCode is the
-// one portable projection. A collision merely risks one spurious "cyclic
-// reference" null-cache if two colliding threads race the same object:
-// lenient degradation, astronomically unlikely. 0 is reserved for "unlocked".
-@OptIn(ExperimentalForeignApi::class)
+/**
+ * A number that each thread takes from [nextThreadId] on its first call and keeps, so two live
+ * threads never share one. The hash of pthread_self folded a 64-bit value to 32 bits, and two
+ * threads with one hash both passed [KiteLock]'s reentrancy check and ran inside the lock together,
+ * over the caches of documents, fonts and bitmaps it guards, and PdfDocument's cycle claims (#773).
+ * 0 is reserved for "unlocked".
+ */
 public actual fun currentThreadId(): Long {
-    val h = pthread_self().hashCode().toLong()
-    return if (h == 0L) 1L else h
+    val known = threadId
+    if (known != 0L) return known
+    return nextThreadId.addAndGet(1).also { threadId = it }
 }
+
+@kotlin.native.concurrent.ThreadLocal
+private var threadId: Long = 0L
+
+private val nextThreadId = AtomicLong(0)
