@@ -21,6 +21,20 @@ private class ExecutorScriptThread : ScriptThread {
         return executor.submit(Callable { runCatching(block) }).get().getOrThrow()
     }
 
+    override fun callWithin(millis: Long, block: () -> Unit): Boolean {
+        if (Thread.currentThread() === thread) {
+            block()
+            return true
+        }
+        val task = executor.submit { runCatching(block) }
+        return try {
+            task.get(millis, java.util.concurrent.TimeUnit.MILLISECONDS)
+            true
+        } catch (_: java.util.concurrent.TimeoutException) {
+            false
+        }
+    }
+
     override fun close() {
         executor.shutdown()
     }

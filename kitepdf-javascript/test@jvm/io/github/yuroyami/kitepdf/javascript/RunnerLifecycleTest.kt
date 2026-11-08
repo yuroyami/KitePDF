@@ -5,6 +5,7 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -54,5 +55,24 @@ class RunnerLifecycleTest {
         assertFalse(closer.isAlive, "close did not return")
         opener.join(10_000)
         assertFalse(opener.isAlive, "the script is still running")
+    }
+
+    @Test
+    fun closing_the_runner_does_not_wait_for_a_built_in_call_that_never_checks_its_deadline() {
+        // join loops in the engine's C code with no interrupt poll, so neither the budget nor a
+        // close stops it until it returns. The close must not wait for that (#996).
+        val doc = PdfDocument.open(pdf("Array.prototype.join.call\\({length: 1073741824}, ''\\)"))
+        val runner = PdfScriptRunner(doc)
+        val opener = thread(isDaemon = true, name = "opener") { runCatching { runBlocking { runner.documentOpened() } } }
+        Thread.sleep(500)
+        val started = System.nanoTime()
+        val closer = thread(isDaemon = true, name = "closer") { runner.close() }
+        closer.join(10_000)
+        val millis = (System.nanoTime() - started) / 1_000_000
+        assertFalse(closer.isAlive, "close did not return")
+        assertTrue(millis < CLOSE_WAIT_MILLIS + 1_500, "close took $millis ms")
+        assertTrue(opener.isAlive, "the call ended before the close, so this test shows nothing: make it longer")
+        // Leave no busy thread behind for the next tests.
+        opener.join(300_000)
     }
 }

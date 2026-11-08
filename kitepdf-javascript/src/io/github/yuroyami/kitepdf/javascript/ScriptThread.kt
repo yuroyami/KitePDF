@@ -11,6 +11,17 @@ internal interface ScriptThread {
     /** Runs [block] on this thread and waits for its result. Runs it at once when already here. */
     fun <T> call(block: () -> T): T
 
+    /**
+     * Queues [block] here and waits at most [millis] for it to end. True when it ended in time;
+     * false leaves it queued, to run once the work before it ends. A close that a script which
+     * never reaches its interrupt check holds up thus does not hold up its caller (#996). Runs
+     * [block] at once, and answers true, when already here or where the work runs in place.
+     */
+    fun callWithin(millis: Long, block: () -> Unit): Boolean {
+        call(block)
+        return true
+    }
+
     /** Stops the thread after the work already queued. */
     fun close()
 

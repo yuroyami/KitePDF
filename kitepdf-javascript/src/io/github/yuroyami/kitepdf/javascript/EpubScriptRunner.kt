@@ -236,7 +236,8 @@ public class EpubScriptRunner(
         closeWaits = false
         val thread = scriptThread.value
         try {
-            thread.call {
+            // A script that never reaches its interrupt check holds the thread, and this caller does not wait for it (#996).
+            thread.callWithin(CLOSE_WAIT_MILLIS) {
                 try {
                     session?.close()
                 } finally {

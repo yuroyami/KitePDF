@@ -792,6 +792,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The tests open encrypted PDFs that qpdf wrote: RC4-128, AES-128 and AES-256, each with a classic cross-
   reference and with object streams, unencrypted metadata, owner-only passwords, and `/StmF /Identity` files for
   R4 and R6. `tools/encrypted_fixtures.py` makes them (#908).
+- `PdfScriptRunner.close()` and `EpubScriptRunner.close()` wait at most a second for a running script to let the
+  engine close, so a host closing a runner on its main thread no longer freezes when a script sits in one long
+  built-in call that the budget cannot interrupt. The engine closes when that call returns (#996).
 
 ## [0.13.0] - 2026-10-09
 

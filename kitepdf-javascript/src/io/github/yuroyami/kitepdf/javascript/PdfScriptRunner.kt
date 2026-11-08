@@ -959,7 +959,10 @@ public class PdfScriptRunner(
         }
         val thread = scriptThread.value
         try {
-            thread.call {
+            // A script that never reaches its interrupt check, such as one long built-in call, holds
+            // the thread: the engine then closes when it returns, and this caller does not wait for
+            // it past CLOSE_WAIT_MILLIS, so a host closing on its main thread does not freeze (#996).
+            thread.callWithin(CLOSE_WAIT_MILLIS) {
                 try {
                     openEngine?.close()
                 } finally {
@@ -972,6 +975,9 @@ public class PdfScriptRunner(
         }
     }
 }
+
+/** How long close() waits for a running script to let the engine close, before it leaves the close queued (#996). */
+internal const val CLOSE_WAIT_MILLIS = 1_000L
 
 /** How many failures a PDF runner keeps, as the EPUB session does (#960). */
 private const val MAX_FAILURES = 100
