@@ -541,7 +541,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         try {
             content = paintInLayer(area, render)
             mask = paintInLayer(area) {
-                if (kind == SoftMask.Kind.Luminosity) {
+                if (kind.readsColor) {
                     // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
                     ctx.save()
                     ctx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
@@ -554,8 +554,8 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         } finally {
             groups.removeLastOrNull()
         }
-        val luminosity = kind == SoftMask.Kind.Luminosity
-        if (luminosity || transfer != null) maskToAlpha(mask.canvas, luminosity, transfer)
+        val luminosity = kind.readsColor
+        if (luminosity || transfer != null) maskToAlpha(mask.canvas, kind, transfer)
         val contentCtx = content.canvas.getContext("2d") as CanvasRenderingContext2D
         contentCtx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
         contentCtx.globalCompositeOperation = "destination-in"
@@ -715,11 +715,11 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     }
 
     /**
-     * Replaces the alpha of every pixel of [canvas] with its mask value: the luminosity
-     * 0.30 R + 0.59 G + 0.11 B when [luminosity] is true, or else the alpha, then mapped
-     * through [transfer].
+     * Replaces the alpha of every pixel of [canvas] with its mask value: the luminosity with the
+     * weights of [kind] when it reads colour, or else the alpha, then mapped through [transfer].
      */
-    private fun maskToAlpha(canvas: HTMLCanvasElement, luminosity: Boolean, transfer: KiteMaskTransfer?) {
+    private fun maskToAlpha(canvas: HTMLCanvasElement, kind: SoftMask.Kind, transfer: KiteMaskTransfer?) {
+        val luminosity = kind.readsColor
         if (canvas.width == 0 || canvas.height == 0) return
         val maskCtx = canvas.getContext("2d") as CanvasRenderingContext2D
         val image = maskCtx.getImageData(0.0, 0.0, canvas.width.toDouble(), canvas.height.toDouble())
@@ -728,7 +728,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         var i = 0
         while (i < length) {
             val level = if (luminosity) {
-                ((data[i] as Int) * 77 + (data[i + 1] as Int) * 150 + (data[i + 2] as Int) * 29) ushr 8
+                kind.levelOf(data[i] as Int, data[i + 1] as Int, data[i + 2] as Int)
             } else {
                 data[i + 3] as Int
             }

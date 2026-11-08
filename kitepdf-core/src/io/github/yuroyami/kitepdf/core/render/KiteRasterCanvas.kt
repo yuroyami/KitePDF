@@ -209,7 +209,7 @@ public class KiteRasterCanvas(
         layers.add(Layer(IntArray(width * height), clips.size))
         failSafe(layers.size - 1) { render() }
         val content = popLayer() ?: return
-        val luminosity = kind == SoftMask.Kind.Luminosity
+        val luminosity = kind.readsColor
         // A luminosity mask composites its group over opaque black (ISO 32000-1, 11.6.5.2).
         layers.add(Layer(IntArray(width * height) { if (luminosity) BLACK else 0 }, clips.size))
         failSafe(layers.size - 1) { renderMask(this) }
@@ -217,11 +217,7 @@ public class KiteRasterCanvas(
         val mask = FloatArray(width * height)
         for (i in mask.indices) {
             val p = maskLayer.pixels[i]
-            val level = if (luminosity) {
-                ((p ushr 16 and 0xFF) * 0.30 + (p ushr 8 and 0xFF) * 0.59 + (p and 0xFF) * 0.11 + 0.5).toInt()
-            } else {
-                p ushr 24
-            }
+            val level = if (luminosity) kind.levelOf(p ushr 16 and 0xFF, p ushr 8 and 0xFF, p and 0xFF) else p ushr 24
             mask[i] = (transfer?.get(level) ?: level) / 255f
         }
         composite(content.pixels, mask, 1f, KiteBlendMode.Normal)

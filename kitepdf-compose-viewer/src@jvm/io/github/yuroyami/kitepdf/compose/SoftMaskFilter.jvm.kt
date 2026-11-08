@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.core.render.SoftMask
 internal actual fun softMaskFilter(kind: SoftMask.Kind, transfer: KiteMaskTransfer?): ColorFilter? {
     val table = transfer?.let { org.jetbrains.skia.ColorFilter.makeTableARGB(it.toByteArray(), null, null, null) }
     if (kind == SoftMask.Kind.Alpha) return table?.asComposeColorFilter()
-    val luminosity = ColorFilter.colorMatrix(ColorMatrix(LUMINOSITY_TO_ALPHA))
+    val luminosity = ColorFilter.colorMatrix(ColorMatrix(luminosityToAlpha(kind)))
     if (table == null) return luminosity
     return org.jetbrains.skia.ColorFilter.makeComposed(table, luminosity.asSkiaColorFilter()).asComposeColorFilter()
 }

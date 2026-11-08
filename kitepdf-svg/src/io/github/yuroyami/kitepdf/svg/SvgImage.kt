@@ -1058,7 +1058,7 @@ public class SvgImage private constructor(
             KiteMatrix(box[2] - box[0], 0.0, 0.0, box[3] - box[1], box[0], box[1])
         }
         // CSS Masking 1, 7.1: mask-type picks the alpha of the content over its luminance.
-        val kind = if (styleOrAttr(def, "mask-type")?.trim() == "alpha") SoftMask.Kind.Alpha else SoftMask.Kind.Luminosity
+        val kind = if (styleOrAttr(def, "mask-type")?.trim() == "alpha") SoftMask.Kind.Alpha else SoftMask.Kind.CssLuminance
         return MaskRef(def, kind, region, contentMatrix)
     }
 

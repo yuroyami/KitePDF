@@ -35,7 +35,7 @@ class SvgMaskTest {
         val canvas = MaskRecorder()
         image.render(canvas, KiteMatrix.IDENTITY)
         val (kind, content) = canvas.masks.single()
-        assertEquals(SoftMask.Kind.Luminosity, kind)
+        assertEquals(SoftMask.Kind.CssLuminance, kind)
         val clip = content.calls.filterIsInstance<RecordingCanvas.Call.PushClip>().first()
         assertEquals(KiteRectangle(0.0, 10.0, 30.0, 60.0), clip.path.bounds(clip.ctm))
         assertEquals(1, content.calls.filterIsInstance<RecordingCanvas.Call.Fill>().size, "the mask content draws once")

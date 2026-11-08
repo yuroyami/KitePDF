@@ -801,7 +801,7 @@ public class ComposeCanvas internal constructor(
             composeCanvas.saveLayer(bounds, maskPaint)
             saves.addLast(Save.Layer)
             try {
-                if (kind == SoftMask.Kind.Luminosity) {
+                if (kind.readsColor) {
                     // Unpainted mask pixels stay black -> luminance 0 -> fully
                     // masked out, per the spec's black-backdrop rule.
                     drawScope.drawRect(Color.Black, topLeft = bounds.topLeft, size = bounds.size)
@@ -831,7 +831,7 @@ public class ComposeCanvas internal constructor(
         val width = kotlin.math.ceil(w / pixelSize).toInt()
         val height = kotlin.math.ceil(h / pixelSize).toInt()
         val group = ImageBitmap(width, height)
-        val luminosity = kind == SoftMask.Kind.Luminosity
+        val luminosity = kind.readsColor
         var nested: ComposeCanvas? = null
         androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
             drawScope, drawScope.layoutDirection, androidx.compose.ui.graphics.Canvas(group), Size(width.toFloat(), height.toFloat()),
@@ -850,7 +850,7 @@ public class ComposeCanvas internal constructor(
         if (nested?.usedSystemFontText == true) usedSystemFontText = true
         val argb = IntArray(width * height)
         group.readPixels(argb)
-        transfer.toMaskAlpha(argb, luminosity)
+        transfer.toMaskAlpha(argb, kind)
         val rgba = ByteArray(argb.size * 4)
         for (i in argb.indices) rgba[4 * i + 3] = (argb[i] ushr 24).toByte()
         val mask = ImageDecoder.decodeRaw(rgba, width, height) ?: return

@@ -167,5 +167,34 @@ public sealed class SoftMask {
         val transfer: KiteFunction? = null,
     ) : SoftMask()
 
-    public enum class Kind { Luminosity, Alpha }
+    /**
+     * What of the mask group becomes the mask value, and with which weights a luminosity mask reads
+     * a colour. A PDF luminosity mask (ISO 32000-1, 11.5.3) weighs a colour as 10.3.2 and `Lum` in
+     * 11.3.5.3 do; a CSS luminance mask, which an SVG `mask` element makes, weighs it with the
+     * `luminanceToAlpha` row of Filter Effects 1 (CSS Masking 1, 7.1; #799, #821).
+     */
+    public enum class Kind(
+        /** The weight of red in the mask value; 0 for [Alpha]. */
+        public val red: Double,
+        /** The weight of green in the mask value; 0 for [Alpha]. */
+        public val green: Double,
+        /** The weight of blue in the mask value; 0 for [Alpha]. */
+        public val blue: Double,
+    ) {
+        /** The luminosity of the group's colour, 0.30 R + 0.59 G + 0.11 B, over its backdrop. */
+        Luminosity(0.30, 0.59, 0.11),
+
+        /** The group's alpha. */
+        Alpha(0.0, 0.0, 0.0),
+
+        /** The luminance of the content, 0.2125 R + 0.7154 G + 0.0721 B, as CSS Masking 1 computes it. */
+        CssLuminance(0.2125, 0.7154, 0.0721),
+        ;
+
+        /** True when the colour of the group, not its alpha, makes the mask. */
+        public val readsColor: Boolean get() = this != Alpha
+
+        /** The mask value from 0 to 255 of a colour whose channels run from 0 to 255. */
+        public fun levelOf(r: Int, g: Int, b: Int): Int = (r * red + g * green + b * blue + 0.5).toInt().coerceIn(0, 255)
+    }
 }

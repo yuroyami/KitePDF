@@ -820,16 +820,25 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
             // the spec (ISO 32000-1 §11.6.5.2) composites the mask group over a
             // fully-opaque BLACK backdrop and derives alpha from the result's
             // luminance, so unpainted areas (luminance 0) mask fully out. We
-            // realise that with the LUMA colour filter, which maps each pixel's
-            // luminance into its alpha, applied as the layer's restore paint.
+            // realise that with a colour matrix that maps each pixel's luminance
+            // into its alpha, applied as the layer's restore paint. Its weights are
+            // the mask kind's: 0.30, 0.59 and 0.11 for PDF (ISO 32000-1, 10.3.2), as
+            // every other canvas uses, not the Rec. 709 row of Skia's luma filter,
+            // and the CSS weights for an SVG mask (#799, #821).
             // The /TR table then maps the alpha, also where the group paints nothing.
             val table = transfer?.let { org.jetbrains.skia.ColorFilter.makeTableARGB(it.toByteArray(), null, null, null) }
             val maskPaint = Paint().apply {
                 blendMode = SkiaBlendMode.DST_IN
-                colorFilter = when {
-                    kind == SoftMask.Kind.Alpha -> table
-                    table != null -> org.jetbrains.skia.ColorFilter.makeComposed(table, org.jetbrains.skia.ColorFilter.luma)
-                    else -> org.jetbrains.skia.ColorFilter.luma
+                colorFilter = if (!kind.readsColor) table else {
+                    val luminance = org.jetbrains.skia.ColorFilter.makeMatrix(
+                        org.jetbrains.skia.ColorMatrix(
+                            0f, 0f, 0f, 0f, 0f,
+                            0f, 0f, 0f, 0f, 0f,
+                            0f, 0f, 0f, 0f, 0f,
+                            kind.red.toFloat(), kind.green.toFloat(), kind.blue.toFloat(), 0f, 0f,
+                        ),
+                    )
+                    if (table != null) org.jetbrains.skia.ColorFilter.makeComposed(table, luminance) else luminance
                 }
             }
             canvas.saveLayer(null, maskPaint)
@@ -840,7 +849,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                 // pixels stay luminance 0 → alpha 0. (Harmless for Alpha masks,
                 // where LUMA isn't applied; but only paint it for Luminosity to
                 // avoid tinting an alpha mask's own colours.)
-                if (kind == SoftMask.Kind.Luminosity) {
+                if (kind.readsColor) {
                     canvas.clear(Color.BLACK)
                 }
                 renderMask(this)

@@ -1301,6 +1301,7 @@ final class io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer { // io.gith
     final fun get(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.get|get(kotlin.Int){}[0]
     final fun toByteArray(): kotlin/ByteArray // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toByteArray|toByteArray(){}[0]
     final fun toMaskAlpha(kotlin/IntArray, kotlin/Boolean) // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toMaskAlpha|toMaskAlpha(kotlin.IntArray;kotlin.Boolean){}[0]
+    final fun toMaskAlpha(kotlin/IntArray, io.github.yuroyami.kitepdf.core.render/SoftMask.Kind) // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toMaskAlpha|toMaskAlpha(kotlin.IntArray;io.github.yuroyami.kitepdf.core.render.SoftMask.Kind){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.Companion|null[0]
         final fun of(kotlin/Function1<kotlin/Double, kotlin/Double>): io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.Companion.of|of(kotlin.Function1<kotlin.Double,kotlin.Double>){}[0]
@@ -2835,11 +2836,21 @@ sealed class io.github.yuroyami.kitepdf.core.render/KiteShading { // io.github.y
 sealed class io.github.yuroyami.kitepdf.core.render/SoftMask { // io.github.yuroyami.kitepdf.core.render/SoftMask|null[0]
     final enum class Kind : kotlin/Enum<io.github.yuroyami.kitepdf.core.render/SoftMask.Kind> { // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind|null[0]
         enum entry Alpha // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.Alpha|null[0]
+        enum entry CssLuminance // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.CssLuminance|null[0]
         enum entry Luminosity // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.Luminosity|null[0]
 
+        final val blue // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.blue|{}blue[0]
+            final fun <get-blue>(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.blue.<get-blue>|<get-blue>(){}[0]
         final val entries // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.entries|#static{}entries[0]
             final fun <get-entries>(): kotlin.enums/EnumEntries<io.github.yuroyami.kitepdf.core.render/SoftMask.Kind> // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.entries.<get-entries>|<get-entries>#static(){}[0]
+        final val green // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.green|{}green[0]
+            final fun <get-green>(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.green.<get-green>|<get-green>(){}[0]
+        final val readsColor // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.readsColor|{}readsColor[0]
+            final fun <get-readsColor>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.readsColor.<get-readsColor>|<get-readsColor>(){}[0]
+        final val red // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.red|{}red[0]
+            final fun <get-red>(): kotlin/Double // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.red.<get-red>|<get-red>(){}[0]
 
+        final fun levelOf(kotlin/Int, kotlin/Int, kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.levelOf|levelOf(kotlin.Int;kotlin.Int;kotlin.Int){}[0]
         final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core.render/SoftMask.Kind // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.valueOf|valueOf#static(kotlin.String){}[0]
         final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core.render/SoftMask.Kind> // io.github.yuroyami.kitepdf.core.render/SoftMask.Kind.values|values#static(){}[0]
     }

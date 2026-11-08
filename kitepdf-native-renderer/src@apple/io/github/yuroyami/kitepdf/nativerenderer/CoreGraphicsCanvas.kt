@@ -1046,7 +1046,7 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
             CGColorSpaceRelease(space)
             if (maskCtx == null) return null
             try {
-                if (kind == SoftMask.Kind.Luminosity) {
+                if (kind.readsColor) {
                     // Unpainted pixels show the black backdrop, whose luminosity is zero.
                     CGContextSetRGBFillColor(maskCtx, 0.0, 0.0, 0.0, 1.0)
                     CGContextFillRect(maskCtx, CGRectMake(0.0, 0.0, w.toDouble(), h.toDouble()))
@@ -1065,7 +1065,7 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
             val r = rgba[i * 4].toInt() and 255
             val g = rgba[i * 4 + 1].toInt() and 255
             val b = rgba[i * 4 + 2].toInt() and 255
-            ((r * 77 + g * 150 + b * 29) ushr 8).toByte()
+            kind.levelOf(r, g, b).toByte()
         }
     }
 

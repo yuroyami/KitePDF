@@ -1072,7 +1072,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         val maskGraphics = mask.createGraphics()
         try {
             maskGraphics.clipRect(painted.x, painted.y, painted.width, painted.height)
-            if (kind == SoftMask.Kind.Luminosity) {
+            if (kind.readsColor) {
                 // Opaque black backdrop means unpainted pixels have zero luminance.
                 maskGraphics.color = Color.BLACK
                 maskGraphics.fillRect(painted.x, painted.y, painted.width, painted.height)
@@ -1085,16 +1085,14 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
         // ISO 32000-1, 11.6.5.2: the mask value scales the content's alpha only.
         val maskPixels = (mask.raster.dataBuffer as DataBufferInt).data
-        val luminosity = kind == SoftMask.Kind.Luminosity
+        val luminosity = kind.readsColor
         for (y in painted.y until painted.y + painted.height) {
             for (i in y * width + painted.x until y * width + painted.x + painted.width) {
                 val p = layerPixels[i]
                 val alpha = p ushr 24
                 if (alpha == 0) continue
                 val m = maskPixels[i]
-                val level = if (luminosity) {
-                    (((m ushr 16) and 255) * 77 + ((m ushr 8) and 255) * 150 + (m and 255) * 29) ushr 8
-                } else m ushr 24
+                val level = if (luminosity) kind.levelOf((m ushr 16) and 255, (m ushr 8) and 255, m and 255) else m ushr 24
                 val coverage = transfer?.get(level) ?: level
                 if (coverage == 255) continue
                 layerPixels[i] = (((alpha * coverage + 127) / 255) shl 24) or (p and 0xFFFFFF)
@@ -1314,7 +1312,7 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
 
         val maskGraphics = mask.createGraphics()
         try {
-            if (kind == SoftMask.Kind.Luminosity) {
+            if (kind.readsColor) {
                 maskGraphics.color = Color.BLACK
                 maskGraphics.fillRect(0, 0, bounds.width, bounds.height)
             }
@@ -1323,15 +1321,13 @@ public class AwtCanvas(private var g: Graphics2D) : KiteCanvas {
         } finally {
             maskGraphics.dispose()
         }
-        if (kind == SoftMask.Kind.Luminosity || transfer != null) {
+        if (kind.readsColor || transfer != null) {
             // Opaque black backdrop means unpainted pixels have zero luminance.
-            val luminosity = kind == SoftMask.Kind.Luminosity
+            val luminosity = kind.readsColor
             val pixels = (mask.raster.dataBuffer as DataBufferInt).data
             for (i in pixels.indices) {
                 val p = pixels[i]
-                val level = if (luminosity) {
-                    (((p ushr 16) and 255) * 77 + ((p ushr 8) and 255) * 150 + (p and 255) * 29) ushr 8
-                } else p ushr 24
+                val level = if (luminosity) kind.levelOf((p ushr 16) and 255, (p ushr 8) and 255, p and 255) else p ushr 24
                 pixels[i] = (transfer?.get(level) ?: level) shl 24
             }
         }

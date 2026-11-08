@@ -1797,6 +1797,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteMaskTransfer {
 	public final fun getSlope ()D
 	public final fun isNearlyLinear ()Z
 	public final fun toByteArray ()[B
+	public final fun toMaskAlpha ([ILio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;)V
 	public final fun toMaskAlpha ([IZ)V
 }
 
@@ -2520,8 +2521,14 @@ public abstract class io/github/yuroyami/kitepdf/core/render/SoftMask {
 
 public final class io/github/yuroyami/kitepdf/core/render/SoftMask$Kind : java/lang/Enum {
 	public static final field Alpha Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;
+	public static final field CssLuminance Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;
 	public static final field Luminosity Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;
+	public final fun getBlue ()D
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getGreen ()D
+	public final fun getReadsColor ()Z
+	public final fun getRed ()D
+	public final fun levelOf (III)I
 	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;
 	public static fun values ()[Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;
 }

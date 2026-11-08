@@ -53,13 +53,14 @@ public class KiteMaskTransfer private constructor(private val table: IntArray) {
      * 11.6.5.2). A luminosity group is drawn over opaque black, so its pixels are opaque.
      */
     public fun toMaskAlpha(argb: IntArray, luminosity: Boolean) {
+        toMaskAlpha(argb, if (luminosity) SoftMask.Kind.Luminosity else SoftMask.Kind.Alpha)
+    }
+
+    /** As the other [toMaskAlpha], with the weights of [kind] for a mask that reads colour (#821). */
+    public fun toMaskAlpha(argb: IntArray, kind: SoftMask.Kind) {
         for (i in argb.indices) {
             val p = argb[i]
-            val level = if (luminosity) {
-                ((p ushr 16 and 0xFF) * 0.30 + (p ushr 8 and 0xFF) * 0.59 + (p and 0xFF) * 0.11 + 0.5).toInt()
-            } else {
-                p ushr 24
-            }
+            val level = if (kind.readsColor) kind.levelOf(p ushr 16 and 0xFF, p ushr 8 and 0xFF, p and 0xFF) else p ushr 24
             argb[i] = this[level] shl 24
         }
     }

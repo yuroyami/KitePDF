@@ -24,12 +24,16 @@ internal const val MASK_MAX_PIXELS: Double = 1_048_576.0
 /** The most pixels a raster step works on before it drops to a lower resolution: 64 MB of ARGB. */
 internal const val STEP_MAX_PIXELS: Double = 16_777_216.0
 
-/** A colour matrix that moves the luminosity of a colour, 0.299 R + 0.587 G + 0.114 B, into its alpha, and clears its colour. */
-internal val LUMINOSITY_TO_ALPHA: FloatArray = floatArrayOf(
+/**
+ * A colour matrix that moves the luminosity of a colour into its alpha, with the weights of [kind]:
+ * 0.30 R + 0.59 G + 0.11 B for a PDF mask, as every other canvas computes it, and the CSS weights
+ * for an SVG mask (#799, #821). It clears the colour.
+ */
+internal fun luminosityToAlpha(kind: SoftMask.Kind): FloatArray = floatArrayOf(
     0f, 0f, 0f, 0f, 0f,
     0f, 0f, 0f, 0f, 0f,
     0f, 0f, 0f, 0f, 0f,
-    0.299f, 0.587f, 0.114f, 0f, 0f,
+    kind.red.toFloat(), kind.green.toFloat(), kind.blue.toFloat(), 0f, 0f,
 )
 
 /**
@@ -43,8 +47,8 @@ internal fun softMaskMatrix(kind: SoftMask.Kind, transfer: KiteMaskTransfer?): C
     // is in levels from 0 to 255.
     val slope = (transfer?.slope ?: 1.0).toFloat()
     val offset = ((transfer?.offset ?: 0.0) * 255).toFloat()
-    val matrix = if (kind == SoftMask.Kind.Luminosity) {
-        LUMINOSITY_TO_ALPHA.copyOf().also { m ->
+    val matrix = if (kind.readsColor) {
+        luminosityToAlpha(kind).also { m ->
             for (i in 15..17) m[i] *= slope
             m[19] = offset
         }
