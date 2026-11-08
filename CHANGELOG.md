@@ -320,6 +320,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A simple TrueType font whose only cmap is the Macintosh (1,0) subtable finds its glyphs through Mac OS Roman
   codes, so WinAnsi `é` no longer draws as `È`, and a symbolic font with a (3,0) and a (1,0) subtable uses the
   (3,0) one (#677).
+- Standard-font text that the writer creates names `/Encoding /WinAnsiEncoding` in its font dictionary, so `café`
+  reads back as written in every reader, KitePDF included, where it read `cafØ` (#668).
+- The writer encodes standard-font text through WinAnsiEncoding, so curly quotes, dashes and the euro sign draw
+  instead of `?`, a C1 control is no longer passed through, and `stringWidth` measures what is drawn (#670).
 
 ## [0.13.0] - 2026-10-09
 

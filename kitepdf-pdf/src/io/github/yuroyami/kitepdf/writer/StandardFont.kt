@@ -21,3 +21,18 @@ public enum class StandardFont(public val baseFont: String) {
     Symbol("Symbol"),
     ZapfDingbats("ZapfDingbats"),
 }
+
+/**
+ * The entries of a standard font dictionary [entries], with `/Encoding /WinAnsiEncoding` for a Latin
+ * font, which the writer's text encoder writes for: without one a reader uses the built-in
+ * StandardEncoding, where `é` is `Oslash` (ISO 32000-1, 9.6.6.2; #668). Symbol and ZapfDingbats
+ * keep their own encodings.
+ */
+internal fun Map<String, io.github.yuroyami.kitepdf.core.parser.PdfObject>.withTextEncoding(
+    font: StandardFont,
+): LinkedHashMap<String, io.github.yuroyami.kitepdf.core.parser.PdfObject> =
+    LinkedHashMap<String, io.github.yuroyami.kitepdf.core.parser.PdfObject>(this).apply {
+        if (font != StandardFont.Symbol && font != StandardFont.ZapfDingbats) {
+            put("Encoding", io.github.yuroyami.kitepdf.core.parser.PdfName("WinAnsiEncoding"))
+        }
+    }

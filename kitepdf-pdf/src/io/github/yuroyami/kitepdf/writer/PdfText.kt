@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.writer
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
+import io.github.yuroyami.kitepdf.core.font.Encodings
+import io.github.yuroyami.kitepdf.core.font.GlyphList
 
 /**
  * Encoders for the two distinct kinds of PDF string the writer produces.
@@ -33,11 +35,27 @@ internal object PdfText {
     }
 
     /**
-     * Encode a content-stream show string as single-byte codes (the common
-     * Latin-1 overlap of WinAnsi/StandardEncoding). Code points above 0xFF
-     * can't be represented by a non-embedded simple font, so they become '?'.
-     * Showing arbitrary Unicode needs an embedded/Type0 font (a later feature).
+     * Encode a content-stream show string for a standard font through WinAnsiEncoding, which the
+     * writer's font dictionaries name (ISO 32000-1, Annex D.2): U+2019 is 0x92 and U+20AC 0x80. A
+     * character that WinAnsi lacks becomes '?', and so does a C1 control, which WinAnsi would draw
+     * as one of its symbols (#670). Showing other Unicode needs an embedded font.
      */
     fun encodeContentString(s: String): ByteArray =
-        ByteArray(s.length) { (s[it].code.takeIf { c -> c <= 0xFF } ?: '?'.code).toByte() }
+        ByteArray(s.length) { (winAnsiCode(s[it]) ?: '?'.code).toByte() }
+
+    /** The WinAnsiEncoding byte that draws [ch], or null when the encoding has none (#670). */
+    fun winAnsiCode(ch: Char): Int? = WIN_ANSI[ch.code]
+
+    private val WIN_ANSI: Map<Int, Int> by lazy {
+        val m = HashMap<Int, Int>()
+        for (code in 0..255) {
+            val name = Encodings.winAnsiEncoding[code] ?: continue
+            val cp = GlyphList.unicodeFor(name) ?: continue
+            m.getOrPut(cp) { code }
+        }
+        // Latin-1 and WinAnsi agree from 0xA0 on, where WinAnsi also names a no-break space and a
+        // soft hyphen by the glyphs of a space and a hyphen.
+        for (code in 0xA0..0xFF) m.getOrPut(code) { code }
+        m
+    }
 }

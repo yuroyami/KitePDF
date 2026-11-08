@@ -190,7 +190,7 @@ public class PdfBuilder {
                         "Type" to PdfName("Font"),
                         "Subtype" to PdfName("Type1"),
                         "BaseFont" to PdfName(font.baseFont),
-                    ),
+                    ).withTextEncoding(font),
                 ),
             )
         }

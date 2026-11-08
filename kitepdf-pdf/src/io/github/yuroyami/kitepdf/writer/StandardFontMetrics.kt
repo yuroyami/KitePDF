@@ -19,8 +19,8 @@ import io.github.yuroyami.kitepdf.core.font.Standard14Widths
 public fun StandardFont.stringWidth(text: String, fontSize: Double, fallbackWidth: Int = 500): Double {
     var total = 0
     for (ch in text) {
-        val code = ch.code
-        val glyph = if (code in 0..255) Encodings.winAnsiEncoding[code] else null
+        // The byte the writer draws the character with, so the width is of what is drawn (#670).
+        val glyph = PdfText.winAnsiCode(ch)?.let { Encodings.winAnsiEncoding[it] }
         val w = glyph?.let { Standard14Widths.widthOf(baseFont, it) } ?: fallbackWidth
         total += w
     }

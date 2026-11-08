@@ -266,7 +266,7 @@ public class PdfEditor internal constructor(
                         "Type" to PdfName("Font"),
                         "Subtype" to PdfName("Type1"),
                         "BaseFont" to PdfName(font.baseFont),
-                    ),
+                    ).withTextEncoding(font),
                 ),
             )
         }
@@ -310,6 +310,7 @@ public class PdfEditor internal constructor(
                     "Type" to PdfName("Font"),
                     "Subtype" to PdfName("Type1"),
                     "BaseFont" to PdfName("Helvetica"),
+                    "Encoding" to PdfName("WinAnsiEncoding"),
                 ),
             ),
         )
@@ -429,6 +430,7 @@ public class PdfEditor internal constructor(
         val apDict = field.rect?.let { rect ->
             val fontRef = addObject(PdfDictionary(linkedMapOf(
                 "Type" to PdfName("Font"), "Subtype" to PdfName("Type1"), "BaseFont" to PdfName("Helvetica"),
+                "Encoding" to PdfName("WinAnsiEncoding"),
             )))
             val da = FieldAppearance.parseDA(field.defaultAppearance)
             val ap = FieldAppearance.build(value, abs(rect.width), abs(rect.height), da, fontRef)

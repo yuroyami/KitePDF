@@ -102,10 +102,7 @@ The 14 standard fonts need no font file, because every PDF reader has them:
 | Courier | `Courier`, `CourierBold`, `CourierOblique`, `CourierBoldOblique` |
 | Symbols | `Symbol`, `ZapfDingbats` |
 
-A standard font has only the characters of Latin-1 (U+0000 to U+00FF). The builder writes a question mark for each other character. To write other scripts, [embed a font](#embedded-fonts).
-
-!!! warning
-    A character above U+007F, such as "é", can show as a different character. MuPDF and Poppler show "café" as "cafØ". Embed a font for text with accents.
+A Latin standard font has the characters of WinAnsiEncoding: Latin-1 from U+00A0 on, and the curly quotes, the dashes, the euro sign, the ellipsis, `Œ`, `Š`, `Ž` and the other characters that WinAnsi places at 0x80 to 0x9F. The builder names `/WinAnsiEncoding` in the font dictionary, so "café" reads back as written in every reader, and writes a question mark for each character that WinAnsi lacks. To write other scripts, [embed a font](#embedded-fonts).
 
 ### Text width
 
