@@ -58,4 +58,19 @@ class XpsPaintTest {
         assertTrue(before[0] > 0.99 && before[2] < 0.01, "red up to the edge: ${before.toList()}")
         assertTrue(after[2] > 0.99 && after[0] < 0.01, "blue after it: ${after.toList()}")
     }
+
+    @Test fun aTiffDeclaresItsResolutionInItsTags() {
+        // ECMA-388, 13.4.1: an image brush's Viewbox is in 1/96 inch at the image's own resolution (#752).
+        val b = ByteArray(66)
+        fun le16(at: Int, v: Int) { b[at] = v.toByte(); b[at + 1] = (v shr 8).toByte() }
+        fun le32(at: Int, v: Int) { le16(at, v and 0xFFFF); le16(at + 2, v ushr 16) }
+        b[0] = 'I'.code.toByte(); b[1] = 'I'.code.toByte(); le16(2, 42); le32(4, 8)
+        le16(8, 3)
+        fun entry(at: Int, tag: Int, type: Int, value: Int) { le16(at, tag); le16(at + 2, type); le32(at + 4, 1); le32(at + 8, value) }
+        entry(10, 282, 5, 50); entry(22, 283, 5, 58); entry(34, 296, 3, 2)
+        le32(50, 300); le32(54, 1); le32(58, 300); le32(62, 1)
+        assertEquals(300.0 to 300.0, imageDpi(b))
+        b[34 + 8] = 3 // centimetres
+        assertEquals(762.0, imageDpi(b).first, 1e-9)
+    }
 }

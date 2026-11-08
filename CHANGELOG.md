@@ -385,6 +385,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out of `displayWidth` and broke the comic's layout (#760).
 - A comic's `.tif`, `.tiff`, `.avif`, `.jxl` and `.jfif` entries are pages, which the decoders already read, and
   `KiteDoc` recognises a comic that mixes them with other images (#755).
+- An XPS image brush reads the resolution of a TIFF from its tags, and of a camera JPEG from its EXIF segment, so
+  its `Viewbox` shows the right part of the image, where both counted as 96 dpi (#752).
 
 ## [0.13.0] - 2026-10-09
 

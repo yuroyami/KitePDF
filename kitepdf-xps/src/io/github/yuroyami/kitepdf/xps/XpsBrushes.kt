@@ -283,7 +283,12 @@ internal fun imageDpi(bytes: ByteArray): Pair<Double, Double> {
             }
             at += size.toInt() + 12
         }
+    } else if (bytes.size > 8 && (bytes[0] == 'I'.code.toByte() && bytes[1] == 'I'.code.toByte() || bytes[0] == 'M'.code.toByte() && bytes[1] == 'M'.code.toByte())) {
+        // A TIFF's XResolution, YResolution and ResolutionUnit tags (#752).
+        tiffDpi(bytes, 0, bytes.size)?.let { return it }
     } else if (bytes.size > 20 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte()) {
+        // The JFIF density wins; a camera JPEG has only the TIFF tags of its EXIF segment (#752).
+        var exif: Pair<Double, Double>? = null
         var at = 2
         while (at + 4 <= bytes.size && bytes[at] == 0xFF.toByte()) {
             val marker = bytes[at + 1].toInt() and 255
@@ -296,8 +301,52 @@ internal fun imageDpi(bytes: ByteArray): Pair<Double, Double> {
                 val x = u16(at + 12) * factor; val y = u16(at + 14) * factor
                 if (x > 0 && y > 0) return x to y
             }
+            if (marker == 0xE1 && exif == null && size >= 16 && bytes.decodeToString(at + 4, at + 8) == "Exif") {
+                exif = tiffDpi(bytes, at + 10, at + 2 + size)
+            }
             at += size + 2
         }
+        exif?.let { return it }
     }
     return 96.0 to 96.0
+}
+
+/**
+ * The resolution of the TIFF structure at [base] up to [end] of [bytes], from its first image file
+ * directory: XResolution (282) and YResolution (283), rationals, in the ResolutionUnit (296) of 2,
+ * inches, the default, or 3, centimetres. Null when it says none.
+ */
+private fun tiffDpi(bytes: ByteArray, base: Int, end: Int): Pair<Double, Double>? {
+    if (base < 0 || end > bytes.size || end - base < 8) return null
+    val le = bytes[base] == 'I'.code.toByte()
+    fun u16(at: Int): Int {
+        val a = bytes[at].toInt() and 255; val b = bytes[at + 1].toInt() and 255
+        return if (le) a or (b shl 8) else (a shl 8) or b
+    }
+    fun u32(at: Int): Long {
+        var v = 0L
+        for (k in 0 until 4) v = if (le) v or ((bytes[at + k].toLong() and 255) shl (8 * k)) else (v shl 8) or (bytes[at + k].toLong() and 255)
+        return v
+    }
+    val ifd = base + u32(base + 4)
+    if (ifd < base + 8 || ifd + 2 > end) return null
+    val count = u16(ifd.toInt())
+    var x = 0.0; var y = 0.0; var unit = 2
+    for (i in 0 until count) {
+        val e = ifd.toInt() + 2 + i * 12
+        if (e + 12 > end) break
+        val tag = u16(e)
+        when (tag) {
+            282, 283 -> {
+                val at = base + u32(e + 8)
+                if (at < base || at + 8 > end) continue
+                val den = u32(at.toInt() + 4)
+                val v = if (den == 0L) 0.0 else u32(at.toInt()).toDouble() / den
+                if (tag == 282) x = v else y = v
+            }
+            296 -> unit = u16(e + 8)
+        }
+    }
+    val factor = when (unit) { 2 -> 1.0; 3 -> 2.54; else -> return null }
+    return if (x > 0 && y > 0) (x * factor) to (y * factor) else null
 }
