@@ -88,7 +88,7 @@ internal object EpubFixtures {
     }
 
     /** Multi-spine book with an EPUB 3 nav document pointing at each chapter. */
-    fun epubWithToc(chapters: Int = 4): ByteArray {
+    fun epubWithToc(chapters: Int = 4, bodies: List<String>? = null): ByteArray {
         val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
         val items = (0 until chapters).joinToString("") {
             """<item id="c${it + 1}" href="chapter${it + 1}.xhtml" media-type="application/xhtml+xml"/>"""
@@ -106,8 +106,8 @@ internal object EpubFixtures {
         val nav = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body>
             <nav epub:type="toc"><ol>$links</ol></nav></body></html>"""
         val chapterFiles = (0 until chapters).map { c ->
-            val body = "<h1 id=\"head$c\">Chapter ${c + 1}</h1>" +
-                (0 until 20).joinToString("") { "<p>Chapter ${c + 1} paragraph $it with a few words on it.</p>" }
+            val body = bodies?.getOrNull(c) ?: ("<h1 id=\"head$c\">Chapter ${c + 1}</h1>" +
+                (0 until 20).joinToString("") { "<p>Chapter ${c + 1} paragraph $it with a few words on it.</p>" })
             "OEBPS/chapter${c + 1}.xhtml" to
                 """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>$body</body></html>""".encodeToByteArray()
         }

@@ -105,8 +105,11 @@ public class EpubDocument internal constructor(
         get() {
             val resolved = isComplete
             // One list for each state of the book, so a panel that reads it on every
-            // recomposition neither builds it nor flattens it again (#391).
-            outlineCache?.let { (forResolved, list) -> if (forResolved == resolved) return list }
+            // recomposition neither builds it nor flattens it again (#391). A script edit or a
+            // :target change lays a chapter out again, so the state counts the shared book's tree
+            // revision and its pages too, or later entries kept the old page numbers (#888).
+            val key = OutlineKey(resolved, parsed.treeRevision, knownPageCount)
+            outlineCache?.let { (forKey, list) -> if (forKey == key) return list }
             fun href(e: TocEntry): String? =
                 e.href?.let { if (e.fragment != null) "$it#${e.fragment}" else it }
             fun map(e: TocEntry): KiteOutlineItem = KiteOutlineItem(
@@ -115,12 +118,15 @@ public class EpubDocument internal constructor(
                 children = e.children.map(::map),
                 target = href(e)?.let { bookmarkOf(it) },
             )
-            return parsed.toc.entries.map(::map).also { outlineCache = resolved to it }
+            return parsed.toc.entries.map(::map).also { outlineCache = key to it }
         }
 
-    /** The last [outline], and whether the book was laid out when it was built. */
+    /** What an [outline] was built for: whether the book was laid out, its tree revision and its page count. */
+    private data class OutlineKey(val resolved: Boolean, val revision: Int, val pages: Int)
+
+    /** The last [outline], and the state of the book it was built for. */
     @kotlin.concurrent.Volatile
-    private var outlineCache: Pair<Boolean, List<KiteOutlineItem>>? = null
+    private var outlineCache: Pair<OutlineKey, List<KiteOutlineItem>>? = null
 
     public val pageWidth: Double get() = settings.pageWidth
     public val pageHeight: Double get() = settings.pageHeight

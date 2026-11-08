@@ -577,6 +577,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the shared chapter trees (#854).
 - An EPUB page's text or links built while a script edit lays the chapter out again are no longer stored in the
   new layout's cache, so `textContent` cannot keep returning the old text (#890).
+- The EPUB outline's page numbers follow a chapter that a script edit or a `:target` change lays out again
+  (#888).
 
 ## [0.13.0] - 2026-10-09
 
