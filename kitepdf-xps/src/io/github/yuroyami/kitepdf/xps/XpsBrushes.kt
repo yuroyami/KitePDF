@@ -78,7 +78,8 @@ internal class XpsBrushes(
         return packageData.image(part) {
             runCatching {
                 val bytes = packageData.read(part) ?: return@runCatching null
-                val decoded = KiteImageData.fromEncodedImage(bytes) ?: return@runCatching null
+                // An XPS image brush places its image by its own viewbox, with the samples as stored.
+                val decoded = KiteImageData.fromEncodedImage(bytes, applyOrientation = false) ?: return@runCatching null
                 val dpi = imageDpi(bytes)
                 Image(decoded, decoded.width * 96.0 / dpi.first, decoded.height * 96.0 / dpi.second)
             }.getOrNull()

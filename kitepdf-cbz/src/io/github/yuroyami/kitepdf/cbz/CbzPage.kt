@@ -34,7 +34,9 @@ public class CbzPage internal constructor(
      */
     private val size: Pair<Int, Int> by lazy {
         // A header that does not parse is a placeholder, never a failure of the comic (#760).
+        // A photo turned by its EXIF orientation takes its upright size, as it draws upright (#826).
         fun dims(bytes: ByteArray) = runCatching { ImageDims.of(bytes) }.getOrNull()
+            ?.let { (w, h) -> if (KiteImageData.swapsAxes(bytes)) h to w else w to h }
         readHeader()?.let(::dims)
             ?: readEntry()?.let { bytes -> dims(bytes) ?: runCatching { KiteImageData.fromEncodedImage(bytes) }.getOrNull()?.let { it.width to it.height } }
             ?: fallback

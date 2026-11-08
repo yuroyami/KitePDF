@@ -570,6 +570,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A line's leading splits in two around its text, half above and half below, with the ascent and descent of the
   text's face (`hhea`) or 0.8 and 0.2 em, so a large `line-height` no longer leaves the text at the top of its
   line (#852).
+- EPUB, SVG and CBZ images draw upright by their EXIF orientation, and a CBZ page takes the upright size of its
+  photo; `KiteImageData.fromEncodedImage(bytes, applyOrientation)` keeps the stored order when asked, as XPS
+  image brushes do (#826).
 
 ## [0.13.0] - 2026-10-09
 

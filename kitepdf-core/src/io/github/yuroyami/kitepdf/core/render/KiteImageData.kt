@@ -497,17 +497,29 @@ public class KiteImageData internal constructor(
          * the codec refuses becomes a [Kind.JPEG] image with the
          * file in [encodedBytes], which draws as a placeholder (#184). Unrecognised formats
          * return null, so callers degrade gracefully by skipping the image.
+         *
+         * The image comes upright: its EXIF orientation is applied, as CSS Images 3's initial
+         * `image-orientation: from-image` asks of a book's or a page's images (#826).
          */
-        public fun fromEncodedImage(bytes: ByteArray): KiteImageData? {
+        public fun fromEncodedImage(bytes: ByteArray): KiteImageData? = fromEncodedImage(bytes, applyOrientation = true)
+
+        /**
+         * As the other [fromEncodedImage], with the EXIF orientation applied only when
+         * [applyOrientation] is set; false keeps the samples in their stored order.
+         */
+        public fun fromEncodedImage(bytes: ByteArray, applyOrientation: Boolean): KiteImageData? {
             return when (ImageFormat.sniff(bytes)) {
                 ImageFormat.PNG, ImageFormat.GIF, ImageFormat.BMP, ImageFormat.JP2,
                 ImageFormat.WEBP, ImageFormat.TIFF, ImageFormat.AVIF, ImageFormat.JXL ->
-                    runCatching { ImageKodec.decode(bytes) }.getOrNull()?.toKiteImageData()
+                    runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
                 ImageFormat.JPEG -> {
-                    runCatching { ImageKodec.decode(bytes) }.getOrNull()?.let { return it.toKiteImageData() }
+                    runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.let { return it.toKiteImageData() }
                     // A damaged or unsupported JPEG stream keeps
-                    // its file and draws as a placeholder (#184).
-                    val (w, h) = jpegFrame(bytes) ?: return null
+                    // its file and draws as a placeholder (#184), at its upright size.
+                    val (fw, fh) = jpegFrame(bytes) ?: return null
+                    val swap = applyOrientation && swapsAxes(bytes)
+                    val w = if (swap) fh else fw
+                    val h = if (swap) fw else fh
                     if (w <= 0 || h <= 0) return null
                     KiteImageData(
                         width = w, height = h, bitsPerComponent = 8,
@@ -517,6 +529,14 @@ public class KiteImageData internal constructor(
                 else -> null
             }
         }
+
+        /**
+         * Whether the EXIF orientation of the image file [bytes] turns it a quarter, so its upright
+         * width is its stored height (#826). [bytes] may be the start of the file only, as long as
+         * it holds the EXIF segment; false when it cannot tell.
+         */
+        public fun swapsAxes(bytes: ByteArray): Boolean =
+            runCatching { ImageKodec.probe(bytes).orientation.swapsAxes }.getOrDefault(false)
 
         /**
          * Width, height and component count of a JPEG from its first SOF marker, or
