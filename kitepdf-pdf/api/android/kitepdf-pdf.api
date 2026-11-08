@@ -1703,9 +1703,11 @@ public final class io/github/yuroyami/kitepdf/writer/PdfImage {
 
 public final class io/github/yuroyami/kitepdf/writer/PdfImage$Companion {
 	public final fun gray ([BII)Lio/github/yuroyami/kitepdf/writer/PdfImage;
+	public final fun jpeg ([B)Lio/github/yuroyami/kitepdf/writer/PdfImage;
 	public final fun jpeg ([BIIZ)Lio/github/yuroyami/kitepdf/writer/PdfImage;
 	public static synthetic fun jpeg$default (Lio/github/yuroyami/kitepdf/writer/PdfImage$Companion;[BIIZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfImage;
 	public final fun jpx ([BII)Lio/github/yuroyami/kitepdf/writer/PdfImage;
+	public final fun jpx ([BIILjava/lang/String;)Lio/github/yuroyami/kitepdf/writer/PdfImage;
 	public final fun rgb ([BII)Lio/github/yuroyami/kitepdf/writer/PdfImage;
 	public final fun rgba ([BII)Lio/github/yuroyami/kitepdf/writer/PdfImage;
 }

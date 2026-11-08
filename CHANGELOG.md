@@ -513,6 +513,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SVG `mask` by the CSS luminance weights through the new `SoftMask.Kind.CssLuminance` (#799, #821).
 - A one- or three-component JPEG 2000 image keeps the `/ColorSpace` its dictionary names (Indexed, Separation,
   CalGray, ICC), as ISO 32000-1 Table 89 asks, and an Indexed one decodes in full (#808).
+- `PdfImage.jpeg` reads the size and the colour space from the JPEG's frame header (grey, RGB or CMYK, with
+  `/Decode [1 0 1 0 1 0 1 0]` for an Adobe CMYK file) and refuses a size that differs; the new `jpeg(bytes)`
+  needs no size. `PdfImage.jpx` names no `/ColorSpace`, so the JPEG 2000 data's own applies, unless the new
+  `colorSpace` overload asks for one (#745).
 
 ## [0.13.0] - 2026-10-09
 

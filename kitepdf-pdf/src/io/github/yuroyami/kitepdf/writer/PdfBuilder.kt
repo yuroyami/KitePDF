@@ -235,8 +235,9 @@ public class PdfBuilder {
             extra["Subtype"] = PdfName("Image")
             extra["Width"] = PdfInt(image.width.toLong())
             extra["Height"] = PdfInt(image.height.toLong())
-            extra["ColorSpace"] = PdfName(image.colorSpace)
+            image.colorSpace?.let { extra["ColorSpace"] = PdfName(it) }
             extra["BitsPerComponent"] = PdfInt(image.bitsPerComponent.toLong())
+            image.decode?.let { d -> extra["Decode"] = PdfArray(d.map { PdfInt(it.toLong()) }) }
             if (smaskRef != null) extra["SMask"] = smaskRef
 
             val n = alloc()

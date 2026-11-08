@@ -269,14 +269,15 @@ val photo = PdfImage.rgb(rgbPixels, width = 100, height = 100)
 val scan = PdfImage.gray(grayPixels, width = 100, height = 100)
 
 // The JPEG file as it is, with no new encoding
-val picture = PdfImage.jpeg(jpegBytes, width = 800, height = 600)
+val picture = PdfImage.jpeg(jpegBytes)
 
 // A JPEG 2000 file as it is
 val map = PdfImage.jpx(jp2Bytes, width = 2000, height = 1500)
 ```
 
 - `rgba` puts the alpha channel in a soft mask. When every pixel is opaque, the image gets no mask.
-- `jpeg` and `jpx` do not read the size from the file, so pass the real size of the image. Pass `grayscale = true` to `jpeg` for a grayscale JPEG.
+- `jpeg` reads the size and the colour space from the JPEG: grey, RGB or CMYK. An Adobe CMYK JPEG gets the `/Decode` its inverted samples need. The overload with `width` and `height` checks them against the file and throws when they differ.
+- `jpx` does not read the size from the file, so pass the real size of the image. It names no colour space, so the one inside the JPEG 2000 file applies; pass `colorSpace` to override it.
 
 !!! warning
     `rgb`, `gray`, `jpeg` and `jpx` keep your array and do not copy it. The builder reads the array only when `build()` runs. Do not change or reuse the array until `build()` returns. If you decode frames into one buffer, every page shows the last frame. `rgba` copies the pixels, so you can reuse its array at once.

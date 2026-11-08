@@ -386,8 +386,10 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
 final class io.github.yuroyami.kitepdf.writer/PdfImage { // io.github.yuroyami.kitepdf.writer/PdfImage|null[0]
     final object Companion { // io.github.yuroyami.kitepdf.writer/PdfImage.Companion|null[0]
         final fun gray(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.gray|gray(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+        final fun jpeg(kotlin/ByteArray): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.jpeg|jpeg(kotlin.ByteArray){}[0]
         final fun jpeg(kotlin/ByteArray, kotlin/Int, kotlin/Int, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.jpeg|jpeg(kotlin.ByteArray;kotlin.Int;kotlin.Int;kotlin.Boolean){}[0]
         final fun jpx(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.jpx|jpx(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+        final fun jpx(kotlin/ByteArray, kotlin/Int, kotlin/Int, kotlin/String): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.jpx|jpx(kotlin.ByteArray;kotlin.Int;kotlin.Int;kotlin.String){}[0]
         final fun rgb(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.rgb|rgb(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
         final fun rgba(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.rgba|rgba(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
     }

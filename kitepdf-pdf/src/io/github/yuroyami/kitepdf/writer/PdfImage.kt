@@ -31,7 +31,8 @@ package io.github.yuroyami.kitepdf.writer
 public class PdfImage private constructor(
     internal val width: Int,
     internal val height: Int,
-    internal val colorSpace: String,
+    /** The device colour space name, or null to leave `/ColorSpace` out (a JPEG 2000 image's own applies). */
+    internal val colorSpace: String?,
     internal val bitsPerComponent: Int,
     /** `null` → raw samples (FlateDecode); otherwise the PDF filter name, e.g. `DCTDecode`. */
     internal val filter: String?,
@@ -39,6 +40,8 @@ public class PdfImage private constructor(
     internal val samples: ByteArray,
     /** Optional 8-bit alpha plane (`width*height` bytes) → emitted as a `/SMask`. */
     internal val alpha: ByteArray?,
+    /** `/Decode`, or null for the default. */
+    internal val decode: List<Int>? = null,
 ) {
     init {
         require(width > 0 && height > 0) { "image must be non-empty (was ${width}x$height)" }
@@ -82,19 +85,55 @@ public class PdfImage private constructor(
         }
 
         /**
-         * Embed encoded JPEG bytes directly via `/DCTDecode` (no re-encode).
-         * [width]/[height] must match the JPEG's own dimensions. Set [grayscale]
-         * for a single-component (DeviceGray) JPEG.
+         * Embed encoded JPEG bytes directly via `/DCTDecode` (no re-encode). The colour space comes
+         * from the frame header: one component is `DeviceGray`, three `DeviceRGB` and four
+         * `DeviceCMYK` (ISO 32000-1, 8.9.5, Table 89). A four-component JPEG with an Adobe APP14
+         * marker stores its samples inverted, as Adobe applications write them, so it gets
+         * `/Decode [1 0 1 0 1 0 1 0]` (#745).
+         *
+         * @throws IllegalArgumentException when [jpegBytes] has no frame header, or the frame has
+         *   another component count.
          */
-        public fun jpeg(jpegBytes: ByteArray, width: Int, height: Int, grayscale: Boolean = false): PdfImage =
-            PdfImage(
-                width, height,
-                if (grayscale) "DeviceGray" else "DeviceRGB",
-                8, "DCTDecode", jpegBytes, null,
-            )
+        public fun jpeg(jpegBytes: ByteArray): PdfImage {
+            val frame = requireNotNull(JpegHeader.read(jpegBytes)) { "not a JPEG with a baseline, extended or progressive frame header" }
+            val space = when (frame.components) {
+                1 -> "DeviceGray"
+                3 -> "DeviceRGB"
+                4 -> "DeviceCMYK"
+                else -> throw IllegalArgumentException("a JPEG with ${frame.components} components has no PDF device colour space")
+            }
+            val decode = if (frame.components == 4 && frame.adobe) List(4) { listOf(1, 0) }.flatten() else null
+            return PdfImage(frame.width, frame.height, space, 8, "DCTDecode", jpegBytes, null, decode)
+        }
 
-        /** Embed a JPEG 2000 (`.jp2`) codestream directly via `/JPXDecode` (no re-encode). */
+        /**
+         * As the other [jpeg], and checks that the JPEG's own frame is [width] by [height], and that it
+         * has one component when [grayscale] is set.
+         *
+         * @throws IllegalArgumentException when the frame differs.
+         */
+        public fun jpeg(jpegBytes: ByteArray, width: Int, height: Int, grayscale: Boolean = false): PdfImage {
+            val image = jpeg(jpegBytes)
+            require(image.width == width && image.height == height) {
+                "the JPEG is ${image.width} x ${image.height}, not $width x $height"
+            }
+            require(!grayscale || image.colorSpace == "DeviceGray") { "the JPEG has colour components, not one grey one" }
+            return image
+        }
+
+        /**
+         * Embed a JPEG 2000 (`.jp2`) file or codestream directly via `/JPXDecode` (no re-encode). The
+         * dictionary names no `/ColorSpace`, so the colour space in the JPEG 2000 data applies
+         * (ISO 32000-1, 8.9.5, Table 89; #745).
+         */
         public fun jpx(jp2Bytes: ByteArray, width: Int, height: Int): PdfImage =
-            PdfImage(width, height, "DeviceRGB", 8, "JPXDecode", jp2Bytes, null)
+            PdfImage(width, height, null, 8, "JPXDecode", jp2Bytes, null)
+
+        /**
+         * As the other [jpx], with [colorSpace] (a device colour space name) in the dictionary, which
+         * overrides the colour space in the JPEG 2000 data.
+         */
+        public fun jpx(jp2Bytes: ByteArray, width: Int, height: Int, colorSpace: String): PdfImage =
+            PdfImage(width, height, colorSpace, 8, "JPXDecode", jp2Bytes, null)
     }
 }
