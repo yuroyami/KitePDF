@@ -724,6 +724,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outlines, instead of throwing (#917). Its glyphs are written as CFF at the default instance by the new
   `Cff2Converter` of `kitepdf-core`, and embed as `CIDFontType0C` through the existing subsetter. KitePDF and
   Poppler draw it, and its text reads back.
+- Paints under one soft mask share it (#912, in part). The PDF renderer hands the canvas the same mask callback
+  while the same mask applies in the same coordinate system, and `KiteRasterCanvas` keeps the mask it rendered
+  for that callback under the same clips. 100 squares under one luminosity mask render in 137 ms instead of 2.7 s
+  there, with the same pixels.
 
 ## [0.13.0] - 2026-10-09
 

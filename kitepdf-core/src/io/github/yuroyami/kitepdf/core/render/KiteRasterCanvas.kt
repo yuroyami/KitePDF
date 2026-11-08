@@ -209,19 +209,43 @@ public class KiteRasterCanvas(
         layers.add(Layer(IntArray(width * height), clips.size))
         failSafe(layers.size - 1) { render() }
         val content = popLayer() ?: return
-        val luminosity = kind.readsColor
-        // A luminosity mask composites its group over opaque black (ISO 32000-1, 11.6.5.2).
-        layers.add(Layer(IntArray(width * height) { if (luminosity) BLACK else 0 }, clips.size))
-        failSafe(layers.size - 1) { renderMask(this) }
-        val maskLayer = popLayer() ?: return
-        val mask = FloatArray(width * height)
-        for (i in mask.indices) {
-            val p = maskLayer.pixels[i]
-            val level = if (luminosity) kind.levelOf(p ushr 16 and 0xFF, p ushr 8 and 0xFF, p and 0xFF) else p ushr 24
-            mask[i] = (transfer?.get(level) ?: level) / 255f
+        // The renderer hands the same callback while the same mask applies, so a mask rendered under
+        // the same clips serves every paint under it, and its group renders once (#912).
+        val key = MaskKey(renderMask, kind, transfer, clips.toList(), layers.size)
+        val mask = lastMask?.takeIf { it.first == key }?.second ?: run {
+            val luminosity = kind.readsColor
+            // A luminosity mask composites its group over opaque black (ISO 32000-1, 11.6.5.2).
+            layers.add(Layer(IntArray(width * height) { if (luminosity) BLACK else 0 }, clips.size))
+            failSafe(layers.size - 1) { renderMask(this) }
+            val maskLayer = popLayer() ?: return
+            val values = FloatArray(width * height)
+            for (i in values.indices) {
+                val p = maskLayer.pixels[i]
+                val level = if (luminosity) kind.levelOf(p ushr 16 and 0xFF, p ushr 8 and 0xFF, p and 0xFF) else p ushr 24
+                values[i] = (transfer?.get(level) ?: level) / 255f
+            }
+            lastMask = key to values
+            values
         }
         composite(content.pixels, mask, 1f, KiteBlendMode.Normal)
     }
+
+    /**
+     * What a rendered mask depends on: the renderer's callback, which stands for the mask group in
+     * its coordinate system, the kind, the transfer, the clips it rendered under, each the same
+     * object while it stays, and the depth of layers, as a mask inside a group renders for that group.
+     */
+    private data class MaskKey(
+        val render: Any, val kind: SoftMask.Kind, val transfer: KiteMaskTransfer?, val clips: List<Any?>, val depth: Int,
+    ) {
+        override fun equals(other: Any?): Boolean = other is MaskKey && other.render === render && other.kind == kind &&
+            other.transfer === transfer && other.depth == depth && other.clips.size == clips.size &&
+            clips.indices.all { other.clips[it] === clips[it] }
+        override fun hashCode(): Int = depth
+    }
+
+    /** The last mask this canvas rendered, with what it depends on. */
+    private var lastMask: Pair<MaskKey, FloatArray>? = null
 
     override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
         val corners = listOf(region.left to region.bottom, region.right to region.bottom, region.left to region.top, region.right to region.top)

@@ -2006,11 +2006,42 @@ public class PageRenderer(
      * one that draws the content, one that re-renders the mask group into
      * a separate layer, blended via `DstIn`.
      */
+    /**
+     * A soft mask as [withSoftMask] hands it to the canvas: its box, its matrix, its transfer and the
+     * callback that renders its group. While the same mask applies in the same coordinate system,
+     * which only another `gs` or a restore changes, the same object comes back, so a canvas that
+     * keeps the mask it rendered for a callback renders it once for every paint under it (#912).
+     */
+    private class MaskPaint(
+        val mask: SoftMask.MaskGroup,
+        val baseCtm: KiteMatrix,
+        val maskBBox: io.github.yuroyami.kitepdf.core.KiteRectangle,
+        val maskCtm: KiteMatrix,
+        val transfer: KiteMaskTransfer?,
+        val renderMask: (KiteCanvas) -> Unit,
+    )
+
+    private var lastMaskPaint: MaskPaint? = null
+
     private fun withSoftMask(state: GraphicsState, paint: () -> Unit) {
         val mask = state.softMask as? SoftMask.MaskGroup
         if (mask == null) {
             paint(); return
         }
+        // The mask lives in the coordinate system in force when gs set it, so a
+        // later cm moves the content, never the mask (ISO 32000-1, 11.6.5.2, #67).
+        val baseCtm = state.softMaskCtm ?: state.ctm
+        val memo = lastMaskPaint?.takeIf { it.mask === mask && it.baseCtm == baseCtm } ?: maskPaint(mask, baseCtm).also { lastMaskPaint = it }
+        // Without a transfer function, the overload that every canvas and wrapper knows.
+        // A wrapper that delegates with `by` sends the other overload past itself.
+        if (memo.transfer == null) {
+            canvas.applySoftMask(mask.kind, memo.maskBBox, memo.maskCtm, paint, memo.renderMask)
+        } else {
+            canvas.applySoftMask(mask.kind, memo.maskBBox, memo.maskCtm, memo.transfer, paint, memo.renderMask)
+        }
+    }
+
+    private fun maskPaint(mask: SoftMask.MaskGroup, baseCtm: KiteMatrix): MaskPaint {
         // The mask group has its own /BBox + /Matrix the renderer should
         // honour. We pass them along so the backend's saveLayer can size
         // the offscreen correctly.
@@ -2021,9 +2052,6 @@ public class PageRenderer(
                 arr.getOrNull(4).toDouble(), arr.getOrNull(5).toDouble(),
             )
         } ?: KiteMatrix.IDENTITY
-        // The mask lives in the coordinate system in force when gs set it, so a
-        // later cm moves the content, never the mask (ISO 32000-1, 11.6.5.2, #67).
-        val baseCtm = state.softMaskCtm ?: state.ctm
         val maskCtm = baseCtm.concat(maskMatrix)
         // /TR maps each value of the group to the mask value, and /BC is the backdrop
         // that a luminosity group composites over (ISO 32000-1, 11.6.5.2, Table 144, #68).
@@ -2062,13 +2090,7 @@ public class PageRenderer(
             // their own state stack (§11.6.5).
             renderMaskGroup(mask.group, childCanvas, baseCtm)
         }
-        // Without a transfer function, the overload that every canvas and wrapper knows.
-        // A wrapper that delegates with `by` sends the other overload past itself.
-        if (transfer == null) {
-            canvas.applySoftMask(mask.kind, maskBBox, maskCtm, paint, renderMask)
-        } else {
-            canvas.applySoftMask(mask.kind, maskBBox, maskCtm, transfer, paint, renderMask)
-        }
+        return MaskPaint(mask, baseCtm, maskBBox, maskCtm, transfer, renderMask)
     }
 
     /** The /BC colour of a luminosity mask in RGB, or null when it is black or absent. */
