@@ -534,6 +534,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When the host gives `KiteDocView` a new `scripts` handler while a text field has the caret, the field ends its
   edit on the old handler and takes the caret again under the new one, so its keys, the form the page draws and
   the commit go to one handler (#739).
+- `KiteDocViewState.commitFocusedField` waits for the commit, the blur and every script call queued before them
+  even when a call suspends, as a paused script on the web does (#741).
 
 ## [0.13.0] - 2026-10-09
 

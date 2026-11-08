@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.compose
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CoroutineScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -198,6 +200,45 @@ class ScriptCallsSceneTest {
                 assertTrue("commit out=4" in scripts.events, "${scripts.events}")
                 assertTrue("blur out" in scripts.events, "${scripts.events}")
                 assertEquals(null, state.focusedField)
+            }
+        }
+    }
+
+    /**
+     * A commit that suspends, as a script that pauses on the web does, frees the script lane before
+     * it ends; the host's wait still lasts until the commit and the blur have finished (#741).
+     */
+    @Test
+    fun a_host_waits_for_a_commit_that_suspends() {
+        forBothEffectOrders { queued ->
+            val doc = PdfDocument.open(formPdf())
+            val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val scripts = object : Recorder(doc) {
+                override suspend fun commit(fieldName: String, value: String): Boolean {
+                    events += "commit waits"
+                    release.await()
+                    return super.commit(fieldName, value)
+                }
+            }
+            lateinit var state: KiteDocViewState
+            val (scene, driver) = drivenScene(200, 200, queued) {
+                state = rememberKiteDocViewState(doc)
+                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), zoomSpec = KiteZoomSpec(doubleTapEnabled = false), scripts = scripts)
+            }
+            scene.use {
+                driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+                tapField(scene)
+                driver.pumpUntilState { "focus out" in scripts.events }
+                driver.pumpFrames(4)
+                type(scene, '4')
+                driver.pumpUntilState { scripts.formState.value("out") == "4" }
+                val work = onTestUiThread { CoroutineScope(TestUiDispatcher).async { state.commitFocusedField() } }
+                driver.pumpUntilState { "commit waits" in scripts.events }
+                driver.pumpFrames(20)
+                assertTrue(!work.isCompleted, "the host's wait ended while the commit was still in the handler")
+                release.complete(Unit)
+                driver.pumpUntilState { work.isCompleted }
+                assertTrue("blur out" in scripts.events, "${scripts.events}")
             }
         }
     }

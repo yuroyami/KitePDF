@@ -47,6 +47,7 @@ import io.github.yuroyami.kitepdf.core.KiteSearchHit
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 import io.github.yuroyami.kitepdf.core.render.KiteBitmapCache
 import io.github.yuroyami.kitepdf.core.kiteWarn
+import io.github.yuroyami.kitepdf.core.withLock
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -681,7 +682,7 @@ public class KiteDocViewState(
         val lane = scriptLane
         val scope = scriptScope
         if (lane == null || scope == null) runInPlace { answer(work()) }
-        else isolatedScriptScope(lane).launch {
+        else laneJob(isolatedScriptScope(lane)) {
             val selection = work()
             scope.launch {
                 backOnComposeThread()
@@ -734,7 +735,7 @@ public class KiteDocViewState(
         val lane = scriptLane
         val scope = scriptScope
         if (lane == null || scope == null) runInPlace { answer(work()) }
-        else isolatedScriptScope(lane).launch {
+        else laneJob(isolatedScriptScope(lane)) {
             val result = work()
             scope.launch {
                 backOnComposeThread()
@@ -800,7 +801,7 @@ public class KiteDocViewState(
             scriptsRan()
         }
         val lane = scriptLane
-        if (lane == null) runInPlace(work) else isolatedScriptScope(lane).launch { work() }
+        if (lane == null) runInPlace(work) else laneJob(isolatedScriptScope(lane)) { work() }
     }
 
     /** Moves keyboard focus among the visible editable text and choice widgets in annotation order. */
@@ -893,7 +894,7 @@ public class KiteDocViewState(
             scriptsRan()
         }
         val lane = scriptLane
-        if (lane == null) runInPlace(work) else isolatedScriptScope(lane).launch { work() }
+        if (lane == null) runInPlace(work) else laneJob(isolatedScriptScope(lane)) { work() }
     }
 
     /**
@@ -925,7 +926,7 @@ public class KiteDocViewState(
             val last = open
             // The view is leaving and its scope with it, so the close runs on a scope of its own.
             if (last != null) {
-                isolatedScriptScope(lane).launch { scriptCall("pageClosed", Unit) { handler.pageClosed(last) } }
+                laneJob(isolatedScriptScope(lane)) { scriptCall("pageClosed", Unit) { handler.pageClosed(last) } }
             }
         }
     }
@@ -941,7 +942,10 @@ public class KiteDocViewState(
     public suspend fun commitFocusedField(): Unit = onViewerThread {
         blurFocusedField()
         val lane = scriptLane ?: return@onViewerThread
-        // The lane runs one call at a time in order, so this returns after the calls before it.
+        // A call that suspends, as a script that pauses on the web does, frees the lane before it
+        // ends, so the lane alone is no barrier: wait for every call queued before (#741).
+        val queued = laneJobsLock.withLock { laneJobs.toList() }
+        queued.forEach { it.join() }
         kotlinx.coroutines.withContext(lane) {}
         backOnComposeThread()
     }
@@ -965,10 +969,27 @@ public class KiteDocViewState(
             }
             return
         }
-        scope.launch(lane) {
+        track(scope.launch(lane) {
             scriptCall(what, Unit) { work() }
             scriptsRan()
+        })
+    }
+
+    /** The calls the viewer queued on the script lane that may not have finished yet (#741). */
+    private val laneJobs = ArrayList<kotlinx.coroutines.Job>()
+    private val laneJobsLock = io.github.yuroyami.kitepdf.core.KiteLock()
+
+    /** Keeps [job] until it ends, so [commitFocusedField] can wait for it. */
+    private fun track(job: kotlinx.coroutines.Job) {
+        laneJobsLock.withLock {
+            laneJobs.removeAll { !it.isActive }
+            laneJobs.add(job)
         }
+    }
+
+    /** Launches [block] in [scope] and keeps its job, as [post] does. */
+    private fun laneJob(scope: kotlinx.coroutines.CoroutineScope, block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) {
+        track(scope.launch(block = block))
     }
 
     /** Wakes the timer pump, which sleeps while no timer waits. Set by the pump (#368). */
