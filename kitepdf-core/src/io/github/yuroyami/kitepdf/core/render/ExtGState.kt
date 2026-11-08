@@ -10,6 +10,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.withDirectValues
 
 /**
  * Parsed Extended Graphics State (ISO 32000-1 §8.4.5).
@@ -60,7 +61,9 @@ public data class ExtGState(
 
     public companion object {
 
-        public fun parse(dict: PdfDictionary, refs: IndirectResolver): ExtGState {
+        public fun parse(dictionary: PdfDictionary, refs: IndirectResolver): ExtGState {
+            // Its numbers and names may be indirect objects (ISO 32000-1, 7.3.10; #777).
+            val dict = dictionary.withDirectValues(refs)
             val fillAlpha = dict.getReal("ca")
             val strokeAlpha = dict.getReal("CA")
             val blendMode = when (val bm = dict["BM"]) {

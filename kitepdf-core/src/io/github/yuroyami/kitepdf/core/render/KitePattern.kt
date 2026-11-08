@@ -9,6 +9,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.withDirectValues
 
 /**
  * Parsed `/Pattern` resource entry (ISO 32000-1 §8.7).
@@ -87,7 +88,7 @@ public sealed class KitePattern {
                 is PdfDictionary -> resolved
                 is PdfStream -> resolved.dict
                 else -> return null
-            }
+            }.withDirectValues(refs) // indirect numbers, as /BBox or /XStep (#777)
             val patternType = dict.getInt("PatternType")?.toInt() ?: return null
             val matrix = (dict.getArray("Matrix"))?.toMatrix() ?: KiteMatrix.IDENTITY
             val ext = dict.getDict("ExtGState", refs)?.let { ExtGState.parse(it, refs) }

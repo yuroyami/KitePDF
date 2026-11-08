@@ -11,6 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.withDirectValues
 
 /**
  * A PDF shading (ISO 32000-1 §8.7.4). Shadings define smooth color
@@ -233,7 +234,9 @@ public sealed class KiteShading {
             }
         }
 
-        private fun parseDict(dict: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): KiteShading? {
+        private fun parseDict(dictionary: PdfDictionary, stream: PdfStream?, refs: IndirectResolver): KiteShading? {
+            // An indirect /Coords made the shading unsupported (ISO 32000-1, 7.3.10; #777).
+            val dict = dictionary.withDirectValues(refs)
             val type = dict.getInt("ShadingType")?.toInt() ?: return null
             val cs = KiteColorSpace.resolve(dict["ColorSpace"], refs)
             val bbox = (dict.getArray("BBox"))?.let { arr ->

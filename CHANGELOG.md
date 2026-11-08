@@ -372,6 +372,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A ZIP entry name without the UTF-8 flag reads as code page 437, or as the Unicode Path extra field gives it, so
   a comic whose names an older tool wrote opens instead of reading as empty; a name that is valid UTF-8 stays
   UTF-8 (#762).
+- A shading, pattern, function or graphics state entry stored as an indirect object, such as `/Coords`, `/BBox`,
+  `/C0` or `/ca`, is read, where it read as absent and a gradient or pattern fill painted nothing (#777).
 
 ## [0.13.0] - 2026-10-09
 

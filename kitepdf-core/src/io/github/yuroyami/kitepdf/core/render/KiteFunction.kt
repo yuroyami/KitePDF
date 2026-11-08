@@ -9,6 +9,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
+import io.github.yuroyami.kitepdf.core.parser.withDirectValues
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -298,12 +299,14 @@ public sealed class KiteFunction {
         private const val MAX_FUNCTION_NESTING = 32
 
         private fun parseTyped(
-            dict: PdfDictionary,
+            dictionary: PdfDictionary,
             stream: PdfStream?,
             refs: IndirectResolver,
             active: HashSet<PdfReference>,
             depth: Int,
         ): KiteFunction? {
+            // An indirect /C0 or /Domain read as absent (ISO 32000-1, 7.3.10; #777).
+            val dict = dictionary.withDirectValues(refs)
             val type = dict.getInt("FunctionType")?.toInt() ?: return null
             val domain = dict.getArray("Domain")?.toDoubleArrayOrNull() ?: doubleArrayOf(0.0, 1.0)
             val range = dict.getArray("Range")?.toDoubleArrayOrNull()
