@@ -268,7 +268,13 @@ public class PdfDocument private constructor(
      * most [imageCacheBudgetBytes], and its order runs from the image used
      * least recently to the one used most recently.
      */
-    private val decodedImageCache = LinkedHashMap<Long, KiteImageData>()
+    private val decodedImageCache = LinkedHashMap<ImageKey, KiteImageData>()
+
+    /**
+     * An image XObject, and the default colour spaces it was decoded under when they replace its
+     * own: ISO 32000-1, 8.6.5.6 substitutes per resource dictionary, so the pair names the result (#803).
+     */
+    private data class ImageKey(val objectNumber: Long, val defaults: String?)
 
     /** Image keys survive decoded-cache eviction without keeping this document or its bytes (#371). */
     private val imageIdentities = KiteImageIdentity()
@@ -297,9 +303,10 @@ public class PdfDocument private constructor(
     internal var imageDecodeCount = 0
         private set
 
-    internal fun cachedImage(objectNumber: Long): KiteImageData? = lock.withLock {
+    internal fun cachedImage(objectNumber: Long, defaults: String? = null): KiteImageData? = lock.withLock {
         // Put the image back at the end, as the one used most recently.
-        decodedImageCache.remove(objectNumber)?.also { decodedImageCache[objectNumber] = it }
+        val key = ImageKey(objectNumber, defaults)
+        decodedImageCache.remove(key)?.also { decodedImageCache[key] = it }
     }
 
     /**
@@ -312,14 +319,17 @@ public class PdfDocument private constructor(
     internal fun inlineImageIdentity(key: String): KiteImageIdentity = imageIdentities.child("inline").child(key)
 
     /** First writer wins; racing decoders converge on one instance. */
-    internal fun cacheImage(objectNumber: Long, image: KiteImageData): KiteImageData = lock.withLock {
-        decodedImageCache[objectNumber]?.let { return@withLock it }
-        // Only images whose pixels are independent of the drawing state enter here. Stencils,
-        // resource-local default colour spaces and other uncached variants keep fresh identities.
-        val identified = image.withIdentity(imageIdentity(objectNumber))
+    internal fun cacheImage(objectNumber: Long, image: KiteImageData, defaults: String? = null): KiteImageData = lock.withLock {
+        val key = ImageKey(objectNumber, defaults)
+        decodedImageCache[key]?.let { return@withLock it }
+        // Only images whose pixels are independent of the drawing state enter here. Stencils and
+        // other uncached variants keep fresh identities; an image under default colour spaces has
+        // one of its own for each set of them.
+        val identity = imageIdentity(objectNumber)
+        val identified = image.withIdentity(if (defaults == null) identity else identity.child("defaults").child(defaults))
         val bytes = identified.retainedBytes()
         if (bytes > imageCacheBudgetBytes) return@withLock identified
-        decodedImageCache[objectNumber] = identified
+        decodedImageCache[key] = identified
         decodedImageBytes += bytes
         trimImageCache()
         identified

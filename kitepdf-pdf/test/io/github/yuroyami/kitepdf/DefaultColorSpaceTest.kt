@@ -148,4 +148,37 @@ class DefaultColorSpaceTest {
             shadings += shading
         }
     }
+
+    @Test
+    fun an_image_under_a_default_decodes_once_for_every_draw_under_the_same_default() {
+        // ISO 32000-1, 8.6.5.6 substitutes per resource dictionary, so the image and the default name the result (#803).
+        val draws = (0 until 20).joinToString(" ") { "q 10 0 0 10 ${it * 10} 0 cm /Im1 Do Q" }
+        val other = "[/CalGray << /WhitePoint [0.9505 1 1.089] /Gamma 2.2 >>]"
+        val pdf = TestPdf.build(
+            listOf(
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 10] /Contents 5 0 R " +
+                    "/Resources << /ColorSpace << /DefaultGray 7 0 R >> /XObject << /Im1 6 0 R >> >> >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 10] /Contents 5 0 R " +
+                    "/Resources << /ColorSpace << /DefaultGray $other >> /XObject << /Im1 6 0 R >> >> >>",
+                TestPdf.stream(draws),
+                TestPdf.stream("80>", "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode"),
+                calGray,
+            ),
+        )
+        val doc = PdfDocument.open(pdf)
+        fun images(page: Int) = RecordingCanvas().also { doc.pages[page].renderTo(it, KiteMatrix.IDENTITY) }
+            .calls.filterIsInstance<RecordingCanvas.Call.Image>().map { it.image }
+        val first = images(0)
+        assertEquals(20, first.size)
+        assertEquals(1, first.distinct().size, "every draw shares one image")
+        images(0)
+        assertEquals(1, doc.imageDecodeCount, "a second render decodes nothing")
+        val second = images(1).first()
+        assertEquals(2, doc.imageDecodeCount, "another default decodes its own")
+        val a = first.first().toRgbaBytes()!![0].toInt() and 0xFF
+        val b = second.toRgbaBytes()!![0].toInt() and 0xFF
+        assertTrue(a != b, "the two defaults give two colours: $a and $b")
+    }
 }

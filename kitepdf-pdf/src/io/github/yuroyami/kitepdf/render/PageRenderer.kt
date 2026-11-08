@@ -825,11 +825,18 @@ public class PageRenderer(
         val spaces = DefaultColorSpaces.withOutputIntent(ContentStreamParser.colorSpaces(resources, resolver), outputIntent)
         if (DefaultColorSpaces.KEYS.none { it in spaces }) return spaces
         val entries = runCatching { resources?.getDict("ColorSpace", resolver) }.getOrNull() ?: return spaces
-        return spaces.mapValues { (name, space) ->
+        val resolved = spaces.mapValues { (name, space) ->
             val device = if (name in DefaultColorSpaces.KEYS) null else DefaultColorSpaces.deviceFamily(entries[name], resolver)
             if (device != null) DefaultColorSpaces.substitute(device, spaces) else space
         }
+        // The default entries as the file writes them, usually references, name the substitution, so
+        // an image decoded under them is shared by every draw under the same ones (#803).
+        val defaults = DefaultColorSpaces.KEYS.sorted().joinToString(";") { "$it=${entries[it] ?: ""}" }
+        return ColorSpaceTable(resolved, defaults)
     }
+
+    /** The colour spaces of a resource dictionary that names default spaces, with a key for those defaults. */
+    private class ColorSpaceTable(spaces: Map<String, KiteColorSpace>, val defaults: String) : Map<String, KiteColorSpace> by spaces
 
     /**
      * Decode an image XObject through the per-document cache: keyed by
@@ -843,9 +850,10 @@ public class PageRenderer(
      * would pin tens of megabytes per page of a scanned book for a reuse that
      * never comes. This matches how `/ImageMask` stencils are already treated.
      *
-     * An image in a device space that a default of [colorSpaces] replaces skips the cache
-     * as well, because the same image can meet other defaults on another page. The output
-     * intent is the same on every page, so an image that only it replaces is cached.
+     * An image in a device space that a default of [colorSpaces] replaces can meet other defaults
+     * on another page, so it is cached under the image and the default entries together (#803).
+     * The output intent is the same on every page, so an image that only it replaces is cached
+     * under the image alone.
      */
     private fun decodeImageCached(slot: XObjectSlot, fillColor: RgbColor, colorSpaces: Map<String, KiteColorSpace>): KiteImageData {
         val doc = resolver as? io.github.yuroyami.kitepdf.PdfDocument
@@ -860,8 +868,14 @@ public class PageRenderer(
             return doc.cacheImage(key, KiteImageData.from(slot.stream, resolver, fillColor, defaultSpace))
         }
         if (defaultSpace != null) {
-            doc?.countImageDecode()
-            return KiteImageData.from(slot.stream, resolver, fillColor, defaultSpace)
+            val defaults = (colorSpaces as? ColorSpaceTable)?.defaults
+            if (doc == null || key == null || masked || defaults == null) {
+                doc?.countImageDecode()
+                return KiteImageData.from(slot.stream, resolver, fillColor, defaultSpace)
+            }
+            doc.cachedImage(key, defaults)?.let { return it }
+            doc.countImageDecode()
+            return doc.cacheImage(key, KiteImageData.from(slot.stream, resolver, fillColor, defaultSpace), defaults)
         }
         if (doc == null || key == null || masked) {
             doc?.countImageDecode()

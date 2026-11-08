@@ -519,6 +519,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `colorSpace` overload asks for one (#745).
 - An image in a DeviceN, calibrated or other general colour space converts each distinct sample tuple once
   instead of each pixel; a 2000 by 2000 duotone of noise went from about 1.5 s to 135 ms on the JVM (#798).
+- An image whose colour space a page's `/DefaultGray`, `/DefaultRGB` or `/DefaultCMYK` replaces decodes once for
+  every draw under the same defaults, and keeps one identity for the canvases' bitmap caches, instead of decoding
+  on every draw (#803).
 
 ## [0.13.0] - 2026-10-09
 
