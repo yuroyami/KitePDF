@@ -275,6 +275,11 @@ internal class Parser(
         return when (val raw = dict["Length"]) {
             is PdfInt -> raw.value
             is PdfReference -> {
+                // A stream is an indirect object (ISO 32000-1, 7.3.8.1), so one inside an array or a
+                // dictionary is damage, and its /Length is found by the endstream scan. Resolving it
+                // started a parser at depth 0 inside this one, so the nesting cap and the resolution
+                // cap multiplied, and 150 KB of such streams needed a 16 MB stack (#965).
+                if (depth > 0) return null
                 val r = resolver ?: return null
                 val resolvedPosBefore = reader.pos()
                 val resolved = runCatching { r.resolve(raw) }.getOrNull()

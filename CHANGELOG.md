@@ -280,6 +280,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text, while one between Hangul syllables still does (#834).
 - A dash pattern too fine to show strokes solid on the AWT canvas, as on the pure-Kotlin stroker, where it held a
   page for minutes or failed it with an `ArrayIndexOutOfBoundsException` from Java2D (#979).
+- A stream inside an array or a dictionary finds its end by the `endstream` keyword instead of resolving an
+  indirect `/Length`, so the parser's nesting cap and the resolution depth cap no longer multiply into a stack
+  overflow (#965).
 
 ## [0.13.0] - 2026-10-09
 
