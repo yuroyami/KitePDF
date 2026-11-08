@@ -522,6 +522,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An image whose colour space a page's `/DefaultGray`, `/DefaultRGB` or `/DefaultCMYK` replaces decodes once for
   every draw under the same defaults, and keeps one identity for the canvases' bitmap caches, instead of decoding
   on every draw (#803).
+- A JPEG 2000 image of a PDF no longer decodes at an eighth when its page loads: the codestream and JP2 headers
+  give its decoded space, and `ImageKodec.probe` its opacity channel (#744).
 
 ## [0.13.0] - 2026-10-09
 

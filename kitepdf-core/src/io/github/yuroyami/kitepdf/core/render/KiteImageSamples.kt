@@ -41,7 +41,7 @@ internal class KiteImageSamples private constructor(
         if (failed) return null
         val decoded = try {
             if (jpx) {
-                JpxDecoder.decode(bytes, reduction)?.let { Decoded(it.width, it.height, it.pixelBytes) }
+                JpxDecoder.decode(bytes, reduction)?.let { Decoded(it.width, it.height, inSpace(it)) }
             } else if (ink != null) {
                 JpegInk.decode(bytes, ink, reduction)
             } else {
@@ -56,6 +56,27 @@ internal class KiteImageSamples private constructor(
         }
         if (decoded == null) failed = true
         return decoded
+    }
+
+    /**
+     * The samples of [result] in [colorSpace], which the headers gave. They agree for every file
+     * whose headers the decoder reads as they say; a file they do not agree on still draws, its
+     * grey spread to RGB or its RGB weighed down to grey.
+     */
+    private fun inSpace(result: JpxDecoder.Result): ByteArray {
+        if (result.colorSpace == colorSpace) return result.pixelBytes
+        val n = result.width * result.height
+        val src = result.pixelBytes
+        return if (colorSpace == "DeviceRGB") {
+            ByteArray(n * 3) { src[it / 3] }
+        } else {
+            ByteArray(n) {
+                val r = src[it * 3].toInt() and 0xFF
+                val g = src[it * 3 + 1].toInt() and 0xFF
+                val b = src[it * 3 + 2].toInt() and 0xFF
+                ((r * 30 + g * 59 + b * 11 + 50) / 100).toByte()
+            }
+        }
     }
 
     class Decoded(val width: Int, val height: Int, val bytes: ByteArray)
@@ -78,15 +99,20 @@ internal class KiteImageSamples private constructor(
 
         /**
          * [bytes], a JPEG 2000 image without an opacity channel, as samples that decode on
-         * demand, or null when it does not decode or carries opacity. A decode at an eighth
-         * checks it and tells whether it comes out grey or RGB.
+         * demand, or null when it does not decode or carries opacity. The headers tell whether
+         * it comes out grey or RGB, so nothing decodes here, as for a JPEG (#475, #744); a file
+         * whose data then fails fails at its first draw. Only when the headers leave the space
+         * open does a decode at an eighth tell it.
          */
         fun jpx(bytes: ByteArray): KiteImageSamples? {
             val info = runCatching { ImageKodec.probe(bytes) }.getOrNull() ?: return null
-            if (!info.isDecodable || info.width <= 0 || info.height <= 0) return null
-            val check = runCatching { JpxDecoder.decode(bytes, 8) }.getOrNull() ?: return null
-            if (check.alpha != null) return null
-            return KiteImageSamples(bytes, info.width, info.height, jpx = true, gray = false, ink = null, check.colorSpace)
+            if (!info.isDecodable || info.width <= 0 || info.height <= 0 || info.hasAlpha) return null
+            val space = jpxDecodedSpace(bytes) ?: run {
+                val check = runCatching { JpxDecoder.decode(bytes, 8) }.getOrNull() ?: return null
+                if (check.alpha != null) return null
+                check.colorSpace
+            }
+            return KiteImageSamples(bytes, info.width, info.height, jpx = true, gray = false, ink = null, space)
         }
     }
 }
