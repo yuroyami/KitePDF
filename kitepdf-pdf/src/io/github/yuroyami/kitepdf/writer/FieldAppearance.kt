@@ -68,31 +68,100 @@ internal object FieldAppearance {
         quadding: Int = 0,
         /** The metrics the value is measured with: those of the font [fontRef] names (#707). */
         metrics: StandardFont = StandardFont.Helvetica,
+        /** The widget's own box, turn and comb cells, as [lookOf] reads them. */
+        look: FieldLook = FieldLook(),
     ): PdfStream {
-        val size = if (da.fontSize > 0.0) da.fontSize else if (multiline) 12.0 else (height - 2.0).coerceIn(6.0, 12.0)
-        val clipW = (width - 2.0).coerceAtLeast(0.0)
-        val clipH = (height - 2.0).coerceAtLeast(0.0)
+        val turn = turnOf(look.rotation, width, height)
+        val w = turn.width
+        val h = turn.height
+        val size = if (da.fontSize > 0.0) da.fontSize else if (multiline) 12.0 else (h - 2.0).coerceIn(6.0, 12.0)
 
         val content = ByteArrayBuilder(64)
-        content.ascii("/Tx BMC\nq\n1 1 ${fmt(clipW)} ${fmt(clipH)} re W n\n")
-        val paragraphs = plainParagraphs(value, metrics, size, da.colorOps, quadding)
-        FieldText.write(FieldText.lines(paragraphs, width - 4.0, multiline), width, height, 2.0, multiline, content) { da.fontName }
+        // ISO 32000-1, 12.7.3.3: the value draws over the widget's /MK background and border (#715).
+        val boxed = drawBox(content, look, w, h)
+        val clip = if (boxed) (look.borderWidth + 1.0).coerceAtLeast(1.0) else 1.0
+        val pad = if (boxed) clip else 2.0
+        content.ascii("/Tx BMC\nq\n${fmt(clip)} ${fmt(clip)} ${fmt((w - 2 * clip).coerceAtLeast(0.0))} ${fmt((h - 2 * clip).coerceAtLeast(0.0))} re W n\n")
+        if (look.combCells > 0) {
+            FieldText.writeComb(value, look.combCells, w, h, size, metrics, da.fontName, da.colorOps, content)
+        } else {
+            val paragraphs = plainParagraphs(value, metrics, size, da.colorOps, quadding)
+            FieldText.write(FieldText.lines(paragraphs, w - 2 * pad, multiline), w, h, pad, multiline, content) { da.fontName }
+        }
         content.ascii("Q\nEMC\n")
+        if (boxed) content.ascii("Q\n")
 
         val resources = PdfDictionary(
             linkedMapOf("Font" to PdfDictionary(linkedMapOf(da.fontName to fontRef as PdfObject))),
         )
-        val bbox = PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(width), PdfReal(height)))
-        return PdfStreams.flate(
-            content.toByteArray(),
-            extra = linkedMapOf(
-                "Type" to PdfName("XObject"),
-                "Subtype" to PdfName("Form"),
-                "FormType" to PdfInt(1),
-                "BBox" to bbox,
-                "Resources" to resources,
-            ),
+        val bbox = PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(w), PdfReal(h)))
+        val extra = linkedMapOf<String, PdfObject>(
+            "Type" to PdfName("XObject"),
+            "Subtype" to PdfName("Form"),
+            "FormType" to PdfInt(1),
+            "BBox" to bbox,
+            "Resources" to resources,
         )
+        turn.matrix?.let { extra["Matrix"] = it }
+        return PdfStreams.flate(content.toByteArray(), extra = extra)
+    }
+
+    /** A widget's look for its appearance: its /MK colours and border, its turn, and its comb cells. */
+    internal class FieldLook(
+        val background: String? = null,
+        val border: String? = null,
+        val borderWidth: Double = 0.0,
+        /** /MK /R: 0, 90, 180 or 270 degrees counterclockwise (ISO 32000-1, 12.5.6.19, Table 189). */
+        val rotation: Int = 0,
+        /** The cells of a comb field, /MaxLen, or 0 when it is none (12.7.4.3, Table 228). */
+        val combCells: Int = 0,
+    )
+
+    /** The look of [widget] of a field with [flags] and [maxLength]. */
+    internal fun lookOf(widget: PdfDictionary, refs: IndirectResolver, flags: Int, maxLength: Int?): FieldLook {
+        val mk = missingAsNull { widget.getDict("MK", refs) }
+        val background = colorOps(missingAsNull { mk?.getArray("BG", refs) }, stroking = false)
+        val border = colorOps(missingAsNull { mk?.getArray("BC", refs) }, stroking = true)
+        return FieldLook(
+            background, border, borderWidthOf(widget, refs, hasBorderColor = border != null),
+            rotationOf(mk, refs), combCellsOf(flags, maxLength),
+        )
+    }
+
+    private fun rotationOf(mk: PdfDictionary?, refs: IndirectResolver): Int {
+        val r = numberOf(missingAsNull { mk?.get("R")?.resolve(refs) })?.toInt() ?: return 0
+        return ((r % 360 + 360) % 360).let { if (it % 90 == 0) it else 0 }
+    }
+
+    /** Table 228: a comb has /MaxLen cells when Comb is set and Multiline, Password and FileSelect are clear. */
+    internal fun combCellsOf(flags: Int, maxLength: Int?): Int =
+        if ((flags and COMB) != 0 && maxLength != null && maxLength > 0 && (flags and (MULTILINE or PASSWORD or FILE_SELECT)) == 0) maxLength else 0
+
+    /** The box an appearance lays out in, and the /Matrix that turns it onto the widget (12.5.5, Algorithm 8.1; #722). */
+    internal class Turn(val width: Double, val height: Double, val matrix: PdfArray?)
+
+    internal fun turnOf(rotation: Int, width: Double, height: Double): Turn {
+        fun m(vararg v: Double) = PdfArray(v.map { PdfReal(it) })
+        return when (rotation) {
+            90 -> Turn(height, width, m(0.0, 1.0, -1.0, 0.0, width, 0.0))
+            180 -> Turn(width, height, m(-1.0, 0.0, 0.0, -1.0, width, height))
+            270 -> Turn(height, width, m(0.0, -1.0, 1.0, 0.0, 0.0, height))
+            else -> Turn(width, height, null)
+        }
+    }
+
+    /** The background and border of [look] in a box [width] by [height], in a q that the caller closes; false when it has none. */
+    private fun drawBox(content: ByteArrayBuilder, look: FieldLook, width: Double, height: Double): Boolean {
+        val border = look.border?.takeIf { look.borderWidth > 0.0 }
+        if (look.background == null && border == null) return false
+        content.ascii("q\n")
+        if (look.background != null) content.ascii("${look.background}\n0 0 ${fmt(width)} ${fmt(height)} re f\n")
+        if (border != null) {
+            val inset = look.borderWidth / 2.0
+            content.ascii("$border ${fmt(look.borderWidth)} w\n")
+            content.ascii("${fmt(inset)} ${fmt(inset)} ${fmt(width - look.borderWidth)} ${fmt(height - look.borderWidth)} re S\n")
+        }
+        return true
     }
 
 
@@ -268,20 +337,25 @@ internal object FieldAppearance {
             )
         }
 
+        // /MK /R turns the box the value lays out in (#722).
+        val turn = turnOf(rotationOf(mk, refs), width, height)
+        val boxWidth = turn.width
+        val boxHeight = turn.height
         val content = ByteArrayBuilder(96)
         content.ascii("q\n")
         if (background != null) {
-            content.ascii("$background\n0 0 ${fmt(width)} ${fmt(height)} re f\n")
+            content.ascii("$background\n0 0 ${fmt(boxWidth)} ${fmt(boxHeight)} re f\n")
         }
         if (border != null && borderWidth > 0.0) {
             val inset = borderWidth / 2.0
             content.ascii("$border ${fmt(borderWidth)} w\n")
             content.ascii(
-                "${fmt(inset)} ${fmt(inset)} ${fmt(width - borderWidth)} ${fmt(height - borderWidth)} re S\n",
+                "${fmt(inset)} ${fmt(inset)} ${fmt(boxWidth - borderWidth)} ${fmt(boxHeight - borderWidth)} re S\n",
             )
         }
         val multiline = fieldType == "Tx" && (flags and MULTILINE) != 0
-        val size = if (da.fontSize > 0.0) da.fontSize else if (multiline) 12.0 else autoSize(height, isPushButton)
+        val size = if (da.fontSize > 0.0) da.fontSize else if (multiline) 12.0 else autoSize(boxHeight, isPushButton)
+        val comb = if (fieldType == "Tx") combCellsOf(flags, (inherited(widget, "MaxLen", refs) as? PdfInt)?.value?.toInt()) else 0
         // A rich text field draws its styled value (§12.7.3.4) until a reader or a script changes it.
         val rich = if (fieldType == "Tx" && (flags and RICH_TEXT) != 0 && valueOverride == null) {
             richValueOf(widget, refs)?.let { rv ->
@@ -295,11 +369,17 @@ internal object FieldAppearance {
         if (paragraphs.any { p -> p.runs.any { it.text.isNotEmpty() } }) {
             val pad = (borderWidth + 1.0).coerceAtLeast(1.0)
             content.ascii("/Tx BMC\nq\n")
-            content.ascii("${fmt(pad)} ${fmt(pad)} ${fmt((width - 2 * pad).coerceAtLeast(0.0))} ${fmt((height - 2 * pad).coerceAtLeast(0.0))} re W n\n")
-            // The plain value draws in the font the default appearance names, and rich text in the standard fonts.
-            FieldText.write(FieldText.lines(paragraphs, width - 2 * pad, multiline), width, height, pad, multiline, content) { font ->
-                used += font
-                if (rich == null) da.fontName else FieldText.conventionalName(font)
+            content.ascii("${fmt(pad)} ${fmt(pad)} ${fmt((boxWidth - 2 * pad).coerceAtLeast(0.0))} ${fmt((boxHeight - 2 * pad).coerceAtLeast(0.0))} re W n\n")
+            if (comb > 0 && rich == null) {
+                // A comb draws one character in each of its cells (12.7.4.3, Table 228; #719).
+                used += StandardFont.Helvetica
+                FieldText.writeComb(text, comb, boxWidth, boxHeight, size, StandardFont.Helvetica, da.fontName, da.colorOps, content)
+            } else {
+                // The plain value draws in the font the default appearance names, and rich text in the standard fonts.
+                FieldText.write(FieldText.lines(paragraphs, boxWidth - 2 * pad, multiline), boxWidth, boxHeight, pad, multiline, content) { font ->
+                    used += font
+                    if (rich == null) da.fontName else FieldText.conventionalName(font)
+                }
             }
             content.ascii("Q\nEMC\n")
         }
@@ -323,9 +403,9 @@ internal object FieldAppearance {
                     "Type" to PdfName("XObject"),
                     "Subtype" to PdfName("Form"),
                     "FormType" to PdfInt(1),
-                    "BBox" to PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(width), PdfReal(height))),
+                    "BBox" to PdfArray(listOf(PdfReal(0.0), PdfReal(0.0), PdfReal(boxWidth), PdfReal(boxHeight))),
                     "Resources" to PdfDictionary(linkedMapOf("Font" to PdfDictionary(fonts))),
-                ),
+                ).also { d -> turn.matrix?.let { d["Matrix"] = it } },
             ),
             rawBytes = content.toByteArray(),
         )
@@ -407,6 +487,10 @@ internal object FieldAppearance {
 
     /** `/Ff` bit 26: the text field's value is rich text, in `/RV`. */
     private const val RICH_TEXT = 1 shl 25
+
+    /** Table 228: the Comb flag, bit 25, and FileSelect, bit 21. */
+    private const val COMB = 1 shl 24
+    private const val FILE_SELECT = 1 shl 20
 
     /** `/Ff` bit 17: the button is a push button, so it has a caption instead of a state. */
     private const val PUSH_BUTTON = 1 shl 16

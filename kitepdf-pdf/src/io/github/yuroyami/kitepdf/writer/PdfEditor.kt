@@ -322,7 +322,9 @@ public class PdfEditor internal constructor(
      * normal appearance (`/AP /N`) so the value is visible in any viewer. The
      * appearance honours the field's `/DA` (font, size, colour): the font of the form's `/DR` that it
      * names when the writer can encode for it, a simple font with WinAnsiEncoding, else Helvetica. It is clipped
-     * to the field rectangle. Also clears the form's `/NeedAppearances` flag (if
+     * to the field rectangle. It draws over the widget's `/MK` background and border, turns with
+     * its `/MK /R`, and puts one character in each cell of a comb field. A value longer than the
+     * field's `/MaxLen` is cut to it. Also clears the form's `/NeedAppearances` flag (if
      * set) so viewers use the appearance we just generated.
      *
      * Only `/Tx` (text) fields are supported; buttons/choices come later.
@@ -336,6 +338,9 @@ public class PdfEditor internal constructor(
         require(field.type == PdfFormField.FieldType.Text) {
             "setTextFieldValue supports text (/Tx) fields only, not ${field.type}"
         }
+        // ISO 32000-1, 12.7.4.3, Table 229: /MaxLen is the longest value the field holds, so a longer
+        // one is cut to it, as a viewer's input stops there (#719).
+        val kept = field.maxLength?.takeIf { it >= 0 && value.length > it }?.let { value.take(it) } ?: value
         val fieldRef = field.fieldReference
             ?: throw IllegalArgumentException("Field '${field.fullyQualifiedName}' has no indirect reference")
         val widgets = buttonWidgets(field)
@@ -345,15 +350,16 @@ public class PdfEditor internal constructor(
 
         val da = FieldAppearance.parseDA(field.defaultAppearance)
         // A password field draws asterisks, never its value (ISO 32000-1, 12.7.4.3, Table 228, #954).
-        val shown = if ((field.flags and FieldAppearance.PASSWORD) != 0) FieldAppearance.masked(value) else value
+        val shown = if ((field.flags and FieldAppearance.PASSWORD) != 0) FieldAppearance.masked(kept) else kept
         val (fontRef, metrics) = appearanceFont(da)
         val entries = LinkedHashMap<String, PdfObject>()
-        entries["V"] = PdfString(PdfText.encodeTextString(value))
+        entries["V"] = PdfString(PdfText.encodeTextString(kept))
         // A rich text field keeps its rich value in step with the plain one, so a reader that
         // shows the rich value shows the new text too (ISO 32000-1, 12.7.3.4, #204).
-        if (field.isRichText) entries["RV"] = PdfString(PdfText.encodeTextString(richBodyOf(value)))
-        writeFieldValue(field, fieldRef, widgets, entries) { w, h ->
-            FieldAppearance.build(shown, w, h, da, fontRef, field.isMultiline, field.quadding, metrics)
+        if (field.isRichText) entries["RV"] = PdfString(PdfText.encodeTextString(richBodyOf(kept)))
+        writeFieldValue(field, fieldRef, widgets, entries) { w, h, widget ->
+            val look = FieldAppearance.lookOf(widget, base, field.flags, field.maxLength)
+            FieldAppearance.build(shown, w, h, da, fontRef, field.isMultiline, field.quadding, metrics, look)
         }
         clearNeedAppearances()
     }
@@ -369,12 +375,12 @@ public class PdfEditor internal constructor(
         fieldRef: PdfReference,
         widgets: List<Pair<PdfReference, PdfDictionary>>,
         entries: Map<String, PdfObject>,
-        draw: (width: Double, height: Double) -> PdfStream,
+        draw: (width: Double, height: Double, widget: PdfDictionary) -> PdfStream,
     ) {
         var merged = false
         for ((ref, widget) in widgets) {
             val ap = rectOf(widget)?.let { r ->
-                PdfDictionary(linkedMapOf("N" to (addObject(draw(abs(r[2] - r[0]), abs(r[3] - r[1]))) as PdfObject)))
+                PdfDictionary(linkedMapOf("N" to (addObject(draw(abs(r[2] - r[0]), abs(r[3] - r[1]), widget)) as PdfObject)))
             }
             if (ref == fieldRef) {
                 val d = LinkedHashMap(field.fieldDict.map)
@@ -498,8 +504,8 @@ public class PdfEditor internal constructor(
         // Build the appearance of each widget (same path as a text field shows its value).
         val da = FieldAppearance.parseDA(field.defaultAppearance)
         val (fontRef, metrics) = appearanceFont(da)
-        writeFieldValue(field, fieldRef, buttonWidgets(field), entries) { w, h ->
-            FieldAppearance.build(value, w, h, da, fontRef, metrics = metrics)
+        writeFieldValue(field, fieldRef, buttonWidgets(field), entries) { w, h, widget ->
+            FieldAppearance.build(value, w, h, da, fontRef, metrics = metrics, look = FieldAppearance.lookOf(widget, base, field.flags, null))
         }
         clearNeedAppearances()
     }

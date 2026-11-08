@@ -126,6 +126,30 @@ internal object FieldText {
         for (u in underlines) out.ascii("$u\n")
     }
 
+    /**
+     * A comb field's value: [cells] equal positions across [width], one character centred in each
+     * (ISO 32000-1, 12.7.4.3, Table 228; #719). Characters past the last cell are not drawn.
+     */
+    fun writeComb(
+        value: String, cells: Int, width: Double, height: Double, size: Double,
+        font: StandardFont, fontName: String, color: String, out: ByteArrayBuilder,
+    ) {
+        val chars = value.filter { it != '\r' && it != '\n' }.take(cells)
+        if (chars.isEmpty() || cells <= 0) return
+        val cell = width / cells
+        val baseline = ((height - size) / 2.0 + size * 0.2).coerceAtLeast(0.0)
+        out.ascii("BT\n")
+        out.append(PdfObjectWriter.toBytes(PdfName(fontName)))
+        out.ascii(" ${fmt(size)} Tf\n$color\n")
+        for ((i, c) in chars.withIndex()) {
+            val x = cell * i + (cell - font.stringWidth(c.toString(), size)) / 2.0
+            out.ascii("1 0 0 1 ${fmt(x)} ${fmt(baseline)} Tm\n")
+            PdfObjectWriter.writeObject(PdfString(PdfText.encodeContentString(c.toString())), out)
+            out.ascii(" Tj\n")
+        }
+        out.ascii("ET\n")
+    }
+
     /** The stroking form of a filling colour operator, so a line draws in the text's colour. */
     private fun stroking(fill: String): String = when {
         fill.endsWith(" rg") -> fill.dropLast(3) + " RG"

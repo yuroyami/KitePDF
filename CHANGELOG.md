@@ -495,6 +495,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Helvetica under that name, so a field that asked for Times drew in Helvetica (#707).
 - `setTextFieldValue` and `setChoiceValue` redraw every widget of a field, each for its own `/Rect`, before they
   clear `/NeedAppearances`. A field shown on several pages showed the new value on the first only (#702).
+- A field appearance that `setTextFieldValue` or `setChoiceValue` writes draws the widget's `/MK` background and
+  border under the value, and every field appearance, the viewer's too, turns with `/MK /R` and puts one
+  character in each cell of a comb field. `setTextFieldValue` cuts a value longer than `/MaxLen` to it (#715,
+  #722, #719).
 
 ## [0.13.0] - 2026-10-09
 
