@@ -755,6 +755,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   images or an unknown format. `CbzDocument.archiveKindOf` tells them.
 - `KiteDoc.openUrl` and `openUrlOrNull` parse the download on `Dispatchers.Default`, so a call from the main
   thread no longer parses there (#827). A damaged PDF repaired for seconds on the UI thread before.
+- An EPUB resource that `META-INF/encryption.xml` lists under an algorithm other than a font obfuscation now
+  reads as a file the book does not hold, instead of laying out its ciphertext. When a content document of the
+  spine is encrypted this way, `EpubDocument.open` throws an `EpubFormatException` that says the book is
+  encrypted (#875).
 
 ## [0.13.0] - 2026-10-09
 

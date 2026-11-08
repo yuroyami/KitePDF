@@ -102,6 +102,8 @@ internal class ParsedEpub(
      * or an empty string without one, parallel to [spinePaths]; null for a document (#614).
      */
     private val imageFallbacks: List<String?> = List(spinePaths.size) { null },
+    /** Zip paths that encryption.xml lists under an algorithm other than a font obfuscation, which no read returns (#875). */
+    private val encrypted: Set<String> = emptySet(),
 ) {
 
     val spineCount: Int get() = spinePaths.size
@@ -471,6 +473,7 @@ internal class ParsedEpub(
         for (item in opf.items) {
             if (item.mediaType != "text/css" && !item.href.endsWith(".css", ignoreCase = true)) continue
             val path = EpubDocument.resolvePath(opf.baseDir, item.href)
+            if (path in encrypted) continue
             val text = zip.readText(path) ?: continue
             if ("@font-face" !in text) continue // cheap reject: most books have none
             for (rule in CssParser.parseAll(text, Origin.AUTHOR).fontFaces) found.add(rule to dirOf(path))
@@ -554,7 +557,7 @@ internal class ParsedEpub(
     fun hasFile(path: String): Boolean = when {
         KiteDataUrl.isDataUrl(path) -> true
         isBlobUrl(path) -> blobs.resolve(path) != null
-        else -> path.substringBefore('#').let { zip.entry(it) != null && listed(it) }
+        else -> path.substringBefore('#').let { it !in encrypted && zip.entry(it) != null && listed(it) }
     }
 
     /** The size in bytes of what [read] answers for [path], without reading it; for a data URL, the length of the URL. */
@@ -678,14 +681,14 @@ internal class ParsedEpub(
     private fun readAt(path: String): ByteArray? = when {
         KiteDataUrl.isDataUrl(path) -> KiteDataUrl.decode(path)?.bytes
         isBlobUrl(path) -> blobs.resolve(path)?.bytes
-        else -> path.substringBefore('#').takeIf(::listed)?.let(zip::read)
+        else -> path.substringBefore('#').takeIf { it !in encrypted && listed(it) }?.let(zip::read)
     }
 
     /** The text of the file at [path] in the zip, of the data URL [path] is (#514), or of the blob a blob URL names (#533). */
     private fun readTextAt(path: String): String? = when {
         KiteDataUrl.isDataUrl(path) -> KiteDataUrl.decode(path)?.let { TextEncoding.decode(it.bytes) }
         isBlobUrl(path) -> blobs.resolve(path)?.let { TextEncoding.decode(it.bytes) }
-        else -> path.takeIf(::listed)?.let(zip::readText)
+        else -> path.takeIf { it !in encrypted && listed(it) }?.let(zip::readText)
     }
 
     /**
@@ -741,6 +744,16 @@ internal class ParsedEpub(
                 SpineDocument(pathOf(item), index, item)
             }
             val present = spine.filter { it.path in zip.names }
+            // A resource encrypted with anything but a font obfuscation is ciphertext this engine
+            // cannot undo, so it is a file the book does not hold (OCF 3.3, 4.4 and 4.5; #875).
+            // A content document of the spine encrypted so means the book is under DRM.
+            val encrypted = parseEncryption(zip).filterValues { it !in Deobfuscate.ALGORITHMS }.keys
+            present.firstOrNull { it.path in encrypted }?.let {
+                throw EpubFormatException(
+                    "this book is encrypted: META-INF/encryption.xml lists '${it.path}' under " +
+                        "an algorithm KitePDF cannot decrypt, so it opens only with that encryption removed",
+                )
+            }
             if (present.isEmpty()) throw EpubFormatException("spine has no readable documents")
             // The table of contents counts the chapters the book keeps, so an entry after a
             // missing file still finds its chapter (#563).
@@ -762,6 +775,7 @@ internal class ParsedEpub(
                 },
                 imageFallbacks = present.map { it.imageFallback },
                 linear = present.map { opf.spineLinear.getOrElse(it.index) { true } },
+                encrypted = encrypted,
             )
         }
 

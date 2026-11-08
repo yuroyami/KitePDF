@@ -18,6 +18,9 @@ internal object Deobfuscate {
     const val IDPF_ALGORITHM = "http://www.idpf.org/2008/embedding"
     const val ADOBE_ALGORITHM = "http://ns.adobe.com/pdf/enc#RC"
 
+    /** The obfuscations [deobfuscate] undoes; every other algorithm of encryption.xml is encryption (#875). */
+    val ALGORITHMS: Set<String> = setOf(IDPF_ALGORITHM, ADOBE_ALGORITHM)
+
     /** Reverse [algorithm] obfuscation on [font] using [uniqueId], or return it unchanged. */
     fun deobfuscate(font: ByteArray, algorithm: String, uniqueId: String): ByteArray = when (algorithm) {
         IDPF_ALGORITHM -> idpf(font, uniqueId)
