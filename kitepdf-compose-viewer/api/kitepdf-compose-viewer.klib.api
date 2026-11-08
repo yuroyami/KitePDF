@@ -324,6 +324,9 @@ final class io.github.yuroyami.kitepdf.compose/KiteDocViewState { // io.github.y
         final fun <get-selection>(): io.github.yuroyami.kitepdf.compose/KiteTextSelection? // io.github.yuroyami.kitepdf.compose/KiteDocViewState.selection.<get-selection>|<get-selection>(){}[0]
     final var selectionInProgress // io.github.yuroyami.kitepdf.compose/KiteDocViewState.selectionInProgress|{}selectionInProgress[0]
         final fun <get-selectionInProgress>(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocViewState.selectionInProgress.<get-selectionInProgress>|<get-selectionInProgress>(){}[0]
+    final var skipsNonLinearChapters // io.github.yuroyami.kitepdf.compose/KiteDocViewState.skipsNonLinearChapters|{}skipsNonLinearChapters[0]
+        final fun <get-skipsNonLinearChapters>(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteDocViewState.skipsNonLinearChapters.<get-skipsNonLinearChapters>|<get-skipsNonLinearChapters>(){}[0]
+        final fun <set-skipsNonLinearChapters>(kotlin/Boolean) // io.github.yuroyami.kitepdf.compose/KiteDocViewState.skipsNonLinearChapters.<set-skipsNonLinearChapters>|<set-skipsNonLinearChapters>(kotlin.Boolean){}[0]
     final var zoom // io.github.yuroyami.kitepdf.compose/KiteDocViewState.zoom|{}zoom[0]
         final fun <get-zoom>(): kotlin/Float // io.github.yuroyami.kitepdf.compose/KiteDocViewState.zoom.<get-zoom>|<get-zoom>(){}[0]
 

@@ -212,6 +212,8 @@ for (entry in book.tableOfContents.entries) {
 
 The label of an entry is the text of its link. An image in the link reads as its `alt`, or as its `title` when it has no `alt`, and KitePDF collapses the white space. So an entry that is only a picture still has a name in the outline.
 
+A spine item that says `linear="no"`, such as an answer key, a pop-up note or a gallery, is still a chapter of the book: `book.isLinear(chapter)` answers false for it. A link, a table of contents entry or a bookmark into it opens it. To step over such chapters when the reader pages through, set `skipsNonLinearChapters = true` on the `KiteDocViewState`; `nextPage` and `previousPage` then go past them. It is off by default.
+
 `EpubDocument` is also a `KiteDocument`, the shared type that `PdfDocument` implements. `metadata`, `outline`, `pageCount` and the `textContent()` of each page work the same way for both formats, so you can write the reader UI once.
 
 ## Search, text and links

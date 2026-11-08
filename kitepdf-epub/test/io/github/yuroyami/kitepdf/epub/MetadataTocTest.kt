@@ -283,4 +283,21 @@ class MetadataTocTest {
         val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/ch1.xhtml" to chapter("hi"))))
         assertTrue(doc.tableOfContents.isEmpty)
     }
+
+    @Test
+    fun a_spine_item_with_linear_no_is_out_of_the_reading_order() {
+        // EPUB 3.3, the itemref element: linear="no" marks auxiliary content; yes is the default (#928).
+        val opf = """<?xml version="1.0"?>
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+              <manifest>
+                <item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+                <item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+                <item id="c3" href="ch3.xhtml" media-type="application/xhtml+xml"/>
+              </manifest>
+              <spine><itemref idref="c1"/><itemref idref="c2" linear="no"/><itemref idref="c3" linear="yes"/></spine>
+            </package>"""
+        val doc = EpubDocument.open(pkg(opf, listOf("OEBPS/ch1.xhtml" to chapter("one"), "OEBPS/ch2.xhtml" to chapter("key"), "OEBPS/ch3.xhtml" to chapter("three"))))
+        assertEquals(3, doc.chapterCount, "the chapter stays a chapter")
+        assertEquals(listOf(true, false, true), (0 until 3).map(doc::isLinear))
+    }
 }

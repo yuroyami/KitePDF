@@ -542,6 +542,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   height * 4`, on every target, where Skia read past the array (#892).
 - With `/NeedAppearances true`, a text or choice field draws from its value, `/DA` and `/MK` instead of from a
   stored appearance a server left stale (#910).
+- `EpubDocument.isLinear(chapter)` reports a spine item's `linear="no"`, and
+  `KiteDocViewState.skipsNonLinearChapters` (off by default) lets next and previous page step over such chapters;
+  links, the table of contents and bookmarks still open them (#928).
 
 ## [0.13.0] - 2026-10-09
 

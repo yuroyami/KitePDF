@@ -2457,16 +2457,30 @@ public class KiteDocViewState(
             return KiteLocation(here.chapter, here.page + 1)
         }
         for (chapter in here.chapter + 1 until document.chapterCount) {
+            if (skipsChapter(chapter)) continue
             if (!prepareChapterGuarded(chapter) || !document.isChapterReady(chapter)) return KiteLocation(chapter, 0)
             if (document.pageCountIn(chapter) > 0) return KiteLocation(chapter, 0)
         }
         return null
     }
 
+    /**
+     * Whether [nextPage] and [previousPage] go past the chapters of a book that its spine leaves out
+     * of the linear reading order (`linear="no"`, EPUB 3.3; #928). Off by default. A link, a table of
+     * contents entry or a bookmark into such a chapter still opens it.
+     */
+    public var skipsNonLinearChapters: Boolean = false
+
+    private fun skipsChapter(chapter: Int): Boolean =
+        skipsNonLinearChapters && (document as? io.github.yuroyami.kitepdf.epub.EpubDocument)?.let {
+            runCatching { !it.isLinear(chapter) }.getOrDefault(false)
+        } == true
+
     /** The location before [here] in reading order, or null at the start. See [locationAfter]. */
     private suspend fun locationBefore(here: KiteLocation): KiteLocation? {
         if (here.page > 0) return KiteLocation(here.chapter, here.page - 1)
         for (chapter in here.chapter - 1 downTo 0) {
+            if (skipsChapter(chapter)) continue
             if (!prepareChapterGuarded(chapter) || !document.isChapterReady(chapter)) return KiteLocation(chapter, 0)
             val pages = document.pageCountIn(chapter)
             if (pages > 0) return KiteLocation(chapter, pages - 1)

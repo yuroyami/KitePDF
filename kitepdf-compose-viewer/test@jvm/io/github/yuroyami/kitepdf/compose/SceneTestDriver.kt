@@ -324,12 +324,12 @@ internal inline fun <T> withoutEscapes(body: () -> T): T {
 
 /* ── shared fixture ──────────────────────────────────────────────────────────── */
 
-internal fun multiSpineEpub(bodies: List<String>): ByteArray {
+internal fun multiSpineEpub(bodies: List<String>, nonLinear: Set<Int> = emptySet()): ByteArray {
     val container = """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"""
     val items = bodies.indices.joinToString("") {
         """<item id="c${it + 1}" href="chapter${it + 1}.xhtml" media-type="application/xhtml+xml"/>"""
     }
-    val refs = bodies.indices.joinToString("") { """<itemref idref="c${it + 1}"/>""" }
+    val refs = bodies.indices.joinToString("") { """<itemref idref="c${it + 1}"${if (it in nonLinear) " linear=\"no\"" else ""}/>""" }
     val opf = """<?xml version="1.0"?>
         <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
           <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">scene</dc:identifier></metadata>

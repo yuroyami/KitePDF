@@ -338,6 +338,39 @@ class IncrementalEpubSceneTest {
         }
     }
 
+    /** Next and previous may step over a chapter that the spine leaves out of the reading order (#928). */
+    @Test
+    fun next_and_previous_skip_a_non_linear_chapter_when_asked() = forBothEffectOrders { queued ->
+        val doc = EpubDocument.open(multiSpineEpub(listOf("<p>One</p>", "<p>Answer key</p>", "<p>Three</p>"), nonLinear = setOf(1)), settings)
+        lateinit var state: KiteDocViewState
+        var step by mutableStateOf(0)
+        val (scene, driver) = drivenScene(200, 260, queued) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged())
+            LaunchedEffect(step) {
+                when (step) {
+                    1 -> state.nextPage()
+                    2 -> state.previousPage()
+                    3 -> state.scrollTo(KiteLocation(1, 0), animate = false)
+                }
+            }
+        }
+        scene.use {
+            driver.pumpUntilState { doc.isComplete && state.currentLocation == KiteLocation(0, 0) }
+            state.skipsNonLinearChapters = true
+            step = 1
+            driver.pumpUntilState { state.currentLocation != KiteLocation(0, 0) }
+            driver.pumpFrames(30)
+            assertEquals(KiteLocation(2, 0), state.currentLocation, "the answer key is stepped over")
+            step = 2
+            driver.pumpUntilState { state.currentLocation != KiteLocation(2, 0) }
+            driver.pumpFrames(30)
+            assertEquals(KiteLocation(0, 0), state.currentLocation)
+            step = 3
+            driver.pumpUntilState { state.currentLocation == KiteLocation(1, 0) }
+        }
+    }
+
     /** A chapter whose layout throws stays a placeholder, and the loader goes on (#331). */
     @Test
     fun a_chapter_that_fails_to_lay_out_does_not_stop_the_book() = forBothEffectOrders { queued ->

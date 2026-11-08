@@ -147,6 +147,16 @@ public class EpubDocument internal constructor(
     public fun renditionOf(chapter: Int): EpubRendition = parsed.renditions[chapter]
 
     /**
+     * Whether [chapter] is in the book's linear reading order: false when its spine entry says
+     * `linear="no"`, as an answer key, a pop-up note or a gallery can (EPUB 3.3, the itemref
+     * element; #928). The chapter stays a chapter of the book, so a link, a table of contents entry
+     * or a bookmark into it still opens it; a reader may only leave it out when paging through.
+     *
+     * @throws IndexOutOfBoundsException when [chapter] is not a chapter of the book.
+     */
+    public fun isLinear(chapter: Int): Boolean = parsed.linear[chapter]
+
+    /**
      * Whether [chapter] is scripted: its manifest item has the `scripted` property, its
      * document has a `script` element (#40), or one of its frames shows a document of the book
      * whose scripts run (#528). Without a script handler such a chapter shows what

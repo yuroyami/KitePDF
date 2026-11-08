@@ -48,6 +48,8 @@ internal class OpfPackage(
     val packageDir: String? = null,
     val titleDir: String? = null,
     val creatorDirs: List<String?> = emptyList(),
+    /** Whether each spine `<itemref>` is in the linear reading order, parallel to [spineIdrefs] (#928). */
+    val spineLinear: List<Boolean> = emptyList(),
 ) {
     val itemsById: Map<String, OpfItem> = items.associateBy { it.id }
 
@@ -144,6 +146,7 @@ internal object Opf {
         val renditionValues = HashMap<String, String>()
         var primaryWritingMode: String? = null
         val spineProps = ArrayList<String?>()
+        val spineLinear = ArrayList<Boolean>()
 
         var capture: String? = null
         var captureIdIsUnique = false
@@ -192,7 +195,12 @@ internal object Opf {
                             items.add(OpfItem(id, href, t.attrs["media-type"], t.attrs["properties"], t.attrs["fallback"], t.attrs["media-overlay"]))
                         }
                     }
-                    "itemref" -> t.attrs["idref"]?.let { spine.add(it); spineProps.add(t.attrs["properties"]) }
+                    "itemref" -> t.attrs["idref"]?.let {
+                        spine.add(it)
+                        spineProps.add(t.attrs["properties"])
+                        // EPUB 3.3, the itemref element: linear="no" marks auxiliary content; yes is the default.
+                        spineLinear.add(t.attrs["linear"]?.trim() != "no")
+                    }
                     "spine" -> { direction = t.attrs["page-progression-direction"]; tocNcx = t.attrs["toc"] }
                     "meta" -> {
                         if (t.attrs["name"] == "cover") metaCover = t.attrs["content"]
@@ -238,6 +246,7 @@ internal object Opf {
                 playbackActiveClass = media["media:playback-active-class"]?.firstOrNull(),
             ),
             overlayDurations = overlayDurations,
+            spineLinear = spineLinear,
             packageDir = packageDir,
             titleDir = titleDir,
             creatorDirs = creatorDirs,

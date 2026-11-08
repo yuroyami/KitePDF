@@ -95,6 +95,8 @@ internal class ParsedEpub(
     private val overlays: List<Pair<String, Double?>?> = List(spinePaths.size) { null },
     /** Whether the manifest marks each spine document `remote-resources`, parallel to [spinePaths] (#38). */
     private val manifestRemote: List<Boolean> = List(spinePaths.size) { false },
+    /** Whether each spine document is in the linear reading order, parallel to [spinePaths] (#928). */
+    val linear: List<Boolean> = List(spinePaths.size) { true },
     /**
      * For each spine entry that is an image shown as a page, the zip path of its fallback document,
      * or an empty string without one, parallel to [spinePaths]; null for a document (#614).
@@ -753,6 +755,7 @@ internal class ParsedEpub(
                     EpubDocument.resolvePath(opf.baseDir, item.href) to opf.overlayDurations[overlayId]
                 },
                 imageFallbacks = present.map { it.imageFallback },
+                linear = present.map { opf.spineLinear.getOrElse(it.index) { true } },
             )
         }
 

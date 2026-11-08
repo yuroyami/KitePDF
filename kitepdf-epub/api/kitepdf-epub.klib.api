@@ -205,6 +205,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
     final fun fragmentOf(kotlin/Int): kotlin/String? // io.github.yuroyami.kitepdf.epub/EpubDocument.fragmentOf|fragmentOf(kotlin.Int){}[0]
     final fun hasRemoteResources(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.hasRemoteResources|hasRemoteResources(kotlin.Int){}[0]
     final fun isChapterReady(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isChapterReady|isChapterReady(kotlin.Int){}[0]
+    final fun isLinear(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isLinear|isLinear(kotlin.Int){}[0]
     final fun isScripted(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubDocument.isScripted|isScripted(kotlin.Int){}[0]
     final fun keepChapters(kotlin.collections/Set<kotlin/Int>) // io.github.yuroyami.kitepdf.epub/EpubDocument.keepChapters|keepChapters(kotlin.collections.Set<kotlin.Int>){}[0]
     final fun linkTarget(kotlin/String): io.github.yuroyami.kitepdf.epub/EpubLinkTarget? // io.github.yuroyami.kitepdf.epub/EpubDocument.linkTarget|linkTarget(kotlin.String){}[0]

@@ -204,6 +204,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun getSelection ()Lio/github/yuroyami/kitepdf/compose/KiteTextSelection;
 	public final fun getSelectionBounds ()Landroidx/compose/ui/geometry/Rect;
 	public final fun getSelectionInProgress ()Z
+	public final fun getSkipsNonLinearChapters ()Z
 	public final fun getZoom ()F
 	public final fun highlightAt-k-4lQ0M (J)Lio/github/yuroyami/kitepdf/compose/KiteHighlight;
 	public final fun hitTest-k-4lQ0M (J)Lio/github/yuroyami/kitepdf/compose/KitePageHit;
@@ -230,6 +231,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteDocViewState {
 	public final fun setHighlights (Ljava/util/List;)V
 	public final fun setOnSelectionChange (Lkotlin/jvm/functions/Function1;)V
 	public final fun setSearchHighlights (Ljava/util/List;)V
+	public final fun setSkipsNonLinearChapters (Z)V
 	public final fun setZoom-Uv8p0NA (FJ)V
 	public static synthetic fun setZoom-Uv8p0NA$default (Lio/github/yuroyami/kitepdf/compose/KiteDocViewState;FJILjava/lang/Object;)V
 	public final fun slotOf (Lio/github/yuroyami/kitepdf/core/KiteLocation;)Ljava/lang/Integer;
