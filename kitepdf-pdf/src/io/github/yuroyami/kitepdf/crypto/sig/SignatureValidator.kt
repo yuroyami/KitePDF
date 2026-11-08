@@ -225,7 +225,7 @@ internal class SignatureValidator(
         // Revocation data counts only from an issuer that may issue: a false issuer signs no CRL.
         val certificates = chain.mapIndexed { i, cert ->
             val issuer = chain.getOrNull(i + 1)?.takeIf { pathProblem == null || i + 1 <= anchorAt && canIssue(chain, i + 1, anchorAt) == null }
-            certificateOf(cert, revocationOf(cert, issuer))
+            certificateOf(cert, revocationOf(cert, issuer, signedTime?.let(::utcSeconds)))
         }
         return PdfSignatureValidation(
             status, certificates.firstOrNull(), certificates, trusted, modified, signedTime,
@@ -242,18 +242,6 @@ internal class SignatureValidator(
         return (from == null || t >= from) && (until == null || t <= until)
     }
 
-    /** [d] as seconds since 1970 in UTC, by the days-from-civil count of the proleptic Gregorian calendar. */
-    private fun utcSeconds(d: PdfDate): Long {
-        val y = d.year - if (d.month <= 2) 1 else 0
-        val era = (if (y >= 0) y else y - 399) / 400
-        val yoe = y - era * 400
-        val mp = (d.month + 9) % 12
-        val doy = (153 * mp + 2) / 5 + d.day - 1
-        val doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
-        val days = era * 146097L + doe - 719468
-        val offset = if (d.tzSign == 'Z') 0 else (d.tzHour * 3600 + d.tzMinute * 60) * (if (d.tzSign == '-') -1 else 1)
-        return days * 86400 + d.hour * 3600 + d.minute * 60 + d.second - offset
-    }
 
     /**
      * Why [signer]'s certificate may not make this signature, or null (#1000). RFC 5280, 4.2.1.3: a
@@ -313,10 +301,10 @@ internal class SignatureValidator(
      * signed counts, or an OCSP responder that the issuer delegated to. A revocation outweighs
      * a good status from another source. Without an issuer, as for a root, nothing is known.
      */
-    private fun revocationOf(cert: X509, issuer: X509?): RevocationResult {
+    private fun revocationOf(cert: X509, issuer: X509?, at: Long?): RevocationResult {
         issuer ?: return RevocationResult.UNKNOWN
-        val results = crls.filter { it.issuerDer.contentEquals(cert.issuerDer) && it.signedBy(issuer) }.map { it.check(cert) } +
-            ocsps.mapNotNull { it.check(cert, issuer) }
+        val results = crls.filter { it.issuerDer.contentEquals(cert.issuerDer) && it.signedBy(issuer) }.mapNotNull { it.check(cert, at) } +
+            ocsps.mapNotNull { it.check(cert, issuer, at) }
         return results.firstOrNull { it.state == RevocationState.REVOKED }
             ?: results.firstOrNull { it.state == RevocationState.GOOD }
             ?: RevocationResult.UNKNOWN
@@ -355,22 +343,5 @@ internal class SignatureValidator(
             else -> false
         }
 
-        /** A UTCTime (two-digit year, RFC 5280, 4.1.2.5.1) or a GeneralizedTime as a [PdfDate]. */
-        fun asn1Date(text: String?): PdfDate? = runCatching {
-            val t = text?.trim() ?: return null
-            val digits = t.takeWhile { it.isDigit() }
-            val full = if (digits.length == 10 || digits.length == 12) {
-                (if (digits.substring(0, 2).toInt() < 50) "20" else "19") + digits
-            } else {
-                digits
-            }
-            val rest = t.substring(digits.length).dropWhile { it == '.' || it == ',' || it.isDigit() }
-            val zone = when {
-                rest.startsWith("Z") -> "Z"
-                rest.startsWith("+") || rest.startsWith("-") -> "${rest[0]}${rest.substring(1, 3)}'${rest.substring(3, 5)}'"
-                else -> ""
-            }
-            PdfDate.parse("D:" + full.padEnd(14, '0') + zone)
-        }.getOrNull()
     }
 }

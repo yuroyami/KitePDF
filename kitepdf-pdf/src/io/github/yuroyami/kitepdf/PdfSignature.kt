@@ -247,7 +247,12 @@ public class PdfCertificate internal constructor(
 
 /** What the revocation data says about a certificate of a signature's chain. */
 public enum class PdfRevocation {
-    /** A CRL or an OCSP response that the certificate's issuer signed says that it is good. */
+    /**
+     * A CRL or an OCSP response that the certificate's issuer signed says that it is good, and is
+     * current at the signing time: its next update is not before it, or, with none, it was issued
+     * no earlier. A CRL counts only when its scope covers the certificate and it has no critical
+     * extension KitePDF does not process (RFC 5280, 5.2 and 6.3.3; RFC 6960, 4.2.2.1).
+     */
     Good,
 
     /** A CRL or an OCSP response that the certificate's issuer signed says that it was revoked. */

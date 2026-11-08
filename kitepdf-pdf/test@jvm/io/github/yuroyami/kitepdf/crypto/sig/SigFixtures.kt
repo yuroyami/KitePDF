@@ -218,15 +218,19 @@ internal object SigFixtures {
     fun keyBits(identity: Identity): ByteArray = Asn1.read(identity.keys.public.encoded, 0)!!.children[1].bitString()!!
 
     /** A v2 CRL that [issuer] signs, listing [revoked] serial numbers as revoked on [revokedAt] (RFC 5280, 5.1). */
-    fun crl(issuer: Identity, revoked: List<BigInteger>, revokedAt: String = "260901000000Z", signer: Identity = issuer): ByteArray {
+    fun crl(
+        issuer: Identity, revoked: List<BigInteger>, revokedAt: String = "260901000000Z", signer: Identity = issuer,
+        thisUpdate: String = "260920000000Z", nextUpdate: String = "261020000000Z", extensions: List<ByteArray> = emptyList(),
+    ): ByteArray {
         val entries = revoked.map { seq(int(it), utcTime(revokedAt)) }
         val tbs = seq(
             int(1),
             signer.signatureAlgorithm,
             issuer.name,
-            utcTime("260920000000Z"),
-            utcTime("261020000000Z"),
+            utcTime(thisUpdate),
+            utcTime(nextUpdate),
             *(if (entries.isEmpty()) emptyArray() else arrayOf(seq(*entries.toTypedArray()))),
+            *(if (extensions.isEmpty()) emptyArray() else arrayOf(tagged(0xA0, seq(*extensions.toTypedArray())))),
         )
         return seq(tbs, signer.signatureAlgorithm, bits(signer.sign(tbs)))
     }
@@ -238,11 +242,14 @@ internal object SigFixtures {
      * An OCSP response that [responder] signs about [statuses] (RFC 6960, 4.2.1), naming the
      * responder by its name or by the SHA-1 of its key, and carrying [certs].
      */
-    fun ocsp(responder: Identity, statuses: List<OcspStatus>, byKey: Boolean = false, certs: List<Identity> = emptyList()): ByteArray {
+    fun ocsp(
+        responder: Identity, statuses: List<OcspStatus>, byKey: Boolean = false, certs: List<Identity> = emptyList(),
+        thisUpdate: String = "20260925000000Z", nextUpdate: String? = "20261002000000Z",
+    ): ByteArray {
         val singles = statuses.map { s ->
             val id = seq(algorithm(SHA1, NULL), octets(sha("SHA-1", s.cert.issuerName)), octets(sha("SHA-1", keyBits(s.issuer))), int(s.cert.serial))
             val status = s.revokedAt?.let { tagged(0xA1, generalizedTime(it)) } ?: byteArrayOf(0x80.toByte(), 0)
-            seq(id, status, generalizedTime("20260925000000Z"))
+            seq(id, status, generalizedTime(thisUpdate), *listOfNotNull(nextUpdate?.let { tagged(0xA0, generalizedTime(it)) }).toTypedArray())
         }
         val responderId = if (byKey) tagged(0xA2, octets(sha("SHA-1", keyBits(responder)))) else tagged(0xA1, responder.name)
         val data = seq(responderId, generalizedTime("20260925000000Z"), seq(*singles.toTypedArray()))

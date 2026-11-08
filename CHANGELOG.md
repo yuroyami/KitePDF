@@ -449,6 +449,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A document timestamp is trusted only when its signer's certificate is a time stamping authority's, with the one
   critical extended key usage id-kp-timeStamping (RFC 3161, 2.3), and a signature only when its certificate's key
   usage, if it has one, allows signing. Any trusted certificate could state a timestamp's time (#1000).
+- Revocation data says `Good` only when it is current at the signing time, by its next update, and a CRL only
+  when its issuing distribution point covers the certificate and it has no critical extension KitePDF does not
+  process. A signer revoked in March could embed a CRL of the year before and read as good (#1001).
 
 ## [0.13.0] - 2026-10-09
 

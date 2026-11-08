@@ -308,7 +308,7 @@ if (result.signer?.revocation == PdfRevocation.Revoked) {
 }
 ```
 
-KitePDF uses only data that the certificate's issuer signed, or that an OCSP responder signed for the issuer. A root certificate has no issuer, so its revocation stays `Unknown`. KitePDF gets nothing from the network.
+KitePDF uses only data that the certificate's issuer signed, or that an OCSP responder signed for the issuer. A root certificate has no issuer, so its revocation stays `Unknown`. KitePDF gets nothing from the network. Data says `Good` only when it is current at the signing time: a CRL or OCSP response whose next update is before that time says nothing, and so does one without a next update that was issued before it. A CRL with a critical extension that KitePDF does not process, or whose issuing distribution point leaves the certificate out, says nothing about it either. The time is the one the signature states, as `signedTime` gives it.
 
 KitePDF checks these encodings: `adbe.pkcs7.detached`, `ETSI.CAdES.detached`, `adbe.pkcs7.sha1`, `adbe.x509.rsa_sha1` and document timestamps (`ETSI.RFC3161`). It checks RSA (PKCS #1 v1.5 and PSS) and ECDSA on the P-256, P-384 and P-521 curves, with SHA-1, SHA-256, SHA-384 and SHA-512.
 

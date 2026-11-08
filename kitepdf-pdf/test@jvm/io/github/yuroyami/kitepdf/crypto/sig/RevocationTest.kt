@@ -136,4 +136,36 @@ class RevocationTest {
         val crl = SigFixtures.crl(root, listOf(signer.serial))
         assertEquals(PdfRevocation.Revoked, validate(revocationData = listOf(crl)).signer?.revocation)
     }
+
+    @Test
+    fun revocationDataCountsOnlyWhenCurrentAtTheSigningAndCoveringTheCertificate() {
+        // The table of #1001: the signer signs at 2026-09-28.
+        fun crl(vararg extensions: ByteArray, thisUpdate: String = "260920000000Z", nextUpdate: String = "261020000000Z", revoked: Boolean = false) =
+            SigFixtures.crl(root, if (revoked) listOf(signer.serial) else emptyList(), revokedAt = "260301000000Z",
+                thisUpdate = thisUpdate, nextUpdate = nextUpdate, extensions = extensions.toList())
+        fun revocation(data: ByteArray, ocsp: Boolean = false) =
+            validate(if (ocsp) PdfOptions(dssOcsps = listOf(data)) else PdfOptions(dssCrls = listOf(data))).signer?.revocation
+        assertEquals(PdfRevocation.Good, revocation(crl()), "a list current at the signing")
+        assertEquals(PdfRevocation.Revoked, revocation(crl(revoked = true)))
+        assertEquals(PdfRevocation.Unknown, revocation(crl(thisUpdate = "250601000000Z", nextUpdate = "250701000000Z")), "a list that expired before the signing")
+        // RFC 5280, 5.2.5: an issuing distribution point of CA certificates only, critical.
+        val onlyCa = SigFixtures.seq(
+            SigFixtures.oid("2.5.29.28"), byteArrayOf(0x01, 0x01, -1),
+            SigFixtures.octets(SigFixtures.seq(byteArrayOf(0x82.toByte(), 0x01, -1))),
+        )
+        assertEquals(PdfRevocation.Unknown, revocation(crl(onlyCa)), "a list whose scope leaves the signer out")
+        // RFC 5280, 5.2: a critical extension KitePDF does not process stops the list.
+        val unknown = SigFixtures.seq(SigFixtures.oid("1.3.6.1.4.1.99999.2"), byteArrayOf(0x01, 0x01, -1), SigFixtures.octets(byteArrayOf(0x05, 0x00)))
+        assertEquals(PdfRevocation.Unknown, revocation(crl(unknown)))
+        // RFC 6960, 4.2.2.1: a response whose next update passed before the signing is unreliable.
+        val stale = SigFixtures.ocsp(root, listOf(SigFixtures.OcspStatus(signer, root)), thisUpdate = "20250601000000Z", nextUpdate = "20250608000000Z")
+        assertEquals(PdfRevocation.Unknown, revocation(stale, ocsp = true))
+        val fresh = SigFixtures.ocsp(root, listOf(SigFixtures.OcspStatus(signer, root)))
+        assertEquals(PdfRevocation.Good, revocation(fresh, ocsp = true))
+        // With no next update, a response counts as good only when produced after the signing.
+        val early = SigFixtures.ocsp(root, listOf(SigFixtures.OcspStatus(signer, root)), nextUpdate = null)
+        assertEquals(PdfRevocation.Unknown, revocation(early, ocsp = true))
+        val later = SigFixtures.ocsp(root, listOf(SigFixtures.OcspStatus(signer, root)), thisUpdate = "20261001000000Z", nextUpdate = null)
+        assertEquals(PdfRevocation.Good, revocation(later, ocsp = true))
+    }
 }
