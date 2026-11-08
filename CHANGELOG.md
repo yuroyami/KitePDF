@@ -668,6 +668,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A book's page text holds right-to-left text in logical order, at the paragraph's own direction, so copying and
   searching Hebrew or Arabic in an EPUB works; Bidi.logicalOrder and logicalEdges are shared with PDF text
   (#933).
+- EPUB layout honours inline direction: dir="auto", <bdi>, <bdo> and the unicode-bidi property open the
+  embeddings, overrides and isolates of UAX #9 around their content (#932).
 
 ## [0.13.0] - 2026-10-09
 

@@ -10,6 +10,9 @@ internal enum class GenericFont { SERIF, SANS, MONO }
 internal enum class CssVAlign { BASELINE, SUPER, SUB, TOP, MIDDLE, BOTTOM }
 internal enum class ListType { DISC, CIRCLE, SQUARE, DECIMAL, LOWER_ROMAN, UPPER_ROMAN, LOWER_ALPHA, UPPER_ALPHA, NONE }
 internal enum class Direction { LTR, RTL }
+
+/** The values of `unicode-bidi` (CSS Writing Modes 3, 2.2). */
+internal enum class UnicodeBidi { NORMAL, EMBED, ISOLATE, BIDI_OVERRIDE, ISOLATE_OVERRIDE, PLAINTEXT }
 internal enum class CssPosition { STATIC, RELATIVE, ABSOLUTE, FIXED }
 internal enum class ObjectFit { FILL, CONTAIN, COVER }
 internal enum class WritingMode { HORIZONTAL, VERTICAL_RL, VERTICAL_LR }
@@ -287,6 +290,11 @@ internal data class ComputedStyle(
      * (HTML, 3.2.6.2), or null where the chapter says none. Inherited. Hyphenation reads it (#864).
      */
     val language: String? = null,
+    /**
+     * `unicode-bidi` (CSS Writing Modes 3, 2.2), not inherited: the embedding, override or isolate
+     * that an inline element opens around its content for the bidi algorithm (#932).
+     */
+    val unicodeBidi: UnicodeBidi = UnicodeBidi.NORMAL,
 ) {
     val mono: Boolean get() = fontFamily == GenericFont.MONO
 

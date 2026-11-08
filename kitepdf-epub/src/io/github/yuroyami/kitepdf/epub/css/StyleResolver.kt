@@ -92,12 +92,68 @@ internal class StyleResolver(
         val built = build(parent, cascaded)
         val cs = if (lang == null) built else built.copy(language = lang.ifEmpty { null })
         if (root) remPt = cs.fontSizePt
-        // The HTML `dir` attribute wins over the CSS `direction` property.
-        return when (el.attrs["dir"]?.lowercase()) {
-            "rtl" -> cs.copy(direction = Direction.RTL)
-            "ltr" -> cs.copy(direction = Direction.LTR)
-            else -> cs
+        // HTML, 15.3.5: `[dir]` and `bdi` isolate their content, and `bdo` overrides it, under any
+        // author `unicode-bidi` (#932).
+        val tag = el.tag.lowercase().substringAfter(':')
+        val dir = el.attrs["dir"]?.trim()?.lowercase()
+        val bidi = cascaded.lastOrNull { it.first == "unicode-bidi" }?.second?.let(::unicodeBidiOf)
+            ?: when {
+                tag == "bdo" -> UnicodeBidi.BIDI_OVERRIDE
+                tag == "bdi" || dir != null -> UnicodeBidi.ISOLATE
+                else -> UnicodeBidi.NORMAL
+            }
+        val styled = if (bidi == cs.unicodeBidi) cs else cs.copy(unicodeBidi = bidi)
+        // The HTML `dir` attribute wins over the CSS `direction` property. `dir="auto"`, and a `bdi`
+        // without `dir`, take the direction of the first strong character of the text (HTML, 3.2.6.4).
+        return when (dir) {
+            "rtl" -> styled.copy(direction = Direction.RTL)
+            "ltr" -> styled.copy(direction = Direction.LTR)
+            "auto" -> styled.copy(direction = autoDirection(el))
+            else -> if (tag == "bdi") styled.copy(direction = autoDirection(el)) else styled
         }
+    }
+
+    private fun unicodeBidiOf(v: String): UnicodeBidi? = when (v.trim().lowercase()) {
+        "normal" -> UnicodeBidi.NORMAL
+        "embed" -> UnicodeBidi.EMBED
+        "isolate", "-webkit-isolate" -> UnicodeBidi.ISOLATE
+        "bidi-override" -> UnicodeBidi.BIDI_OVERRIDE
+        "isolate-override", "-webkit-isolate-override" -> UnicodeBidi.ISOLATE_OVERRIDE
+        "plaintext", "-webkit-plaintext" -> UnicodeBidi.PLAINTEXT
+        else -> null
+    }
+
+    /**
+     * The direction of the first strong character of [el]'s text, past `bdi`, `script`, `style`,
+     * `textarea` and the elements that set their own `dir`, or LTR when it has none (HTML, 3.2.6.4).
+     */
+    private fun autoDirection(el: KiteXmlNode.Element): Direction = firstStrong(el)?.let { if (it) Direction.RTL else Direction.LTR } ?: Direction.LTR
+
+    private fun firstStrong(el: KiteXmlNode.Element): Boolean? {
+        for (c in el.children) when (c) {
+            is KiteXmlNode.Text -> {
+                var k = 0
+                while (k < c.text.length) {
+                    val ch = c.text[k]
+                    val cp = if (ch.isHighSurrogate() && k + 1 < c.text.length && c.text[k + 1].isLowSurrogate()) {
+                        k++
+                        0x10000 + ((ch.code - 0xD800) shl 10) + (c.text[k].code - 0xDC00)
+                    } else ch.code
+                    k++
+                    when (io.github.yuroyami.kitepdf.core.text.Bidi.classify(cp)) {
+                        io.github.yuroyami.kitepdf.core.text.Bidi.L -> return false
+                        io.github.yuroyami.kitepdf.core.text.Bidi.R, io.github.yuroyami.kitepdf.core.text.Bidi.AL -> return true
+                    }
+                }
+            }
+            is KiteXmlNode.Element -> {
+                val tag = c.tag.lowercase().substringAfter(':')
+                val skip = tag in AUTO_SKIPPED || c.attrs["dir"]?.trim()?.lowercase() in VALID_DIRS
+                if (!skip) firstStrong(c)?.let { return it }
+            }
+            else -> {}
+        }
+        return null
     }
 
     /**
@@ -1598,6 +1654,10 @@ internal class StyleResolver(
     }
 
     private companion object {
+        /** What `dir="auto"` skips when it looks for the first strong character (HTML, 3.2.6.4). */
+        val AUTO_SKIPPED = setOf("bdi", "script", "style", "textarea")
+        val VALID_DIRS = setOf("ltr", "rtl", "auto")
+
         /** The elements whose `bgcolor` is their background colour (HTML, 15.3.8 and 15.3.1). */
         val BGCOLOR_TAGS = setOf("body", "table", "thead", "tbody", "tfoot", "tr", "td", "th")
 

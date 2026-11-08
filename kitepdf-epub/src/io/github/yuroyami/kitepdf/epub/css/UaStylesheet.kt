@@ -14,7 +14,8 @@ package io.github.yuroyami.kitepdf.epub.css
  * difftest oracle, so the two agree on what a book should look like.
  *
  * Not covered yet, so the rules or properties are ignored rather than honoured:
- * `@page`, `unicode-bidi`, and detailed border painting.
+ * `@page` and detailed border painting. The `unicode-bidi` of `[dir]`, `bdi` and `bdo`
+ * (HTML, 15.3.5) is applied in StyleResolver.compute, under any author rule (#932).
  */
 internal object UaStylesheet {
 

@@ -115,8 +115,16 @@ internal data class InlineRun(
      * exactly where they did.
      */
     val element: KiteXmlNode.Element? = null,
+    /**
+     * The inline elements around the text that open an embedding, override or isolate
+     * (`unicode-bidi`), outermost first (#932). Each scope is one element, by identity.
+     */
+    val bidi: List<BidiScope> = emptyList(),
 ) {
     companion object {
         val BLACK = RgbColor(0.0, 0.0, 0.0)
     }
 }
+
+/** One inline element's `unicode-bidi` scope and its direction, compared by identity (#932). */
+internal class BidiScope(val kind: io.github.yuroyami.kitepdf.epub.css.UnicodeBidi, val rtl: Boolean)

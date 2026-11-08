@@ -808,6 +808,7 @@ internal class BoxBuilder(
         val id = el.attrs["id"]?.takeIf { it.isNotBlank() }
         if (id != null) inl.beginId(id)
         if (tracksElements) inl.beginElement(el)
+        val bidiScope = inl.beginBidi(style)
         inl.beginCombine(style.textCombineUpright)
         val background = inl.beginBackground(style.backgroundColor)
         try {
@@ -912,6 +913,7 @@ internal class BoxBuilder(
         } finally {
             inl.endBackground(background)
             inl.endCombine()
+            if (bidiScope) inl.endBidi()
             if (tracksElements) inl.endElement()
             if (id != null) inl.endId()
             if (speech != null) inl.endSpeech()
@@ -1042,6 +1044,18 @@ internal class BoxBuilder(
         private var element: KiteXmlNode.Element? = null
 
         fun beginElement(el: KiteXmlNode.Element) { elementStack.addLast(element); element = el }
+
+        // The bidi scopes of the inline elements around the text, outermost first (#932).
+        private var bidi: List<BidiScope> = emptyList()
+
+        /** Opens the scope of an inline element whose `unicode-bidi` is not `normal`; true when it did. */
+        fun beginBidi(style: ComputedStyle): Boolean {
+            if (style.unicodeBidi == io.github.yuroyami.kitepdf.epub.css.UnicodeBidi.NORMAL) return false
+            bidi = bidi + BidiScope(style.unicodeBidi, style.direction == io.github.yuroyami.kitepdf.epub.css.Direction.RTL)
+            return true
+        }
+
+        fun endBidi() { bidi = bidi.dropLast(1) }
 
         fun endElement() { element = elementStack.removeLastOrNull() }
 
@@ -1248,7 +1262,9 @@ internal class BoxBuilder(
         // place to break (#845).
         private fun samePaint(a: InlineRun, b: InlineRun): Boolean =
             a.underline == b.underline && a.lineThrough == b.lineThrough && a.overline == b.overline && a.backgroundColor == b.backgroundColor &&
-                a.combineGroup == b.combineGroup && a.noWrap == b.noWrap
+                a.combineGroup == b.combineGroup && a.noWrap == b.noWrap &&
+                // A space outside an element's bidi scope stays out of it, as its order there differs (#932).
+                a.bidi == b.bidi
 
         private fun makeRun(text: String, style: ComputedStyle) = InlineRun(
             text = text, fontSizePt = style.fontSizePt,
@@ -1260,6 +1276,7 @@ internal class BoxBuilder(
             speech = speech,
             ids = ids,
             element = element,
+            bidi = bidi,
             letterSpacingPt = style.letterSpacingPt, wordSpacingPt = style.wordSpacingPt,
             smallCaps = style.smallCaps,
             // Both break only where white space lets a line wrap, which nowrap does not (CSS Text 3, 5.5; #845).

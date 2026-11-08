@@ -17,6 +17,7 @@ import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.Edge
 import io.github.yuroyami.kitepdf.epub.css.Emphasis
 import io.github.yuroyami.kitepdf.epub.css.Direction
+import io.github.yuroyami.kitepdf.epub.css.UnicodeBidi
 import io.github.yuroyami.kitepdf.epub.css.FlexAlign
 import io.github.yuroyami.kitepdf.epub.css.FlexBasis
 import io.github.yuroyami.kitepdf.epub.css.FlexDirection
@@ -1935,7 +1936,7 @@ internal class BoxLayout(
      * inline image stands for U+FFFC.
      */
     private fun bidiLevels(runs: List<InlineRun>, baseLevel: Int): List<IntArray>? {
-        if (baseLevel == 0 && runs.none { it.imageSrc == null && reorders(it.text) }) return null
+        if (baseLevel == 0 && runs.none { it.imageSrc == null && reorders(it.text) || it.bidi.isNotEmpty() }) return null
         val out = runs.map { IntArray(if (it.imageSrc != null) 1 else it.text.length) { baseLevel } }
         val cps = ArrayList<Int>()
         val owners = ArrayList<Long>()
@@ -1943,6 +1944,7 @@ internal class BoxLayout(
             if (cps.isEmpty()) return
             val levels = Bidi.resolveLevels(cps.toIntArray(), baseLevel)
             for ((k, owner) in owners.withIndex()) {
+                if (owner < 0L) continue
                 val levelsOfRun = out[(owner ushr 32).toInt()]
                 val at = owner.toInt()
                 levelsOfRun[at] = levels[k]
@@ -1951,9 +1953,22 @@ internal class BoxLayout(
             cps.clear()
             owners.clear()
         }
+        // The scopes open in the paragraph so far. Where a run's scopes differ from them, the
+        // controls of UAX #9 close the ones it left and open the ones it entered, as a browser
+        // inserts them for unicode-bidi (CSS Writing Modes 3, 2.4.2; #932). They own no char.
+        var open: List<BidiScope> = emptyList()
+        fun control(cp: Int) { cps += cp; owners += -1L }
+        fun enter(scopes: List<BidiScope>) {
+            var common = 0
+            while (common < open.size && common < scopes.size && open[common] === scopes[common]) common++
+            for (k in open.size - 1 downTo common) closeScope(open[k], ::control)
+            for (k in common until scopes.size) openScope(scopes[k], ::control)
+            open = scopes
+        }
         for ((r, run) in runs.withIndex()) {
+            if (!run.hardBreak) enter(run.bidi)
             when {
-                run.hardBreak -> resolve()
+                run.hardBreak -> { resolve(); open = emptyList() }
                 run.imageSrc != null -> { cps += 0xFFFC; owners += r.toLong() shl 32 }
                 else -> {
                     var at = 0
@@ -1967,6 +1982,28 @@ internal class BoxLayout(
         }
         resolve()
         return out
+    }
+
+    /** The controls that open [scope]: an embedding, an override, an isolate or both (UAX #9, 2.1 to 2.4). */
+    private fun openScope(scope: BidiScope, add: (Int) -> Unit) {
+        when (scope.kind) {
+            UnicodeBidi.EMBED -> add(if (scope.rtl) 0x202B else 0x202A)
+            UnicodeBidi.BIDI_OVERRIDE -> add(if (scope.rtl) 0x202E else 0x202D)
+            UnicodeBidi.ISOLATE -> add(if (scope.rtl) 0x2067 else 0x2066)
+            UnicodeBidi.ISOLATE_OVERRIDE -> { add(if (scope.rtl) 0x2067 else 0x2066); add(if (scope.rtl) 0x202E else 0x202D) }
+            UnicodeBidi.PLAINTEXT -> add(0x2068)
+            UnicodeBidi.NORMAL -> {}
+        }
+    }
+
+    /** The controls that close [scope]: PDF for an embedding or override, PDI for an isolate. */
+    private fun closeScope(scope: BidiScope, add: (Int) -> Unit) {
+        when (scope.kind) {
+            UnicodeBidi.EMBED, UnicodeBidi.BIDI_OVERRIDE -> add(0x202C)
+            UnicodeBidi.ISOLATE, UnicodeBidi.PLAINTEXT -> add(0x2069)
+            UnicodeBidi.ISOLATE_OVERRIDE -> { add(0x202C); add(0x2069) }
+            UnicodeBidi.NORMAL -> {}
+        }
     }
 
     /** True when [text] has a character that can move in a left-to-right paragraph. */
