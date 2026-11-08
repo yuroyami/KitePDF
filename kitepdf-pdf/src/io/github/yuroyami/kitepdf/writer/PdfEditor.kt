@@ -285,9 +285,12 @@ public class PdfEditor internal constructor(
         val stampBytes = csb.toByteArray()
 
         val merged = ByteArrayBuilder(contentBytes.size + stampBytes.size + 16)
-        merged.append("q\n".encodeToByteArray())
+        // The content's own q and Q may not balance, so the wrap opens and closes enough of
+        // them that the stamp starts in default user space whatever it did (#1014).
+        val wrap = SaveRestoreWrap.of(runCatching { ContentStreamParser.parse(contentBytes) }.getOrDefault(emptyList()))
+        merged.append(wrap.open.encodeToByteArray())
         merged.append(contentBytes)
-        merged.append("\nQ\nq\n".encodeToByteArray())
+        merged.append("\n${wrap.close}q\n".encodeToByteArray())
         merged.append(stampBytes)
         merged.append("Q\n".encodeToByteArray())
         val streamRef = addObject(PdfStreams.flate(merged.toByteArray()))
@@ -985,9 +988,11 @@ public class PdfEditor internal constructor(
         val body = ContentStreamWriter.serialize(finalOps)
 
         val out = ByteArrayBuilder(body.size + 64)
-        out.append("q\n".encodeToByteArray())
+        // The boxes go in default user space, whatever q and Q the content leaves unbalanced (#1014).
+        val wrap = SaveRestoreWrap.of(finalOps)
+        out.append(wrap.open.encodeToByteArray())
         out.append(body)
-        out.append("\nQ\n".encodeToByteArray())
+        out.append("\n${wrap.close}".encodeToByteArray())
         // This call's own regions always repaint (their content is new). An
         // EARLIER region only needs repainting if it overlaps one of them: only
         // an overlap could have sent that box's construction back through the

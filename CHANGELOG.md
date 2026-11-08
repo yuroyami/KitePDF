@@ -590,6 +590,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer survives in the saved bytes (#632).
 - Redaction redacts a soft mask group that paints into a region, in a copy of its own that the page's `gs` then
   names, so text a page draws only through a mask goes with the region (#631).
+- A redaction box and a stamp land in default user space when the page content leaves a `q` open or has a `Q` too
+  many (#1014).
 
 ## [0.13.0] - 2026-10-09
 

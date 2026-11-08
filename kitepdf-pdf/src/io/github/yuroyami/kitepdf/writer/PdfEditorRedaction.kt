@@ -833,3 +833,26 @@ internal fun PdfEditor.loadFormBBoxes(resources: PdfDictionary?): Map<String, Ki
     }
     return out
 }
+
+/**
+ * The `q` and `Q` to put around content this editor did not write, so what it appends after the
+ * content starts in the graphics state the content began in (ISO 32000-1, 8.4.2; #1014). A file
+ * can leave a `q` open, whose `Q` the wrap's own would close, or have a `Q` too many, which would
+ * close the wrap's `q`. [open] is the wrap's `q` and one more for each such stray `Q`, and [close]
+ * closes all of them and every `q` the content left open. The content itself is not rewritten.
+ */
+internal class SaveRestoreWrap(val open: String, val close: String) {
+    companion object {
+        fun of(ops: List<Operation>): SaveRestoreWrap {
+            var depth = 0
+            var lowest = 0
+            for (op in ops) when (op.operator) {
+                "q" -> depth++
+                "Q" -> { depth--; if (depth < lowest) lowest = depth }
+            }
+            val opened = 1 - lowest
+            // After the content the stack stands at opened + depth, never below the wrap's first q.
+            return SaveRestoreWrap("q\n".repeat(opened), "Q\n".repeat(opened + depth))
+        }
+    }
+}
