@@ -653,6 +653,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setAttachment, removeAttachment, setOutline, setPageLabels and setXmpMetadata (#921).
 - The JVM and Android local openers refuse a document past DEFAULT_MAX_LOCAL_DOCUMENT_BYTES (128 MiB) with
   KiteFormatException instead of running out of memory, and take a maxBytes to raise it (#829).
+- On Apple platforms a file over 2 GB is refused with the documented format exception, instead of a negative size
+  or the first bytes of the file opened as the file (#832).
 
 ## [0.13.0] - 2026-10-09
 

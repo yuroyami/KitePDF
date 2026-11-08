@@ -29,7 +29,13 @@ public fun EpubDocument.Companion.openFile(
 private fun NSData.toByteArray(): ByteArray {
     // NSUInteger differs in width between 32- and 64-bit Apple targets;
     // convert() keeps this shared appleMain source width-agnostic.
-    val n = length.toLong().toInt()
+    // A length past Int.MAX_VALUE kept only its low 32 bits: a negative size, or the first bytes
+    // of a file past 4 GiB opened as the file. Refuse it, as the POSIX reader does (#832).
+    val size = length.toLong()
+    if (size < 0L || size > Int.MAX_VALUE.toLong()) {
+        throw EpubFormatException("file is larger than 2 GB, which this reader cannot hold ($size bytes)")
+    }
+    val n = size.toInt()
     if (n == 0) return ByteArray(0)
     val out = ByteArray(n)
     out.usePinned { memcpy(it.addressOf(0), bytes, n.convert()) }
