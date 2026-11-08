@@ -27,6 +27,13 @@ class KiteDocCbzTest {
     }
 
     @Test
+    fun a_tiff_page_beside_pngs_still_reads_as_cbz() {
+        // KiteDoc's set of page extensions follows the decoders, as CbzDocument's does (#755).
+        val zip = storedZip(listOf("1.bmp" to bmp(), "2.tiff" to byteArrayOf(1), "3.jxl" to byteArrayOf(1)))
+        assertEquals(KiteDocFormat.Cbz, KiteDoc.formatOf(zip))
+    }
+
+    @Test
     fun junk_beside_images_still_reads_as_cbz() {
         val cbz = storedZip(
             listOf(

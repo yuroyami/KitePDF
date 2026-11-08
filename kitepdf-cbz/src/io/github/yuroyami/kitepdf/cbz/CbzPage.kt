@@ -33,8 +33,10 @@ public class CbzPage internal constructor(
      * through a comic does not inflate and check each scan to lay out its slot (#386).
      */
     private val size: Pair<Int, Int> by lazy {
-        readHeader()?.let(ImageDims::of)
-            ?: readEntry()?.let { bytes -> ImageDims.of(bytes) ?: KiteImageData.fromEncodedImage(bytes)?.let { it.width to it.height } }
+        // A header that does not parse is a placeholder, never a failure of the comic (#760).
+        fun dims(bytes: ByteArray) = runCatching { ImageDims.of(bytes) }.getOrNull()
+        readHeader()?.let(::dims)
+            ?: readEntry()?.let { bytes -> dims(bytes) ?: runCatching { KiteImageData.fromEncodedImage(bytes) }.getOrNull()?.let { it.width to it.height } }
             ?: fallback
     }
 

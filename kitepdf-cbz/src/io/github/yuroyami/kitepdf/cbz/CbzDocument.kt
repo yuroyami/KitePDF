@@ -9,9 +9,12 @@ import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.render.KiteImageIdentity
 import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
-/** Entry extensions that count as comic pages. */
+/**
+ * Entry extensions that count as comic pages: what the image decoders read, TIFF, AVIF and JPEG XL
+ * included (#755). `KiteDoc.looksLikeCbz` keeps the same set.
+ */
 internal val CBZ_IMAGE_EXTENSIONS: Set<String> =
-    setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
+    setOf("jpg", "jpeg", "jfif", "png", "gif", "bmp", "webp", "tif", "tiff", "avif", "jxl")
 
 /** Directory markers, hidden files and packaging noise: never pages. */
 internal fun isJunkEntry(name: String): Boolean {

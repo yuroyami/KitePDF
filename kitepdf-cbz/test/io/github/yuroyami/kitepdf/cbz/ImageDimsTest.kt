@@ -79,4 +79,22 @@ class ImageDimsTest {
         assertEquals(320 to 200, ImageDims.of(tiff(le = true)))
         assertEquals(320 to 200, ImageDims.of(tiff(le = false)))
     }
+
+    @Test
+    fun a_tiff_directory_offset_near_int_max_is_no_size() {
+        // ifd + 2 wrapped and passed the check, and the read threw (#760).
+        val b = byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0x7F)
+        assertNull(ImageDims.of(b))
+        val page = CbzDocument.open(CbzFixtures.comic("page.png" to b)).pages.single()
+        assertEquals(800.0, page.displayWidth)
+    }
+
+    @Test
+    fun tiff_avif_and_jxl_entries_are_pages() {
+        // The decoders read them, so a comic counts them (#755).
+        val doc = CbzDocument.open(CbzFixtures.comic(
+            "1.png" to CbzFixtures.pngHeader320x200(), "2.tif" to byteArrayOf(1), "3.avif" to byteArrayOf(1), "4.jxl" to byteArrayOf(1),
+        ))
+        assertEquals(4, doc.pageCount)
+    }
 }

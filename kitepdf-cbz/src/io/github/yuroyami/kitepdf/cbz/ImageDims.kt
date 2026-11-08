@@ -59,7 +59,8 @@ internal object ImageDims {
         fun u16(o: Int) = if (le) le16(b, o) else ((b[o].toInt() and 0xFF) shl 8) or (b[o + 1].toInt() and 0xFF)
         fun u32(o: Int) = if (le) le32(b, o) else be32(b, o)
         val ifd = u32(4)
-        if (ifd < 8 || ifd + 2 > b.size) return null
+        // In Long: an offset near Int.MAX_VALUE wrapped the sum and passed the check (#760).
+        if (ifd < 8 || ifd.toLong() + 2 > b.size) return null
         var w = 0
         var h = 0
         for (i in 0 until u16(ifd)) {

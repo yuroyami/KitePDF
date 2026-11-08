@@ -192,7 +192,8 @@ public object KiteDoc {
         }.getOrDefault(false)
     }
 
-    private val cbzImageExtensions = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
+    /** The page extensions of `CbzDocument`, which keeps the same set (#755). */
+    private val cbzImageExtensions = setOf("jpg", "jpeg", "jfif", "png", "gif", "bmp", "webp", "tif", "tiff", "avif", "jxl")
 
     /** Every real entry is an image: the strict CBZ definition, so a photo backup stays unrecognized. */
     private fun looksLikeCbz(bytes: ByteArray): Boolean = runCatching {
