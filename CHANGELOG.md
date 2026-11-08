@@ -485,6 +485,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every JVM and Android artifact is Java 11 bytecode, as ImageKodec and KiteJS are, where it was Java 21: an app
   on Java 17 failed with `UnsupportedClassVersionError` on the first class it loaded. The README and the platform
   page say Java 11 or newer, and the consumer check builds on Java 11 (#683).
+- `PdfScriptRunner.keystroke` with `commit = true` runs the keystroke that ends the edit, with `event.willCommit`
+  true, the whole value in `event.value` and no change, and stores nothing. It ignored `commit` (#779).
 
 ## [0.13.0] - 2026-10-09
 

@@ -437,6 +437,12 @@ public class PdfScriptRunner(
      *
      * [change] is what is being inserted, and [selectionStart] and [selectionEnd] say what it
      * replaces.
+     *
+     * With [commit] true it runs the keystroke that ends the edit instead (ISO 32000-1, 12.6.3,
+     * Table 196, `K`): `event.willCommit` is true, `event.value` holds the whole value after the
+     * change and `event.change` is empty, as the Acrobat JavaScript reference gives them, so a
+     * script that refuses the final value refuses it here (#779). Nothing is stored; [setFieldValue]
+     * commits, validates and calculates.
      */
     public fun keystroke(
         fieldName: String,
@@ -444,7 +450,25 @@ public class PdfScriptRunner(
         selectionStart: Int = editingValue(fieldName).length,
         selectionEnd: Int = selectionStart,
         commit: Boolean = false,
-    ): KeystrokeResult = onScriptThread { keystrokeHere(fieldName, change, selectionStart, selectionEnd) }
+    ): KeystrokeResult = onScriptThread {
+        if (commit) commitKeystrokeHere(fieldName, mergedValue(fieldName, change, selectionStart, selectionEnd))
+        else keystrokeHere(fieldName, change, selectionStart, selectionEnd)
+    }
+
+    /** The keystroke that commits [value], without storing it. */
+    private suspend fun commitKeystrokeHere(fieldName: String, value: String): KeystrokeResult {
+        ensureEngine()
+        val script = keystrokeScript(fieldName)
+        if (script == null || !policy.enabled) return KeystrokeResult(true, value)
+        val result = dispatch(
+            script, "keystroke",
+            mapOf(
+                "name" to "Keystroke", "type" to "Field", "field" to fieldName,
+                "value" to value, "change" to "", "willCommit" to true,
+            ),
+        )
+        return KeystrokeResult(result.rc, if (result.rc) result.value else editingValue(fieldName))
+    }
 
     private suspend fun keystrokeHere(fieldName: String, change: String, selectionStart: Int, selectionEnd: Int): KeystrokeResult {
         ensureEngine()
