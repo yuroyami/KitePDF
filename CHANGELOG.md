@@ -882,6 +882,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#684).
 - `KiteMediaOverlay` no longer lays out a chapter that the layout budget dropped on the UI thread: it waits until
   the page has its content back, then shows the page's media (#681).
+- On the web, going to a bookmark, a table of contents entry or a link with a fragment, and opening at a saved
+  position, lay the target chapter out in slices with frames between them, as the chapter loader does, instead of
+  in one task on the UI thread (#682).
 
 ## [0.13.0] - 2026-10-09
 

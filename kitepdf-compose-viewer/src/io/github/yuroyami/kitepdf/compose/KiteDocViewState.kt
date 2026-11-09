@@ -2296,8 +2296,19 @@ public class KiteDocViewState(
     private fun flowTarget(bookmark: KiteBookmark.Flow): KiteLocation =
         KiteLocation(bookmark.chapter.coerceIn(0, (document.chapterCount - 1).coerceAtLeast(0)), 0)
 
-    /** [KiteDocument.locate] off the main thread, or null when the layout it needs failed (#331). */
-    private suspend fun locateGuarded(bookmark: KiteBookmark): KiteLocation? = try {
+    /**
+     * [KiteDocument.locate] off the main thread, or null when the layout it needs failed (#331).
+     * Where layout runs on the UI thread, the target chapter first lays out in slices, so neither
+     * locate nor topOf lays it out in one task (#682).
+     */
+    private suspend fun locateGuarded(bookmark: KiteBookmark): KiteLocation? {
+        if (layoutPausesForFrames && bookmark is KiteBookmark.Flow && document.chapterCount > 0) {
+            if (!prepareChapterGuarded(flowTarget(bookmark).chapter)) return null
+        }
+        return locateNow(bookmark)
+    }
+
+    private suspend fun locateNow(bookmark: KiteBookmark): KiteLocation? = try {
         withContext(kitepdfRasterDispatcher()) { document.locate(bookmark) }
     } catch (cancelled: CancellationException) {
         throw cancelled
