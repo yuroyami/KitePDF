@@ -245,7 +245,7 @@ internal class BoxLayout(
         }
         frames.removeAt(frames.lastIndex)
         frame.close()
-        frames.lastOrNull()?.landed(frame.box)
+        frames.lastOrNull()?.landed(frame.box, frame)
     }
 
     /**
@@ -253,7 +253,11 @@ internal class BoxLayout(
      * flow cursor its children move down. [layoutBlock] runs one to its end; a [Run] keeps one for
      * each block between the root and the child it is at.
      */
-    private inner class BlockFrame(val box: BlockBox, xLeft: Double, availWidth: Double, topY: Double, forcedWidth: Double?) {
+    private inner class BlockFrame(
+        val box: BlockBox, xLeft: Double, availWidth: Double, topY: Double, forcedWidth: Double?,
+        /** The collapsed margin the parent put above this box, when it can collapse with this box's first child (#836). */
+        private val above: Margin? = null,
+    ) {
         // Percentages of widths are of this box's containing block, the room it is given (#838).
         private val s = box.style.within(availWidth)
         // A positioned box is the containing block for its out-of-flow
@@ -263,18 +267,46 @@ internal class BoxLayout(
         private val bL = s.borderLeft.effective
         private val contentW: Double
         private val contentLeft: Double
-        private val contentTop: Double
+        private var contentTop: Double
         private var cursorY: Double
-        private var prevBottom = 0.0
+        /** The margin waiting below the last in-flow child, or above the first while [first] (CSS 2.1, 8.3.1; #836). */
+        private var pending = Margin.ZERO
         private var first = true
+        /** How far this box has moved down to let its top margin collapse with its children's. */
+        private var shifted = 0.0
         private val floatsBefore: Int
 
         /** The children that stack in this block's flow, and the index of the next one. */
         val children: List<LayoutBox>
         var next = 0
 
-        /** The bottom margin of the block child whose own frame is open above this one. */
-        private var openChildBottom = 0.0
+        /** The block child whose own frame is open above this one: its top and bottom margins, and where the flow stood. */
+        private var openChildTop = Margin.ZERO
+        private var openChildBottom = Margin.ZERO
+        private var openCursor = 0.0
+        private var openPending = Margin.ZERO
+        private var openFirst = true
+
+        /**
+         * True when this box starts no new block formatting context and nothing separates its
+         * margins from its children's: no border or padding there, and an auto height at the
+         * bottom (CSS 2.1, 8.3.1).
+         */
+        private val opensContext: Boolean = s.display == Display.FLEX || s.display == Display.GRID ||
+            s.display == Display.INLINE_BLOCK || s.display == Display.TABLE_CELL || s.clipsOverflow ||
+            s.cssFloat != CssFloat.NONE || s.position == CssPosition.ABSOLUTE || s.position == CssPosition.FIXED ||
+            box.embed != null || forcedWidth != null
+        private val topCollapses = above != null && !opensContext && s.borderTop.effective == 0.0 && s.paddingTopPt == 0.0
+        val bottomCollapses: Boolean = above != null && !opensContext && s.borderBottom.effective == 0.0 && s.paddingBottomPt == 0.0 &&
+            s.heightPt == null && (s.minHeightPt ?: 0.0) <= 0.0
+
+        /** The bottom margin of the last child that passes through this box's bottom, once [close] has run. */
+        var escapedBottom: Margin = Margin.ZERO
+            private set
+
+        /** True once [close] finds no in-flow content and margins that collapse through the box. */
+        var collapsedThrough: Boolean = false
+            private set
 
         init {
             if (ownCb != null) currentCb = ownCb
@@ -346,30 +378,65 @@ internal class BoxLayout(
                 return null
             }
             // Anonymous text boxes carry no margins; real block children do.
-            val topMargin = if (child is BlockBox) child.style.marginTopPt else 0.0
-            val botMargin = if (child is BlockBox) child.style.marginBottomPt else 0.0
-            val gap = if (first) topMargin else maxOf(prevBottom, topMargin)
+            val topMargin = Margin.of(if (child is BlockBox) child.style.within(contentW).marginTopPt else 0.0)
+            val botMargin = Margin.of(if (child is BlockBox) child.style.within(contentW).marginBottomPt else 0.0)
+            // Adjoining margins collapse to the largest positive one plus the most negative one (CSS 2.1, 8.3.1).
+            val joined = pending.with(topMargin)
+            val gap = if (first && topCollapses) {
+                // The first child's margin joins this box's own: the box moves down with it, and the child starts at its top.
+                val extra = above!!.with(joined).value - (above.value + shifted)
+                if (extra != 0.0) shiftTop(extra)
+                0.0
+            } else joined.value
             if (child is BlockBox) {
+                openChildTop = joined
                 openChildBottom = botMargin
-                return BlockFrame(child, contentLeft, contentW, cursorY + gap, forcedWidth = null)
+                openCursor = cursorY
+                openPending = pending
+                openFirst = first
+                return BlockFrame(child, contentLeft, contentW, cursorY + gap, forcedWidth = null, above = if (first && topCollapses) above!!.with(joined) else joined)
             }
             layoutChild(child, contentLeft, contentW, cursorY + gap)
             cursorY = child.bottom
-            prevBottom = botMargin
+            pending = botMargin
             first = false
             return null
         }
 
         /** Moves the cursor below [child], the block child of [place] whose frame has closed. */
-        fun landed(child: BlockBox) {
+        fun landed(child: BlockBox, frame: BlockFrame) {
+            if (frame.collapsedThrough) {
+                // An empty block's margins collapse through it, with the margins on either side (8.3.1).
+                cursorY = openCursor
+                pending = openChildTop.with(openChildBottom).with(frame.escapedBottom)
+                first = openFirst
+                return
+            }
             cursorY = child.bottom
-            prevBottom = openChildBottom
+            pending = if (frame.bottomCollapses) openChildBottom.with(frame.escapedBottom) else openChildBottom
             first = false
+        }
+
+        /** Moves this box, and the flow inside it, down by [dy], before any in-flow child has landed. */
+        private fun shiftTop(dy: Double) {
+            box.y += dy
+            contentTop += dy
+            cursorY += dy
+            shifted += dy
         }
 
         /** Sizes the block around its laid-out children and places what waited on its size. */
         fun close() {
-            cursorY += prevBottom
+            if (first && topCollapses && bottomCollapses && s.borderTop.effective == 0.0 && floatsBefore == activeFloats.size) {
+                // No in-flow content: the box's own margins and those of its empty children collapse through it.
+                collapsedThrough = true
+                escapedBottom = pending
+            } else if (bottomCollapses) {
+                // The last child's bottom margin leaves through this box's bottom (8.3.1).
+                escapedBottom = pending
+            } else {
+                cursorY += pending.value
+            }
             // A float may extend below the last in-flow child; grow the block to
             // contain it so pagination never splits content across a float (CSS
             // lets floats overflow their block, a deliberate simplification here).
@@ -3368,3 +3435,18 @@ internal class BoxLayout(
 /** True for a track size that the content decides (CSS Grid Layout 1, 7.2). */
 private val GridSize.intrinsic: Boolean
     get() = this is GridSize.Auto || this is GridSize.MinContent || this is GridSize.MaxContent
+
+/**
+ * A collapsed margin: the largest positive margin and the most negative one that take part, whose
+ * sum is the margin (CSS 2.1, 8.3.1; #836).
+ */
+internal class Margin private constructor(val positive: Double, val negative: Double) {
+    val value: Double get() = positive + negative
+
+    fun with(other: Margin): Margin = Margin(maxOf(positive, other.positive), minOf(negative, other.negative))
+
+    companion object {
+        val ZERO: Margin = Margin(0.0, 0.0)
+        fun of(margin: Double): Margin = if (!margin.isFinite()) ZERO else Margin(maxOf(0.0, margin), minOf(0.0, margin))
+    }
+}

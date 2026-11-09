@@ -63,8 +63,8 @@ class MathGoldenTest {
 
     @Test
     fun theReferenceFormulasDrawAsWhenTheyWereChecked() {
-        assertEquals("5fc0bceab2c89e0ff8b5cfa48787ab587529ae11", sha1(stream(quadratic)), "the quadratic formula")
-        assertEquals("b1514169429f2347645bacbbbbc2fc63bb47728e", sha1(stream(nested)), "the nested fraction")
-        assertEquals("cdbfc4b978e85fb012f3ae5707424f9e02168e92", sha1(stream(matrix)), "the matrix")
+        assertEquals("635b9b14c364c25b997ace91659b4923b2004448", sha1(stream(quadratic)), "the quadratic formula")
+        assertEquals("f250f3a025bf95bb3e86819f8dde99f5b23f7c25", sha1(stream(nested)), "the nested fraction")
+        assertEquals("7f05cf8e7a820dfb2bf3c3e2b4c4e9bb36cbc040", sha1(stream(matrix)), "the matrix")
     }
 }

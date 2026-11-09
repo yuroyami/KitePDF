@@ -989,6 +989,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   containing block, not of the page. Two nested `width: 50%` boxes on a 300 point page were both 150 points wide
   and are now 150 and 75, and a `width: 100%` table in a blockquote fills the blockquote instead of running past
   the page (#838).
+- EPUB margins collapse as CSS 2.1, 8.3.1 has them: a block with its first and its last child, through an empty
+  block, and with a negative margin to the largest positive one plus the most negative one. The first paragraph
+  of a chapter starts at 12 points instead of 24, and seven corpus books lose one or two pages (#836).
 
 ## [0.13.0] - 2026-10-09
 
