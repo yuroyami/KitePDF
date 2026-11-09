@@ -992,6 +992,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EPUB margins collapse as CSS 2.1, 8.3.1 has them: a block with its first and its last child, through an empty
   block, and with a negative margin to the largest positive one plus the most negative one. The first paragraph
   of a chapter starts at 12 points instead of 24, and seven corpus books lose one or two pages (#836).
+- On Canvas2D a soft-masked paint keeps its blend mode: its layer starts as the pixels under it, and the mask
+  mixes it into the page. A red Multiply paint on blue under an opaque mask is black, as on AWT and MuPDF, and no
+  longer red (#764).
 
 ## [0.13.0] - 2026-10-09
 

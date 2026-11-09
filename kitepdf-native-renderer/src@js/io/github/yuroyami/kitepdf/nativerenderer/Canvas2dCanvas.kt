@@ -561,12 +561,17 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         }
         // The mask is zero wherever the content could show.
         if (area[2] == 0 || area[3] == 0) return
+        // ISO 32000-1, 11.6.4.3: the mask scales the shape of each paint, which still blends with
+        // the real backdrop in its own mode (11.3.5). So the content layer starts as the pixels
+        // under it, and the mask mixes the layer in: backdrop x (1 - m) + layer x m (#764). In a
+        // knockout group a paint's backdrop is the group's own, so it keeps a transparent layer.
+        val exact = !knockingOut
         // The content and the mask composite as usual, also inside a knockout group.
         groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
         val content: Layer?
         val mask: Layer?
         try {
-            content = paintInLayer(area, render)
+            content = paintInLayer(area, fromBackdrop = exact, paint = render)
             // Without a layer for the content it paints straight onto the page, without its mask (#889).
             if (content == null) {
                 render()
@@ -594,6 +599,13 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                 contentCtx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
                 contentCtx.globalCompositeOperation = "destination-in"
                 contentCtx.drawImage(mask.canvas, 0.0, 0.0)
+                if (exact) {
+                    // The page keeps 1 - m of itself, and the masked layer, which holds the backdrop's
+                    // part already, adds to it.
+                    composite(mask, 1.0, "destination-out")
+                    composite(content, 1.0, "lighter")
+                    return
+                }
             }
             composite(content, 1.0, "source-over")
         } finally {
@@ -689,10 +701,18 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     }
 
     /** A layer over [area] that [paint] draws into, through this canvas, or null, painting nothing, when the browser gives no layer. */
-    private fun paintInLayer(area: IntArray, paint: () -> Unit): Layer? {
+    private fun paintInLayer(area: IntArray, fromBackdrop: Boolean = false, paint: () -> Unit): Layer? {
         val saved = Saved(ctx, originX, originY, openLayers)
         val openGroups = groups.size
         val layer = openLayer(area) ?: return null
+        if (fromBackdrop && area[2] > 0 && area[3] > 0) {
+            // The layer starts as the pixels under it, read from the canvas of the context outside.
+            ctx.save()
+            ctx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+            ctx.drawImage(saved.ctx.canvas, layer.x - saved.originX, layer.y - saved.originY, area[2].toDouble(), area[3].toDouble(),
+                0.0, 0.0, area[2].toDouble(), area[3].toDouble())
+            ctx.restore()
+        }
         try {
             paint()
         } finally {

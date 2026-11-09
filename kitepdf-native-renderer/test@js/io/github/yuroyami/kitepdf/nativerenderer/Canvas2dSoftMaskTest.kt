@@ -88,4 +88,30 @@ class Canvas2dSoftMaskTest {
         ctx.assertPixel(60, 100, listOf(255, 0, 0))
         ctx.assertPixel(140, 100, listOf(255, 255, 255))
     }
+
+    /** A blue page, then a red fill in Multiply under a soft mask whose group fills [mask] over the page. */
+    private fun multiplied(mask: String, kind: String = "Alpha", maskResources: String = "") = testPage(
+        "0 0 1 rg 0 0 200 200 re f /GS1 gs 1 0 0 rg 0 0 200 200 re f",
+        "/ExtGState << /GS1 << /BM /Multiply /SMask << /S /$kind /G 5 0 R >> >> >>",
+        listOf(groupForm(mask, maskResources)),
+    )
+
+    @Test
+    fun a_masked_paint_keeps_its_blend_mode() {
+        // ISO 32000-1, 11.6.4.3 and 11.3.5: an opaque mask leaves the Multiply as it is, so red on
+        // blue stays black; the layer used to blend against transparency and painted red (#764).
+        renderOnCanvas(multiplied("1 g 0 0 200 200 re f")).assertPixel(100, 100, listOf(0, 0, 0))
+        renderOnCanvas(multiplied("1 g 0 0 200 200 re f", "Luminosity")).assertPixel(100, 100, listOf(0, 0, 0))
+        // A mask of half keeps half of the blue and half of the black.
+        renderOnCanvas(multiplied("/GH gs 1 g 0 0 200 200 re f", maskResources = "/ExtGState << /GH << /ca 0.5 >> >>"))
+            .assertPixel(100, 100, listOf(0, 0, 128))
+        // A Normal paint under a mask is unchanged: half red over blue.
+        renderOnCanvas(
+            testPage(
+                "0 0 1 rg 0 0 200 200 re f /GS1 gs 1 0 0 rg 0 0 200 200 re f",
+                "/ExtGState << /GS1 << /SMask << /S /Alpha /G 5 0 R >> >> >>",
+                listOf(groupForm("/GH gs 1 g 0 0 200 200 re f", "/ExtGState << /GH << /ca 0.5 >> >>")),
+            ),
+        ).assertPixel(100, 100, listOf(128, 0, 128))
+    }
 }
