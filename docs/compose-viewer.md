@@ -85,7 +85,7 @@ fun Reader(document: KiteDocument) {
 
     | Parameter | What it does |
     | --- | --- |
-    | `state` | The state that this viewer shows and that your code drives |
+    | `state` | The state that this viewer shows and that your code drives. One viewer shows a state at a time; give a second viewer of the same document a state of its own. Widgets such as `KiteThumbnailStrip` may share it. |
     | `modifier` | The modifier of the viewport |
     | `layout` | How the pages sit and move, see [Layouts](#layouts) |
     | `zoomSpec` | Pinch, double tap, pan and the zoom limits, see [Zoom and gestures](#zoom-and-gestures) |
