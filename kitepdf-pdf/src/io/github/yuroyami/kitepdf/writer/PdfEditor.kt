@@ -1792,7 +1792,7 @@ public class PdfEditor internal constructor(
         }
         if (staged.isEmpty() && trailerOverrides.isEmpty()) return base.bytes
 
-        val out = ByteArrayBuilder(base.fileSize + 1024)
+        val out = ByteArrayBuilder(incrementalSaveCapacity(base.fileSize))
         out.append(base.fileBytes)
         // The appended section must start on its own line so byte offsets and
         // the "N G obj" header parse cleanly regardless of how the original ended.
@@ -2169,3 +2169,10 @@ public class PdfEditor internal constructor(
         val SCRUBBED_FIELD_KEYS = listOf("V", "DV", "RV", "AS", "I", "T", "TU", "TM", "AP")
     }
 }
+
+/**
+ * The first capacity of an incremental save's output: the original file and 1 KiB for the update,
+ * clamped to the largest array, as [fileSize] + 1024 overflowed to a negative capacity for a file
+ * within 1 KiB of 2 GiB and the save failed before it wrote a byte.
+ */
+internal fun incrementalSaveCapacity(fileSize: Int): Int = minOf(fileSize.toLong() + 1024L, Int.MAX_VALUE.toLong() - 8L).toInt()
