@@ -1041,6 +1041,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An inline-block with inline content is one unit of its line, as CSS 2.1, 9.2.4 asks: no line breaks inside it,
   it takes its width or min-width, its horizontal padding, border and margins take room, and its background and
   border paint as one box behind its text. Its text still reads, searches and selects with the line (#840).
+- The differential sweep scores the mean error of the worst 24-pixel tile of each page too, so a page that loses
+  or gains a small shape of any colour fails: a pale 40-pixel square that vanished from a Letter page moved the
+  page scores by less than their margins and scores 0.15 in its tile (#775).
 
 ## [0.13.0] - 2026-10-09
 

@@ -46,6 +46,8 @@ object DiffHarness {
         val diffPng: String?,
         /** Non-background pixels in the reference render, when the oracle ran. */
         val referenceInk: Long? = null,
+        /** The largest mean error of one tile, when the oracle ran (#775). */
+        val tileError: Double? = null,
         /** The document this page came from. */
         val source: Corpus.Entry? = null,
     )
@@ -205,6 +207,7 @@ object DiffHarness {
                     var score: Double? = null
                     var diffFrac: Double? = null
                     var maxDelta: Int? = null
+                    var tileError: Double? = null
                     var refRel: String? = null
                     var diffRel: String? = null
                     var oracleError: String? = documentOracleError.takeIf { i == 0 }
@@ -236,6 +239,7 @@ object DiffHarness {
                                     score = d.meanAbsError
                                     diffFrac = d.diffFraction
                                     maxDelta = d.maxChannelDelta
+                                    tileError = d.largestTileError
                                     diffRel = rel(outDir, diffPng)
                                 }
                             }
@@ -252,7 +256,7 @@ object DiffHarness {
                         doc = entry.name, page = i, synthetic = entry.synthetic,
                         rendered = true, error = null, nonBlank = nonBlank,
                         oracleError = oracleError,
-                        score = score, diffFraction = diffFrac, maxDelta = maxDelta,
+                        score = score, diffFraction = diffFrac, maxDelta = maxDelta, tileError = tileError,
                         kitePng = rel(outDir, kitePng), refPng = refRel, diffPng = diffRel,
                         referenceInk = referenceInk, source = entry,
                     )

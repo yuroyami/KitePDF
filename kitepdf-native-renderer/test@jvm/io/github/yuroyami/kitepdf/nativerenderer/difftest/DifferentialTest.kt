@@ -17,6 +17,7 @@ import kotlin.test.assertTrue
  *   -Dkitepdf.diff.dpi=150             render density (default 96)
  *   -Dkitepdf.diff.budget=0.15         max allowed per-page MAE before failing
  *   -Dkitepdf.diff.updateBaseline=true rewrite the per-page baseline, `difftest-baseline.txt`
+ *   -Dkitepdf.diff.updateTiles=true    record only the tile score of each page within its other margins (#775)
  *   -Dkitepdf.difftest.out=build/difftest   output directory
  *
  * Without an oracle the test degrades to a KitePDF-only smoke pass (render
@@ -87,7 +88,10 @@ class DifferentialTest {
         // Each page against its own recorded score (#195). The scores hold at the default
         // density only, so a run at another density skips them.
         if (report.oracleAvailable && dpi == DiffHarness.DEFAULT_DPI) {
-            checkBaseline(corpus, report, update = System.getProperty("kitepdf.diff.updateBaseline") == "true")
+            checkBaseline(
+                corpus, report, update = System.getProperty("kitepdf.diff.updateBaseline") == "true",
+                updateTiles = System.getProperty("kitepdf.diff.updateTiles") == "true",
+            )
         }
     }
 
@@ -114,12 +118,12 @@ class DifferentialTest {
          * Fails when a page scores worse than its recorded baseline, or when a fixture has no
          * baseline. With [update], writes this run's scores instead.
          */
-        internal fun checkBaseline(corpus: List<Corpus.Entry>, report: DiffHarness.Report, update: Boolean) {
+        internal fun checkBaseline(corpus: List<Corpus.Entry>, report: DiffHarness.Report, update: Boolean, updateTiles: Boolean = false) {
             val current = LinkedHashMap<String, DiffBaseline.Score>()
             val names = HashMap<String, String>()
             for (r in report.results) {
                 val entry = r.source ?: continue
-                val score = DiffBaseline.Score(r.score ?: continue, r.diffFraction ?: continue, r.maxDelta ?: continue)
+                val score = DiffBaseline.Score(r.score ?: continue, r.diffFraction ?: continue, r.maxDelta ?: continue, r.tileError)
                 val key = DiffBaseline.key(entry, r.page)
                 current[key] = score
                 names[key] = "${r.doc} p${r.page}"
@@ -130,6 +134,17 @@ class DifferentialTest {
             if (update) {
                 DiffBaseline.write(file, baseline, current, corpus.filter { it.synthetic }.map { it.name }.toSet())
                 println("[difftest] wrote ${current.size} page scores to ${file.path}")
+                return
+            }
+            if (updateTiles) {
+                // Records only the tile score, of each page within its other margins, and keeps the
+                // rest of the baseline as it is: a run whose oracle differs from CI's moves nothing else (#775).
+                val merged = baseline.mapValues { (key, base) ->
+                    val now = current[key]
+                    if (now?.tile != null && DiffBaseline.regression(base.copy(tile = null), now) == null) base.copy(tile = now.tile) else base
+                }
+                DiffBaseline.write(file, merged, emptyMap(), corpus.filter { it.synthetic }.map { it.name }.toSet())
+                println("[difftest] recorded the tile score of ${merged.count { it.value.tile != null }} of ${merged.size} pages in ${file.path}")
                 return
             }
             val worse = current.mapNotNull { (key, now) ->

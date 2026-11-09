@@ -82,6 +82,17 @@ class DifferentialConfigurationTest {
         assertFalse(DiffBaseline.improved(base, DiffBaseline.Score(0.0008, 0.004, 40)))
     }
 
+    /** The issue's case: a pale square lost from syn-text moved none of the three page scores past its margin (#775). */
+    @Test
+    fun a_small_pale_shape_that_went_missing_fails_its_tile() {
+        val base = DiffBaseline.Score(0.00015, 0.00096, 31, tile = 0.004)
+        val lost = DiffBaseline.Score(0.00043, 0.00281, 39, tile = 0.15)
+        assertNull(DiffBaseline.regression(base.copy(tile = null), lost), "the three page scores let it pass")
+        assertNotNull(DiffBaseline.regression(base, lost), "the tile fails it")
+        assertNull(DiffBaseline.regression(base, base.copy(tile = 0.02)), "within the tile margin")
+        assertNull(DiffBaseline.regression(base, lost.copy(tile = null)), "a page with no tile score recorded is not checked by it")
+    }
+
     @Test
     fun rewriting_the_baseline_keeps_corpus_documents_and_drops_removed_fixtures() {
         val f = Files.createTempFile("kite-baseline-", ".txt").toFile()

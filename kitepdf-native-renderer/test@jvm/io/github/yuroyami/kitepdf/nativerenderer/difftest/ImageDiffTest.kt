@@ -8,8 +8,25 @@ import java.awt.image.BufferedImage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class ImageDiffTest {
+
+    /** A 0.85 grey square of 40 by 40 pixels on a white page of 816 by 1056, the size of a Letter page at 96 dpi. */
+    @Test
+    fun a_missing_pale_square_raises_its_tile_not_the_page_mean() {
+        fun page(square: Boolean) = BufferedImage(816, 1056, BufferedImage.TYPE_INT_RGB).also { img ->
+            val g = img.createGraphics()
+            g.color = java.awt.Color.WHITE
+            g.fillRect(0, 0, 816, 1056)
+            if (square) { g.color = java.awt.Color(217, 217, 217); g.fillRect(400, 400, 40, 40) }
+            g.dispose()
+        }
+        val result = ImageDiff.compare(page(square = false), page(square = true))
+        assertTrue(result.meanAbsError < 0.0005, "the page mean: ${result.meanAbsError}")
+        assertEquals(38.0 / 255, result.largestTileError, 1e-9, "a tile wholly inside the square")
+        assertEquals(0.0, ImageDiff.compare(page(square = true), page(square = true)).largestTileError)
+    }
 
     @Test
     fun accepts_a_single_rounding_pixel_and_compares_the_pixels_both_have() {

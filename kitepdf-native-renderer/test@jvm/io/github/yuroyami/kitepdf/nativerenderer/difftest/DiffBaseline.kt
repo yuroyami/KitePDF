@@ -15,8 +15,11 @@ import java.util.Locale
  */
 internal object DiffBaseline {
 
-    /** The scores of one page: mean absolute error, fraction of changed pixels, largest channel error. */
-    data class Score(val mae: Double, val diffFraction: Double, val maxDelta: Int)
+    /**
+     * The scores of one page: mean absolute error, fraction of changed pixels, largest channel error,
+     * and the largest mean error of one tile, which a page recorded before #775 lacks.
+     */
+    data class Score(val mae: Double, val diffFraction: Double, val maxDelta: Int, val tile: Double? = null)
 
     /** The key of page [page] (0-based) of [entry]. */
     fun key(entry: Corpus.Entry, page: Int): String = "${id(entry)} p$page"
@@ -37,7 +40,7 @@ internal object DiffBaseline {
         return File(d ?: File("."), "kitepdf-native-renderer/testResources@jvm/difftest-baseline.txt")
     }
 
-    /** `id pN mae diffFraction maxDelta` per line; `#` starts a comment. */
+    /** `id pN mae diffFraction maxDelta [tile]` per line; `#` starts a comment. */
     fun read(f: File): Map<String, Score> {
         if (!f.exists()) return emptyMap()
         val out = LinkedHashMap<String, Score>()
@@ -48,7 +51,7 @@ internal object DiffBaseline {
             val mae = parts[2].toDoubleOrNull() ?: continue
             val fraction = parts[3].toDoubleOrNull() ?: continue
             val delta = parts[4].toIntOrNull() ?: continue
-            out["${parts[0]} ${parts[1]}"] = Score(mae, fraction, delta)
+            out["${parts[0]} ${parts[1]}"] = Score(mae, fraction, delta, parts.getOrNull(5)?.toDoubleOrNull())
         }
         return out
     }
@@ -72,9 +75,14 @@ internal object DiffBaseline {
             buildString {
                 append("# The score of each page of the differential sweep against MuPDF at 96 dpi, checked by DifferentialTest.\n")
                 append("# Fixture name or corpus document hash, page, mean absolute error, fraction of changed pixels,\n")
-                append("# largest channel error. Rewrite with -Dkitepdf.diff.updateBaseline=true and say why in the commit.\n")
+                append("# largest channel error, and the largest mean error of a 24-pixel tile where it was recorded.\n")
+                append("# Rewrite with -Dkitepdf.diff.updateBaseline=true and say why in the commit.\n")
                 // A fixed locale, so the file reads back the same wherever it is written.
-                for ((key, s) in ordered) append(String.format(Locale.ROOT, "%s %.5f %.5f %d\n", key, s.mae, s.diffFraction, s.maxDelta))
+                for ((key, s) in ordered) {
+                    append(String.format(Locale.ROOT, "%s %.5f %.5f %d", key, s.mae, s.diffFraction, s.maxDelta))
+                    s.tile?.let { append(String.format(Locale.ROOT, " %.5f", it)) }
+                    append('\n')
+                }
             },
         )
     }
@@ -87,6 +95,12 @@ internal object DiffBaseline {
             reasons += "changed pixels %.5f -> %.5f".format(base.diffFraction, now.diffFraction)
         }
         if (now.maxDelta > base.maxDelta + DELTA_MARGIN) reasons += "largest channel error ${base.maxDelta} -> ${now.maxDelta}"
+        // A small shape that went missing, of any colour, shows in its tile (#775).
+        val baseTile = base.tile
+        val nowTile = now.tile
+        if (baseTile != null && nowTile != null && nowTile > baseTile * FACTOR + TILE_MARGIN) {
+            reasons += "largest tile error %.5f -> %.5f".format(baseTile, nowTile)
+        }
         return reasons.takeIf { it.isNotEmpty() }?.joinToString(", ")
     }
 
@@ -99,4 +113,6 @@ internal object DiffBaseline {
     private const val MAE_MARGIN = 0.0005
     private const val FRACTION_MARGIN = 0.002
     private const val DELTA_MARGIN = 48
+    /** A tile may score this much worse: a 24-pixel tile of 0.85 grey on white that went missing scores 0.15. */
+    private const val TILE_MARGIN = 0.02
 }

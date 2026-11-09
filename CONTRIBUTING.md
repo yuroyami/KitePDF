@@ -51,6 +51,9 @@ The sweep also compares each page with its own score in `kitepdf-native-renderer
 - its mean error
 - its fraction of changed pixels
 - its largest channel error
+- the mean error of its worst 24-pixel tile, where one is recorded, so that a small shape of any colour cannot go missing while the page's mean holds (#775)
+
+`kitepdf.diff.updateTiles=true` records only the tile score, for each page that is within its other margins, and leaves the rest of the file as it is.
 
 A new fixture fails until it has a score. When your change moves a score on purpose, run the sweep again with the system property `kitepdf.diff.updateBaseline=true`, and say why in the same commit. The sweep also names each page that got better. Record the new score, so that the page cannot slip back unnoticed.
 

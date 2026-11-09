@@ -22,6 +22,9 @@ import kotlin.math.abs
  */
 public object ImageDiff {
 
+    /** The side in pixels of the tiles that [DiffResult.largestTileError] scores, as the PDFium parity check does. */
+    const val TILE: Int = 24
+
     /** Per-channel delta above which a pixel counts toward [DiffResult.diffFraction]. */
     private const val PERCEPTUAL_THRESHOLD = 16
 
@@ -34,6 +37,12 @@ public object ImageDiff {
         val diffFraction: Double,
         /** Worst single-channel delta seen, 0..255. */
         val maxChannelDelta: Int,
+        /**
+         * The largest mean absolute error of one [TILE] by [TILE] tile, 0.0 .. 1.0: a local error,
+         * which a small shape that went missing raises whatever its colour, where the page's
+         * mean spreads it thin (#775).
+         */
+        val largestTileError: Double,
         /** Red-on-white heatmap: white = identical, deeper red = larger local error. */
         val heatmap: BufferedImage,
     ) {
@@ -71,6 +80,9 @@ public object ImageDiff {
         var sumErr = 0L
         var diffPixels = 0L
         var maxDelta = 0
+        val tilesX = (w + TILE - 1) / TILE
+        val tilesY = (h + TILE - 1) / TILE
+        val tileErr = LongArray(tilesX * tilesY)
 
         for (y in 0 until h) {
             for (x in 0 until w) {
@@ -81,6 +93,7 @@ public object ImageDiff {
                 val db = abs((pa and 0xFF) - (pb and 0xFF))
 
                 sumErr += (dr + dg + db).toLong()
+                tileErr[(y / TILE) * tilesX + x / TILE] += (dr + dg + db).toLong()
                 val pixMax = maxOf(dr, dg, db)
                 if (pixMax > maxDelta) maxDelta = pixMax
                 if (pixMax > PERCEPTUAL_THRESHOLD) diffPixels++
@@ -95,12 +108,19 @@ public object ImageDiff {
 
         val totalPix = (w.toLong() * h.toLong()).coerceAtLeast(1L)
         val mae = sumErr.toDouble() / (totalPix.toDouble() * 3.0 * 255.0)
+        var largestTile = 0.0
+        for (ty in 0 until tilesY) for (tx in 0 until tilesX) {
+            // An edge tile is smaller, and scores over the pixels it has.
+            val pixels = (minOf(TILE, w - tx * TILE) * minOf(TILE, h - ty * TILE)).toDouble()
+            largestTile = maxOf(largestTile, tileErr[ty * tilesX + tx] / (pixels * 3.0 * 255.0))
+        }
         return DiffResult(
             width = w,
             height = h,
             meanAbsError = mae,
             diffFraction = diffPixels.toDouble() / totalPix.toDouble(),
             maxChannelDelta = maxDelta,
+            largestTileError = largestTile,
             heatmap = heatmap,
         )
     }
