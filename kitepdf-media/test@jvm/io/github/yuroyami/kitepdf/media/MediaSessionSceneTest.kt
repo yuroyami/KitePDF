@@ -116,6 +116,31 @@ class MediaSessionSceneTest {
         assertTrue(players[1].state.value.status.isActive)
     }
 
+    /** A new session takes an open player over, so starting its own element pauses it (#717). */
+    @Test
+    fun an_open_player_follows_a_new_session() = runComposeUiTest {
+        val doc = book(
+            """<audio src="tone.mp3" controls="controls" loop="loop"></audio><p>Between.</p><audio src="other.mp3" controls="controls" loop="loop"></audio>""",
+            files = mapOf("tone.mp3" to fixture("tone.mp3"), "other.mp3" to fixture("tone.mp3")),
+        )
+        val first = KiteMediaSession()
+        val second = KiteMediaSession()
+        val current = mutableStateOf(first)
+        setContent {
+            KiteDocView(KiteDocViewState(doc), Modifier.size(400.dp, 600.dp), pageOverlay = { KiteMediaOverlay(newPlayer = ::newPlayer, session = current.value) })
+        }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Play").fetchSemanticsNodes().size == 2 }
+        onAllNodesWithContentDescription("Play")[0].performClick()
+        waitUntil(timeoutMillis = 30_000) { players.size == 1 && players[0].state.value.status.isActive }
+        current.value = second
+        waitForIdle()
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Play").fetchSemanticsNodes().size == 1 }
+        onAllNodesWithContentDescription("Play")[0].performClick()
+        waitUntil(timeoutMillis = 30_000) { players.size == 2 && players[1].state.value.status.isActive }
+        val paused = runCatching { waitUntil(timeoutMillis = 10_000) { !players[0].state.value.status.isActive } }.isSuccess
+        assertTrue(paused, "the first element plays on with the element of its new session")
+    }
+
     @Test
     fun a_session_forgets_the_oldest_places_past_its_bound() {
         val session = KiteMediaSession()

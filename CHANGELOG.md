@@ -872,6 +872,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the script effects used to follow the first state shown (#714).
 - A media element that could not play because `allowRemote` was false, or because `newPlayer` gave no player,
   tries again when the host changes either: the play button comes back, and an autoplay element starts (#716).
+- An open media player follows the `session` and `place` that `EpubMediaPlayer` is composed with now: a new
+  session takes the player over without closing it, and the player keeps its position under the new place (#717).
 
 ## [0.13.0] - 2026-10-09
 

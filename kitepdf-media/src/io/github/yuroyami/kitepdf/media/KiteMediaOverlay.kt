@@ -177,7 +177,9 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  * @param labels the words of the controls. See [KiteMediaOverlay].
  * @param session what the elements share. See [KiteMediaSession].
  * @param place a name for the element that stays the same when its chapter is laid out again,
- *   under which [session] keeps where it stopped. Null keeps no place.
+ *   under which [session] keeps where it stopped. Null keeps no place. The player belongs to the
+ *   session and keeps its place under the name it is composed with when it closes, so a new
+ *   [session] or [place] applies to an open player too.
  */
 @Composable
 public fun EpubMediaPlayer(
@@ -247,19 +249,27 @@ public fun EpubMediaPlayer(
         }
     }
     val open = player
+    // The player belongs to the session and the place it is composed with now (#717). A new place
+    // takes effect at the next save, and a new session moves the registration without closing the player.
+    val currentPlace by rememberUpdatedState(place)
+    val currentSession by rememberUpdatedState(session)
     DisposableEffect(open) {
-        if (open != null) session.register(open)
         onDispose {
             if (open != null) {
-                session.unregister(open)
-                if (place != null) session.keep(place, placeToKeep(open))
+                currentPlace?.let { currentSession.keep(it, placeToKeep(open)) }
                 open.close()
             }
         }
     }
+    // Declared after the effect that closes the player, so it is disposed first, and the player
+    // leaves its session before its place is kept.
+    DisposableEffect(open, session) {
+        if (open != null) session.register(open)
+        onDispose { if (open != null) session.unregister(open) }
+    }
     if (open != null) {
         LaunchedEffect(open) {
-            open.state.map { it.status.isActive }.distinctUntilChanged().collect { active -> if (active) session.started(open) }
+            open.state.map { it.status.isActive }.distinctUntilChanged().collect { active -> if (active) currentSession.started(open) }
         }
         BackgroundHandling(open, if (media.kind == EpubMediaKind.VIDEO) BackgroundPolicy.PauseAll else session.audioInBackground)
     }
