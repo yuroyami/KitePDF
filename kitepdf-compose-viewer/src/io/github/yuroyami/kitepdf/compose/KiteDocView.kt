@@ -345,8 +345,9 @@ public fun KiteDocView(
     LaunchedEffect(state) { snapshotFlow { state.readerItem() }.collect { state.noteReaderItem(it) } }
     // The chapters on screen stay laid out, so a long press, a link tap or a Vectorized draw on
     // them does not lay a dropped chapter out again on the UI thread (#377).
-    LaunchedEffect(state) { snapshotFlow { state.chaptersOnScreen() }.collect { state.document.keepChapters(it) } }
-    DisposableEffect(state) { onDispose { state.document.keepChapters(emptySet()) } }
+    // Each view keeps its own chapters, so two views of one book keep both (#658).
+    LaunchedEffect(state) { snapshotFlow { state.chaptersOnScreen() }.collect { state.document.keepChapters(state, it) } }
+    DisposableEffect(state) { onDispose { state.document.keepChapters(state, emptySet()) } }
     DisposableEffect(state) { onDispose { state.vectorImageCacheFor(0L) } }
 
     // The handlers whose engine is ready. A tap reaches a script only once its handler has

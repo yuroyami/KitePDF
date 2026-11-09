@@ -227,6 +227,17 @@ public interface KiteDocument : AutoCloseable {
     public fun keepChapters(chapters: Set<Int>) {}
 
     /**
+     * [keepChapters] for one of several viewers of this document: each [owner] keeps its own
+     * chapters, and the document keeps them all, so two views of one book do not replace each
+     * other's chapters, and a view that leaves lets go of its own only (#658). An empty set lets
+     * go of the owner's chapters. A viewer passes its own state. By default it calls
+     * [keepChapters] with [chapters].
+     */
+    public fun keepChapters(owner: Any, chapters: Set<Int>) {
+        keepChapters(chapters)
+    }
+
+    /**
      * The page at [location]. Prepares its chapter first.
      *
      * The same location answers the same object for the life of the document,

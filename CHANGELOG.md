@@ -918,6 +918,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With `KiteZoomSpec.panEnabled` false, a page that overflows a pager no longer locks its swipe, so touch can
   still turn it, and the wheel's pan follows the same flag. `KiteZoomSpec.Disabled` now keeps the pan on, so a
   `scrolled-doc` chapter fit to the width can still be read down at zoom 1 (#648).
+- Two views of one book keep the chapters of both: the new `KiteDocument.keepChapters(owner, chapters)` keeps a
+  set for each viewer, an EPUB keeps them all, and a view that leaves lets go of its own only (#658).
 
 ## [0.13.0] - 2026-10-09
 

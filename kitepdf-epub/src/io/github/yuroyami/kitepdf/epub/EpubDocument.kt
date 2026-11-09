@@ -757,6 +757,9 @@ public class EpubDocument internal constructor(
     /** The chapters on screen, which the budget never drops (#377). */
     private var kept: Set<Int> = emptySet()
 
+    /** The chapters each viewer keeps, under [tableLock]; [kept] is their union (#658). */
+    private val keptBy = HashMap<Any, Set<Int>>()
+
     /** Ticks on every use of a chapter's pages, to stamp [LiveChapter.lastUse]. */
     private var useClock = 0L
 
@@ -1152,8 +1155,17 @@ public class EpubDocument internal constructor(
      * dropped again when the budget needs the room.
      */
     override fun keepChapters(chapters: Set<Int>) {
+        keepChapters(NO_OWNER, chapters)
+    }
+
+    /**
+     * Keeps [chapters] for [owner], one of the viewers of this book, beside the chapters of the
+     * others: the book keeps them all (#658). An empty set lets go of the owner's.
+     */
+    override fun keepChapters(owner: Any, chapters: Set<Int>) {
         tableLock.withLock {
-            kept = chapters.toSet()
+            if (chapters.isEmpty()) keptBy.remove(owner) else keptBy[owner] = chapters.toSet()
+            kept = keptBy.values.flatMapTo(HashSet()) { it }
             trimToBudget()
         }
     }
@@ -4040,3 +4052,6 @@ private fun collapseWithMap(s: String): Pair<String, IntArray> {
 
 private fun commonPrefix(a: String, b: String): Int { var n = 0; while (n < a.length && n < b.length && a[n] == b[n]) n++; return n }
 private fun commonSuffix(a: String, b: String): Int { var n = 0; while (n < a.length && n < b.length && a[a.length - 1 - n] == b[b.length - 1 - n]) n++; return n }
+
+/** The owner of the chapters that [EpubDocument.keepChapters] keeps when the caller names none. */
+private val NO_OWNER = Any()

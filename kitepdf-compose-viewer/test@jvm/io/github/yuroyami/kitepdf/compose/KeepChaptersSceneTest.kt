@@ -26,6 +26,11 @@ class KeepChaptersSceneTest {
             kept += chapters
             inner.keepChapters(chapters)
         }
+
+        override fun keepChapters(owner: Any, chapters: Set<Int>) {
+            kept += chapters
+            inner.keepChapters(owner, chapters)
+        }
     }
 
     private fun book(chapters: Int): EpubDocument = EpubDocument.open(

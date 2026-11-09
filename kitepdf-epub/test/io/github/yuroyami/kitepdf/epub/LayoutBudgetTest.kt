@@ -98,6 +98,24 @@ class LayoutBudgetTest {
         assertFalse(doc.isChapterLive(0), "the chapter that the reader left stays past the budget")
     }
 
+    /** Two viewers of one book keep both their chapters, and one that leaves lets go of its own only (#658). */
+    @Test
+    fun two_viewers_keep_the_chapters_of_both() {
+        val doc = book(budget = 0)
+        val first = Any()
+        val second = Any()
+        doc.keepChapters(first, setOf(0))
+        doc.keepChapters(second, setOf(1))
+        draws(doc.page(KiteLocation(0, 0)))
+        draws(doc.page(KiteLocation(1, 0)))
+        draws(doc.page(KiteLocation(2, 0)))
+        assertTrue(doc.isChapterLive(0) && doc.isChapterLive(1), "a viewer's chapter was dropped for the other's")
+        doc.keepChapters(second, emptySet())
+        draws(doc.page(KiteLocation(2, 0)))
+        assertTrue(doc.isChapterLive(0), "a viewer that left let go of the other's chapter")
+        assertFalse(doc.isChapterLive(1), "the chapter of the viewer that left stays")
+    }
+
     @Test
     fun letting_chapters_go_trims_to_the_budget_at_once() {
         val doc = book(budget = 0)

@@ -32,6 +32,7 @@ public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuro
 	public final fun isFixedLayout ()Z
 	public final fun isLinear (I)Z
 	public final fun isScripted (I)Z
+	public fun keepChapters (Ljava/lang/Object;Ljava/util/Set;)V
 	public fun keepChapters (Ljava/util/Set;)V
 	public final fun linkTarget (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/epub/EpubLinkTarget;
 	public fun locate (Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Lio/github/yuroyami/kitepdf/core/KiteLocation;
