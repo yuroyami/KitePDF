@@ -147,6 +147,7 @@ final enum class io.github.yuroyami.kitepdf.core/KiteRole : kotlin/Enum<io.githu
     final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.core/KiteRole // io.github.yuroyami.kitepdf.core/KiteRole.valueOf|valueOf#static(kotlin.String){}[0]
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.core/KiteRole> // io.github.yuroyami.kitepdf.core/KiteRole.values|values#static(){}[0]
 }
+
 final enum class io.github.yuroyami.kitepdf.core/KiteWarningKind : kotlin/Enum<io.github.yuroyami.kitepdf.core/KiteWarningKind> { // io.github.yuroyami.kitepdf.core/KiteWarningKind|null[0]
     enum entry Filter // io.github.yuroyami.kitepdf.core/KiteWarningKind.Filter|null[0]
     enum entry Font // io.github.yuroyami.kitepdf.core/KiteWarningKind.Font|null[0]
@@ -174,11 +175,12 @@ abstract fun interface io.github.yuroyami.kitepdf.core/KiteCancellation { // io.
     abstract fun isCancelled(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteCancellation.isCancelled|isCancelled(){}[0]
 }
 
-abstract fun interface io.github.yuroyami.kitepdf.core/KiteWarningSink { // io.github.yuroyami.kitepdf.core/KiteWarningSink|null[0]
-    abstract fun warn(kotlin/String) // io.github.yuroyami.kitepdf.core/KiteWarningSink.warn|warn(kotlin.String){}[0]
-}
 abstract fun interface io.github.yuroyami.kitepdf.core/KiteWarningListener { // io.github.yuroyami.kitepdf.core/KiteWarningListener|null[0]
     abstract fun warn(io.github.yuroyami.kitepdf.core/KiteWarning) // io.github.yuroyami.kitepdf.core/KiteWarningListener.warn|warn(io.github.yuroyami.kitepdf.core.KiteWarning){}[0]
+}
+
+abstract fun interface io.github.yuroyami.kitepdf.core/KiteWarningSink { // io.github.yuroyami.kitepdf.core/KiteWarningSink|null[0]
+    abstract fun warn(kotlin/String) // io.github.yuroyami.kitepdf.core/KiteWarningSink.warn|warn(kotlin.String){}[0]
 }
 
 abstract interface io.github.yuroyami.kitepdf.core.filters/PdfFilter { // io.github.yuroyami.kitepdf.core.filters/PdfFilter|null[0]
@@ -276,12 +278,12 @@ abstract interface io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroy
         abstract fun <get-displayHeight>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KitePage.displayHeight.<get-displayHeight>|<get-displayHeight>(){}[0]
     abstract val displayWidth // io.github.yuroyami.kitepdf.core/KitePage.displayWidth|{}displayWidth[0]
         abstract fun <get-displayWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.core/KitePage.displayWidth.<get-displayWidth>|<get-displayWidth>(){}[0]
+    open val animations // io.github.yuroyami.kitepdf.core/KitePage.animations|{}animations[0]
+        open fun <get-animations>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteImageAnimation> // io.github.yuroyami.kitepdf.core/KitePage.animations.<get-animations>|<get-animations>(){}[0]
     open val drawsHostFontText // io.github.yuroyami.kitepdf.core/KitePage.drawsHostFontText|{}drawsHostFontText[0]
         open fun <get-drawsHostFontText>(): kotlin/Boolean? // io.github.yuroyami.kitepdf.core/KitePage.drawsHostFontText.<get-drawsHostFontText>|<get-drawsHostFontText>(){}[0]
     open val hyperlinks // io.github.yuroyami.kitepdf.core/KitePage.hyperlinks|{}hyperlinks[0]
         open fun <get-hyperlinks>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteLink> // io.github.yuroyami.kitepdf.core/KitePage.hyperlinks.<get-hyperlinks>|<get-hyperlinks>(){}[0]
-    open val animations // io.github.yuroyami.kitepdf.core/KitePage.animations|{}animations[0]
-        open fun <get-animations>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteImageAnimation> // io.github.yuroyami.kitepdf.core/KitePage.animations.<get-animations>|<get-animations>(){}[0]
     open val isContentLoaded // io.github.yuroyami.kitepdf.core/KitePage.isContentLoaded|{}isContentLoaded[0]
         open fun <get-isContentLoaded>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KitePage.isContentLoaded.<get-isContentLoaded>|<get-isContentLoaded>(){}[0]
 
@@ -659,11 +661,10 @@ final class io.github.yuroyami.kitepdf.core.font/OpenTypeMarks { // io.github.yu
     final fun ligatureOffset(kotlin/Int, kotlin/Int, kotlin/Int, io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan? = ...): kotlin/Pair<kotlin/Double, kotlin/Double>? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.ligatureOffset|ligatureOffset(kotlin.Int;kotlin.Int;kotlin.Int;io.github.yuroyami.kitepdf.core.font.OpenTypeMarks.Plan?){}[0]
     final fun offset(kotlin/Int, kotlin/Int, io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan? = ...): kotlin/Pair<kotlin/Double, kotlin/Double>? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.offset|offset(kotlin.Int;kotlin.Int;io.github.yuroyami.kitepdf.core.font.OpenTypeMarks.Plan?){}[0]
     final fun plan(kotlin/String?, kotlin/String?): io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.plan|plan(kotlin.String?;kotlin.String?){}[0]
-    final fun stackOffset(kotlin/IntArray, kotlin/Int, io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan?): kotlin/Pair<kotlin/Pair<kotlin/Double, kotlin/Double>, kotlin/Int>? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.stackOffset|stackOffset(kotlin.IntArray;kotlin.Int;io.github.yuroyami.kitepdf.core.font.OpenTypeMarks.Plan?){}[0]
     final fun stackOffset(kotlin/Int, kotlin/Int): kotlin/Pair<kotlin/Double, kotlin/Double>? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.stackOffset|stackOffset(kotlin.Int;kotlin.Int){}[0]
+    final fun stackOffset(kotlin/IntArray, kotlin/Int, io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan?): kotlin/Pair<kotlin/Pair<kotlin/Double, kotlin/Double>, kotlin/Int>? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.stackOffset|stackOffset(kotlin.IntArray;kotlin.Int;io.github.yuroyami.kitepdf.core.font.OpenTypeMarks.Plan?){}[0]
 
-    final class Plan { // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan|null[0]
-    }
+    final class Plan // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan|null[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Companion|null[0]
         final fun from(kotlin/ByteArray?, kotlin/ByteArray? = ...): io.github.yuroyami.kitepdf.core.font/OpenTypeMarks? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Companion.from|from(kotlin.ByteArray?;kotlin.ByteArray?){}[0]
@@ -1251,13 +1252,14 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageAnimation { // io.gi
         final fun <get-frameCount>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameCount.<get-frameCount>|<get-frameCount>(){}[0]
     final val frameDelays // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameDelays|{}frameDelays[0]
         final fun <get-frameDelays>(): kotlin/IntArray? // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameDelays.<get-frameDelays>|<get-frameDelays>(){}[0]
-    final var frameIndex // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex|{}frameIndex[0]
-        final fun <get-frameIndex>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex.<get-frameIndex>|<get-frameIndex>(){}[0]
-        final fun <set-frameIndex>(kotlin/Int) // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex.<set-frameIndex>|<set-frameIndex>(kotlin.Int){}[0]
     final val isPrepared // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.isPrepared|{}isPrepared[0]
         final fun <get-isPrepared>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.isPrepared.<get-isPrepared>|<get-isPrepared>(){}[0]
     final val loopCount // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.loopCount|{}loopCount[0]
         final fun <get-loopCount>(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.loopCount.<get-loopCount>|<get-loopCount>(){}[0]
+
+    final var frameIndex // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex|{}frameIndex[0]
+        final fun <get-frameIndex>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex.<get-frameIndex>|<get-frameIndex>(){}[0]
+        final fun <set-frameIndex>(kotlin/Int) // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameIndex.<set-frameIndex>|<set-frameIndex>(kotlin.Int){}[0]
 
     final fun currentFrame(): io.github.yuroyami.kitepdf.core.render/KiteImageData? // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.currentFrame|currentFrame(){}[0]
     final fun frameAt(kotlin/Long): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.frameAt|frameAt(kotlin.Long){}[0]
@@ -1272,9 +1274,8 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageAnimation { // io.gi
         final fun probe(kotlin/ByteArray, kotlin/Boolean = ...): io.github.yuroyami.kitepdf.core.render/KiteImageAnimation? // io.github.yuroyami.kitepdf.core.render/KiteImageAnimation.Companion.probe|probe(kotlin.ByteArray;kotlin.Boolean){}[0]
     }
 }
+
 final class io.github.yuroyami.kitepdf.core.render/KiteImageData { // io.github.yuroyami.kitepdf.core.render/KiteImageData|null[0]
-    final var animation // io.github.yuroyami.kitepdf.core.render/KiteImageData.animation|{}animation[0]
-        final fun <get-animation>(): io.github.yuroyami.kitepdf.core.render/KiteImageAnimation? // io.github.yuroyami.kitepdf.core.render/KiteImageData.animation.<get-animation>|<get-animation>(){}[0]
     final val bitsPerComponent // io.github.yuroyami.kitepdf.core.render/KiteImageData.bitsPerComponent|{}bitsPerComponent[0]
         final fun <get-bitsPerComponent>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.bitsPerComponent.<get-bitsPerComponent>|<get-bitsPerComponent>(){}[0]
     final val colorKeyMask // io.github.yuroyami.kitepdf.core.render/KiteImageData.colorKeyMask|{}colorKeyMask[0]
@@ -1309,6 +1310,9 @@ final class io.github.yuroyami.kitepdf.core.render/KiteImageData { // io.github.
         final fun <get-softMaskWidth>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.softMaskWidth.<get-softMaskWidth>|<get-softMaskWidth>(){}[0]
     final val width // io.github.yuroyami.kitepdf.core.render/KiteImageData.width|{}width[0]
         final fun <get-width>(): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteImageData.width.<get-width>|<get-width>(){}[0]
+
+    final var animation // io.github.yuroyami.kitepdf.core.render/KiteImageData.animation|{}animation[0]
+        final fun <get-animation>(): io.github.yuroyami.kitepdf.core.render/KiteImageAnimation? // io.github.yuroyami.kitepdf.core.render/KiteImageData.animation.<get-animation>|<get-animation>(){}[0]
 
     final fun retainedBytes(): kotlin/Long // io.github.yuroyami.kitepdf.core.render/KiteImageData.retainedBytes|retainedBytes(){}[0]
     final fun withIccProfile(kotlin/ByteArray): io.github.yuroyami.kitepdf.core.render/KiteImageData // io.github.yuroyami.kitepdf.core.render/KiteImageData.withIccProfile|withIccProfile(kotlin.ByteArray){}[0]
@@ -1375,8 +1379,8 @@ final class io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer { // io.gith
 
     final fun get(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.get|get(kotlin.Int){}[0]
     final fun toByteArray(): kotlin/ByteArray // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toByteArray|toByteArray(){}[0]
-    final fun toMaskAlpha(kotlin/IntArray, kotlin/Boolean) // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toMaskAlpha|toMaskAlpha(kotlin.IntArray;kotlin.Boolean){}[0]
     final fun toMaskAlpha(kotlin/IntArray, io.github.yuroyami.kitepdf.core.render/SoftMask.Kind) // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toMaskAlpha|toMaskAlpha(kotlin.IntArray;io.github.yuroyami.kitepdf.core.render.SoftMask.Kind){}[0]
+    final fun toMaskAlpha(kotlin/IntArray, kotlin/Boolean) // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.toMaskAlpha|toMaskAlpha(kotlin.IntArray;kotlin.Boolean){}[0]
 
     final object Companion { // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.Companion|null[0]
         final fun of(kotlin/Function1<kotlin/Double, kotlin/Double>): io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer // io.github.yuroyami.kitepdf.core.render/KiteMaskTransfer.Companion.of|of(kotlin.Function1<kotlin.Double,kotlin.Double>){}[0]
@@ -1622,6 +1626,7 @@ final class io.github.yuroyami.kitepdf.core.render/KiteTransfer { // io.github.y
 
     final fun map(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core.render/KiteTransfer.map|map(kotlin.Int){}[0]
 }
+
 final class io.github.yuroyami.kitepdf.core.render/ReaderTheme { // io.github.yuroyami.kitepdf.core.render/ReaderTheme|null[0]
     constructor <init>(io.github.yuroyami.kitepdf.core.render/RgbColor, kotlin/Function1<io.github.yuroyami.kitepdf.core.render/RgbColor, io.github.yuroyami.kitepdf.core.render/RgbColor>) // io.github.yuroyami.kitepdf.core.render/ReaderTheme.<init>|<init>(io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Function1<io.github.yuroyami.kitepdf.core.render.RgbColor,io.github.yuroyami.kitepdf.core.render.RgbColor>){}[0]
     constructor <init>(io.github.yuroyami.kitepdf.core.render/RgbColor, kotlin/Function1<io.github.yuroyami.kitepdf.core.render/RgbColor, io.github.yuroyami.kitepdf.core.render/RgbColor>, io.github.yuroyami.kitepdf.core.render/ReaderImages) // io.github.yuroyami.kitepdf.core.render/ReaderTheme.<init>|<init>(io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Function1<io.github.yuroyami.kitepdf.core.render.RgbColor,io.github.yuroyami.kitepdf.core.render.RgbColor>;io.github.yuroyami.kitepdf.core.render.ReaderImages){}[0]
@@ -2290,8 +2295,8 @@ final class io.github.yuroyami.kitepdf.core/KiteTextBlock { // io.github.yuroyam
 }
 
 final class io.github.yuroyami.kitepdf.core/KiteTextLine { // io.github.yuroyami.kitepdf.core/KiteTextLine|null[0]
-    constructor <init>(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/DoubleArray, kotlin/Boolean, io.github.yuroyami.kitepdf.core/KiteLineEnd) // io.github.yuroyami.kitepdf.core/KiteTextLine.<init>|<init>(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.DoubleArray;kotlin.Boolean;io.github.yuroyami.kitepdf.core.KiteLineEnd){}[0]
     constructor <init>(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/DoubleArray, kotlin/Boolean = ..., io.github.yuroyami.kitepdf.core/KiteLineEnd = ..., kotlin/IntArray? = ...) // io.github.yuroyami.kitepdf.core/KiteTextLine.<init>|<init>(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.DoubleArray;kotlin.Boolean;io.github.yuroyami.kitepdf.core.KiteLineEnd;kotlin.IntArray?){}[0]
+    constructor <init>(kotlin/String, io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/DoubleArray, kotlin/Boolean, io.github.yuroyami.kitepdf.core/KiteLineEnd) // io.github.yuroyami.kitepdf.core/KiteTextLine.<init>|<init>(kotlin.String;io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.DoubleArray;kotlin.Boolean;io.github.yuroyami.kitepdf.core.KiteLineEnd){}[0]
 
     final val bounds // io.github.yuroyami.kitepdf.core/KiteTextLine.bounds|{}bounds[0]
         final fun <get-bounds>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.core/KiteTextLine.bounds.<get-bounds>|<get-bounds>(){}[0]
@@ -2336,6 +2341,7 @@ final class io.github.yuroyami.kitepdf.core/KiteTextRange { // io.github.yuroyam
         final fun decode(kotlin/String): io.github.yuroyami.kitepdf.core/KiteTextRange? // io.github.yuroyami.kitepdf.core/KiteTextRange.Companion.decode|decode(kotlin.String){}[0]
     }
 }
+
 final class io.github.yuroyami.kitepdf.core/KiteTextRangeHits { // io.github.yuroyami.kitepdf.core/KiteTextRangeHits|null[0]
     constructor <init>(io.github.yuroyami.kitepdf.core/KiteTextRange, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit>, kotlin/Boolean) // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteTextRange;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteSearchHit>;kotlin.Boolean){}[0]
 
@@ -2346,6 +2352,7 @@ final class io.github.yuroyami.kitepdf.core/KiteTextRangeHits { // io.github.yur
     final val repaired // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.repaired|{}repaired[0]
         final fun <get-repaired>(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/KiteTextRangeHits.repaired.<get-repaired>|<get-repaired>(){}[0]
 }
+
 final class io.github.yuroyami.kitepdf.core/KiteWarning { // io.github.yuroyami.kitepdf.core/KiteWarning|null[0]
     constructor <init>(kotlin/String, kotlin/Any?, kotlin/Int?, io.github.yuroyami.kitepdf.core/KiteWarningKind) // io.github.yuroyami.kitepdf.core/KiteWarning.<init>|<init>(kotlin.String;kotlin.Any?;kotlin.Int?;io.github.yuroyami.kitepdf.core.KiteWarningKind){}[0]
 
@@ -3248,6 +3255,7 @@ final object io.github.yuroyami.kitepdf.core.filters/RunLengthFilter : io.github
 final object io.github.yuroyami.kitepdf.core.font/Cff2Converter { // io.github.yuroyami.kitepdf.core.font/Cff2Converter|null[0]
     final fun toCff(io.github.yuroyami.kitepdf.core.font/CffFont): kotlin/ByteArray // io.github.yuroyami.kitepdf.core.font/Cff2Converter.toCff|toCff(io.github.yuroyami.kitepdf.core.font.CffFont){}[0]
 }
+
 final object io.github.yuroyami.kitepdf.core.font/CffSubsetter { // io.github.yuroyami.kitepdf.core.font/CffSubsetter|null[0]
     final fun subset(io.github.yuroyami.kitepdf.core.font/CffFont, kotlin.collections/Set<kotlin/Int>, kotlin/Int = ...): io.github.yuroyami.kitepdf.core.font/CffSubsetter.Subset // io.github.yuroyami.kitepdf.core.font/CffSubsetter.subset|subset(io.github.yuroyami.kitepdf.core.font.CffFont;kotlin.collections.Set<kotlin.Int>;kotlin.Int){}[0]
 
@@ -3281,6 +3289,7 @@ final object io.github.yuroyami.kitepdf.core.font/GlyphList { // io.github.yuroy
 final object io.github.yuroyami.kitepdf.core.font/OpenTypeLanguage { // io.github.yuroyami.kitepdf.core.font/OpenTypeLanguage|null[0]
     final fun tagOf(kotlin/String): kotlin/String? // io.github.yuroyami.kitepdf.core.font/OpenTypeLanguage.tagOf|tagOf(kotlin.String){}[0]
 }
+
 final object io.github.yuroyami.kitepdf.core.font/Standard14Widths { // io.github.yuroyami.kitepdf.core.font/Standard14Widths|null[0]
     final fun isStandard14(kotlin/String): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/Standard14Widths.isStandard14|isStandard14(kotlin.String){}[0]
     final fun widthOf(kotlin/String, kotlin/String): kotlin/Int? // io.github.yuroyami.kitepdf.core.font/Standard14Widths.widthOf|widthOf(kotlin.String;kotlin.String){}[0]
@@ -3405,6 +3414,7 @@ final object io.github.yuroyami.kitepdf.core/KiteWarningScope { // io.github.yur
     final fun exit(kotlin/Any?) // io.github.yuroyami.kitepdf.core/KiteWarningScope.exit|exit(kotlin.Any?){}[0]
     final inline fun <#A1: kotlin/Any?> with(io.github.yuroyami.kitepdf.core/KiteWarningListener?, kotlin/Any?, kotlin/Int?, kotlin/Function0<#A1>): #A1 // io.github.yuroyami.kitepdf.core/KiteWarningScope.with|with(io.github.yuroyami.kitepdf.core.KiteWarningListener?;kotlin.Any?;kotlin.Int?;kotlin.Function0<0:0>){0§<kotlin.Any?>}[0]
 }
+
 final object io.github.yuroyami.kitepdf.core/KiteWarnings { // io.github.yuroyami.kitepdf.core/KiteWarnings|null[0]
     final var sink // io.github.yuroyami.kitepdf.core/KiteWarnings.sink|{}sink[0]
         final fun <get-sink>(): io.github.yuroyami.kitepdf.core/KiteWarningSink? // io.github.yuroyami.kitepdf.core/KiteWarnings.sink.<get-sink>|<get-sink>(){}[0]
@@ -3440,6 +3450,6 @@ final fun io.github.yuroyami.kitepdf.core.render/spacedPieces(kotlin.collections
 final fun io.github.yuroyami.kitepdf.core.render/strokePen(io.github.yuroyami.kitepdf.core.render/KiteMatrix, kotlin/Double, kotlin/Double = ...): io.github.yuroyami.kitepdf.core.render/KiteStrokePen // io.github.yuroyami.kitepdf.core.render/strokePen|strokePen(io.github.yuroyami.kitepdf.core.render.KiteMatrix;kotlin.Double;kotlin.Double){}[0]
 final fun io.github.yuroyami.kitepdf.core.render/twoCircleParameter(kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double): kotlin/Double? // io.github.yuroyami.kitepdf.core.render/twoCircleParameter|twoCircleParameter(kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double){}[0]
 final fun io.github.yuroyami.kitepdf.core/currentThreadId(): kotlin/Long // io.github.yuroyami.kitepdf.core/currentThreadId|currentThreadId(){}[0]
-final fun io.github.yuroyami.kitepdf.core/kiteWarn(kotlin/Function0<kotlin/String>) // io.github.yuroyami.kitepdf.core/kiteWarn|kiteWarn(kotlin.Function0<kotlin.String>){}[0]
 final fun io.github.yuroyami.kitepdf.core/kiteWarn(io.github.yuroyami.kitepdf.core/KiteWarningKind, kotlin/Function0<kotlin/String>) // io.github.yuroyami.kitepdf.core/kiteWarn|kiteWarn(io.github.yuroyami.kitepdf.core.KiteWarningKind;kotlin.Function0<kotlin.String>){}[0]
+final fun io.github.yuroyami.kitepdf.core/kiteWarn(kotlin/Function0<kotlin/String>) // io.github.yuroyami.kitepdf.core/kiteWarn|kiteWarn(kotlin.Function0<kotlin.String>){}[0]
 final inline fun <#A: kotlin/Any?> (io.github.yuroyami.kitepdf.core/KiteLock).io.github.yuroyami.kitepdf.core/withLock(kotlin/Function0<#A>): #A // io.github.yuroyami.kitepdf.core/withLock|withLock@io.github.yuroyami.kitepdf.core.KiteLock(kotlin.Function0<0:0>){0§<kotlin.Any?>}[0]
