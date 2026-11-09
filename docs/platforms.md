@@ -38,7 +38,7 @@ On the JVM and Android, every artifact is Java 11 bytecode (class file version 5
 
 The Apple artifacts on Maven Central are klibs, which only a Kotlin Multiplatform build reads. There is no framework, Swift package or CocoaPods spec to download, and the releases attach none.
 
-- A Kotlin Multiplatform app adds the coordinates to its shared module, as [Getting started](getting-started.md#1-add-the-dependency) shows,, and can export a framework of its own to Swift code. The iOS sample, `sample-ios`, is an app of this kind, written in Kotlin.
+- A Kotlin Multiplatform app adds the coordinates to its shared module, as [Getting started](getting-started.md#1-add-the-dependency) shows, and can export a framework of its own to Swift code. The iOS sample, `sample-ios`, is an app of this kind, written in Kotlin.
 - A Swift-only app links frameworks from a checkout of this repository. `scripts/apple_frameworks.py` runs the Kotlin/Native compiler on the klibs that `./kotlin build` writes. It needs a Mac with Xcode, because it calls `lipo` and `xcodebuild`.
 
 Build the klibs of each platform first:

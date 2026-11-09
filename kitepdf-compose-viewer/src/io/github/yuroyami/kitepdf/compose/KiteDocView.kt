@@ -352,7 +352,8 @@ public fun KiteDocView(
 
     // The document's own scripts: its open action once, then each page's as the reader
     // reaches it, and the timers a script set, pumped a frame at a time.
-    LaunchedEffect(scripts, state.document) {
+    // Keyed on the state too: a new state for the same document gets its own page scripts (#714).
+    LaunchedEffect(scripts, state, state.document) {
         val handler = scripts ?: return@LaunchedEffect
         scriptCall("prepare", Unit) { handler.prepare() }
         preparedScripts = handler
@@ -389,7 +390,8 @@ public fun KiteDocView(
 
     // The book's scripts: a scripted chapter's run when the reader reaches it, and a change of
     // location that one asks for goes the way of a link (#41).
-    LaunchedEffect(epubScripts, state.document) {
+    // Keyed on the state too, so a new state for the same book follows its own chapters (#714).
+    LaunchedEffect(epubScripts, state, state.document) {
         val book = state.document as? EpubDocument ?: return@LaunchedEffect
         // Without scripts the book still takes the fragment the reader goes to, for `:target` (#550).
         val handler = epubScripts ?: return@LaunchedEffect state.followChapters(book, null, scriptLane)

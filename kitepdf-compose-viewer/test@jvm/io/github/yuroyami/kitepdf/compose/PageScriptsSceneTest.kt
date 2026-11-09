@@ -86,6 +86,31 @@ class PageScriptsSceneTest {
         }
     }
 
+    /** A new state for the same document gets its own page scripts, so its pages still open (#714). */
+    @Test
+    fun a_new_state_for_the_same_document_runs_its_page_scripts() {
+        forBothEffectOrders { queued ->
+            val doc = PdfDocument.open(pagesPdf(4))
+            val scripts = Recorder(doc)
+            var supplied by mutableStateOf(KiteDocViewState(doc))
+            val (scene, driver) = drivenScene(200, 200, queued) {
+                KiteDocView(state = supplied, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged(), scripts = scripts)
+            }
+            scene.use {
+                driver.pumpUntilState { "page 0" in scripts.events }
+                val fresh = KiteDocViewState(doc)
+                driver.runOnUi { supplied = fresh }
+                driver.pumpUntilState { fresh.adapter != null }
+                driver.runOnUi { fresh.scrollToPage(2) }
+                try {
+                    driver.pumpUntilState { "page 2" in scripts.events }
+                } catch (failure: AssertionError) {
+                    throw AssertionError("no page 2, events ${scripts.events}, page ${fresh.currentPage}", failure)
+                }
+            }
+        }
+    }
+
     @Test
     fun the_open_page_closes_when_the_view_leaves() {
         forBothEffectOrders { queued ->
