@@ -868,6 +868,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolver warns too (#712).
 - The platform page says how an Apple app uses KitePDF: a Kotlin Multiplatform app adds the klibs, and a Swift-
   only app links an XCFramework with `scripts/apple_frameworks.py` (#729).
+- A new `KiteDocViewState` for the same document runs its own page scripts, chapter scripts and `:target`, where
+  the script effects used to follow the first state shown (#714).
 
 ## [0.13.0] - 2026-10-09
 
