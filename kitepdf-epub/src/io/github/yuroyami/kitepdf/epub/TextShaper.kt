@@ -41,8 +41,64 @@ internal object TextShaper {
             listOf("rlig"), listOf("rclt", "calt"), listOf("mset") + ligatures,
         )
         val direction = if (isRightToLeft(script)) "rtla" else "ltra"
-        return listOf(listOf("rvrn"), listOf(direction) + MIRRORED + listOf("ccmp", "locl", "rlig", "rclt", "calt") + ligatures)
+        val jamo = if (script == "hang") JAMO else emptyList()
+        return listOf(listOf("rvrn"), listOf(direction) + MIRRORED + listOf("ccmp", "locl") + jamo + listOf("rlig", "rclt", "calt") + ligatures)
     }
+
+    /** The features of the leading, vowel and trailing jamo, each of which reaches only the glyphs that list it (#635). */
+    val JAMO: List<String> = listOf("ljmo", "vjmo", "tjmo")
+
+    /** The feature of a conjoining jamo that stays apart: `ljmo`, `vjmo` or `tjmo`, or null for any other character. */
+    fun jamoFeature(cp: Int): String? = when (cp) {
+        in 0x1100..0x115F, in 0xA960..0xA97C -> "ljmo"
+        in 0x1160..0x11A7, in 0xD7B0..0xD7C6 -> "vjmo"
+        in 0x11A8..0x11FF, in 0xD7CB..0xD7FB -> "tjmo"
+        else -> null
+    }
+
+    /**
+     * Joins conjoining jamo into precomposed Hangul syllables by the arithmetic of the Unicode
+     * Standard, 3.12, where [hasGlyph] says the font has the syllable, as HarfBuzz's Hangul
+     * shaper does: a leading consonant and a vowel make an LV syllable, a trailing consonant
+     * after it makes an LVT one, and so does a trailing consonant after a precomposed LV
+     * syllable. The characters that join share the source of the first. Null when nothing joins.
+     */
+    fun composeHangul(cps: IntArray, hasGlyph: (Int) -> Boolean): Normalizer.Result? {
+        fun isL(c: Int) = c in L_BASE until L_BASE + L_COUNT
+        fun isV(c: Int) = c in V_BASE until V_BASE + V_COUNT
+        fun isT(c: Int) = c in T_BASE + 1 until T_BASE + T_COUNT
+        fun isLV(c: Int) = c in S_BASE until S_BASE + S_COUNT && (c - S_BASE) % T_COUNT == 0
+        val codes = ArrayList<Int>(cps.size)
+        val srcs = ArrayList<Int>(cps.size)
+        var changed = false
+        var i = 0
+        while (i < cps.size) {
+            val c = cps[i]
+            if (isL(c) && i + 1 < cps.size && isV(cps[i + 1])) {
+                val lv = S_BASE + ((c - L_BASE) * V_COUNT + (cps[i + 1] - V_BASE)) * T_COUNT
+                val t = cps.getOrNull(i + 2)
+                if (t != null && isT(t) && hasGlyph(lv + (t - T_BASE))) {
+                    codes += lv + (t - T_BASE); srcs += i; i += 3; changed = true; continue
+                }
+                if (hasGlyph(lv)) {
+                    codes += lv; srcs += i; i += 2; changed = true; continue
+                }
+            } else if (isLV(c) && i + 1 < cps.size && isT(cps[i + 1]) && hasGlyph(c + (cps[i + 1] - T_BASE))) {
+                codes += c + (cps[i + 1] - T_BASE); srcs += i; i += 2; changed = true; continue
+            }
+            codes += c; srcs += i; i++
+        }
+        return if (changed) Normalizer.Result(codes.toIntArray(), srcs.toIntArray()) else null
+    }
+
+    private const val S_BASE = 0xAC00
+    private const val L_BASE = 0x1100
+    private const val V_BASE = 0x1161
+    private const val T_BASE = 0x11A7
+    private const val L_COUNT = 19
+    private const val V_COUNT = 21
+    private const val T_COUNT = 28
+    private const val S_COUNT = L_COUNT * V_COUNT * T_COUNT
 
     /** The mirrored forms, each of which reaches only the glyphs that list it. */
     val MIRRORED: List<String> = listOf("ltrm", "rtlm")
@@ -122,8 +178,14 @@ internal object TextShaper {
             UseShaper.shape(gsub, script, glyphs, prepared.codePoints, face::gidFor, optionalLigatures)
         } else {
             val arabic = script == "arab" || script == "syrc"
-            // Thai and Lao split sara am before normalization, as HarfBuzz's Thai shaper does.
-            val split = if (script == "thai" || script == "lao ") decomposeSaraAm(cps) else null
+            val hangul = script == "hang"
+            // Thai and Lao split sara am before normalization, as HarfBuzz's Thai shaper does, and
+            // Korean jamo join into the syllable the font has a glyph for, as its Hangul shaper does (#635).
+            val split = when {
+                script == "thai" || script == "lao " -> decomposeSaraAm(cps)
+                hangul -> composeHangul(cps) { face.gidFor(it) != 0 }
+                else -> null
+            }
             // A word of whole letters that the font has needs no normalization.
             val normal = if (split == null && gs.none { it == 0 } && cps.none { Normalizer.isMark(it) }) null else {
                 Normalizer.normalize(
@@ -136,10 +198,13 @@ internal object TextShaper {
                 val gid = if (cp == cps[source]) gs[source] else face.gidFor(cp)
                 // A letter takes the joining form of the character it came from; a mark takes none.
                 val form = forms?.get(source)?.takeIf { ArabicJoining.type(cp) != ArabicJoining.Jt.T }
-                add(GsubGlyph(gid, source, form?.let { setOf(ArabicJoining.feature(it)) } ?: emptySet(), isMark(cp), ignorable(cp)), cp)
+                // A jamo that stays apart takes its own feature, for a font that joins them itself.
+                val jamo = if (hangul) jamoFeature(cp) else null
+                val features = form?.let { setOf(ArabicJoining.feature(it)) } ?: jamo?.let { setOf(it) } ?: emptySet()
+                add(GsubGlyph(gid, source, features, isMark(cp), ignorable(cp)), cp)
             }
             val manualZwj = if (arabic) ARABIC_MANUAL_ZWJ else emptySet()
-            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL + MIRRORED, manualZwj = manualZwj)
+            gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL + MIRRORED + JAMO, manualZwj = manualZwj)
         }
         hideIgnorables(face, glyphs, ignorables)
         return glyphs
