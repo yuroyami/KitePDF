@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathSegment
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
@@ -194,12 +195,18 @@ public class ComposeCanvas internal constructor(
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
         flushText()
+        keptMask = null
+        keptKey = null
+        lastMaskKey = null
         restoreAll()
         groups.clear()
     }
 
     override fun endPage() {
         flushText()
+        keptMask = null
+        keptKey = null
+        lastMaskKey = null
         // Close anything still open (defensive: well-formed PDFs always pair them,
         // but malformed ones leak).
         restoreAll()
@@ -867,8 +874,9 @@ public class ComposeCanvas internal constructor(
         // backdrop x (1 - m) + content x m, a DstOut of the page by the mask and the masked
         // content added with Plus (#764). Elsewhere the content layer starts transparent.
         val backdrop = if (!byPixels && !knockingOut && stepBounds == null && Save.Layer !in saves) readBackdrop(bounds) else null
+        val mask = maskFor(kind, transfer, bounds, maskBBox, maskCtm, renderMask, keep = !byPixels)
         if (backdrop != null) {
-            maskLayer(kind, transfer, bounds, ComposeBlendMode.DstOut, renderMask)
+            mask(ComposeBlendMode.DstOut)
             composeCanvas.saveLayer(bounds, Paint().apply { blendMode = ComposeBlendMode.Plus })
             saves.addLast(Save.Layer)
             groups.addLast(Group(layered = false, knockout = false))
@@ -876,7 +884,7 @@ public class ComposeCanvas internal constructor(
                 drawScope.drawImage(backdrop.first, dstOffset = backdrop.second, blendMode = ComposeBlendMode.Src)
                 render()
                 flushText()
-                maskLayer(kind, transfer, bounds, ComposeBlendMode.DstIn, renderMask)
+                mask(ComposeBlendMode.DstIn)
             } finally {
                 groups.removeLastOrNull()
                 restoreThroughLayer()
@@ -898,7 +906,7 @@ public class ComposeCanvas internal constructor(
                 gateByMaskPixels(kind, transfer!!, renderMask)
                 return
             }
-            maskLayer(kind, transfer, bounds, ComposeBlendMode.DstIn, renderMask)
+            mask(ComposeBlendMode.DstIn)
         } finally {
             groups.removeLastOrNull()
             restoreThroughLayer()
@@ -929,7 +937,84 @@ public class ComposeCanvas internal constructor(
      * luminance becomes the alpha at the layer's restore, as the Skia backend does. The /TR
      * function then maps the alpha.
      */
+    /** What a kept mask is kept by: everything that decides its pixels in this scope (#912). */
+    private data class MaskKey(
+        val renderMask: (KiteCanvas) -> Unit,
+        val kind: SoftMask.Kind,
+        val transfer: KiteMaskTransfer?,
+        val box: KiteRectangle,
+        val maskCtm: KiteMatrix,
+        val scope: DrawScope,
+        val clip: Int,
+        val bounds: Rect,
+    )
+
+    /** The mask that two paints in a row used, filtered to its mask values over its bounds, until the key or the page changes. */
+    private var keptMask: ImageBitmap? = null
+    private var keptKey: MaskKey? = null
+
+    /** The key of the last masked paint, so the second paint under one mask knows to keep it. */
+    private var lastMaskKey: MaskKey? = null
+
+    /** An id for each clip on the stack; balanced pushes and pops, such as a mask group's own box, leave the same one on top. */
+    private val clipIds = ArrayDeque<Int>()
+    private var nextClipId = 0
+
+    /** False renders the mask again for every paint, as before #912, so a test can compare. */
+    internal var keepMasks: Boolean = true
+
+    /** How many times this canvas rendered a mask group, which a test counts (#912). */
+    internal var maskRenders: Int = 0
+
+    /**
+     * How a masked paint applies its mask with a blend mode: from the kept image when the same
+     * mask, scope and clip were kept, by rendering it once into an image when the paint before
+     * used the same, else as a layer of the mask group, as before (#912). The renderer hands the
+     * same [renderMask] for every paint under one mask in one coordinate system.
+     */
+    private fun maskFor(
+        kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: Rect, box: KiteRectangle, maskCtm: KiteMatrix,
+        renderMask: (KiteCanvas) -> Unit, keep: Boolean,
+    ): (ComposeBlendMode) -> Unit {
+        val layer: (ComposeBlendMode) -> Unit = { blend -> maskLayer(kind, transfer, bounds, blend, renderMask) }
+        if (!keep || !keepMasks || stepBounds != null || bounds.isEmpty || bounds.width * bounds.height > MAX_KEPT_MASK_PIXELS) return layer
+        val key = MaskKey(renderMask, kind, transfer, box, maskCtm, drawScope, clipIds.lastOrNull() ?: 0, bounds)
+        if (keptKey != key && lastMaskKey == key) keepMask(key, kind, transfer, bounds, renderMask)
+        lastMaskKey = key
+        val image = keptMask?.takeIf { keptKey == key } ?: return layer
+        return { blend -> drawScope.drawImage(image, topLeft = Offset(bounds.left, bounds.top), blendMode = blend) }
+    }
+
+    /** Renders the mask group once, through the layer [maskLayer] would make, into an image of [bounds]. */
+    private fun keepMask(key: MaskKey, kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: Rect, renderMask: (KiteCanvas) -> Unit) {
+        keptMask = null
+        keptKey = null
+        val w = bounds.width.toInt()
+        val h = bounds.height.toInt()
+        if (w <= 0 || h <= 0) return
+        val image = ImageBitmap(w, h)
+        var nested: ComposeCanvas? = null
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+            drawScope, drawScope.layoutDirection, androidx.compose.ui.graphics.Canvas(image), Size(w.toFloat(), h.toFloat()),
+        ) {
+            translate(-bounds.left, -bounds.top) {
+                val canvas = ComposeCanvas(
+                    this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables, bitmaps,
+                    inSceneDrawPass, hostLines = hostLines, hostText = hostText, batchText = batchText,
+                )
+                nested = canvas
+                canvas.maskLayer(kind, transfer, bounds, ComposeBlendMode.SrcOver, renderMask)
+                canvas.flushText()
+            }
+        }
+        if (nested?.usedSystemFontText == true) usedSystemFontText = true
+        maskRenders++
+        keptMask = image
+        keptKey = key
+    }
+
     private fun maskLayer(kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: Rect, blend: ComposeBlendMode, renderMask: (KiteCanvas) -> Unit) {
+        if (blend != ComposeBlendMode.SrcOver) maskRenders++
         val maskPaint = Paint().apply {
             blendMode = blend
             (if (maskTables) softMaskFilter(kind, transfer) else softMaskMatrix(kind, transfer))?.let { colorFilter = it }
@@ -1058,6 +1143,7 @@ public class ComposeCanvas internal constructor(
 
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
         flushText()
+        clipIds.addLast(++nextClipId)
         val composePath = toComposePath(path, ctm).apply {
             fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
         }
@@ -1084,6 +1170,7 @@ public class ComposeCanvas internal constructor(
 
     override fun popClip() {
         flushText()
+        clipIds.removeLastOrNull()
         // The renderer pops a clip before it ends the group the clip was pushed in. A pop that
         // finds a layer on top would restore that layer instead, so it is ignored.
         if (saves.lastOrNull() != Save.Clip) return
@@ -1502,6 +1589,9 @@ private const val MAX_HOST_TEXT_PX = 100_000.0
 
 /** The pixels a run of glyphs may add its coverage into at most: about four megapixels. */
 private const val MAX_RUN_PIXELS = 4L * 1024 * 1024
+
+/** The largest mask, in pixels, that a canvas keeps for the paints under it: 64 MB of bitmap (#912). */
+private const val MAX_KEPT_MASK_PIXELS = 16f * 1024 * 1024
 
 /** [src] under [ctm], rewound into [into] or in a new path. */
 internal fun toComposePath(src: KitePath, ctm: KiteMatrix, into: Path? = null): Path {
