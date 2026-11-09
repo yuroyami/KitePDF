@@ -633,6 +633,35 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         // Outside the mask's box the mask is its backdrop's value, and the renderer passes the
         // page box when that is not 0 (ISO 32000-1, 11.6.5.2, #384), so both layers stop at the box (#824).
         val bounds = layerBounds(maskBBox, maskCtm)
+        // ISO 32000-1, 11.6.4.3 and 11.3.5: the mask scales the shape of each paint, which still
+        // blends with the real backdrop in its own mode. Where the canvas can read the page under
+        // the mask, the content paints over a copy of it, and the mask mixes it in:
+        // backdrop x (1 - m) + content x m, a DstOut of the page by the mask and the masked
+        // content added with Plus (#764). Elsewhere the content layer starts transparent, where a
+        // blend mode sees no backdrop.
+        val backdrop = readBackdrop(maskBBox, maskCtm)
+        if (backdrop != null) {
+            try {
+                maskLayer(kind, transfer, bounds, AndroidBlendMode.DST_OUT, renderMask)
+                canvas.saveLayer(bounds, Paint().apply { blendMode = AndroidBlendMode.PLUS })
+                openLayers++
+                layers++
+                groups.addLast(Group(layered = false, knockout = false))
+                try {
+                    canvas.drawBitmap(backdrop.bitmap, backdrop.x.toFloat(), backdrop.y.toFloat(), Paint().apply { blendMode = AndroidBlendMode.SRC })
+                    render()
+                    maskLayer(kind, transfer, bounds, AndroidBlendMode.DST_IN, renderMask)
+                } finally {
+                    groups.removeLastOrNull()
+                    canvas.restore()
+                    openLayers--
+                    layers--
+                }
+            } finally {
+                backdrop.bitmap.recycle()
+            }
+            return
+        }
         canvas.saveLayer(bounds, Paint())
         openLayers++
         layers++
@@ -640,33 +669,70 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
-            val luminosity = kind.readsColor
-            if (transfer != null && !transfer.isNearlyLinear) {
-                // Android has no table colour filter, and the closest line would bend the mask,
-                // so gate by the mask group's pixels (#445).
-                gateByMaskPixels(kind, transfer, renderMask)
-                return
-            }
-            val maskPaint = Paint().apply {
-                blendMode = AndroidBlendMode.DST_IN
-                // ISO 32000-1, 11.5.3: a luminosity mask gates by the group's brightness,
-                // so the layer's luminosity becomes its alpha when it composites (#79).
-                if (luminosity || transfer != null) colorFilter = ColorMatrixColorFilter(maskToAlpha(kind, transfer))
-            }
-            canvas.saveLayer(bounds, maskPaint)
-            openLayers++
-            layers++
-            try {
-                // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
-                if (luminosity) canvas.drawColor(Color.BLACK)
-                renderMask(this)
-            } finally {
-                canvas.restore()
-                openLayers--
-                layers--
-            }
+            maskLayer(kind, transfer, bounds, AndroidBlendMode.DST_IN, renderMask)
         } finally {
             groups.removeLastOrNull()
+            canvas.restore()
+            openLayers--
+            layers--
+        }
+    }
+
+    /** The device pixels of a box, read from [target], and where they go. */
+    private class Backdrop(val bitmap: android.graphics.Bitmap, val x: Int, val y: Int)
+
+    /**
+     * The pixels of [target] under [box] under [ctm], cut to the clip, or null where the canvas
+     * cannot read the backdrop of a paint: on a canvas without a target, inside a layer or a
+     * raster step, whose pixels Android keeps to itself, and in a knockout group, where a
+     * paint's backdrop is the group's own (ISO 32000-1, 11.4.6).
+     */
+    private fun readBackdrop(box: KiteRectangle, ctm: KiteMatrix): Backdrop? {
+        val bitmap = target ?: return null
+        if (layers > 0 || canvas !== hostCanvas || knockingOut) return null
+        val r = layerBounds(box, ctm) ?: return null
+        val clip = android.graphics.Rect()
+        if (!canvas.getClipBounds(clip)) return null
+        val left = maxOf(kotlin.math.floor(r.left).toInt(), clip.left, 0)
+        val top = maxOf(kotlin.math.floor(r.top).toInt(), clip.top, 0)
+        val right = minOf(kotlin.math.ceil(r.right).toInt(), clip.right, bitmap.width)
+        val bottom = minOf(kotlin.math.ceil(r.bottom).toInt(), clip.bottom, bitmap.height)
+        if (right <= left || bottom <= top || (right - left).toDouble() * (bottom - top) > STEP_MAX_PIXELS) return null
+        // A copy, which the canvas recycles: createBitmap may hand back its source when the box is all of it.
+        val copy = android.graphics.Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+            .let { if (it === bitmap) bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false) else it }
+        return Backdrop(copy, left, top)
+    }
+
+    /**
+     * Paints the mask group in a layer that composites in [blend]: DstIn gates the content by the
+     * mask, and DstOut takes the mask's share out of the page. A luminosity mask gates by the
+     * group's brightness over an opaque black backdrop, so the layer's luminosity becomes its
+     * alpha when it composites (ISO 32000-1, 11.6.5.2, #79). A [transfer] that a colour matrix
+     * cannot give goes through the mask group's pixels (#445).
+     */
+    private fun maskLayer(
+        kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: android.graphics.RectF?,
+        blend: AndroidBlendMode, renderMask: (KiteCanvas) -> Unit,
+    ) {
+        if (transfer != null && !transfer.isNearlyLinear) {
+            // Android has no table colour filter, and the closest line would bend the mask.
+            gateByMaskPixels(kind, transfer, bounds, blend, renderMask)
+            return
+        }
+        val luminosity = kind.readsColor
+        val maskPaint = Paint().apply {
+            blendMode = blend
+            if (luminosity || transfer != null) colorFilter = ColorMatrixColorFilter(maskToAlpha(kind, transfer))
+        }
+        canvas.saveLayer(bounds, maskPaint)
+        openLayers++
+        layers++
+        try {
+            // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
+            if (luminosity) canvas.drawColor(Color.BLACK)
+            renderMask(this)
+        } finally {
             canvas.restore()
             openLayers--
             layers--
@@ -779,11 +845,16 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
     /**
      * Gates the open layer by a soft mask whose [transfer] only a table gives: draws the mask
      * group into a bitmap of the whole canvas, turns its pixels into mask values through the
-     * table (see [KiteMaskTransfer.toMaskAlpha]), and keeps the layer only where that bitmap is.
-     * The whole canvas, because the mask outside its group is the value of the backdrop. A large
+     * table (see [KiteMaskTransfer.toMaskAlpha]), and draws that bitmap in [blend], DstIn to keep
+     * the layer only where the mask is, DstOut to take the mask's share out of the page. The
+     * whole canvas, because the mask outside its group is the value of the backdrop, cut to the
+     * mask layer's [bounds], beyond which the mask draws nothing either way (#824). A large
      * canvas draws the mask at a lower resolution and scales it up.
      */
-    private fun gateByMaskPixels(kind: SoftMask.Kind, transfer: KiteMaskTransfer, renderMask: (KiteCanvas) -> Unit) {
+    private fun gateByMaskPixels(
+        kind: SoftMask.Kind, transfer: KiteMaskTransfer, bounds: android.graphics.RectF?,
+        blend: AndroidBlendMode, renderMask: (KiteCanvas) -> Unit,
+    ) {
         val luminosity = kind.readsColor
         val width = canvas.width
         val height = canvas.height
@@ -804,8 +875,9 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
             transfer.toMaskAlpha(argb, kind)
             group.setPixels(argb, 0, w, 0, 0, w, h)
             canvas.save()
+            if (bounds != null) canvas.clipRect(bounds)
             canvas.scale(1f / scale, 1f / scale)
-            canvas.drawBitmap(group, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { blendMode = AndroidBlendMode.DST_IN })
+            canvas.drawBitmap(group, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { blendMode = blend })
             canvas.restore()
         } finally {
             group.recycle()

@@ -1083,6 +1083,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Android canvas sizes the layer of a transparency group and of a soft-masked paint to its box, not to the
   whole clip, as the Skia canvas does. On a Letter page at 300 dpi under Robolectric, 500 small groups rendered in
   7 s and now in 0.4 s, and 500 small masked paints, which took 44 to 100 s, in 0.3 s (#824).
+- On the Android canvas of `AndroidPdfBitmapRenderer`, a paint under a soft mask keeps its blend mode outside
+  every layer, as on AWT, Skia, Compose and Canvas2D: an opaque mask over a red Multiply paint on blue gives black,
+  where it gave red (#764).
 
 ## [0.13.0] - 2026-10-09
 

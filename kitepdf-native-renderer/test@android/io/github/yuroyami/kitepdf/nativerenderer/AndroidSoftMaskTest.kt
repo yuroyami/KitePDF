@@ -98,6 +98,36 @@ class AndroidSoftMaskTest {
         bitmap.assertPixel(140, 100, listOf(255, 255, 255))
     }
 
+    /** A blue page, then a red fill in Multiply under a soft mask whose group fills [mask] over the page. */
+    private fun multiplied(mask: String, kind: String = "Alpha", maskResources: String = "", entries: String = "") = testPage(
+        "0 0 1 rg 0 0 200 200 re f /GS1 gs 1 0 0 rg 0 0 200 200 re f",
+        "/ExtGState << /GS1 << /BM /Multiply /SMask << /S /$kind /G 5 0 R $entries >> >> >>",
+        listOf(groupForm(mask, maskResources)),
+    )
+
+    @Test
+    fun a_masked_paint_keeps_its_blend_mode() {
+        // ISO 32000-1, 11.6.4.3 and 11.3.5: an opaque mask leaves the Multiply as it is, so red on
+        // blue stays black; the layer used to blend against transparency and painted red (#764).
+        renderOnBitmap(multiplied("1 g 0 0 200 200 re f")).assertPixel(100, 100, listOf(0, 0, 0))
+        renderOnBitmap(multiplied("1 g 0 0 200 200 re f", "Luminosity")).assertPixel(100, 100, listOf(0, 0, 0))
+        // A mask of half keeps half of the blue and half of the black.
+        val half = "/ExtGState << /GH << /ca 0.5 >> >>"
+        renderOnBitmap(multiplied("/GH gs 1 g 0 0 200 200 re f", maskResources = half)).assertPixel(100, 100, listOf(0, 0, 128))
+        // A squaring /TR, which goes through the mask group's pixels (#445), makes that a quarter.
+        val square = "/TR << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 2 >>"
+        renderOnBitmap(multiplied("/GH gs 1 g 0 0 200 200 re f", maskResources = half, entries = square))
+            .assertPixel(100, 100, listOf(0, 0, 191))
+        // A Normal paint under a mask is unchanged: half red over blue.
+        renderOnBitmap(
+            testPage(
+                "0 0 1 rg 0 0 200 200 re f /GS1 gs 1 0 0 rg 0 0 200 200 re f",
+                "/ExtGState << /GS1 << /SMask << /S /Alpha /G 5 0 R >> >> >>",
+                listOf(groupForm("/GH gs 1 g 0 0 200 200 re f", half)),
+            ),
+        ).assertPixel(100, 100, listOf(128, 0, 128))
+    }
+
     @Test
     fun a_luminosity_mask_group_painted_at_half_alpha_composites_over_black() {
         // ISO 32000-1, 11.6.5.2: the group composites over its black backdrop before its
