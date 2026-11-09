@@ -1038,6 +1038,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one luminosity mask rendered the mask group 98 times and now 3 times (#912).
 - Canvas2D renders a soft mask once for all the paints under it, as AWT, Skia and Compose do: 49 squares under
   one luminosity mask rendered and converted the mask group 49 times and now 2 times (#912).
+- An inline-block with inline content is one unit of its line, as CSS 2.1, 9.2.4 asks: no line breaks inside it,
+  it takes its width or min-width, its horizontal padding, border and margins take room, and its background and
+  border paint as one box behind its text. Its text still reads, searches and selects with the line (#840).
 
 ## [0.13.0] - 2026-10-09
 

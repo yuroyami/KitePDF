@@ -2259,6 +2259,8 @@ internal class BoxLayout(
         val overline: DecorationLine? = null,
         val emphasis: Emphasis? = null,
         val backgroundColor: CssBackground? = null,
+        // The inline-block this cell is inside, which lays out as one unit (#840).
+        val box: InlineBox? = null,
         // The bidi level of the character, from [bidiLevels]; odd for right to left.
         val level: Int = 0,
         // Where the cell's character sits in the block's text, in code points. A ligature keeps
@@ -2331,7 +2333,7 @@ internal class BoxLayout(
             kernAfter1000 = spacing,
             rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
             element = run.element, text = text,
-            lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor,
+            lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, box = run.box,
             level = level, src = src, combined = Combined(glyphs, f),
         )
     }
@@ -2567,7 +2569,7 @@ internal class BoxLayout(
                     Cell(c, penAdvance1000(f, gid, c, run.textOrientation) * cellFs / 1000.0, cellFs, spec, run.color, shift, run.underline, f, gid,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                         element = run.element,
-                        lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, level = level, src = src,
+                        lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, box = run.box, level = level, src = src,
                         orientation = run.textOrientation)
                 } else {
                     // An upright letter of the generic font takes one em down the column (#508).
@@ -2576,7 +2578,7 @@ internal class BoxLayout(
                     Cell(c, advance, cellFs, spec, run.color, shift, run.underline,
                         rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                         element = run.element,
-                        lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, level = level, src = src,
+                        lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, box = run.box, level = level, src = src,
                         orientation = run.textOrientation)
                 }
                 // letter-spacing: added to every glyph advance, kept in sync
@@ -2606,7 +2608,7 @@ internal class BoxLayout(
                     cp, w + spacing, fs, spec, run.color, shift, run.underline, face, face?.gidFor(' '.code) ?: -1,
                     rubyGroup = run.rubyGroup, rubyText = run.rubyText, href = run.href, speech = run.speech, ids = run.ids,
                     element = run.element,
-                    lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, level = level, src = src,
+                    lineThrough = run.lineThrough, overline = run.overline, emphasis = run.emphasis, backgroundColor = run.backgroundColor, box = run.box, level = level, src = src,
                 )
             }
             var at = 0
@@ -2651,7 +2653,7 @@ internal class BoxLayout(
                         tokens.add(Token.Space(Cell(
                             ' '.code, spaceW, fs, spec, run.color, shift, run.underline,
                             href = run.href, speech = run.speech, ids = run.ids, element = run.element,
-                            lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, level = level,
+                            lineThrough = run.lineThrough, overline = run.overline, backgroundColor = run.backgroundColor, box = run.box, level = level,
                         ), tab))
                     }
                     // keep-all: CJK letters join the word like Latin ones. A break may still come
@@ -2692,7 +2694,45 @@ internal class BoxLayout(
             }
         }
         endWord()
+        padBoxes(tokens)
         return tokens
+    }
+
+    /**
+     * Gives each inline-block's box its room (#840): its left margin, border and padding before its
+     * first cell, and after its last its right ones and what its text lacks of its `width` or
+     * `min-width`. Its words then measure what the box takes on the line.
+     */
+    private fun padBoxes(tokens: MutableList<Token>) {
+        val first = LinkedHashMap<InlineBox, Cell>()
+        val last = HashMap<InlineBox, Cell>()
+        val content = HashMap<InlineBox, Double>()
+        for (t in tokens) {
+            val cells = when (t) {
+                is Token.Word -> t.cells
+                is Token.Space -> listOf(t.cell)
+                Token.Break -> emptyList()
+            }
+            for (c in cells) {
+                val b = c.box ?: continue
+                first.getOrPut(b) { c }
+                last[b] = c
+                content[b] = (content[b] ?: 0.0) + c.width + c.padBefore + c.padAfter
+            }
+        }
+        if (first.isEmpty()) return
+        for ((b, c) in first) {
+            c.padBefore += b.before
+            val text = content.getValue(b)
+            val extra = maxOf(0.0, (b.widthPt ?: 0.0) - text, (b.minWidthPt ?: 0.0) - text)
+            last.getValue(b).padAfter += extra + b.after
+        }
+        for (i in tokens.indices) {
+            val t = tokens[i]
+            if (t is Token.Word && t.cells.any { it.box != null }) {
+                tokens[i] = Token.Word(t.cells, t.cells.sumOf { it.width + it.padBefore + it.padAfter }, t.hyphenPoints, t.overflowWrap, t.breakAll, t.lineBreak)
+            }
+        }
     }
 
     /**
@@ -2772,7 +2812,7 @@ internal class BoxLayout(
                     base.spec, base.color, base.shift, base.underline, face, g.gid, kernAfter1000 = spacing,
                     rubyGroup = base.rubyGroup, rubyText = base.rubyText, href = base.href, speech = base.speech, ids = base.ids,
                     element = base.element,
-                    lineThrough = base.lineThrough, overline = base.overline, emphasis = base.emphasis, backgroundColor = base.backgroundColor, level = base.level,
+                    lineThrough = base.lineThrough, overline = base.overline, emphasis = base.emphasis, backgroundColor = base.backgroundColor, box = base.box, level = base.level,
                     src = base.src, orientation = base.orientation,
                 ).also {
                     it.ligComponents = g.components; it.ligComponent = g.component; it.text = text
@@ -3077,7 +3117,7 @@ internal class BoxLayout(
         return Cell(
             '-'.code, hyphenWidth(c), c.fontSize, c.spec, c.color, c.shift, c.underline, face, face?.gidFor('-'.code) ?: -1,
             href = c.href, speech = c.speech, ids = c.ids, element = c.element,
-            lineThrough = c.lineThrough, overline = c.overline, emphasis = c.emphasis, backgroundColor = c.backgroundColor, level = c.level, orientation = c.orientation,
+            lineThrough = c.lineThrough, overline = c.overline, emphasis = c.emphasis, backgroundColor = c.backgroundColor, box = c.box, level = c.level, orientation = c.orientation,
         )
     }
 
@@ -3085,6 +3125,32 @@ internal class BoxLayout(
         KiteFontFamily.Monospace -> GenericFont.MONO
         KiteFontFamily.SansSerif -> GenericFont.SANS
         else -> GenericFont.SERIF
+    }
+
+    /**
+     * The box of each inline-block on the line (#840), first in [out] so it paints behind its text:
+     * from its first cell to its last, without its margins, each cell placed as [placeRuns] places it.
+     */
+    private fun boxRuns(cells: List<Cell>, xStart: Double, extraPerSpace: Double, out: MutableList<PlacedRun>) {
+        if (cells.none { it.box != null }) return
+        fun advance(c: Cell): Double =
+            if (isGap(c.cp)) c.width + if (isWordSeparator(c.cp)) extraPerSpace else 0.0 else c.padBefore + c.width + c.padAfter
+        var x = xStart
+        var k = 0
+        while (k < cells.size) {
+            val c = cells[k]
+            val b = c.box
+            val start = x
+            x += advance(c)
+            k++
+            if (b == null) continue
+            while (k < cells.size && cells[k].box === b) x += advance(cells[k++])
+            val left = start + b.marginLeft
+            val right = x - b.marginRight
+            if (right > left) {
+                out.add(PlacedRun(emptyList(), left, c.fontSize, c.spec, c.color, c.shift, null, backgroundColor = b.background, paintWidth = right - left, box = b))
+            }
+        }
     }
 
     private fun placeRuns(
@@ -3095,6 +3161,7 @@ internal class BoxLayout(
         mathSink: MutableList<PlacedMath>? = null,
     ): List<PlacedRun> {
         val out = ArrayList<PlacedRun>()
+        boxRuns(cells, xStart, extraPerSpace, out)
         var x = xStart
         var i = 0
         // Ruby envelope tracking: a group's overlay is centered over

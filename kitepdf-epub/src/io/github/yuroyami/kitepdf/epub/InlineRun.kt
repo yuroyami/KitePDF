@@ -12,6 +12,39 @@ import io.github.yuroyami.kitepdf.epub.css.TextOrientation
 import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.svg.SvgImage
+import io.github.yuroyami.kitepdf.epub.css.Edge
+
+/**
+ * An element of `display: inline-block` whose content is inline (CSS 2.1, 9.2.4; #840): its text
+ * stays runs of the line, so it reads, searches and selects as before, but the runs form one unit
+ * that no line breaks inside. The unit takes the element's [widthPt] or [minWidthPt] when its text
+ * is narrower, its horizontal padding, border and margins as room before and after it, and paints
+ * its [background] and border as one box behind its text.
+ *
+ * One object for each element, compared by identity. An inline-block with a block inside it keeps
+ * the old layout, as inline text.
+ */
+internal class InlineBox(
+    val widthPt: Double?,
+    val minWidthPt: Double?,
+    val paddingTop: Double,
+    val paddingRight: Double,
+    val paddingBottom: Double,
+    val paddingLeft: Double,
+    val borderTop: Edge,
+    val borderRight: Edge,
+    val borderBottom: Edge,
+    val borderLeft: Edge,
+    val marginLeft: Double,
+    val marginRight: Double,
+    val background: CssBackground?,
+) {
+    /** The room before the text: the left margin, border and padding. */
+    val before: Double get() = marginLeft + borderLeft.effective + paddingLeft
+
+    /** The room after the text, without the shortfall from [widthPt]: the right padding, border and margin. */
+    val after: Double get() = paddingRight + borderRight.effective + marginRight
+}
 
 /**
  * A maximal span of text sharing one computed inline style. Everything the layout
@@ -100,6 +133,8 @@ internal data class InlineRun(
     val combineGroup: Int = -1,
     /** Inline box background, including the nearest painted inline ancestor. */
     val backgroundColor: CssBackground? = null,
+    /** The inline-block this run's text is inside, which lays out as one unit on its line, or null (#840). */
+    val box: InlineBox? = null,
     /** The pronunciation of the element this run's text belongs to, or null (#39). */
     val speech: SpeechHint? = null,
     /**

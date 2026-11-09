@@ -787,6 +787,27 @@ internal class BoxBuilder(
     private fun KiteXmlNode.isTableWhiteSpace(): Boolean =
         this is KiteXmlNode.Text && text.all { it == ' ' || it == '\t' || it == '\n' || it == '\r' || it == '\u000C' }
 
+    /**
+     * Whether [el] holds anything that is not inline: a block, a table, a list item, a break, or an
+     * inline-block that holds one in turn. Such an inline-block keeps laying out as inline text,
+     * since this builder hoists blocks out of the line (#840).
+     */
+    private fun hasBlockContent(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, style: ComputedStyle, depth: Int = 0): Boolean {
+        if (depth > 32) return true
+        val childAncestors = listOf(el) + ancestors
+        for (child in el.children) {
+            if (child !is KiteXmlNode.Element) continue
+            if (child.tag == "br") return true
+            val cs = resolver.compute(child, childAncestors, style)
+            when (cs.display) {
+                Display.NONE -> {}
+                Display.INLINE, Display.INLINE_BLOCK -> if (cs.cssFloat != CssFloat.NONE || hasBlockContent(child, childAncestors, cs, depth + 1)) return true
+                else -> return true
+            }
+        }
+        return false
+    }
+
     private fun processInline(
         el: KiteXmlNode.Element,
         style: ComputedStyle,
@@ -810,7 +831,17 @@ internal class BoxBuilder(
         if (tracksElements) inl.beginElement(el)
         val bidiScope = inl.beginBidi(style)
         inl.beginCombine(style.textCombineUpright)
-        val background = inl.beginBackground(style.backgroundColor)
+        // An inline-block with inline content is one unit of its line, with its own box (#840).
+        val atom = if (style.display == Display.INLINE_BLOCK && style.cssFloat == CssFloat.NONE && !inl.inBox &&
+            !hasBlockContent(el, ancestors, style)
+        ) InlineBox(
+            style.widthPt, style.minWidthPt,
+            style.paddingTopPt, style.paddingRightPt, style.paddingBottomPt, style.paddingLeftPt,
+            style.borderTop, style.borderRight, style.borderBottom, style.borderLeft,
+            style.marginLeftPt, style.marginRightPt, style.backgroundColor,
+        ) else null
+        val background = inl.beginBackground(if (atom == null) style.backgroundColor else null)
+        val outerBox = atom?.let { inl.beginBox(it) }
         try {
             if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
             // Inline generated content flows with the element's own runs (a
@@ -912,6 +943,7 @@ internal class BoxBuilder(
             resolver.computePseudo(el, ancestors, style, PseudoSide.AFTER)?.let { inl.appendText(it.text, it.style) }
         } finally {
             inl.endBackground(background)
+            if (atom != null) inl.endBox(outerBox)
             inl.endCombine()
             if (bidiScope) inl.endBidi()
             if (tracksElements) inl.endElement()
@@ -991,6 +1023,19 @@ internal class BoxBuilder(
         private var pendingBreak = false
         private var lastCp = 0
         private var backgroundColor: CssBackground? = null
+        private var box: InlineBox? = null
+
+        /** Whether the runs made now are inside an inline-block's box, which a nested one does not split (#840). */
+        val inBox: Boolean get() = box != null
+
+        /** Runs made until [endBox] are inside [b], an inline-block's box (#840). */
+        fun beginBox(b: InlineBox): InlineBox? {
+            val previous = box
+            box = b
+            return previous
+        }
+
+        fun endBox(previous: InlineBox?) { box = previous }
 
         fun beginBackground(color: CssBackground?): CssBackground? {
             val previous = backgroundColor
@@ -1262,6 +1307,7 @@ internal class BoxBuilder(
         // place to break (#845).
         private fun samePaint(a: InlineRun, b: InlineRun): Boolean =
             a.underline == b.underline && a.lineThrough == b.lineThrough && a.overline == b.overline && a.backgroundColor == b.backgroundColor &&
+                a.box === b.box &&
                 a.combineGroup == b.combineGroup && a.noWrap == b.noWrap &&
                 // A space outside an element's bidi scope stays out of it, as its order there differs (#932).
                 a.bidi == b.bidi
@@ -1283,7 +1329,8 @@ internal class BoxBuilder(
             overflowWrap = (style.overflowWrap || style.wordBreak == WordBreak.BREAK_WORD) && style.whiteSpace != WhiteSpaceMode.NOWRAP,
             breakAll = style.wordBreak == WordBreak.BREAK_ALL && style.whiteSpace != WhiteSpaceMode.NOWRAP,
             keepAll = style.wordBreak == WordBreak.KEEP_ALL,
-            noWrap = style.whiteSpace == WhiteSpaceMode.NOWRAP,
+            // No line breaks inside an inline-block's box, which is one unit (#840).
+            noWrap = style.whiteSpace == WhiteSpaceMode.NOWRAP || box != null,
             tabSpaces = style.tabSpaces,
             tabLengthPt = style.tabLengthPt,
             language = style.language,
@@ -1293,8 +1340,10 @@ internal class BoxBuilder(
             overline = style.overline,
             emphasis = emphasisOf(style),
             combineGroup = combineGroup,
-            backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || style.display == Display.INLINE_BLOCK }
+            // An inline-block's box paints its own background, around its padding too (#840).
+            backgroundColor = style.backgroundColor.takeIf { style.display == Display.INLINE || (style.display == Display.INLINE_BLOCK && box == null) }
                 ?: backgroundColor,
+            box = box,
         )
     }
 

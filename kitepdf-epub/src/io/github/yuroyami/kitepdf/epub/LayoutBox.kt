@@ -177,6 +177,8 @@ internal class PlacedRun(
     val lineThrough: DecorationLine? = null,
     val overline: DecorationLine? = null,
     val backgroundColor: CssBackground? = null,
+    /** An inline-block's box, which this run of no glyphs paints behind the box's text, with its padding and border (#840). */
+    val box: InlineBox? = null,
     /** Includes justified spaces, even when no glyph is painted for them. */
     val paintWidth: Double = glyphs.sumOf { it.advanceWidth } * fontSize / 1000.0,
     /** The pronunciation of the element the run's text belongs to (see [InlineRun.speech]). */

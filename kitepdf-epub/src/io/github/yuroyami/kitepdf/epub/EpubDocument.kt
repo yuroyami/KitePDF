@@ -2969,9 +2969,29 @@ public class EpubPage internal constructor(
     }
 
     private fun paintRunBackground(run: PlacedRun, canvas: KiteCanvas, ctm: KiteMatrix) {
+        val box = run.box
+        if (box != null) {
+            paintInlineBox(box, run, canvas, ctm)
+            return
+        }
         run.backgroundColor?.let {
             rectFill(canvas, ctm, 0.0, -0.2 * run.fontSize, run.paintWidth, run.fontSize, it.color, it.alpha)
         }
+    }
+
+    /**
+     * An inline-block's box (#840): the background over the border box, which is the em of the
+     * box's text with its padding and border around it, then each border edge that paints, solid.
+     */
+    private fun paintInlineBox(box: InlineBox, run: PlacedRun, canvas: KiteCanvas, ctm: KiteMatrix) {
+        val w = run.paintWidth
+        val bottom = -0.2 * run.fontSize - box.paddingBottom - box.borderBottom.effective
+        val height = run.fontSize + box.paddingTop + box.paddingBottom + box.borderTop.effective + box.borderBottom.effective
+        box.background?.let { rectFill(canvas, ctm, 0.0, bottom, w, height, it.color, it.alpha) }
+        if (box.borderLeft.visible) rectFill(canvas, ctm, 0.0, bottom, box.borderLeft.width, height, box.borderLeft.color)
+        if (box.borderRight.visible) rectFill(canvas, ctm, w - box.borderRight.width, bottom, box.borderRight.width, height, box.borderRight.color)
+        if (box.borderBottom.visible) rectFill(canvas, ctm, 0.0, bottom, w, box.borderBottom.width, box.borderBottom.color)
+        if (box.borderTop.visible) rectFill(canvas, ctm, 0.0, bottom + height - box.borderTop.width, w, box.borderTop.width, box.borderTop.color)
     }
 
     /**
