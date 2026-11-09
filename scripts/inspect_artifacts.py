@@ -5,7 +5,8 @@ For each published module it reads the JVM jars and the Android AARs and checks:
 
 - every class file is Java 11 bytecode or older, the `jvm.release` of common.module-template.yaml
   (#683);
-- the jar or the AAR's classes.jar carries META-INF/LICENSE and META-INF/NOTICE (#703);
+- the jar, or a jar inside the AAR (classes.jar, or libs/*.jar as the Kotlin Toolchain writes),
+  carries META-INF/LICENSE and META-INF/NOTICE (#703);
 - an AAR's AndroidManifest.xml declares the minSdk its module.yaml asks for, or the template's
   (#721).
 
@@ -86,14 +87,23 @@ def main():
             checked += 1
             with zipfile.ZipFile(aar) as z:
                 names = set(z.namelist())
-                if "classes.jar" in names:
-                    check_jar(f"{aar.name}!classes.jar", z.read("classes.jar"), problems, need_notices=False)
-                if not any(n in names for n in ("META-INF/LICENSE", "META-INF/NOTICE")) and "classes.jar" in names:
-                    with zipfile.ZipFile(io.BytesIO(z.read("classes.jar"))) as c:
-                        inner = set(c.namelist())
-                    for notice in ("META-INF/LICENSE", "META-INF/NOTICE"):
-                        if notice not in inner:
-                            problems.append(f"{aar.name}: no {notice}")
+                # The Kotlin Toolchain keeps an AAR's classes in libs/<artifact>-jvm.jar, other builds in classes.jar.
+                inner = sorted(n for n in names if n == "classes.jar" or (n.startswith("libs/") and n.endswith(".jar")))
+                if not inner:
+                    problems.append(f"{aar.name}: no classes.jar and no jar under libs/")
+                has_license = "META-INF/LICENSE" in names
+                has_notice = "META-INF/NOTICE" in names
+                for n in inner:
+                    data = z.read(n)
+                    check_jar(f"{aar.name}!{n}", data, problems, need_notices=False)
+                    with zipfile.ZipFile(io.BytesIO(data)) as c:
+                        entries = set(c.namelist())
+                    has_license = has_license or "META-INF/LICENSE" in entries
+                    has_notice = has_notice or "META-INF/NOTICE" in entries
+                if not has_license:
+                    problems.append(f"{aar.name}: no META-INF/LICENSE")
+                if not has_notice:
+                    problems.append(f"{aar.name}: no META-INF/NOTICE")
                 want = module_min_sdk(module, default_sdk)
                 got = min_sdk_of(z.read("AndroidManifest.xml")) if "AndroidManifest.xml" in names else None
                 if want is not None and got != want:

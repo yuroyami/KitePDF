@@ -24,11 +24,11 @@ def jar(major, notices=True):
     return out.getvalue()
 
 
-def aar(min_sdk, major=55):
+def aar(min_sdk, major=55, inner="classes.jar", notices=True):
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as z:
         z.writestr("AndroidManifest.xml", f'<manifest><uses-sdk android:minSdkVersion="{min_sdk}"/></manifest>')
-        z.writestr("classes.jar", jar(major))
+        z.writestr(inner, jar(major, notices))
     return out.getvalue()
 
 
@@ -64,6 +64,15 @@ class InspectArtifactsTest(unittest.TestCase):
         code, out = self.run_on({"kitepdf-skia-renderer-android/9.9.9/kitepdf-skia-renderer-android-9.9.9.aar": aar(21)})
         self.assertEqual(1, code)
         self.assertIn("asks for 24", out)
+
+    def test_the_toolchain_aar_layout_is_read(self):
+        # Classes in libs/<artifact>-jvm.jar, as the Kotlin Toolchain writes an AAR.
+        good = aar(21, inner="libs/kitepdf-core-jvm.jar")
+        self.assertEqual(0, self.run_on({"kitepdf-core-android/9.9.9/kitepdf-core-android-9.9.9.aar": good})[0])
+        code, out = self.run_on({"kitepdf-core-android/9.9.9/kitepdf-core-android-9.9.9.aar": aar(21, major=65, inner="libs/kitepdf-core-jvm.jar", notices=False)})
+        self.assertEqual(1, code)
+        self.assertIn("Java 21", out)
+        self.assertIn("META-INF/NOTICE", out)
 
     def test_no_artifacts_is_an_error(self):
         code, _ = self.run_on({})
