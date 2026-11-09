@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.core.render
 
+import io.github.yuroyami.imagekodec.ColorTarget
 import io.github.yuroyami.imagekodec.ImageKodec
 import io.github.yuroyami.imagekodec.codec.JpxDecoder
 
@@ -22,6 +23,8 @@ internal class KiteImageSamples private constructor(
     private val ink: JpegInk.Layout?,
     /** The colour space the samples come in, `DeviceGray`, `DeviceRGB` or `DeviceCMYK`. */
     val colorSpace: String,
+    /** What a JPEG's samples convert to: as stored for a PDF's, sRGB through its profile for a file of its own (#833). */
+    private val target: ColorTarget = ColorTarget.Source,
 ) {
     /** The bytes this holds: the encoded image. */
     val encodedSize: Int get() = bytes.size
@@ -45,7 +48,7 @@ internal class KiteImageSamples private constructor(
             } else if (ink != null) {
                 JpegInk.decode(bytes, ink, reduction)
             } else {
-                val bitmap = ImageKodec.decodeReduced(bytes, reduction)
+                val bitmap = ImageKodec.decodeReduced(bytes, reduction, target)
                 Decoded(bitmap.width, bitmap.height, if (gray) bitmap.toGrayBytes() else bitmap.toRgbBytes())
             }
         } catch (damaged: Exception) {
@@ -90,11 +93,11 @@ internal class KiteImageSamples private constructor(
          * at its first draw, and the image draws as a placeholder (#184). With [ink], the samples
          * are CMYK.
          */
-        fun jpeg(bytes: ByteArray, gray: Boolean, ink: JpegInk.Layout? = null): KiteImageSamples? {
+        fun jpeg(bytes: ByteArray, gray: Boolean, ink: JpegInk.Layout? = null, target: ColorTarget = ColorTarget.Source): KiteImageSamples? {
             val info = runCatching { ImageKodec.probe(bytes) }.getOrNull() ?: return null
             if (!info.isDecodable || info.width <= 0 || info.height <= 0) return null
             val space = if (ink != null) "DeviceCMYK" else if (gray) "DeviceGray" else "DeviceRGB"
-            return KiteImageSamples(bytes, info.width, info.height, jpx = false, gray, ink, space)
+            return KiteImageSamples(bytes, info.width, info.height, jpx = false, gray, ink, space, target)
         }
 
         /**

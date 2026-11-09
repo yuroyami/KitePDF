@@ -1904,6 +1904,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteImageData$Companio
 	public static synthetic fun from$default (Lio/github/yuroyami/kitepdf/core/render/KiteImageData$Companion;Lio/github/yuroyami/kitepdf/core/parser/PdfStream;Lio/github/yuroyami/kitepdf/core/parser/IndirectResolver;Lio/github/yuroyami/kitepdf/core/render/RgbColor;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 	public final fun fromEncodedImage ([B)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 	public final fun fromEncodedImage ([BZ)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
+	public final fun fromEncodedImage ([BZZ)Lio/github/yuroyami/kitepdf/core/render/KiteImageData;
 	public final fun swapsAxes ([B)Z
 }
 

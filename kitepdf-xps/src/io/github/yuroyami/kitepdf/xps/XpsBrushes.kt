@@ -87,8 +87,9 @@ internal class XpsBrushes(
             runCatching {
                 val bytes = packageData.read(part) ?: return@runCatching null
                 // An XPS image brush places its image by its own viewbox, with the samples as stored.
-                val stored = KiteImageData.fromEncodedImage(bytes, applyOrientation = false) ?: return@runCatching null
                 val profile = profilePart?.let { packageData.read(it) }
+                // A profile the brush names takes the place of one in the file, so the samples then stay as stored (#833, #895).
+                val stored = KiteImageData.fromEncodedImage(bytes, applyOrientation = false, convertColor = profile == null) ?: return@runCatching null
                 if (profilePart != null && profile == null) kiteWarn { "xps: the colour profile $profilePart of $part is not in the package" }
                 val decoded = profile?.let { stored.withIccProfile(it) } ?: stored
                 val dpi = imageDpi(bytes)

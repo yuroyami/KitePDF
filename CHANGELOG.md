@@ -837,6 +837,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A JPEG or JPEG 2000 file that is an image of its own, a comic page, an EPUB or SVG image or an XPS brush, stays
   encoded and decodes at the size it draws, as a PDF's does, so a large comic page drawn as a thumbnail no longer
   allocates hundreds of MB on every draw (#839).
+- An image that is a file of its own, in an EPUB, a comic, an SVG or an XPS brush, draws in the colour it
+  declares: its ICC profile, or a PNG's `sRGB`, `gAMA`, `cHRM` and `cICP` chunks, converted to sRGB as a browser
+  draws it. `KiteImageData.fromEncodedImage` takes `convertColor`, which an XPS brush that names its own profile
+  turns off (#833).
 
 ## [0.13.0] - 2026-10-09
 

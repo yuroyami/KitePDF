@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.core.render
 
+import io.github.yuroyami.imagekodec.ColorTarget
 import io.github.yuroyami.imagekodec.ImageFormat
 import io.github.yuroyami.imagekodec.ImageKodec
 import io.github.yuroyami.imagekodec.codec.Jbig2Decoder
@@ -529,18 +530,29 @@ public class KiteImageData internal constructor(
          * As the other [fromEncodedImage], with the EXIF orientation applied only when
          * [applyOrientation] is set; false keeps the samples in their stored order.
          */
-        public fun fromEncodedImage(bytes: ByteArray, applyOrientation: Boolean): KiteImageData? {
+        public fun fromEncodedImage(bytes: ByteArray, applyOrientation: Boolean): KiteImageData? =
+            fromEncodedImage(bytes, applyOrientation, convertColor = true)
+
+        /**
+         * As the other [fromEncodedImage]. With [convertColor], as a browser draws them, the
+         * samples come through the colour the file declares: its ICC profile, a PNG's `sRGB`,
+         * `gAMA`, `cHRM` and `cICP` chunks, to sRGB (#833). Without it they stay as stored, for a
+         * container that names a profile of its own for them, as an XPS `ColorConvertedBitmap`
+         * does, which [withIccProfile] then applies.
+         */
+        public fun fromEncodedImage(bytes: ByteArray, applyOrientation: Boolean, convertColor: Boolean): KiteImageData? {
+            val target = if (convertColor) ColorTarget.Srgb() else ColorTarget.Source
             return when (ImageFormat.sniff(bytes)) {
                 ImageFormat.PNG, ImageFormat.GIF, ImageFormat.WEBP, ImageFormat.AVIF, ImageFormat.JXL ->
-                    runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
+                    runCatching { ImageKodec.decode(bytes, applyOrientation, target) }.getOrNull()?.toKiteImageData()
                         ?.also { it.animation = KiteImageAnimation.of(bytes, applyOrientation) }
-                ImageFormat.JP2 -> encodedSamples(bytes, applyOrientation, jpx = true)
-                    ?: runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
+                ImageFormat.JP2 -> encodedSamples(bytes, applyOrientation, jpx = true, target)
+                    ?: runCatching { ImageKodec.decode(bytes, applyOrientation, target) }.getOrNull()?.toKiteImageData()
                 ImageFormat.BMP, ImageFormat.TIFF ->
-                    runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.toKiteImageData()
+                    runCatching { ImageKodec.decode(bytes, applyOrientation, target) }.getOrNull()?.toKiteImageData()
                 ImageFormat.JPEG -> {
-                    encodedSamples(bytes, applyOrientation, jpx = false)?.let { return it }
-                    runCatching { ImageKodec.decode(bytes, applyOrientation) }.getOrNull()?.let { return it.toKiteImageData() }
+                    encodedSamples(bytes, applyOrientation, jpx = false, target)?.let { return it }
+                    runCatching { ImageKodec.decode(bytes, applyOrientation, target) }.getOrNull()?.let { return it.toKiteImageData() }
                     // A damaged or unsupported JPEG stream keeps
                     // its file and draws as a placeholder (#184), at its upright size.
                     val (fw, fh) = jpegFrame(bytes) ?: return null
@@ -564,12 +576,12 @@ public class KiteImageData internal constructor(
          * whose orientation must turn it, which a reduced decode does not, and for one whose
          * headers name a coding ImageKodec does not decode, which then decodes in full as before.
          */
-        private fun encodedSamples(bytes: ByteArray, applyOrientation: Boolean, jpx: Boolean): KiteImageData? {
-            if (applyOrientation) {
-                val orientation = runCatching { ImageKodec.probe(bytes).orientation }.getOrNull() ?: return null
-                if (orientation != io.github.yuroyami.imagekodec.Orientation.Normal) return null
-            }
-            val lazy = (if (jpx) KiteImageSamples.jpx(bytes) else KiteImageSamples.jpeg(bytes, gray = false)) ?: return null
+        private fun encodedSamples(bytes: ByteArray, applyOrientation: Boolean, jpx: Boolean, target: ColorTarget): KiteImageData? {
+            val info = runCatching { ImageKodec.probe(bytes) }.getOrNull() ?: return null
+            if (applyOrientation && info.orientation != io.github.yuroyami.imagekodec.Orientation.Normal) return null
+            // A JPEG 2000 decode at a reduced size does not convert colour, so one with a profile decodes in full (#833).
+            if (jpx && target is ColorTarget.Srgb && info.colorProfile != null) return null
+            val lazy = (if (jpx) KiteImageSamples.jpx(bytes) else KiteImageSamples.jpeg(bytes, gray = false, target = target)) ?: return null
             val gray = lazy.colorSpace == "DeviceGray"
             return KiteImageData(
                 lazy.width, lazy.height, 8, if (gray) "DeviceGray" else "DeviceRGB", Kind.RAW, encodedBytes = bytes,
