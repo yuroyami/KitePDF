@@ -69,7 +69,13 @@ public class KiteChoiceStrings(
     public val noMatches: String = "No matching options",
     public val rejected: String = "Selection was not accepted",
     public val emptyOption: String = "Empty value",
-)
+) {
+    // Two sets of the same words are equal, so a set built inline does not recompose its content (#675).
+    override fun equals(other: Any?): Boolean = this === other || other is KiteChoiceStrings &&
+        noOptions == other.noOptions && noMatches == other.noMatches && rejected == other.rejected && emptyOption == other.emptyOption
+
+    override fun hashCode(): Int = listOf(noOptions, noMatches, rejected, emptyOption).hashCode()
+}
 
 /** The words of PDF choice controls below this composition. */
 public val LocalKiteChoiceStrings: ProvidableCompositionLocal<KiteChoiceStrings> = staticCompositionLocalOf { KiteChoiceStrings() }

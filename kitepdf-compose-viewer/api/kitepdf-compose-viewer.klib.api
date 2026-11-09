@@ -246,6 +246,9 @@ final class io.github.yuroyami.kitepdf.compose/KiteChoiceStrings { // io.github.
         final fun <get-noOptions>(): kotlin/String // io.github.yuroyami.kitepdf.compose/KiteChoiceStrings.noOptions.<get-noOptions>|<get-noOptions>(){}[0]
     final val rejected // io.github.yuroyami.kitepdf.compose/KiteChoiceStrings.rejected|{}rejected[0]
         final fun <get-rejected>(): kotlin/String // io.github.yuroyami.kitepdf.compose/KiteChoiceStrings.rejected.<get-rejected>|<get-rejected>(){}[0]
+
+    final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteChoiceStrings.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteChoiceStrings.hashCode|hashCode(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.compose/KiteDocViewColors { // io.github.yuroyami.kitepdf.compose/KiteDocViewColors|null[0]
@@ -546,6 +549,9 @@ final class io.github.yuroyami.kitepdf.compose/KiteViewerStrings { // io.github.
         final fun <get-page>(): kotlin/Function2<kotlin/Int, kotlin/Int?, kotlin/String> // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.page.<get-page>|<get-page>(){}[0]
     final val previousPage // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.previousPage|{}previousPage[0]
         final fun <get-previousPage>(): kotlin/String // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.previousPage.<get-previousPage>|<get-previousPage>(){}[0]
+
+    final fun equals(kotlin/Any?): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KiteViewerStrings.hashCode|hashCode(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.compose/KiteZoomSpec { // io.github.yuroyami.kitepdf.compose/KiteZoomSpec|null[0]

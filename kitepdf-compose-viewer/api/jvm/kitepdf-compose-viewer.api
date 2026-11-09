@@ -55,10 +55,12 @@ public final class io/github/yuroyami/kitepdf/compose/KiteChoiceStrings {
 	public fun <init> ()V
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
 	public final fun getEmptyOption ()Ljava/lang/String;
 	public final fun getNoMatches ()Ljava/lang/String;
 	public final fun getNoOptions ()Ljava/lang/String;
 	public final fun getRejected ()Ljava/lang/String;
+	public fun hashCode ()I
 }
 
 public abstract interface class io/github/yuroyami/kitepdf/compose/KiteDocLayout {
@@ -575,6 +577,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteViewerStrings {
 	public fun <init> ()V
 	public fun <init> (Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;)V
 	public synthetic fun <init> (Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCancel ()Ljava/lang/String;
 	public final fun getFormField ()Ljava/lang/String;
 	public final fun getHighlightColor ()Lkotlin/jvm/functions/Function2;
@@ -585,6 +588,7 @@ public final class io/github/yuroyami/kitepdf/compose/KiteViewerStrings {
 	public final fun getOpenLinkQuestion ()Ljava/lang/String;
 	public final fun getPage ()Lkotlin/jvm/functions/Function2;
 	public final fun getPreviousPage ()Ljava/lang/String;
+	public fun hashCode ()I
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KiteViewerStringsKt {

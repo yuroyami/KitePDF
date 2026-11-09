@@ -891,6 +891,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A form that changes often no longer rebuilds every accessibility node of the pages on screen: their text and
   links are built once per content, and their field nodes at most four times a second, from one pass over the
   widgets. The new `PdfPage.visibleWidgets(formState)` lists the widgets that show (#666).
+- `KiteViewerStrings` and `KiteChoiceStrings` compare by value, so a set built inline under
+  `LocalKiteViewerStrings`, as the KDoc shows, no longer recomposes the whole viewer each time the composable
+  around it recomposes (#675).
 
 ## [0.13.0] - 2026-10-09
 
