@@ -6,13 +6,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.PixelMap
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfFormState
 import io.github.yuroyami.kitepdf.PdfScriptHandler
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /**
- * The deep-zoom tiles follow the inputs of the whole page, such as the form layer (#662).
+ * The deep-zoom tiles follow the inputs of the whole page: the form layer (#662), and the hairline
+ * of their own resolution at a quality above 1 (#665).
  */
 class TileInputsSceneTest {
 
@@ -71,5 +75,33 @@ class TileInputsSceneTest {
             driver.pumpFrames(80)
             driver.pumpUntil { white(it, 100, 100) }
         }
+    }
+
+    /** How dark column [x] of [pixels] is from [top] to [bottom]: the sum of one less the red. */
+    private fun darkness(pixels: PixelMap, x: Int, top: Int, bottom: Int): Float = (top until bottom).sumOf { (1f - pixels[x, it].red).toDouble() }.toFloat()
+
+    @Test
+    fun a_tile_at_quality_2_draws_a_hairline_one_screen_pixel_wide() {
+        val doc = pdf(100, 100, "0 w 0 g 10 50 m 90 50 l S")
+        val dark = HashMap<Float, Float>()
+        for (quality in listOf(1f, 2f)) {
+            forBothEffectOrders { queued ->
+                val state = KiteDocViewState(doc)
+                val (scene, driver) = drivenScene(100, 100, queued) {
+                    KiteDocView(
+                        state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.SinglePage(0),
+                        renderSpec = KiteRenderSpec.Rasterized(quality = quality, maxBitmapLongSide = 64),
+                    )
+                }
+                scene.use {
+                    driver.pumpUntil { darkness(it, 50, 40, 60) > 0.2f }
+                    driver.pumpFrames(60)
+                    dark[quality] = darkness(driver.pumpFrames(1).toComposeImageBitmap().toPixelMap(), 50, 40, 60)
+                }
+            }
+        }
+        val one = dark.getValue(1f)
+        val two = dark.getValue(2f)
+        assertTrue(two > one * 0.75f, "the hairline at quality 2 is $two dark against $one at quality 1")
     }
 }

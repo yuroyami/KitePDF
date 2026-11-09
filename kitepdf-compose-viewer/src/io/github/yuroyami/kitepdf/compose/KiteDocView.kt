@@ -1526,9 +1526,13 @@ private fun KitePageRaster(
     Box(modifier) {
         PageBitmap(bitmap, pageIndex, colors, pagePlaceholder)
         if (tiled && state != null) {
+            // A tile draws at the full size, with quality raster pixels to a screen pixel, not at the
+            // capped bitmap's ratio, so its hairline follows its own ratio (#665).
+            val visualWidth = settledBase.width * (plan.scale / spec.quality)
+            val tileHairline = if (spec.preserveHairlines && visualWidth > 0f) max(1f, full.width / visualWidth) else 1f
             PageTiles(
                 page, pageIndex, state, full, settledBase, rasterizer, cache,
-                paper, colors, hairline, drawsFormLayer, spec.canvasDecorator, contentVersion,
+                paper, colors, tileHairline, drawsFormLayer, spec.canvasDecorator, contentVersion,
             )
         }
     }

@@ -911,6 +911,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The deep-zoom tiles of a page follow the form layer and the font environment: turning a `scripts` handler on or
   off, or a new `LocalFontFamilyResolver`, drops the tiles drawn under the old ones instead of leaving their
   pixels over the page (#662).
+- With `Rasterized(quality > 1)` and `preserveHairlines`, the deep-zoom tiles draw a zero-width stroke one screen
+  pixel wide, where they drew it a quality's share of one (#665).
 
 ## [0.13.0] - 2026-10-09
 
