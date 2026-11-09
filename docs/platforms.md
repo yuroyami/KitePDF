@@ -81,7 +81,8 @@ CI compiles every target in the table on each push and pull request. It runs the
 | macOS arm64 | The format modules, `kitepdf`, `-javascript`, `-net`, `-native-renderer` and `-compose-viewer` |
 | JS | The format modules, `-javascript` and `-net` on Node, and `-native-renderer` in headless Chrome |
 | Linux x64 | The format modules, `-javascript` and `-net` |
+| Windows x64 | The format modules, `kitepdf`, `-javascript` and `-net` |
 | wasmJs | The format modules, `-javascript` and `-net` on Node, and `-compose-viewer` in headless Chrome |
 | wasmWasi | The format modules on Node |
 
-CI compiles an artifact that a row does not name, but it does not test that artifact on that target. The other targets (iOS x64, tvOS, watchOS, Linux arm64, Windows and Android Native) are compiled but not tested.
+CI compiles an artifact that a row does not name, but it does not test that artifact on that target. The other targets (iOS x64, tvOS, watchOS, Linux arm64 and Android Native) are compiled but not tested.

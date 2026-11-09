@@ -10,6 +10,7 @@ name: CI
 #   Platform regressions are therefore merge-blocking, instead of being discovered only after they land.
 # - `other-targets` does the same for the rest of what we publish: it runs the common tests on Linux x64,
 #   and compiles Linux arm64, Windows and the Android native ABIs, so none of them rots unseen (#562).
+# - `windows` runs the common tests of the modules that ship for Windows on Windows x64 (#641).
 # - `other-apple` builds the Apple targets that `apple` does not: iOS devices, the Intel iOS simulator,
 #   tvOS and watchOS.
 # - `api` compiles the libraries of every target on macOS, the one host that compiles them all, and checks
@@ -358,6 +359,30 @@ jobs:
         run: >
           ./kotlin build -p linuxArm64 -p mingwX64
           -p androidNativeArm32 -p androidNativeArm64 -p androidNativeX64 -p androidNativeX86
+
+  # The Windows target has platform code of its own and was only compiled, never tested (#641). The
+  # modules that declare mingwX64 run their tests here: the format modules, kitepdf, -net and -javascript.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      # As in other-targets: each Kotlin/Native compiler takes up to 3 GB, so the toolchain sees 3 cores.
+      KOTLIN_CLI_JAVA_OPTIONS: -XX:ActiveProcessorCount=3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Cache the Kotlin Toolchain downloads
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\JetBrains\Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
+
+      - name: Test the Windows x64 suites
+        shell: cmd
+        run: kotlin.bat test -p mingwX64
 
   other-apple:
     runs-on: macos-latest
