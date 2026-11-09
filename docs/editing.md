@@ -182,6 +182,23 @@ editor.stampPage(doc.pages[0]) {
 val stamped = editor.saveIncremental()
 ```
 
+## Annotations
+
+`addAnnotation` adds an annotation to a page and returns its reference, and `removeAnnotation` takes it off again. Each annotation gets its own appearance stream, so other viewers draw it as KitePDF does.
+
+```kotlin
+val editor = document.edit()
+val page = document.pages[0]
+// A quad is eight numbers: upper left, upper right, lower left, lower right, in page space.
+val note = editor.addAnnotation(page, PdfNewAnnotation.Highlight(listOf(72.0, 700.0, 300.0, 700.0, 72.0, 686.0, 300.0, 686.0)))
+editor.addAnnotation(page, PdfNewAnnotation.Text(KiteRectangle(20.0, 760.0, 40.0, 780.0), "Check this paragraph"))
+editor.addAnnotation(page, PdfNewAnnotation.Link(KiteRectangle(72.0, 600.0, 200.0, 614.0), "https://example.com"))
+editor.removeAnnotation(page, note)
+val bytes = editor.saveRewritten()
+```
+
+The subtypes are `Highlight`, `Underline`, `StrikeOut`, `Squiggly`, `Text`, `FreeText`, `Ink`, `Square`, `Circle`, `Line` and `Link`. A search hit's quads are in display space; turn them into page space with the page's transform before you pass them.
+
 ## Page content
 
 `editPageContent` gives you the operations of a page's content stream as a list. Your function returns the list to write back, so you can remove, reorder or keep operations:

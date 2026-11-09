@@ -385,6 +385,7 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
     final val pendingObjectCount // io.github.yuroyami.kitepdf.writer/PdfEditor.pendingObjectCount|{}pendingObjectCount[0]
         final fun <get-pendingObjectCount>(): kotlin/Int // io.github.yuroyami.kitepdf.writer/PdfEditor.pendingObjectCount.<get-pendingObjectCount>|<get-pendingObjectCount>(){}[0]
 
+    final fun addAnnotation(io.github.yuroyami.kitepdf/PdfPage, io.github.yuroyami.kitepdf.writer/PdfNewAnnotation): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.addAnnotation|addAnnotation(io.github.yuroyami.kitepdf.PdfPage;io.github.yuroyami.kitepdf.writer.PdfNewAnnotation){}[0]
     final fun addFlateStream(kotlin/ByteArray, kotlin.collections/Map<kotlin/String, io.github.yuroyami.kitepdf.core.parser/PdfObject> = ...): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.addFlateStream|addFlateStream(kotlin.ByteArray;kotlin.collections.Map<kotlin.String,io.github.yuroyami.kitepdf.core.parser.PdfObject>){}[0]
     final fun addSecurityStore(kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<io.github.yuroyami.kitepdf/PdfSignature> = ...) // io.github.yuroyami.kitepdf.writer/PdfEditor.addSecurityStore|addSecurityStore(kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<io.github.yuroyami.kitepdf.PdfSignature>){}[0]
     final fun addObject(io.github.yuroyami.kitepdf.core.parser/PdfObject): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.addObject|addObject(io.github.yuroyami.kitepdf.core.parser.PdfObject){}[0]
@@ -403,6 +404,7 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
     final fun redactRegions(io.github.yuroyami.kitepdf/PdfPage, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle>) // io.github.yuroyami.kitepdf.writer/PdfEditor.redactRegions|redactRegions(io.github.yuroyami.kitepdf.PdfPage;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteRectangle>){}[0]
     final fun redactRegions(io.github.yuroyami.kitepdf/PdfPage, kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteRectangle>, io.github.yuroyami.kitepdf.writer/RedactImages) // io.github.yuroyami.kitepdf.writer/PdfEditor.redactRegions|redactRegions(io.github.yuroyami.kitepdf.PdfPage;kotlin.collections.List<io.github.yuroyami.kitepdf.core.KiteRectangle>;io.github.yuroyami.kitepdf.writer.RedactImages){}[0]
     final fun removeAllText(io.github.yuroyami.kitepdf/PdfPage) // io.github.yuroyami.kitepdf.writer/PdfEditor.removeAllText|removeAllText(io.github.yuroyami.kitepdf.PdfPage){}[0]
+    final fun removeAnnotation(io.github.yuroyami.kitepdf/PdfPage, io.github.yuroyami.kitepdf.core.parser/PdfReference): kotlin/Boolean // io.github.yuroyami.kitepdf.writer/PdfEditor.removeAnnotation|removeAnnotation(io.github.yuroyami.kitepdf.PdfPage;io.github.yuroyami.kitepdf.core.parser.PdfReference){}[0]
     final fun removeAttachment(kotlin/String) // io.github.yuroyami.kitepdf.writer/PdfEditor.removeAttachment|removeAttachment(kotlin.String){}[0]
     final fun removeEncryption() // io.github.yuroyami.kitepdf.writer/PdfEditor.removeEncryption|removeEncryption(){}[0]
     final fun removePage(io.github.yuroyami.kitepdf/PdfPage) // io.github.yuroyami.kitepdf.writer/PdfEditor.removePage|removePage(io.github.yuroyami.kitepdf.PdfPage){}[0]
@@ -2042,6 +2044,167 @@ sealed class io.github.yuroyami.kitepdf.writer/PdfImageColorSpace { // io.github
             final fun <get-DeviceGray>(): io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceGray.<get-DeviceGray>|<get-DeviceGray>(){}[0]
         final val DeviceRGB // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceRGB|{}DeviceRGB[0]
             final fun <get-DeviceRGB>(): io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Device // io.github.yuroyami.kitepdf.writer/PdfImageColorSpace.Companion.DeviceRGB.<get-DeviceRGB>|<get-DeviceRGB>(){}[0]
+    }
+}
+
+sealed class io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation|null[0]
+    abstract val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.color|{}color[0]
+        abstract fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.color.<get-color>|<get-color>(){}[0]
+    abstract val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.contents|{}contents[0]
+        abstract fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.contents.<get-contents>|<get-contents>(){}[0]
+
+    final class Circle : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle|null[0]
+        constructor <init>(io.github.yuroyami.kitepdf.core/KiteRectangle, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., kotlin/Double = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRectangle;io.github.yuroyami.kitepdf.core.render.RgbColor;io.github.yuroyami.kitepdf.core.render.RgbColor?;kotlin.Double;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.contents.<get-contents>|<get-contents>(){}[0]
+        final val interiorColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.interiorColor|{}interiorColor[0]
+            final fun <get-interiorColor>(): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.interiorColor.<get-interiorColor>|<get-interiorColor>(){}[0]
+        final val rect // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.rect|{}rect[0]
+            final fun <get-rect>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.rect.<get-rect>|<get-rect>(){}[0]
+        final val width // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.width|{}width[0]
+            final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Circle.width.<get-width>|<get-width>(){}[0]
+    }
+
+    final class FreeText : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText|null[0]
+        constructor <init>(io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/String, kotlin/Double = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/Double = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.String;kotlin.Double;io.github.yuroyami.kitepdf.core.render.RgbColor;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Double){}[0]
+
+        final val borderWidth // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.borderWidth|{}borderWidth[0]
+            final fun <get-borderWidth>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.borderWidth.<get-borderWidth>|<get-borderWidth>(){}[0]
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.contents.<get-contents>|<get-contents>(){}[0]
+        final val fontSize // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.fontSize|{}fontSize[0]
+            final fun <get-fontSize>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.fontSize.<get-fontSize>|<get-fontSize>(){}[0]
+        final val rect // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.rect|{}rect[0]
+            final fun <get-rect>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.rect.<get-rect>|<get-rect>(){}[0]
+        final val textColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.textColor|{}textColor[0]
+            final fun <get-textColor>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.FreeText.textColor.<get-textColor>|<get-textColor>(){}[0]
+    }
+
+    final class Highlight : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.TextMarkup { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Highlight|null[0]
+        constructor <init>(kotlin.collections/List<kotlin/Double>, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Highlight.<init>|<init>(kotlin.collections.List<kotlin.Double>;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Highlight.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Highlight.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Highlight.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Highlight.contents.<get-contents>|<get-contents>(){}[0]
+        final val quadPoints // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Highlight.quadPoints|{}quadPoints[0]
+            final fun <get-quadPoints>(): kotlin.collections/List<kotlin/Double> // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Highlight.quadPoints.<get-quadPoints>|<get-quadPoints>(){}[0]
+    }
+
+    final class Ink : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink|null[0]
+        constructor <init>(kotlin.collections/List<kotlin.collections/List<kotlin/Double>>, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/Double = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.<init>|<init>(kotlin.collections.List<kotlin.collections.List<kotlin.Double>>;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Double;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.contents.<get-contents>|<get-contents>(){}[0]
+        final val strokes // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.strokes|{}strokes[0]
+            final fun <get-strokes>(): kotlin.collections/List<kotlin.collections/List<kotlin/Double>> // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.strokes.<get-strokes>|<get-strokes>(){}[0]
+        final val width // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.width|{}width[0]
+            final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Ink.width.<get-width>|<get-width>(){}[0]
+    }
+
+    final class Line : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line|null[0]
+        constructor <init>(kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Double, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/Double = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.<init>|<init>(kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Double;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.contents.<get-contents>|<get-contents>(){}[0]
+        final val width // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.width|{}width[0]
+            final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.width.<get-width>|<get-width>(){}[0]
+        final val x1 // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.x1|{}x1[0]
+            final fun <get-x1>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.x1.<get-x1>|<get-x1>(){}[0]
+        final val x2 // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.x2|{}x2[0]
+            final fun <get-x2>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.x2.<get-x2>|<get-x2>(){}[0]
+        final val y1 // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.y1|{}y1[0]
+            final fun <get-y1>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.y1.<get-y1>|<get-y1>(){}[0]
+        final val y2 // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.y2|{}y2[0]
+            final fun <get-y2>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Line.y2.<get-y2>|<get-y2>(){}[0]
+    }
+
+    final class Link : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link|null[0]
+        constructor <init>(io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/String, kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.String;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.contents.<get-contents>|<get-contents>(){}[0]
+        final val rect // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.rect|{}rect[0]
+            final fun <get-rect>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.rect.<get-rect>|<get-rect>(){}[0]
+        final val uri // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.uri|{}uri[0]
+            final fun <get-uri>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Link.uri.<get-uri>|<get-uri>(){}[0]
+    }
+
+    final class Square : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square|null[0]
+        constructor <init>(io.github.yuroyami.kitepdf.core/KiteRectangle, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., io.github.yuroyami.kitepdf.core.render/RgbColor? = ..., kotlin/Double = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRectangle;io.github.yuroyami.kitepdf.core.render.RgbColor;io.github.yuroyami.kitepdf.core.render.RgbColor?;kotlin.Double;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.contents.<get-contents>|<get-contents>(){}[0]
+        final val interiorColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.interiorColor|{}interiorColor[0]
+            final fun <get-interiorColor>(): io.github.yuroyami.kitepdf.core.render/RgbColor? // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.interiorColor.<get-interiorColor>|<get-interiorColor>(){}[0]
+        final val rect // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.rect|{}rect[0]
+            final fun <get-rect>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.rect.<get-rect>|<get-rect>(){}[0]
+        final val width // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.width|{}width[0]
+            final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Square.width.<get-width>|<get-width>(){}[0]
+    }
+
+    final class Squiggly : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.TextMarkup { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Squiggly|null[0]
+        constructor <init>(kotlin.collections/List<kotlin/Double>, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Squiggly.<init>|<init>(kotlin.collections.List<kotlin.Double>;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Squiggly.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Squiggly.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Squiggly.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Squiggly.contents.<get-contents>|<get-contents>(){}[0]
+        final val quadPoints // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Squiggly.quadPoints|{}quadPoints[0]
+            final fun <get-quadPoints>(): kotlin.collections/List<kotlin/Double> // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Squiggly.quadPoints.<get-quadPoints>|<get-quadPoints>(){}[0]
+    }
+
+    final class StrikeOut : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.TextMarkup { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.StrikeOut|null[0]
+        constructor <init>(kotlin.collections/List<kotlin/Double>, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.StrikeOut.<init>|<init>(kotlin.collections.List<kotlin.Double>;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.StrikeOut.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.StrikeOut.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.StrikeOut.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.StrikeOut.contents.<get-contents>|<get-contents>(){}[0]
+        final val quadPoints // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.StrikeOut.quadPoints|{}quadPoints[0]
+            final fun <get-quadPoints>(): kotlin.collections/List<kotlin/Double> // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.StrikeOut.quadPoints.<get-quadPoints>|<get-quadPoints>(){}[0]
+    }
+
+    final class Text : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text|null[0]
+        constructor <init>(io.github.yuroyami.kitepdf.core/KiteRectangle, kotlin/String, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteRectangle;kotlin.String;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.contents.<get-contents>|<get-contents>(){}[0]
+        final val icon // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.icon|{}icon[0]
+            final fun <get-icon>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.icon.<get-icon>|<get-icon>(){}[0]
+        final val rect // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.rect|{}rect[0]
+            final fun <get-rect>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Text.rect.<get-rect>|<get-rect>(){}[0]
+    }
+
+    final class Underline : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.TextMarkup { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Underline|null[0]
+        constructor <init>(kotlin.collections/List<kotlin/Double>, io.github.yuroyami.kitepdf.core.render/RgbColor = ..., kotlin/String = ...) // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Underline.<init>|<init>(kotlin.collections.List<kotlin.Double>;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.String){}[0]
+
+        final val color // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Underline.color|{}color[0]
+            final fun <get-color>(): io.github.yuroyami.kitepdf.core.render/RgbColor // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Underline.color.<get-color>|<get-color>(){}[0]
+        final val contents // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Underline.contents|{}contents[0]
+            final fun <get-contents>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Underline.contents.<get-contents>|<get-contents>(){}[0]
+        final val quadPoints // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Underline.quadPoints|{}quadPoints[0]
+            final fun <get-quadPoints>(): kotlin.collections/List<kotlin/Double> // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.Underline.quadPoints.<get-quadPoints>|<get-quadPoints>(){}[0]
+    }
+
+    sealed class TextMarkup : io.github.yuroyami.kitepdf.writer/PdfNewAnnotation { // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.TextMarkup|null[0]
+        abstract val quadPoints // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.TextMarkup.quadPoints|{}quadPoints[0]
+            abstract fun <get-quadPoints>(): kotlin.collections/List<kotlin/Double> // io.github.yuroyami.kitepdf.writer/PdfNewAnnotation.TextMarkup.quadPoints.<get-quadPoints>|<get-quadPoints>(){}[0]
     }
 }
 

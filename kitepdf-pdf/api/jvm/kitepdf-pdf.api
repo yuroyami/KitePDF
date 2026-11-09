@@ -1724,6 +1724,7 @@ public final class io/github/yuroyami/kitepdf/writer/PdfBuilder {
 }
 
 public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
+	public final fun addAnnotation (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/writer/PdfNewAnnotation;)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public final fun addFlateStream ([BLjava/util/Map;)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public static synthetic fun addFlateStream$default (Lio/github/yuroyami/kitepdf/writer/PdfEditor;[BLjava/util/Map;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
 	public final fun addObject (Lio/github/yuroyami/kitepdf/core/parser/PdfObject;)Lio/github/yuroyami/kitepdf/core/parser/PdfReference;
@@ -1748,6 +1749,7 @@ public final class io/github/yuroyami/kitepdf/writer/PdfEditor {
 	public final fun redactRegions (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/util/List;)V
 	public final fun redactRegions (Lio/github/yuroyami/kitepdf/PdfPage;Ljava/util/List;Lio/github/yuroyami/kitepdf/writer/RedactImages;)V
 	public final fun removeAllText (Lio/github/yuroyami/kitepdf/PdfPage;)V
+	public final fun removeAnnotation (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/parser/PdfReference;)Z
 	public final fun removeAttachment (Ljava/lang/String;)V
 	public final fun removeEncryption ()V
 	public final fun removePage (Lio/github/yuroyami/kitepdf/PdfPage;)V
@@ -1828,6 +1830,117 @@ public final class io/github/yuroyami/kitepdf/writer/PdfImageColorSpace$Indexed 
 	public fun getComponents ()I
 	public final fun getEntries ()I
 	public final fun getPalette ()[B
+}
+
+public abstract class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public abstract fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public abstract fun getContents ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Circle : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLjava/lang/String;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public final fun getInteriorColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public final fun getWidth ()D
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$FreeText : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/lang/String;DLio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;D)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/lang/String;DLio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getBorderWidth ()D
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public final fun getFontSize ()D
+	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public final fun getTextColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Highlight : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$TextMarkup {
+	public fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public fun getQuadPoints ()Ljava/util/List;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Ink : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public final fun getStrokes ()Ljava/util/List;
+	public final fun getWidth ()D
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Line : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public fun <init> (DDDDLio/github/yuroyami/kitepdf/core/render/RgbColor;DLjava/lang/String;)V
+	public synthetic fun <init> (DDDDLio/github/yuroyami/kitepdf/core/render/RgbColor;DLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public final fun getWidth ()D
+	public final fun getX1 ()D
+	public final fun getX2 ()D
+	public final fun getY1 ()D
+	public final fun getY2 ()D
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Link : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public final fun getUri ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Square : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLjava/lang/String;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public final fun getInteriorColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public final fun getWidth ()D
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Squiggly : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$TextMarkup {
+	public fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public fun getQuadPoints ()Ljava/util/List;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$StrikeOut : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$TextMarkup {
+	public fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public fun getQuadPoints ()Ljava/util/List;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Text : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public final fun getIcon ()Ljava/lang/String;
+	public final fun getRect ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+}
+
+public abstract class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$TextMarkup : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation {
+	public abstract fun getQuadPoints ()Ljava/util/List;
+}
+
+public final class io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$Underline : io/github/yuroyami/kitepdf/writer/PdfNewAnnotation$TextMarkup {
+	public fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/util/List;Lio/github/yuroyami/kitepdf/core/render/RgbColor;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getColor ()Lio/github/yuroyami/kitepdf/core/render/RgbColor;
+	public fun getContents ()Ljava/lang/String;
+	public fun getQuadPoints ()Ljava/util/List;
 }
 
 public final class io/github/yuroyami/kitepdf/writer/PdfObjectWriter {

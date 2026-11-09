@@ -935,6 +935,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MutationInterruptedException` when a chapter lands: a turn that a page-table publication interrupts goes on
   against the new strip, and a newer navigation still wins. Read-aloud keeps track of where its own turn left the
   view, even an interrupted one, so it does not read a clip again (#629).
+- The editor creates annotations: `PdfEditor.addAnnotation(page, PdfNewAnnotation...)` adds a highlight,
+  underline, strike-out, squiggly, note, free text, ink, square, circle, line or link, each with its own
+  appearance stream, and `removeAnnotation` takes one off the page (#638).
 
 ## [0.13.0] - 2026-10-09
 

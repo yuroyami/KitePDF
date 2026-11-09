@@ -502,6 +502,39 @@ public class PdfEditor internal constructor(
     /* ─── Page content editing ───────────────────────────────────────────── */
 
     /**
+     * Adds [annotation] to [page] and returns the reference of its new annotation dictionary
+     * (ISO 32000-1, 12.5). The annotation gets its own `/AP /N` appearance stream (12.5.5), so
+     * another viewer draws it as KitePDF does, the Print flag, and `/P` naming the page. It goes
+     * last in the page's `/Annots`, so it draws above the annotations already there (#638).
+     */
+    public fun addAnnotation(page: PdfPage, annotation: PdfNewAnnotation): PdfReference {
+        val pageRef = pageReference(page)
+        val dict = AnnotationWriter.dictionary(annotation)
+        val appearance = addObject(AnnotationWriter.appearance(annotation, dict, effective))
+        val withAppearance = withEntry(withEntry(dict, "AP", PdfDictionary(linkedMapOf("N" to appearance))), "P", pageRef)
+        val ref = addObject(withAppearance)
+        val pageDict = effectivePageDict(pageRef)
+        val existing = (pageDict["Annots"]?.resolve(effective) as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.items.orEmpty()
+        updateObject(pageRef, withEntry(pageDict, "Annots", io.github.yuroyami.kitepdf.core.parser.PdfArray(existing + ref)))
+        return ref
+    }
+
+    /**
+     * Removes the annotation [annotation] from [page]'s `/Annots`, and returns false when the
+     * page does not list it (#638). The annotation's objects stay in the file, unreferenced, as
+     * an incremental update keeps them; [saveRewritten] leaves them out.
+     */
+    public fun removeAnnotation(page: PdfPage, annotation: PdfReference): Boolean {
+        val pageRef = pageReference(page)
+        val pageDict = effectivePageDict(pageRef)
+        val existing = (pageDict["Annots"]?.resolve(effective) as? io.github.yuroyami.kitepdf.core.parser.PdfArray)?.items ?: return false
+        val kept = existing.filter { it != annotation }
+        if (kept.size == existing.size) return false
+        updateObject(pageRef, withEntry(pageDict, "Annots", io.github.yuroyami.kitepdf.core.parser.PdfArray(kept)))
+        return true
+    }
+
+    /**
      * Rewrite [page]'s content stream by [transform]ing its parsed operations.
      * The page's decoded content is parsed (see [ContentStreamParser]), passed
      * to [transform], re-serialized, written as a new compressed stream, and
