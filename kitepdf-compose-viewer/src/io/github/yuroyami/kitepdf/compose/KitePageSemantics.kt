@@ -270,7 +270,8 @@ private fun androidx.compose.ui.semantics.SemanticsPropertyReceiver.describe(nod
         AccessKind.TEXT_FIELD -> {
             contentDescription = node.label
             if (node.password) password() else node.state?.let { stateDescription = it }
-            onClick { act() }
+            // ISO 32000-1, 12.7.3.1, Table 221: a read-only field "shall not interact with the user" (#671).
+            if (node.enabled) onClick { act() } else disabled()
         }
         AccessKind.CHOICE -> {
             contentDescription = node.label
@@ -282,18 +283,21 @@ private fun androidx.compose.ui.semantics.SemanticsPropertyReceiver.describe(nod
             contentDescription = node.label
             role = Role.Checkbox
             toggleableState = ToggleableState(node.checked == true)
-            onClick { act() }
+            // ISO 32000-1, 12.7.3.1, Table 221: a read-only field "shall not interact with the user" (#671).
+            if (node.enabled) onClick { act() } else disabled()
         }
         AccessKind.RADIO -> {
             contentDescription = node.label
             role = Role.RadioButton
             selected = node.checked == true
-            onClick { act() }
+            // ISO 32000-1, 12.7.3.1, Table 221: a read-only field "shall not interact with the user" (#671).
+            if (node.enabled) onClick { act() } else disabled()
         }
         AccessKind.BUTTON -> {
             contentDescription = node.label
             role = Role.Button
-            onClick { act() }
+            // ISO 32000-1, 12.7.3.1, Table 221: a read-only field "shall not interact with the user" (#671).
+            if (node.enabled) onClick { act() } else disabled()
         }
     }
 }

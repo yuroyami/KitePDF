@@ -899,6 +899,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   again only when its slot comes on screen or leaves it (#679).
 - `KiteThumbnailStrip` draws its thumbnails again when the font environment changes, as the page in the viewer
   does (#664).
+- A read-only form field is a disabled node with no click action for a screen reader, as a read-only choice field
+  already was, and it follows a script that makes it read-only or writable again (#671).
 
 ## [0.13.0] - 2026-10-09
 

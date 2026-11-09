@@ -146,4 +146,27 @@ class PageSemanticsSceneTest {
             assertTrue(rebuilt in 1..8, "the field nodes were built $rebuilt times for 20 changes in a second")
         }
     }
+
+    /** A read-only field is a disabled node with no click, and a field a script makes writable again takes clicks (#671). */
+    @Test
+    fun a_read_only_field_is_disabled_and_has_no_click() {
+        val doc = pdf()
+        val scripts = Scripts(doc)
+        val state = KiteDocViewState(doc)
+        ImageComposeScene(width = 200, height = 300, density = Density(1f)) {
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged(), scripts = scripts)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntilState { described(scene, "Email address") != null }
+            fun locked(name: String) = described(scene, name)?.config?.let { it.contains(SemanticsProperties.Disabled) && !it.contains(SemanticsActions.OnClick) } == true
+            onTestUiThread {
+                scripts.formState.setReadOnly("email", true)
+                scripts.formState.setReadOnly("agree", true)
+            }
+            driver.pumpUntilState { locked("Email address") && locked("I agree") }
+            onTestUiThread { scripts.formState.setReadOnly("email", false) }
+            driver.pumpUntilState { described(scene, "Email address")?.config?.contains(SemanticsActions.OnClick) == true }
+            assertTrue(locked("I agree"))
+        }
+    }
 }
