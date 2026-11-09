@@ -958,6 +958,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EPUB layout moves Thai tone marks and vowels in a font that has no GSUB for Thai: they take the Private Use
   Area variants that such fonts carry, lower or further left, and a consonant drops its descender before a lower
   vowel, as HarfBuzz does (#637).
+- The consumer check takes the KitePDF modules from Maven Local only before a release, so a module that the local
+  publish left out fails the check instead of coming from the last release on Maven Central (#676).
 
 ## [0.13.0] - 2026-10-09
 

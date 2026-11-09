@@ -132,6 +132,8 @@ Each published module carries `LICENSE` and `NOTICE` in `resources/META-INF`, so
 cd consumer-test && ./gradlew test
 ```
 
+Before a release the check takes the KitePDF modules from Maven Local only, so a module that the publish left out fails it rather than coming from the last release on Maven Central. KiteJS and ImageKodec still come from Maven Central.
+
 The publish signs the artifacts, so it needs a signing key in `KOTLIN_TOOLCHAIN_SIGNING_KEY` (and `KOTLIN_TOOLCHAIN_SIGNING_KEY_PASSPHRASE` when the key has one). For Maven Local, a throwaway key is enough. The CI workflow shows how to make one.
 
 After the release reaches Maven Central, check the released artifacts too:

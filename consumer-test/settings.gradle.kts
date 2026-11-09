@@ -19,9 +19,17 @@ pluginManagement {
 
 dependencyResolutionManagement {
     repositories {
-        // Before a release, the artifacts come from Maven Local. After one, run with
-        // -PkitepdfRepo=central to check the artifacts on Maven Central.
-        if (providers.gradleProperty("kitepdfRepo").orNull != "central") mavenLocal()
+        // Before a release, the KitePDF artifacts come from Maven Local, and from Maven Local only:
+        // a module that the local publish left out must fail the check, not come from the last
+        // release on Maven Central, which has the same version until the release commit (#676).
+        // KiteJS and ImageKodec share the group, so the filter names the kitepdf modules. After a
+        // release, run with -PkitepdfRepo=central to check the artifacts on Maven Central.
+        if (providers.gradleProperty("kitepdfRepo").orNull != "central") {
+            exclusiveContent {
+                forRepository { mavenLocal() }
+                filter { includeModuleByRegex("io\\.github\\.yuroyami", "kitepdf(-.*)?") }
+            }
+        }
         mavenCentral()
         google()
     }
