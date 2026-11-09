@@ -452,21 +452,26 @@ public class KitePageRasterizer(
             val deviceCtm = region?.let { KiteMatrix.translation(-it.left.toDouble(), -it.top.toDouble()).concat(whole) } ?: whole
             val base = ComposeCanvas(
                 this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification = 1f, glyphMasks = glyphMasks,
-                hostLines = textOffMain, target = bitmap,
+                hostLines = textOffMain, target = bitmap, batchText = true,
             )
             val themed = theme?.wrap(base) ?: base
             val canvas = canvasDecorator?.invoke(themed) ?: themed
             // A viewer with a live form draws the widgets in its own layer, so the bitmap must
             // leave them out or each field would be drawn twice, the stale one underneath.
-            when {
-                formState != null && page is io.github.yuroyami.kitepdf.PdfPage -> page.renderTo(
-                    canvas, deviceCtm, formState, cancellation = cancellation ?: NEVER_CANCELLED,
-                )
-                skipWidgets && page is io.github.yuroyami.kitepdf.PdfPage -> page.renderTo(
-                    canvas, deviceCtm, formState = null, cancellation = cancellation ?: NEVER_CANCELLED,
-                ) { it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget }
-                cancellation != null -> page.renderTo(canvas, deviceCtm, cancellation)
-                else -> page.renderTo(canvas, deviceCtm)
+            try {
+                when {
+                    formState != null && page is io.github.yuroyami.kitepdf.PdfPage -> page.renderTo(
+                        canvas, deviceCtm, formState, cancellation = cancellation ?: NEVER_CANCELLED,
+                    )
+                    skipWidgets && page is io.github.yuroyami.kitepdf.PdfPage -> page.renderTo(
+                        canvas, deviceCtm, formState = null, cancellation = cancellation ?: NEVER_CANCELLED,
+                    ) { it.subtype != io.github.yuroyami.kitepdf.PdfAnnotation.Subtype.Widget }
+                    cancellation != null -> page.renderTo(canvas, deviceCtm, cancellation)
+                    else -> page.renderTo(canvas, deviceCtm)
+                }
+            } finally {
+                // The page ends itself, but a decorator may not pass the end on, so the last runs go here (#790).
+                base.flushText()
             }
             usedSystemFont = base.usedSystemFontText
             if (watchFonts) fonts = base.hostFontWatch()

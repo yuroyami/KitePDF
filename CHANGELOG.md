@@ -1025,6 +1025,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a web page, KiteBrowserPrint of kitepdf-native-renderer prints any document with the browser's print dialog:
   each page drawn as it prints onto a canvas at 150 dots per inch, laid out at its size in points with a page
   break after it (#951).
+- The Compose rasterizer draws the opaque text runs of one colour in one bitmap while their box stays dense, not
+  a bitmap for each run: a page set word by word with TJ made 701 bitmaps and now makes 3, with the same pixels
+  to within a level, and rasterizes as fast as the same page set line by line (#790).
 
 ## [0.13.0] - 2026-10-09
 

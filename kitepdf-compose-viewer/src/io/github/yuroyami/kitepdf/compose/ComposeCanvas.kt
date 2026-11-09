@@ -141,6 +141,11 @@ public class ComposeCanvas internal constructor(
     private val hostFace: (FontSpec) -> Boolean = ::hostHasFace,
     /** The code points this canvas draws through Compose's text, shared with the canvases of its soft masks (#595). */
     private val hostText: HostFontWatch.Log = HostFontWatch.Log(),
+    /**
+     * True when runs of opaque text wait to draw as one bitmap (#790), for an owner that ends
+     * the page or calls [flushText] once the render is over. False draws each run at once.
+     */
+    private val batchText: Boolean = false,
 ) : KiteCanvas {
 
     /**
@@ -188,11 +193,13 @@ public class ComposeCanvas internal constructor(
     private enum class Save { Clip, Layer }
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
+        flushText()
         restoreAll()
         groups.clear()
     }
 
     override fun endPage() {
+        flushText()
         // Close anything still open (defensive: well-formed PDFs always pair them,
         // but malformed ones leak).
         restoreAll()
@@ -200,6 +207,7 @@ public class ComposeCanvas internal constructor(
     }
 
     private fun restoreAll() {
+        flushText()
         while (saves.isNotEmpty()) {
             saves.removeLast()
             drawScope.drawContext.canvas.restore()
@@ -208,6 +216,7 @@ public class ComposeCanvas internal constructor(
 
     /** Restores the newest layer, and first any clip opened inside it. */
     private fun restoreThroughLayer() {
+        flushText()
         while (saves.isNotEmpty()) {
             val top = saves.removeLast()
             drawScope.drawContext.canvas.restore()
@@ -219,6 +228,7 @@ public class ComposeCanvas internal constructor(
         path: KitePath, ctm: KiteMatrix, color: RgbColor, evenOdd: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
+        flushText()
         val composePath = toComposePath(path, ctm, scratchPath).apply {
             fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
         }
@@ -236,6 +246,7 @@ public class ComposeCanvas internal constructor(
         dashArray: List<Double>?, dashPhase: Double,
         lineCap: Int, lineJoin: Int, miterLimit: Double,
     ) {
+        flushText()
         // The hairline scales with a supersampled raster, so thin strokes keep their
         // on-screen weight after the downscale, and shrinks with a magnified one (#418).
         val pen = strokePen(ctm, lineWidth, hairlineWidthPx.toDouble() / magnification)
@@ -320,6 +331,8 @@ public class ComposeCanvas internal constructor(
         // knockout group paints with Src, which would clear the empty pixels of the run's box,
         // so those fill each glyph's path.
         val masks = if (a == 1f && blendMode == KiteBlendMode.Normal && !knockingOut) glyphMasks else null
+        // A glyph this run fills at once must not land under runs of another kind that still wait.
+        if (pending != null && (masks == null || color != pendingColor || composeBlend != pendingBlend)) flushText()
         val run = if (masks != null) ArrayList<RunGlyph>(glyphs.size) else null
         var penX = 0.0
         for (glyph in glyphs) {
@@ -340,9 +353,7 @@ public class ComposeCanvas internal constructor(
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
-        if (!run.isNullOrEmpty() && !drawRun(run, color)) {
-            for (g in run) fillGlyph(g.outline, g.matrix, color, a, composeBlend)
-        }
+        if (!run.isNullOrEmpty()) addToPending(run, color, composeBlend)
     }
 
     /** One glyph of a run that draws from masks: where its mask lands, and its outline should the run draw paths after all. */
@@ -363,6 +374,76 @@ public class ComposeCanvas internal constructor(
      * cover, and drawn once. True when drawn, or when none of it lies on the canvas. False, with
      * nothing drawn, for a run spread so thinly that its box would cost more than its paths.
      */
+    /**
+     * Opaque runs of one colour that wait to draw as one bitmap (#790). The renderer draws a run
+     * for each string of a `TJ` array, so a page typeset word by word made a bitmap per word. Runs
+     * join while they keep the colour and their box stays as dense as [drawRun] needs, and they
+     * draw before anything else does, at the end of a page, and before a layer, a mask or a
+     * raster step that holds them closes. Glyphs of one colour cover a pixel by
+     * 1 - (1 - a)(1 - b) whichever run they come from, so the order within them does not matter.
+     */
+    private var pending: ArrayList<RunGlyph>? = null
+    private var pendingColor: Color = Color.Unspecified
+    private var pendingBlend: ComposeBlendMode = ComposeBlendMode.SrcOver
+    private var pendingLeft = 0
+    private var pendingTop = 0
+    private var pendingRight = 0
+    private var pendingBottom = 0
+    private var pendingCovered = 0L
+
+    /** How many bitmaps of glyph runs this canvas drew, which a test counts (#790). */
+    internal var runBitmaps: Int = 0
+
+    private fun addToPending(run: List<RunGlyph>, color: Color, blend: ComposeBlendMode) {
+        if (!batchText) {
+            if (!drawRun(run, color)) for (g in run) fillGlyph(g.outline, g.matrix, color, 1f, blend)
+            return
+        }
+        var left = Int.MAX_VALUE
+        var top = Int.MAX_VALUE
+        var right = Int.MIN_VALUE
+        var bottom = Int.MIN_VALUE
+        var covered = 0L
+        for (g in run) {
+            val m = g.placed.mask
+            val x = g.placed.x + m.left
+            val y = g.placed.y + m.top
+            left = minOf(left, x)
+            top = minOf(top, y)
+            right = maxOf(right, x + m.width)
+            bottom = maxOf(bottom, y + m.height)
+            covered += m.width.toLong() * m.height
+        }
+        val waiting = pending
+        if (waiting != null) {
+            val l = minOf(left, pendingLeft)
+            val t = minOf(top, pendingTop)
+            val r = maxOf(right, pendingRight)
+            val b = maxOf(bottom, pendingBottom)
+            val area = (r - l).toLong() * (b - t)
+            val all = covered + pendingCovered
+            if (color == pendingColor && blend == pendingBlend && area <= MAX_RUN_PIXELS && area <= 8 * all + 4096) {
+                waiting.addAll(run)
+                pendingLeft = l; pendingTop = t; pendingRight = r; pendingBottom = b; pendingCovered = all
+                return
+            }
+            flushText()
+        }
+        pending = ArrayList(run)
+        pendingColor = color
+        pendingBlend = blend
+        pendingLeft = left; pendingTop = top; pendingRight = right; pendingBottom = bottom; pendingCovered = covered
+    }
+
+    /** Draws the runs that wait, if any. */
+    internal fun flushText() {
+        val run = pending ?: return
+        pending = null
+        if (!drawRun(run, pendingColor)) {
+            for (g in run) fillGlyph(g.outline, g.matrix, pendingColor, 1f, pendingBlend)
+        }
+    }
+
     private fun drawRun(run: List<RunGlyph>, color: Color): Boolean {
         var left = Int.MAX_VALUE
         var top = Int.MAX_VALUE
@@ -422,6 +503,7 @@ public class ComposeCanvas internal constructor(
         }
         val bitmap = ImageDecoder.decodeRaw(rgba, w, h) ?: return false
         drawScope.drawImage(bitmap, Offset(left.toFloat(), top.toFloat()))
+        runBitmaps++
         return true
     }
 
@@ -434,6 +516,7 @@ public class ComposeCanvas internal constructor(
         alpha: Double,
         blendMode: KiteBlendMode,
     ) {
+        flushText()
         val text = glyphs.joinToString("") { it.text }
         if (text.isEmpty()) return
         if (skipSystemFontText) {
@@ -586,6 +669,7 @@ public class ComposeCanvas internal constructor(
     }
 
     override fun drawImage(image: KiteImageData, ctm: KiteMatrix, alpha: Double, blendMode: KiteBlendMode) {
+        flushText()
         // One sampling policy on every canvas (#122, #123). The ctm maps to this scope's pixels,
         // and the edges of an unrotated image move outwards onto whole pixels, as in MuPDF (#300).
         // Magnified output samples for the pixels on screen, and snaps to none: a zoom layer
@@ -627,6 +711,7 @@ public class ComposeCanvas internal constructor(
         alpha: Double,
         blendMode: KiteBlendMode,
     ) {
+        flushText()
         if (paintComplexShading(shading, ctm, clipPath, alpha, blendMode)) return
         val stops = shading.sampleStops() ?: return
         // An end that is not extended paints nothing past it (ISO 32000-1, 8.7.4.5.3 and
@@ -770,6 +855,7 @@ public class ComposeCanvas internal constructor(
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
+        flushText()
         val composeCanvas = drawScope.drawContext.canvas
         // Outside its box the mask is zero, since the renderer passes the page box when the backdrop
         // lets content through. So both layers cover the box, not the whole canvas (#384).
@@ -789,6 +875,7 @@ public class ComposeCanvas internal constructor(
             try {
                 drawScope.drawImage(backdrop.first, dstOffset = backdrop.second, blendMode = ComposeBlendMode.Src)
                 render()
+                flushText()
                 maskLayer(kind, transfer, bounds, ComposeBlendMode.DstIn, renderMask)
             } finally {
                 groups.removeLastOrNull()
@@ -804,6 +891,7 @@ public class ComposeCanvas internal constructor(
         groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
+            flushText()
             if (byPixels) {
                 // No filter here takes the whole table (Android), and the closest line would
                 // bend the mask, so gate by the mask group's pixels (#445).
@@ -854,6 +942,7 @@ public class ComposeCanvas internal constructor(
                 drawScope.drawRect(Color.Black, topLeft = bounds.topLeft, size = bounds.size)
             }
             renderMask(this)
+            flushText()
         } finally {
             restoreThroughLayer()
         }
@@ -884,10 +973,11 @@ public class ComposeCanvas internal constructor(
             scale(1f / pixelSize.toFloat(), pivot = Offset.Zero) {
                 val canvas = ComposeCanvas(
                     this, textMeasurer, hairlineWidthPx, skipSystemFontText, magnification, twoCircleShader, maskTables, bitmaps,
-                    inSceneDrawPass, hostLines = hostLines, hostText = hostText,
+                    inSceneDrawPass, hostLines = hostLines, hostText = hostText, batchText = batchText,
                 )
                 nested = canvas
                 renderMask(canvas)
+                canvas.flushText()
             }
         }
         if (nested?.usedSystemFontText == true) usedSystemFontText = true
@@ -967,6 +1057,7 @@ public class ComposeCanvas internal constructor(
     }
 
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
+        flushText()
         val composePath = toComposePath(path, ctm).apply {
             fillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero
         }
@@ -992,6 +1083,7 @@ public class ComposeCanvas internal constructor(
     }
 
     override fun popClip() {
+        flushText()
         // The renderer pops a clip before it ends the group the clip was pushed in. A pop that
         // finds a layer on top would restore that layer instead, so it is ignored.
         if (saves.lastOrNull() != Save.Clip) return
@@ -1020,6 +1112,7 @@ public class ComposeCanvas internal constructor(
      * it draws into, reads a backdrop, and only outside every layer.
      */
     override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
+        flushText()
         val b = region.normalized()
         val xs = doubleArrayOf(ctm.transformX(b.left, b.bottom), ctm.transformX(b.right, b.bottom), ctm.transformX(b.left, b.top), ctm.transformX(b.right, b.top))
         val ys = doubleArrayOf(ctm.transformY(b.left, b.bottom), ctm.transformY(b.right, b.bottom), ctm.transformY(b.left, b.top), ctm.transformY(b.right, b.top))
@@ -1082,6 +1175,7 @@ public class ComposeCanvas internal constructor(
                         clipBounds.clear()
                         stepBounds = Rect(x.toFloat(), y.toFloat(), (x + boxWidth).toFloat(), (y + boxHeight).toFloat())
                         content()
+                        flushText()
                     } finally {
                         // Clips and layers the content left open end on the bitmap.
                         restoreAll()
@@ -1143,6 +1237,7 @@ public class ComposeCanvas internal constructor(
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
+        flushText()
         // A group nested in a knockout group gets a layer, so its own paints do not knock each other out.
         val nested = knockingOut
         val layered = isolated || knockout || nested || alpha < 1.0 || blendMode != KiteBlendMode.Normal
@@ -1251,6 +1346,7 @@ public class ComposeCanvas internal constructor(
     private fun paintBlend(mode: KiteBlendMode): ComposeBlendMode = if (knockingOut) ComposeBlendMode.Src else mode.toCompose()
 
     override fun endTransparencyGroup() {
+        flushText()
         val ended = groups.removeLastOrNull()
         ended?.element?.let { endKnockoutElement(it); return }
         if (ended?.layered != true) return
