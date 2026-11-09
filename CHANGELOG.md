@@ -908,6 +908,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of a frame clock, and `animateZoomTo` with no view applies its target (#659).
 - In `Paged`, `Spread` and `SinglePage` layouts, a page that comes back is a hit in the page-bitmap cache instead
   of a new render: every slot of a layout shares one rasterizer, as the `Continuous` strip already did (#660).
+- The deep-zoom tiles of a page follow the form layer and the font environment: turning a `scripts` handler on or
+  off, or a new `LocalFontFamilyResolver`, drops the tiles drawn under the old ones instead of leaving their
+  pixels over the page (#662).
 
 ## [0.13.0] - 2026-10-09
 

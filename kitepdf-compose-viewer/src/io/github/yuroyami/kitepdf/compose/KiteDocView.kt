@@ -1632,8 +1632,10 @@ private fun PageTiles(
     val sx = full.width.toFloat() / slot.width
     val sy = full.height.toFloat() / slot.height
     val tiles = remember(shown, full, slot) { shown?.let { tilesOver(it, sx, sy, full) }.orEmpty() }
-    val bitmaps = remember(page, full, paper, colors.theme, hairline, canvasDecorator, contentVersion) { mutableStateMapOf<IntRect, ImageBitmap>() }
-    LaunchedEffect(page, full, tiles, paper, colors.theme, hairline, drawsFormLayer, canvasDecorator, contentVersion) {
+    // The tiles follow every input the whole page follows: a form layer that comes or goes, or a
+    // rasterizer of a new font environment, drops the tiles drawn under the old one (#662).
+    val bitmaps = remember(page, full, paper, colors.theme, hairline, drawsFormLayer, rasterizer, canvasDecorator, contentVersion) { mutableStateMapOf<IntRect, ImageBitmap>() }
+    LaunchedEffect(page, full, tiles, paper, colors.theme, hairline, drawsFormLayer, rasterizer, canvasDecorator, contentVersion) {
         // A tile that left the view gives its memory back; the cache keeps it for a return.
         bitmaps.keys.retainAll(tiles.toSet())
         if (shown == null) return@LaunchedEffect
