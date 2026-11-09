@@ -72,35 +72,88 @@ def kotlin(*args):
     run(ROOT / ("kotlin.bat" if sys.platform == "win32" else "kotlin"), *args)
 
 
+def version_key(version):
+    return [int(p) if p.isdigit() else 0 for p in re.split(r"[.-]", version)]
+
+
+def resolved_klibs(module, platform):
+    """The klibs that the tests of [module] resolve on [platform], as the toolchain's dependency graph names them.
+
+    Only these choose the npm packages: the shared cache also holds the klibs of other projects and older revisions,
+    which CI restores through `restore-keys` (#694).
+    """
+    result = run(ROOT / ("kotlin.bat" if sys.platform == "win32" else "kotlin"), "show", "dependencies", "-m", module,
+                 "-p", platform, "--include-tests", "--scope=runtime", capture=True)
+    if result.returncode != 0:
+        print(result.stdout[-4000:], flush=True)
+        raise RuntimeError(f"cannot read the dependencies of {module} on {platform}")
+    klibs = set()
+    # A line names a Maven dependency as group:artifact:version, with " -> version" when another version won.
+    # A line that names a module scope first, such as "kitepdf-epub:js:group:artifact:version", repeats the next one.
+    coordinate = re.compile(r"(?<![\w.:-])([\w.-]+):([\w.-]+):([\w.+-]+)(?: -> ([\w.+-]+))?(?: \(\*\))?\s*$")
+    for line in result.stdout.splitlines():
+        found = coordinate.search(line)
+        if not found:
+            continue
+        group, artifact, version = found.group(1), found.group(2), found.group(4) or found.group(3)
+        klib = CACHE / ".m2.cache" / group.replace(".", "/") / artifact / version / f"{artifact}-{version}.klib"
+        if klib.is_file():
+            klibs.add(klib)
+    return sorted(klibs)
+
+
+def npm_versions(module, platform):
+    """The npm packages that the klibs of [module] on [platform] list in their package.json, by name.
+
+    Two klibs that ask for different versions of one package get the higher one, and the run says so.
+    """
+    wanted = {}
+    for klib in resolved_klibs(module, platform):
+        try:
+            with zipfile.ZipFile(klib) as archive:
+                package = json.loads(archive.read("package.json"))
+        except (KeyError, ValueError, zipfile.BadZipFile):
+            continue
+        for name, version in package.get("dependencies", {}).items():
+            wanted.setdefault(name, {})[version] = klib.name
+    versions = {}
+    for name, asked in sorted(wanted.items()):
+        versions[name] = max(asked, key=version_key)
+        if len(asked) > 1:
+            choices = ", ".join(f"{v} ({k})" for v, k in sorted(asked.items(), key=lambda e: version_key(e[0])))
+            print(f"npm: {module} {platform} asks for {name} {choices}; installing {versions[name]}", flush=True)
+    return versions
+
+
 @functools.cache
-def klib_npm_versions():
-    """The npm packages that the JS and Wasm klibs in the toolchain cache list in their package.json, by name."""
-    found = {}
-    for pattern in ("**/*-js/*/*.klib", "**/*-wasm-js/*/*.klib"):
-        for klib in (CACHE / ".m2.cache").glob(pattern):
-            try:
-                with zipfile.ZipFile(klib) as archive:
-                    package = json.loads(archive.read("package.json"))
-            except (KeyError, ValueError, zipfile.BadZipFile):
-                continue
-            for name, version in package.get("dependencies", {}).items():
-                key = lambda v: [int(p) if p.isdigit() else 0 for p in re.split(r"[.-]", v)]
-                if name not in found or key(version) > key(found[name]):
-                    found[name] = version
-    return found
+def node_builtins():
+    """The modules that Node itself provides, which no npm package brings."""
+    names = subprocess.run([node(), "-p", "require('module').builtinModules.join('\\n')"], text=True,
+                           capture_output=True, check=True).stdout.split()
+    return set(names)
 
 
-def install_npm_packages(output):
-    """Installs the npm packages that the linked output imports into build/node_modules, where Node finds them."""
+def install_npm_packages(output, module, platform):
+    """Installs the npm packages that the linked output imports into build/node_modules, where Node finds them.
+
+    The versions come from the klibs that [module] resolved on [platform], read after it is linked. An import that no
+    klib of the module names fails the run with its name.
+    """
     imported = set()
     for script in output.rglob("*.mjs"):
         for specifier in re.findall(r"""(?:\bfrom|\bimport)\s*\(?\s*['"](@?[a-z0-9][\w.-]*(?:/[\w.-]+)*)['"]""",
                                     script.read_text()):
             parts = specifier.split("/")
             imported.add("/".join(parts[:2]) if specifier.startswith("@") else parts[0])
-    versions = klib_npm_versions()
+    imported -= node_builtins()
+    if not imported:
+        return
+    versions = npm_versions(module, platform)
+    unknown = sorted(imported - versions.keys())
+    if unknown:
+        raise RuntimeError(f"{module} {platform} imports {', '.join(unknown)}, which no klib of the module lists")
     missing = []
-    for name in sorted(imported & versions.keys()):
+    for name in sorted(imported):
         installed = ROOT / "build/node_modules" / name / "package.json"
         if not installed.is_file() or json.loads(installed.read_text()).get("version") != versions[name]:
             missing.append(f"{name}@{versions[name]}")
@@ -112,7 +165,7 @@ def install_npm_packages(output):
 def js_entry(module):
     kotlin("task", f":{module}:linkJsTest")
     entry = ARTIFACTS / f"{module}jsTestrelease/kotlin-output/{module}_test.mjs"
-    install_npm_packages(entry.parent)
+    install_npm_packages(entry.parent, module, "js")
     return entry
 
 
@@ -158,7 +211,7 @@ def wasm_tests(module, executable, platform):
     task = platform[0].upper() + platform[1:]
     kotlin("task", f":{module}:link{task}TestDebug")
     entry = ARTIFACTS / f"{module}{platform}Testdebug/kotlin-output/{module}_test.mjs"
-    install_npm_packages(entry.parent)
+    install_npm_packages(entry.parent, module, platform)
     script = f"const tests = await import({entry.as_uri()!r}); tests.startUnitTests();"
     result = run(executable, "--input-type=module", "-e", script, capture=True)
     # kotlin-test for Wasm reports in the TeamCity service message format.
