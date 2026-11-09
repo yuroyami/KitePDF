@@ -19,6 +19,7 @@ import java.io.ByteArrayOutputStream
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import androidx.compose.ui.semantics.getOrNull
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -103,6 +104,40 @@ class EpubScriptSceneTest {
 
     private fun isRed(pixels: PixelMap, at: Offset): Boolean = pixels[at.x.toInt(), at.y.toInt()].let { it.red > 0.8f && it.green < 0.2f && it.blue < 0.2f }
     private fun isBlue(pixels: PixelMap, at: Offset): Boolean = pixels[at.x.toInt(), at.y.toInt()].let { it.blue > 0.8f && it.red < 0.2f && it.green < 0.2f }
+
+    /** Every name and text that the semantics tree of [scene] gives. */
+    private fun spoken(scene: ImageComposeScene): List<String> = onTestUiThread {
+        val out = ArrayList<String>()
+        fun walk(node: androidx.compose.ui.semantics.SemanticsNode) {
+            node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.let(out::addAll)
+            node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.forEach { out += it.text }
+            node.children.forEach(::walk)
+        }
+        scene.semanticsOwners.forEach { walk(it.unmergedRootSemanticsNode) }
+        return@onTestUiThread out
+    }
+
+    /** A script's change to the chapter on screen reaches the accessibility nodes, as it reaches the pixels (#673). */
+    @Test
+    fun the_accessibility_nodes_follow_a_scripts_change() = forBothEffectOrders { queued ->
+        val page = """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head>
+            <meta name="viewport" content="width=300, height=200"/></head>
+            <body><p><a id="link" href="c2.xhtml">Old link</a></p>
+            <script>setTimeout(function () { var a = document.getElementById('link'); a.textContent = 'New link'; a.setAttribute('href', 'c3.xhtml'); }, 300);</script></body></html>"""
+        val doc = book(fixed = true, items = listOf("page.xhtml" to "application/xhtml+xml"), files = mapOf("page.xhtml" to page))
+        val scripts = runner(doc)
+        lateinit var state: KiteDocViewState
+        val (scene, driver) = drivenScene(300, 400, queued) {
+            state = rememberKiteDocViewState(doc)
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), epubScripts = scripts)
+        }
+        scene.use {
+            driver.pumpUntilState { spoken(scene).any { "Old link" in it } || spoken(scene).any { "New link" in it } }
+            driver.pumpUntilState { spoken(scene).any { "New link" in it } }
+            driver.pumpFrames(5)
+            assertTrue(spoken(scene).none { "Old link" in it }, "the nodes keep the old link: ${spoken(scene)}")
+        }
+    }
 
     @Test
     fun a_tap_on_a_scripted_fixed_layout_page_runs_its_script_on_screen() = forBothEffectOrders { queued ->

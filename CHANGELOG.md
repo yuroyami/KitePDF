@@ -885,6 +885,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the web, going to a bookmark, a table of contents entry or a link with a fragment, and opening at a saved
   position, lay the target chapter out in slices with frames between them, as the chapter loader does, instead of
   in one task on the UI thread (#682).
+- The accessibility nodes of a page follow its content: after a book's script changes the chapter on screen, a
+  `:target` restyle or a layer change, the nodes of the old layout go, and the page's new text and links take
+  their place (#673).
 
 ## [0.13.0] - 2026-10-09
 

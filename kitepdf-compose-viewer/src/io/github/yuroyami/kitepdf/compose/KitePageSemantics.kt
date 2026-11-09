@@ -159,9 +159,13 @@ internal fun PageSemantics(state: KiteDocViewState, page: KitePage, pageIndex: I
     val tap = LocalViewerTap.current ?: return
     val strings = LocalKiteViewerStrings.current
     val formState = state.scripts?.formState
-    var nodes by remember(page) { mutableStateOf<List<PageAccessNode>>(emptyList()) }
+    // The nodes follow the content version the pixels follow: a script's change to the chapter, a
+    // :target restyle or a layer change keeps the page object, and nodes of the old layout would
+    // name text and tap links that are no longer there (#673). A new version drops them at once.
+    val contentVersion = state.contentVersionOf(page)
+    var nodes by remember(page, contentVersion) { mutableStateOf<List<PageAccessNode>>(emptyList()) }
     val shown by remember(state, pageIndex) { derivedStateOf { state.inZoomedView(pageIndex) && state.pageGeometry.containsKey(pageIndex) } }
-    LaunchedEffect(page, formState, strings, state.formRevision) {
+    LaunchedEffect(page, contentVersion, formState, strings, state.formRevision) {
         // The text is read once the page shows and the view rests, not for every page scrolled past.
         snapshotFlow { shown && state.adapter?.isScrollInProgress != true }.first { it }
         val built = try {
