@@ -71,6 +71,9 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
     internal var target: android.graphics.Bitmap? = null
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
+        dropKeptMask()
+        lastMaskKey = null
+        clipIds.clear()
         openLayers = 0
         layers = 0
         groups.clear()
@@ -80,6 +83,9 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         // Defensive: well-formed PDFs always pair pushes with pops. A knockout element left open
         // ends first, which puts back the canvas it painted over.
         groups.firstOrNull { it.element != null }?.element?.let { endKnockoutElement(it) }
+        dropKeptMask()
+        lastMaskKey = null
+        clipIds.clear()
         while (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -477,6 +483,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
     }
 
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
+        clipIds.addLast(++nextClipId)
         canvas.save()
         openLayers++
         val p = toAndroidPath(path, ctm).apply {
@@ -486,6 +493,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
     }
 
     override fun popClip() {
+        clipIds.removeLastOrNull()
         if (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -608,6 +616,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         val bitmap: android.graphics.Bitmap, val x: Int, val y: Int, val fromPixels: Matrix,
         val alpha: Double, val blendMode: KiteBlendMode,
         val savedCanvas: AndroidCanvas, val savedOpen: Int, val savedLayers: Int, val savedGroups: List<Group>,
+        val savedClipIds: List<Int>,
     )
 
     /**
@@ -639,7 +648,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         val offscreen = AndroidCanvas(bitmap)
         offscreen.translate(-left.toFloat(), -top.toFloat())
         offscreen.concat(toPixels)
-        val element = KnockoutElement(bitmap, left, top, back, alpha.coerceIn(0.0, 1.0), blendMode, canvas, openLayers, layers, groups.toList())
+        val element = KnockoutElement(bitmap, left, top, back, alpha.coerceIn(0.0, 1.0), blendMode, canvas, openLayers, layers, groups.toList(), clipIds.toList())
         canvas = offscreen
         openLayers = 0
         layers = 0
@@ -655,6 +664,8 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         layers = element.savedLayers
         groups.clear()
         groups.addAll(element.savedGroups)
+        clipIds.clear()
+        clipIds.addAll(element.savedClipIds)
         try {
             canvas.save()
             canvas.concat(element.fromPixels)
@@ -715,6 +726,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         // Outside the mask's box the mask is its backdrop's value, and the renderer passes the
         // page box when that is not 0 (ISO 32000-1, 11.6.5.2, #384), so both layers stop at the box (#824).
         val bounds = layerBounds(maskBBox, maskCtm)
+        val mask = maskFor(kind, transfer, bounds, maskBBox, maskCtm, renderMask)
         // ISO 32000-1, 11.6.4.3 and 11.3.5: the mask scales the shape of each paint, which still
         // blends with the real backdrop in its own mode. Where the canvas can read the page under
         // the mask, the content paints over a copy of it, and the mask mixes it in:
@@ -724,7 +736,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         val backdrop = readBackdrop(maskBBox, maskCtm)
         if (backdrop != null) {
             try {
-                maskLayer(kind, transfer, bounds, AndroidBlendMode.DST_OUT, renderMask)
+                mask(AndroidBlendMode.DST_OUT)
                 canvas.saveLayer(bounds, Paint().apply { blendMode = AndroidBlendMode.PLUS })
                 openLayers++
                 layers++
@@ -732,7 +744,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
                 try {
                     canvas.drawBitmap(backdrop.bitmap, backdrop.x.toFloat(), backdrop.y.toFloat(), Paint().apply { blendMode = AndroidBlendMode.SRC })
                     render()
-                    maskLayer(kind, transfer, bounds, AndroidBlendMode.DST_IN, renderMask)
+                    mask(AndroidBlendMode.DST_IN)
                 } finally {
                     groups.removeLastOrNull()
                     canvas.restore()
@@ -751,7 +763,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
-            maskLayer(kind, transfer, bounds, AndroidBlendMode.DST_IN, renderMask)
+            mask(AndroidBlendMode.DST_IN)
         } finally {
             groups.removeLastOrNull()
             canvas.restore()
@@ -786,6 +798,142 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         return Backdrop(copy, left, top)
     }
 
+    /** What a kept mask is kept by: everything that decides its pixels (#912). */
+    private data class MaskKey(
+        val renderMask: (KiteCanvas) -> Unit,
+        val kind: SoftMask.Kind,
+        val transfer: KiteMaskTransfer?,
+        val box: KiteRectangle,
+        val maskCtm: KiteMatrix,
+        val canvas: AndroidCanvas,
+        val matrix: List<Float>,
+        val clipVersion: Int,
+        val device: List<Int>,
+    )
+
+    /** The mask that two paints in a row used, rendered once in pixels at [keptX], [keptY], until the key or the page changes. */
+    private var keptMask: android.graphics.Bitmap? = null
+    private var keptKey: MaskKey? = null
+    private var keptX = 0
+    private var keptY = 0
+
+    /** Whether [keptMask] holds the mask as alpha, or the mask group's pixels that the mask paint turns to alpha. */
+    private var keptAsAlpha = false
+
+    /** The key of the last masked paint, so the second paint under one mask knows to keep it. */
+    private var lastMaskKey: MaskKey? = null
+
+    /**
+     * An id for each clip on the stack, so a mask kept under one clip is not taken for another.
+     * Pushes and pops that balance, such as a mask group's own box, leave the same id on top.
+     */
+    private val clipIds = ArrayDeque<Int>()
+    private var nextClipId = 0
+
+    /** False renders the mask again for every paint, as before #912, so a test can compare. */
+    internal var keepMasks: Boolean = true
+
+    /** How many times this canvas rendered a mask group, which a test counts (#912). */
+    internal var maskRenders: Int = 0
+
+    private fun dropKeptMask() {
+        keptMask?.recycle()
+        keptMask = null
+        keptKey = null
+    }
+
+    /**
+     * How a masked paint applies its mask with a blend mode: from the kept bitmap when the same
+     * mask, canvas, matrix and clip were kept, by rendering it once into a bitmap when the paint
+     * before used the same, else as a layer of the mask group, as before (#912). The renderer
+     * hands the same [renderMask] for every paint under one mask in one coordinate system. A
+     * transfer that only a table gives keeps the layer, whose pixel gate works in the canvas's
+     * own units.
+     */
+    private fun maskFor(
+        kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: android.graphics.RectF?,
+        box: KiteRectangle, maskCtm: KiteMatrix, renderMask: (KiteCanvas) -> Unit,
+    ): (AndroidBlendMode) -> Unit {
+        val layer: (AndroidBlendMode) -> Unit = { blend -> maskLayer(kind, transfer, bounds, blend, renderMask) }
+        if (!keepMasks || bounds == null || (transfer != null && !transfer.isNearlyLinear)) return layer
+        val toPixels = Matrix()
+        @Suppress("DEPRECATION")
+        canvas.getMatrix(toPixels)
+        val fromPixels = Matrix()
+        // A turn would resample the kept bitmap on the way back.
+        if (!toPixels.rectStaysRect() || !toPixels.invert(fromPixels)) return layer
+        val device = maskDeviceBox(bounds, toPixels) ?: return layer
+        val values = FloatArray(9).also { toPixels.getValues(it) }
+        val key = MaskKey(renderMask, kind, transfer, box, maskCtm, canvas, values.toList(), clipIds.lastOrNull() ?: 0, device.toList())
+        if (keptKey != key && lastMaskKey == key) keepMask(key, device, toPixels, kind, transfer, bounds, renderMask)
+        lastMaskKey = key
+        val kept = keptMask?.takeIf { keptKey == key } ?: return layer
+        val x = keptX.toFloat()
+        val y = keptY.toFloat()
+        val asAlpha = keptAsAlpha
+        return { blend ->
+            canvas.save()
+            canvas.concat(fromPixels)
+            canvas.drawBitmap(kept, x, y, if (asAlpha) Paint().apply { blendMode = blend } else maskPaint(kind, transfer, blend))
+            canvas.restore()
+        }
+    }
+
+    /** The pixels of [bounds] cut to the clip, under [toPixels], as left, top, right and bottom. */
+    private fun maskDeviceBox(bounds: android.graphics.RectF, toPixels: Matrix): IntArray? {
+        val clip = android.graphics.Rect()
+        if (!canvas.getClipBounds(clip)) return null
+        val r = android.graphics.RectF(bounds)
+        if (!r.intersect(android.graphics.RectF(clip))) return null
+        toPixels.mapRect(r)
+        val left = kotlin.math.floor(r.left).toInt()
+        val top = kotlin.math.floor(r.top).toInt()
+        val right = kotlin.math.ceil(r.right).toInt()
+        val bottom = kotlin.math.ceil(r.bottom).toInt()
+        if (right <= left || bottom <= top || (right - left).toDouble() * (bottom - top) > STEP_MAX_PIXELS) return null
+        return intArrayOf(left, top, right, bottom)
+    }
+
+    /**
+     * Renders the mask group once into a bitmap of [device]. From API 35 the bitmap holds the
+     * mask as alpha, through the layer [maskLayer] would make, and draws as it is. Below, it
+     * holds the pixels that layer would hold and draws with the paint the layer composites with,
+     * colour filter and all, so each mask value is the layer's to the bit: on API 29 a mask kept
+     * as 8-bit alpha took a level off the page under the whole mask box each time a paint took
+     * its share out and added it back, where the layer's own mask leaves the page as it was.
+     * API 30 to 34 were not measured, so they keep the exact form.
+     */
+    private fun keepMask(
+        key: MaskKey, device: IntArray, toPixels: Matrix, kind: SoftMask.Kind, transfer: KiteMaskTransfer?,
+        bounds: android.graphics.RectF, renderMask: (KiteCanvas) -> Unit,
+    ) {
+        dropKeptMask()
+        val bitmap = android.graphics.Bitmap.createBitmap(device[2] - device[0], device[3] - device[1], android.graphics.Bitmap.Config.ARGB_8888)
+        val off = AndroidCanvas(bitmap)
+        val asAlpha = Build.VERSION.SDK_INT >= KEPT_ALPHA_SDK
+        // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
+        if (!asAlpha && kind.readsColor) off.drawColor(Color.BLACK)
+        off.translate(-device[0].toFloat(), -device[1].toFloat())
+        off.concat(toPixels)
+        if (asAlpha) {
+            AndroidNativeCanvas(off).maskLayer(kind, transfer, bounds, AndroidBlendMode.SRC_OVER, renderMask)
+        } else {
+            renderMask(AndroidNativeCanvas(off))
+        }
+        maskRenders++
+        keptAsAlpha = asAlpha
+        keptMask = bitmap
+        keptKey = key
+        keptX = device[0]
+        keptY = device[1]
+    }
+
+    /** The paint a layer of the mask group composites with: [blend], and the colour matrix that turns the group into alpha. */
+    private fun maskPaint(kind: SoftMask.Kind, transfer: KiteMaskTransfer?, blend: AndroidBlendMode): Paint = Paint().apply {
+        blendMode = blend
+        if (kind.readsColor || transfer != null) colorFilter = ColorMatrixColorFilter(maskToAlpha(kind, transfer))
+    }
+
     /**
      * Paints the mask group in a layer that composites in [blend]: DstIn gates the content by the
      * mask, and DstOut takes the mask's share out of the page. A luminosity mask gates by the
@@ -797,22 +945,18 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: android.graphics.RectF?,
         blend: AndroidBlendMode, renderMask: (KiteCanvas) -> Unit,
     ) {
+        if (blend != AndroidBlendMode.SRC_OVER) maskRenders++
         if (transfer != null && !transfer.isNearlyLinear) {
             // Android has no table colour filter, and the closest line would bend the mask.
             gateByMaskPixels(kind, transfer, bounds, blend, renderMask)
             return
         }
-        val luminosity = kind.readsColor
-        val maskPaint = Paint().apply {
-            blendMode = blend
-            if (luminosity || transfer != null) colorFilter = ColorMatrixColorFilter(maskToAlpha(kind, transfer))
-        }
-        canvas.saveLayer(bounds, maskPaint)
+        canvas.saveLayer(bounds, maskPaint(kind, transfer, blend))
         openLayers++
         layers++
         try {
             // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
-            if (luminosity) canvas.drawColor(Color.BLACK)
+            if (kind.readsColor) canvas.drawColor(Color.BLACK)
             renderMask(this)
         } finally {
             canvas.restore()
@@ -880,6 +1024,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
                 val savedOpen = openLayers
                 val savedLayers = layers
                 val savedGroups = groups.toList()
+                val savedClipIds = clipIds.toList()
                 try {
                     canvas = offscreen
                     openLayers = 0
@@ -895,6 +1040,8 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
                     layers = savedLayers
                     groups.clear()
                     groups.addAll(savedGroups)
+                    clipIds.clear()
+                    clipIds.addAll(savedClipIds)
                 }
                 val argb = IntArray(width * height)
                 bitmap.getPixels(argb, 0, width, 0, 0, width, height)
@@ -1068,6 +1215,9 @@ private const val MASK_MAX_PIXELS = 1_048_576.0
 
 /** The most pixels a radial shading between two circles draws below API 31: 4 MB of them, scaled up past it. */
 private const val TWO_CIRCLE_MAX_PIXELS = 1_048_576.0
+
+/** The first API level on which a mask kept as alpha was measured to draw what the mask group's layer draws (#912). */
+private const val KEPT_ALPHA_SDK = 35
 
 /** The most pixels a raster step works on before it drops to a lower resolution: 16 MB of them. */
 private const val STEP_MAX_PIXELS = 4_194_304.0

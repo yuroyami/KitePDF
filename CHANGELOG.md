@@ -1089,6 +1089,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the Android canvas, a group nested in a knockout group takes the earlier paints of its parent away where it
   draws, as on AWT, Skia, Compose and Canvas2D. A half-transparent nested blue group over a red square showed
   purple, (127, 0, 127), and now shows the half-transparent blue of a plain fill (#756).
+- The Android canvas renders a soft mask once for the paints under it, as AWT, Skia, Compose and Canvas2D do: 49
+  squares under one mask render its group 3 times instead of 98, and draw the same pixels. From API 35 the kept
+  mask draws as alpha, and 400 such squares rendered under Robolectric in 0.65 s instead of 2.3 s. Below API 35
+  it draws through the mask's colour filter, which keeps the pixels exact and saves only the group's render
+  (#912).
 
 ## [0.13.0] - 2026-10-09
 
