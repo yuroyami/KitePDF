@@ -12,6 +12,7 @@ package io.github.yuroyami.kitepdf.epub.script
  */
 internal val DOM_PRELUDE: String = buildString {
     append(DOM_PRELUDE_HEAD)
+    append(DOM_PRELUDE_HEAD_EVENTS)
     append(DOM_PRELUDE_NODES)
     append(DOM_PRELUDE_COLLECTIONS)
     append(DOM_PRELUDE_URL)
@@ -109,6 +110,7 @@ var ObjectCtor = Object, ArrayIsArray = Array.isArray, ObjectToString = uncurry(
   ArrayBufferTransfer = typeof ArrayBuffer.prototype.transfer === 'function' ? uncurry(ArrayBuffer.prototype.transfer) : null,
   DataViewCtor = DataView, WeakSetHas = typeof WeakSet === 'function' ? uncurry(WeakSet.prototype.has) : null,
   WeakRefDeref = typeof WeakRef === 'function' ? uncurry(WeakRef.prototype.deref) : null,
+  WeakRefCtor = typeof WeakRef === 'function' ? WeakRef : null,
   RegistryUnregister = typeof FinalizationRegistry === 'function' ? uncurry(FinalizationRegistry.prototype.unregister) : null,
   RegistryRegister = typeof FinalizationRegistry === 'function' ? uncurry(FinalizationRegistry.prototype.register) : null,
   FinalizationRegistryCtor = typeof FinalizationRegistry === 'function' ? FinalizationRegistry : null,
@@ -209,7 +211,122 @@ function asciiTokens(s) {
 }
 
 var wrappers = new Map();
-/* The object under each form's proxy. */
+/* A node's wrapper lives while the document holds the node or the script holds a wrapper of its tree,
+   as in a browser (#885). Every wrapper starts in [wrappers]. A sweep, run once as many wrappers
+   were made as were alive after the last one, asks the host which wrapped nodes are outside every
+   document and in which tree. Their wrappers move to [weakWrappers] and each tree's share one group,
+   which each of them holds and which holds them all, so one held wrapper keeps the whole tree's,
+   with their expandos and listeners. When the script holds none of them, the group goes and the
+   registry queues its ids for [releaseNodes]. An insertion makes the parent's and the child's
+   wrappers strong again at once, since the document may now hold them. */
+var weakWrappers = new Map();
+// Each group's held value is a record of its ids, which a later sweep marks dead when it regroups them.
+// No unregister token: an engine may hold a token strongly, and the group must be free to go.
+// The ids of the groups that went wait in [goneIds] and reach the host in batches: one host call each would
+// cost the engine a handle each.
+var goneIds = [];
+var nodeGroups = WeakRefCtor && FinalizationRegistryCtor ? new FinalizationRegistryCtor(function (held) {
+  if (held.dead) return;
+  for (var i = 0; i < held.ids.length; i++) ArrayPush(goneIds, held.ids[i]);
+  if (goneIds.length >= 1024) releaseNodes();
+}) : null;
+var wrappedSinceSweep = 0, sweepAfter = 1024;
+function lookup(id) {
+  var w = MapGet(wrappers, id);
+  if (w !== undefined) return w;
+  var r = MapGet(weakWrappers, id);
+  if (r === undefined) return undefined;
+  w = WeakRefDeref(r);
+  if (w === undefined) MapDelete(weakWrappers, id);
+  return w;
+}
+function groupHolder(w) { return WeakMapGet(formTargets, w) || w; }
+/* [w] now belongs to [group], or to none, with [held] the record the registry hands back when it goes.
+   A tree of one node needs no group: the wrapper itself is watched, so it goes as soon as the script
+   drops it, with no cycle for the engine to find. */
+function joinGroup(w, group, held) {
+  var holder = groupHolder(w), old = holder.__nodeHeld;
+  if (old && old !== held) old.dead = true;
+  hidden(holder, '__nodeHeld', held);
+  hidden(holder, '__nodeGroup', group);
+}
+function strengthen(w) {
+  if (w === undefined || w === null || nodeGroups === null) return;
+  var id = w.__id;
+  if (MapGet(wrappers, id) === w) return;
+  MapSet(wrappers, id, w);
+  MapDelete(weakWrappers, id);
+}
+function sweepNodes() {
+  wrappedSinceSweep = 0;
+  if (goneIds.length > 0) releaseNodes();
+  var ids = [], ws = [], it, step;
+  it = MapEntries(wrappers);
+  while (!(step = MapIteratorNext(it)).done) { ArrayPush(ids, step.value[0]); ArrayPush(ws, step.value[1]); }
+  it = MapEntries(weakWrappers);
+  while (!(step = MapIteratorNext(it)).done) {
+    var held = WeakRefDeref(step.value[1]);
+    if (held !== undefined && MapGet(wrappers, step.value[0]) === undefined) { ArrayPush(ids, step.value[0]); ArrayPush(ws, held); }
+  }
+  var trees = K.sweep(ids), groups = [];
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i], w = ws[i], t = trees[i];
+    if (t < 0) {
+      joinGroup(w, null, null);
+      MapSet(wrappers, id, w);
+      MapDelete(weakWrappers, id);
+      continue;
+    }
+    var group = groups[t];
+    if (group === undefined) { group = { __proto__: null, wrappers: [], held: { __proto__: null, ids: [], dead: false } }; groups[t] = group; }
+    ArrayPush(group.wrappers, w);
+    ArrayPush(group.held.ids, id);
+    MapDelete(wrappers, id);
+    MapSet(weakWrappers, id, new WeakRefCtor(w));
+  }
+  for (var g = 0; g < groups.length; g++) {
+    var made = groups[g];
+    if (made === undefined) continue;
+    if (made.wrappers.length === 1) {
+      joinGroup(made.wrappers[0], null, made.held);
+      RegistryRegister(nodeGroups, made.wrappers[0], made.held);
+    } else {
+      for (var k = 0; k < made.wrappers.length; k++) joinGroup(made.wrappers[k], made, made.held);
+      RegistryRegister(nodeGroups, made, made.held);
+    }
+  }
+  ids = null; ws = null; groups = null;
+  // The weak ones wait for the engine and are not counted, or one slow collection would space the sweeps out.
+  sweepAfter = MathMax(1024, MapSize(wrappers));
+}
+/* The script holds no wrapper of the nodes in [goneIds] any more. The host forgets a tree of them once
+   no wrapper of any node in it is alive, since a live one could still reach the rest. */
+function releaseNodes() {
+  var ids = goneIds;
+  goneIds = [];
+  var trees = K.trees(ids), purge = [];
+  for (var t = 0; t < trees.length; t++) {
+    var tree = trees[t], live = false;
+    for (var i = 0; i < tree.length && !live; i++) live = lookup(tree[i]) !== undefined;
+    if (live) continue;
+    for (var j = 0; j < tree.length; j++) {
+      var id = tree[j];
+      MapDelete(weakWrappers, id);
+      if (typeof elementNames !== 'undefined') MapDelete(elementNames, id);
+      if (typeof nodeDocuments !== 'undefined') MapDelete(nodeDocuments, id);
+      if (typeof imageRequests !== 'undefined') MapDelete(imageRequests, id);
+    }
+    ArrayPush(purge, tree[0]);
+  }
+  if (purge.length > 0) K.purge(purge);
+}
+"""
+
+/**
+ * The second part of the head of [DOM_PRELUDE], split from [DOM_PRELUDE_HEAD] so that neither
+ * constant passes 64 KB: wrapping nodes, events and event handlers.
+ */
+private const val DOM_PRELUDE_HEAD_EVENTS: String = """/* The object under each form's proxy. */
 var formTargets = new WeakMap();
 var rootId = K.root();
 
@@ -487,7 +604,7 @@ function check(error, what) {
 
 /* A node's id in the host, for a wrapper this DOM made; anything else is no node. */
 function isNode(v) {
-  return v !== null && typeof v === 'object' && typeof v.__id === 'number' && MapGet(wrappers, v.__id) === v;
+  return v !== null && typeof v === 'object' && typeof v.__id === 'number' && lookup(v.__id) === v;
 }
 function idOf(node) {
   if (!isNode(node)) throw new TypeError('parameter is not a Node');
@@ -497,7 +614,7 @@ function idOf(node) {
    is a proxy, whose controls are its named and indexed properties. */
 function wrap(id) {
   if (id == null) return null;
-  var w = MapGet(wrappers, id);
+  var w = lookup(id);
   if (w) return w;
   var kind = K.kind(id), proto;
   if (kind === 1) proto = protoFor(id);
@@ -517,6 +634,7 @@ function wrap(id) {
     WeakMapSet(formTargets, w, target);
   }
   MapSet(wrappers, id, w);
+  if (nodeGroups !== null && ++wrappedSinceSweep >= sweepAfter) sweepNodes();
   return w;
 }
 function listenersOf(t) {
@@ -528,6 +646,10 @@ function textNode(data) { return wrap(K.createText(String(data))); }
 function insertNode(parentId, node, before, what) {
   // The script elements it brings, found before a fragment gives its children away (#935).
   var scripts = scriptsMade > 0 ? scriptElementsAt(idOf(node)) : null;
+  // The document may hold them now, so their wrappers stop being weak until the next sweep (#885).
+  strengthen(lookup(parentId));
+  strengthen(node);
+  if (K.kind(idOf(node)) === 11) { var moving = K.children(idOf(node)); if (moving) for (var m = 0; m < moving.length; m++) strengthen(lookup(moving[m])); }
   check(K.insert(parentId, idOf(node), before == null ? null : idOf(before)), what);
   if (scripts !== null) prepareScriptsAt(scripts);
   // Text put into a script element that waited without any prepares it.

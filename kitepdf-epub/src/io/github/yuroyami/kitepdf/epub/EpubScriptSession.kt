@@ -490,6 +490,11 @@ public class EpubScriptSession(
             fontOutlines = fontOutlines,
         )
 
+        init {
+            // A canvas of a tree that the script and every document let go keeps no context (#885).
+            dom.purged = { canvases.forget(it) }
+        }
+
         /** The size of each image a canvas drew, by its address, or null for one that does not decode. */
         private val imageSizes = HashMap<String, Pair<Double, Double>?>()
 
@@ -831,6 +836,11 @@ public class EpubScriptSession(
             }
             def("sanitize") { args -> element(args, 0)?.let { el -> FormValues.sanitize(string(args, 1), string(args, 2)) { dom.attr(el, it) } } ?: string(args, 2) }
             def("createFragment") { dom.idOf(dom.createFragment()) }
+            // The script's sweep of the wrappers it holds, and the trees it let go (#885).
+            fun ints(args: List<Any?>, i: Int): List<Int> = (args.getOrNull(i) as? List<*>).orEmpty().mapNotNull { (it as? Double)?.toInt() }
+            def("sweep") { args -> dom.sweepTrees(ints(args, 0)) }
+            def("trees") { args -> dom.trees(ints(args, 0)) }
+            def("purge") { args -> ints(args, 0).forEach(dom::purge); null }
             def("insert") { args ->
                 val parent = element(args, 0) ?: return@def "HierarchyRequestError"
                 val child = node(args, 1) ?: return@def "NotFoundError"

@@ -1014,6 +1014,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them, so an app that depends only on kitepdf-pdf no longer carries 3.1 MB of pattern classes; the kitepdf-core
   jar shrinks from 3.2 MB to 2.2 MB. Hyphenator keeps its package, so code that imports it and depends on
   kitepdf-epub or kitepdf still compiles (#687).
+- A node that a chapter script made or removed, and that no script holds, is now let go, as in a browser: 60,000
+  elements made on a timer and dropped kept 24 MB of Java heap, and now keep under 4 MB. A wrapper still lives
+  while the document holds its node or while the script holds a wrapper of any node in its tree, so expandos and
+  listeners on a detached tree survive until it is attached (#885).
 
 ## [0.13.0] - 2026-10-09
 

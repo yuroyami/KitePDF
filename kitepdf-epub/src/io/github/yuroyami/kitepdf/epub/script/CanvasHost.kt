@@ -53,6 +53,12 @@ internal class CanvasHost(
     private val patterns = HashMap<Int, CanvasPattern>()
     private var nextHandle = 1
 
+    /** Drops what this host keeps for [canvas], a canvas element that its document forgot (#885). */
+    fun forget(canvas: KiteXmlNode.Element) {
+        contexts.remove(canvas)?.let { rasters.remove(it) }
+        shown.remove(canvas)
+    }
+
     /** The size of [canvas] from its attributes, 300 by 150 when they are missing or wrong (HTML, 4.12.5). */
     fun sizeOf(canvas: KiteXmlNode.Element): Pair<Int, Int> =
         dimension(canvas.attrs["width"], 300) to dimension(canvas.attrs["height"], 150)

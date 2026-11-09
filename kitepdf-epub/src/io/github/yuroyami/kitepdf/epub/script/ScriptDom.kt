@@ -36,7 +36,9 @@ internal class ScriptDom(
 ) {
 
     private val ids = HashMap<KiteXmlNode, Int>()
-    private val nodes = ArrayList<KiteXmlNode>()
+    // By number. A number is never given twice, so one the script forgot names nothing (#885).
+    private val nodes = HashMap<Int, KiteXmlNode>()
+    private var nextId = 0
 
     /** The element each text node and comment sits in: neither keeps a parent of its own. */
     private val leafParents = HashMap<KiteXmlNode, KiteXmlNode.Element>()
@@ -466,9 +468,85 @@ internal class ScriptDom(
         return Name(namespace, null, if (namespace == SVG_NS) SVG_TAG_CASE[el.tag] ?: el.tag else el.tag)
     }
 
-    fun idOf(node: KiteXmlNode): Int = ids.getOrPut(node) { nodes.add(node); nodes.size - 1 }
+    fun idOf(node: KiteXmlNode): Int = ids.getOrPut(node) { val id = nextId++; nodes[id] = node; id }
 
-    fun node(id: Int): KiteXmlNode? = nodes.getOrNull(id)
+    /** How many nodes have a number, which a test counts (#885). */
+    internal val numbered: Int get() = nodes.size
+
+    /** Told of each element that [purge] forgets, so the canvas host can drop its context (#885). */
+    var purged: ((KiteXmlNode.Element) -> Unit)? = null
+
+    private fun rootOf(node: KiteXmlNode): KiteXmlNode {
+        var at: KiteXmlNode = node
+        while (true) at = parentOf(at) ?: return at
+    }
+
+    /** Whether [node] is in the document or in a document a script made, which keep their nodes. */
+    private fun isKept(node: KiteXmlNode): Boolean {
+        val top = rootOf(node)
+        return top === root || top in documents
+    }
+
+    /**
+     * For each of [idList], -1 when a document holds its node, else the index of its node's tree
+     * among the trees of these ids: what the script's sweep groups its wrappers by (#885).
+     */
+    fun sweepTrees(idList: List<Int>): List<Int> {
+        val trees = HashMap<KiteXmlNode, Int>()
+        return idList.map { id ->
+            val node = nodes[id] ?: return@map -1
+            val top = rootOf(node)
+            if (top === root || top in documents) -1 else trees.getOrPut(top) { trees.size }
+        }
+    }
+
+    /** The numbers of every numbered node in each tree outside every document that one of [idList] is in (#885). */
+    fun trees(idList: List<Int>): List<List<Int>> {
+        val seen = HashSet<KiteXmlNode>()
+        val out = ArrayList<List<Int>>()
+        for (id in idList) {
+            val node = nodes[id] ?: continue
+            val top = rootOf(node)
+            if (top === root || top in documents || !seen.add(top)) continue
+            val numbers = ArrayList<Int>()
+            walk(top) { n -> ids[n]?.let { numbers += it } }
+            if (numbers.isNotEmpty()) out += numbers
+        }
+        return out
+    }
+
+    /**
+     * Forgets the tree that the node [id] is in, when no document holds it: the script holds no
+     * wrapper of any node in it, so nothing can reach it again (#885).
+     */
+    fun purge(id: Int) {
+        val node = nodes[id] ?: return
+        if (isKept(node)) return
+        walk(rootOf(node)) { n ->
+            ids.remove(n)?.let { nodes.remove(it) }
+            when (n) {
+                is KiteXmlNode.Element -> {
+                    fragments.remove(n); names.remove(n); attributeLists.remove(n); written.remove(n)
+                    declarations.remove(n); quirksDocuments.remove(n)
+                    purged?.invoke(n)
+                }
+                is KiteXmlNode.Text -> { leafParents.remove(n); cdataSections.remove(n) }
+                is KiteXmlNode.Comment -> { leafParents.remove(n); instructions.remove(n); doctypes.remove(n) }
+            }
+        }
+    }
+
+    private fun walk(top: KiteXmlNode, visit: (KiteXmlNode) -> Unit) {
+        val pending = ArrayDeque<KiteXmlNode>()
+        pending.addLast(top)
+        while (pending.isNotEmpty()) {
+            val n = pending.removeLast()
+            visit(n)
+            if (n is KiteXmlNode.Element) for (c in n.children) pending.addLast(c)
+        }
+    }
+
+    fun node(id: Int): KiteXmlNode? = nodes[id]
 
     fun element(id: Int): KiteXmlNode.Element? = node(id) as? KiteXmlNode.Element
 
