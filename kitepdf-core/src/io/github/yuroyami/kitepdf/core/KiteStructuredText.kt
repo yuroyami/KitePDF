@@ -311,6 +311,43 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
     }
 
     /**
+     * The words of the text, in reading order, each with its text, its flattened char range and
+     * its bounds in display space (#639). The range works with [textRange], [quadsFor] and
+     * [copyText]. A word lies on one line.
+     *
+     * Boundaries follow the word rules of Unicode Standard Annex #29: letters and digits run on
+     * together, with combining marks, a connector such as `_`, an apostrophe or a colon between
+     * two letters, as in "don't", and a point or a comma between two digits, as in "3.14". Each
+     * Han ideograph and each hiragana is a word of its own, and a run of katakana is one word.
+     * UAX #29 leaves Thai, Lao, Khmer and Myanmar to a dictionary, which KitePDF does not have,
+     * so a run of one of these scripts is one word. Spaces, punctuation and symbols are in no word.
+     */
+    public fun words(): List<KiteWord> = wordList
+
+    /** The word whose bounds hold the display-space point ([x], [y]), or null when none does. See [words]. */
+    public fun wordAt(x: Double, y: Double): KiteWord? = wordList.firstOrNull { w ->
+        x >= w.bounds.left && x <= w.bounds.right && y >= w.bounds.bottom && y <= w.bounds.top
+    }
+
+    private val wordList: List<KiteWord> by lazy {
+        val out = ArrayList<KiteWord>()
+        var base = 0
+        for (block in blocks) for (line in block.lines) {
+            for (range in KiteWordBreaker.wordsOf(line.text)) {
+                val start = base + range.first
+                val end = base + range.last
+                val quads = quadsFor(start, end)
+                val bounds = quads.reduce { a, b ->
+                    KiteRectangle(minOf(a.left, b.left), minOf(a.bottom, b.bottom), maxOf(a.right, b.right), maxOf(a.top, b.top))
+                }
+                out += KiteWord(line.text.substring(range.first, range.last + 1), start, end, bounds)
+            }
+            base += line.text.length
+        }
+        out
+    }
+
+    /**
      * Display-space quads (one per line touched) for the inclusive flattened
      * range. Search hits use the same walker.
      */
@@ -359,6 +396,113 @@ public class KiteStructuredText(public val blocks: List<KiteTextBlock>) {
             i = j + 1
         }
         return quads
+    }
+}
+
+/**
+ * A word of a [KiteStructuredText]: its [text], the flattened char range [start]..[endInclusive]
+ * that [KiteStructuredText.textRange] and [KiteStructuredText.quadsFor] take, and its [bounds] in
+ * display space, with the smaller y in [KiteRectangle.bottom] (#639).
+ */
+public class KiteWord(
+    public val text: String,
+    public val start: Int,
+    public val endInclusive: Int,
+    public val bounds: KiteRectangle,
+) {
+    override fun toString(): String = "KiteWord($text, $start..$endInclusive)"
+}
+
+/** Word boundaries of one line by the rules of UAX #29 that need no dictionary (#639). */
+internal object KiteWordBreaker {
+
+    private enum class Kind { LETTER, NUMBER, KATAKANA, IDEOGRAPH, HIRAGANA, COMPLEX, EXTEND, CONNECTOR, MID_LETTER, MID_NUMBER, MID_BOTH, OTHER }
+
+    /** The char ranges of the words of [text], each inclusive. */
+    fun wordsOf(text: String): List<IntRange> {
+        val kinds = Array(text.length) { kindAt(text, it) }
+        val out = ArrayList<IntRange>()
+        var i = 0
+        fun extendFrom(j: Int): Int {
+            var k = j
+            while (k + 1 < text.length && kinds[k + 1] == Kind.EXTEND) k++
+            return k
+        }
+        while (i < text.length) {
+            val kind = kinds[i]
+            when (kind) {
+                Kind.IDEOGRAPH, Kind.HIRAGANA -> {
+                    // A pair of surrogates is one char of the text.
+                    var end = if (text[i].isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()) i + 1 else i
+                    end = extendFrom(end)
+                    out += i..end
+                    i = end + 1
+                }
+                Kind.KATAKANA, Kind.COMPLEX -> {
+                    var end = i
+                    while (end + 1 < text.length && (kinds[end + 1] == kind || kinds[end + 1] == Kind.EXTEND || kinds[end + 1] == Kind.CONNECTOR)) end++
+                    out += i..end
+                    i = end + 1
+                }
+                Kind.LETTER, Kind.NUMBER, Kind.CONNECTOR -> {
+                    var end = i
+                    while (end + 1 < text.length) {
+                        val next = kinds[end + 1]
+                        val here = lastCore(kinds, i, end)
+                        if (next == Kind.LETTER || next == Kind.NUMBER || next == Kind.EXTEND || next == Kind.CONNECTOR) {
+                            end++
+                            continue
+                        }
+                        // A middle char joins two letters, two digits, or either for a point or an apostrophe.
+                        val after = kinds.getOrNull(end + 2)
+                        val joins = when (next) {
+                            Kind.MID_LETTER -> here == Kind.LETTER && after == Kind.LETTER
+                            Kind.MID_NUMBER -> here == Kind.NUMBER && after == Kind.NUMBER
+                            Kind.MID_BOTH -> (here == Kind.LETTER && after == Kind.LETTER) || (here == Kind.NUMBER && after == Kind.NUMBER)
+                            else -> false
+                        }
+                        if (!joins) break
+                        end += 2
+                    }
+                    // A word of connectors alone, such as "__", is no word.
+                    if ((i..end).any { kinds[it] == Kind.LETTER || kinds[it] == Kind.NUMBER }) out += i..end
+                    i = end + 1
+                }
+                else -> i++
+            }
+        }
+        return out
+    }
+
+    /** The kind of the last letter or digit of [from]..[to], which a middle char must match. */
+    private fun lastCore(kinds: Array<Kind>, from: Int, to: Int): Kind? {
+        for (k in to downTo from) if (kinds[k] == Kind.LETTER || kinds[k] == Kind.NUMBER) return kinds[k]
+        return null
+    }
+
+    private fun kindAt(text: String, i: Int): Kind {
+        val c = text[i]
+        val code = c.code
+        if (c.isLowSurrogate()) return Kind.EXTEND.takeIf { i > 0 && text[i - 1].isHighSurrogate() } ?: Kind.OTHER
+        if (c.isHighSurrogate()) {
+            // Planes 2 and 3 hold the CJK Unified Ideographs Extensions B to H.
+            return if (code in 0xD840..0xD8BF) Kind.IDEOGRAPH else Kind.OTHER
+        }
+        return when {
+            DiacriticFolding.isMark(c) || code == 0x200D || code == 0x200C -> Kind.EXTEND
+            code in 0x3400..0x4DBF || code in 0x4E00..0x9FFF || code in 0xF900..0xFAFF || code == 0x3005 || code == 0x3007 -> Kind.IDEOGRAPH
+            code in 0x3041..0x309F -> Kind.HIRAGANA
+            code in 0x30A0..0x30FF || code in 0x31F0..0x31FF || code in 0xFF66..0xFF9F -> Kind.KATAKANA
+            code in 0x0E00..0x0EFF || code in 0x1000..0x109F || code in 0x1780..0x17FF || code in 0x19E0..0x19FF -> Kind.COMPLEX
+            c.isDigit() -> Kind.NUMBER
+            c.isLetter() -> Kind.LETTER
+            code == 0x5F || code == 0x203F || code == 0x2040 || code == 0x2054 || code == 0xFE33 || code == 0xFE34 || code in 0xFE4D..0xFE4F || code == 0xFF3F -> Kind.CONNECTOR
+            code == 0x3A || code == 0xB7 || code == 0x387 || code == 0x5F4 || code == 0x2027 || code == 0xFE13 || code == 0xFE55 || code == 0xFF1A -> Kind.MID_LETTER
+            code == 0x2C || code == 0x3B || code == 0x37E || code == 0x589 || code == 0x60C || code == 0x60D || code == 0x66C || code == 0x7F8 ||
+                code == 0x2044 || code == 0xFE10 || code == 0xFE14 || code == 0xFE50 || code == 0xFE54 || code == 0xFF0C || code == 0xFF1B -> Kind.MID_NUMBER
+            code == 0x2E || code == 0x27 || code == 0x2018 || code == 0x2019 || code == 0x2024 || code == 0xFE52 || code == 0xFF07 || code == 0xFF0E -> Kind.MID_BOTH
+            else -> Kind.OTHER
+        }
     }
 }
 

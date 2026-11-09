@@ -2278,6 +2278,8 @@ final class io.github.yuroyami.kitepdf.core/KiteStructuredText { // io.github.yu
     final fun search(kotlin/String, kotlin/Boolean = ..., kotlin/Int = ..., io.github.yuroyami.kitepdf.core/KiteLocation?): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteSearchHit> // io.github.yuroyami.kitepdf.core/KiteStructuredText.search|search(kotlin.String;kotlin.Boolean;kotlin.Int;io.github.yuroyami.kitepdf.core.KiteLocation?){}[0]
     final fun sourceOffsetAt(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteStructuredText.sourceOffsetAt|sourceOffsetAt(kotlin.Int){}[0]
     final fun textRange(kotlin/Int, kotlin/Int): kotlin/String // io.github.yuroyami.kitepdf.core/KiteStructuredText.textRange|textRange(kotlin.Int;kotlin.Int){}[0]
+    final fun wordAt(kotlin/Double, kotlin/Double): io.github.yuroyami.kitepdf.core/KiteWord? // io.github.yuroyami.kitepdf.core/KiteStructuredText.wordAt|wordAt(kotlin.Double;kotlin.Double){}[0]
+    final fun words(): kotlin.collections/List<io.github.yuroyami.kitepdf.core/KiteWord> // io.github.yuroyami.kitepdf.core/KiteStructuredText.words|words(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf.core/KiteTextBlock { // io.github.yuroyami.kitepdf.core/KiteTextBlock|null[0]
@@ -2358,6 +2360,22 @@ final class io.github.yuroyami.kitepdf.core/KiteWarning { // io.github.yuroyami.
 
     final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteWarning.toString|toString(){}[0]
 }
+
+final class io.github.yuroyami.kitepdf.core/KiteWord { // io.github.yuroyami.kitepdf.core/KiteWord|null[0]
+    constructor <init>(kotlin/String, kotlin/Int, kotlin/Int, io.github.yuroyami.kitepdf.core/KiteRectangle) // io.github.yuroyami.kitepdf.core/KiteWord.<init>|<init>(kotlin.String;kotlin.Int;kotlin.Int;io.github.yuroyami.kitepdf.core.KiteRectangle){}[0]
+
+    final val bounds // io.github.yuroyami.kitepdf.core/KiteWord.bounds|{}bounds[0]
+        final fun <get-bounds>(): io.github.yuroyami.kitepdf.core/KiteRectangle // io.github.yuroyami.kitepdf.core/KiteWord.bounds.<get-bounds>|<get-bounds>(){}[0]
+    final val endInclusive // io.github.yuroyami.kitepdf.core/KiteWord.endInclusive|{}endInclusive[0]
+        final fun <get-endInclusive>(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteWord.endInclusive.<get-endInclusive>|<get-endInclusive>(){}[0]
+    final val start // io.github.yuroyami.kitepdf.core/KiteWord.start|{}start[0]
+        final fun <get-start>(): kotlin/Int // io.github.yuroyami.kitepdf.core/KiteWord.start.<get-start>|<get-start>(){}[0]
+    final val text // io.github.yuroyami.kitepdf.core/KiteWord.text|{}text[0]
+        final fun <get-text>(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteWord.text.<get-text>|<get-text>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf.core/KiteWord.toString|toString(){}[0]
+}
+
 final class io.github.yuroyami.kitepdf.core/KiteWrongPasswordException : kotlin/RuntimeException { // io.github.yuroyami.kitepdf.core/KiteWrongPasswordException|null[0]
     constructor <init>(kotlin/String, kotlin/Throwable? = ...) // io.github.yuroyami.kitepdf.core/KiteWrongPasswordException.<init>|<init>(kotlin.String;kotlin.Throwable?){}[0]
 }

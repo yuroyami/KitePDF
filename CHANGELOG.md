@@ -941,6 +941,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The tag tree of a tagged PDF is public: `PdfDocument.structureTree` gives its root `PdfStructElement`s in
   logical order, each with its type, `/Alt`, `/ActualText`, `/Lang`, bounds and kids, and a marked-content kid
   names its page and MCID (#640).
+- `KiteStructuredText.words()` gives the words of a page in reading order, each with its text, char range and
+  bounds, and `wordAt(x, y)` the word under a point, by the rules of UAX #29 that need no dictionary. PDF, EPUB
+  and XPS pages give them alike (#639).
 
 ## [0.13.0] - 2026-10-09
 

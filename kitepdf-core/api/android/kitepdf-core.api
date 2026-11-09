@@ -377,6 +377,8 @@ public final class io/github/yuroyami/kitepdf/core/KiteStructuredText {
 	public static synthetic fun search$default (Lio/github/yuroyami/kitepdf/core/KiteStructuredText;Ljava/lang/String;ZILio/github/yuroyami/kitepdf/core/KiteLocation;ILjava/lang/Object;)Ljava/util/List;
 	public final fun sourceOffsetAt (I)I
 	public final fun textRange (II)Ljava/lang/String;
+	public final fun wordAt (DD)Lio/github/yuroyami/kitepdf/core/KiteWord;
+	public final fun words ()Ljava/util/List;
 }
 
 public final class io/github/yuroyami/kitepdf/core/KiteTextBlock {
@@ -474,6 +476,15 @@ public final class io/github/yuroyami/kitepdf/core/KiteWarnings {
 public final class io/github/yuroyami/kitepdf/core/KiteWarningsKt {
 	public static final fun kiteWarn (Lio/github/yuroyami/kitepdf/core/KiteWarningKind;Lkotlin/jvm/functions/Function0;)V
 	public static final fun kiteWarn (Lkotlin/jvm/functions/Function0;)V
+}
+
+public final class io/github/yuroyami/kitepdf/core/KiteWord {
+	public fun <init> (Ljava/lang/String;IILio/github/yuroyami/kitepdf/core/KiteRectangle;)V
+	public final fun getBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public final fun getEndInclusive ()I
+	public final fun getStart ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/yuroyami/kitepdf/core/KiteWrongPasswordException : java/lang/RuntimeException {

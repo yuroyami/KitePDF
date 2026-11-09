@@ -135,6 +135,18 @@ Vertical text makes columns instead of lines. A Type 0 font whose CMap has writi
 
 `page.textContent()` gives the same text as a `KiteStructuredText`, the shared type that EPUB pages also give. Its coordinates are in display space: points from the top-left corner of the page as it shows, with y going down. Search, selection and the Compose viewer use this form. A vertical line has `vertical = true` there, so a highlight follows the column.
 
+### Words
+
+`textContent().words()` gives the words of a page in reading order, each with its `text`, its char range (`start` and `endInclusive`, which `textRange`, `quadsFor` and `copyText` take) and its `bounds` in display space. `wordAt(x, y)` gives the word under a point, or null:
+
+```kotlin
+val text = page.textContent() ?: return
+for (word in text.words()) println("${word.text} at ${word.bounds}")
+val tapped = text.wordAt(x, y)
+```
+
+Words follow the rules of Unicode Standard Annex #29 that need no dictionary. Letters and digits run on together across an apostrophe, as in "don't", and digits across a point or a comma, as in "3.14". Each Han ideograph and each hiragana is a word of its own, and a run of katakana is one word. Thai, Lao, Khmer and Myanmar need a dictionary to split, which KitePDF does not have, so a run of one of them is one word. Spaces and punctuation are in no word. EPUB and XPS pages give the same `KiteStructuredText`, so the calls work for them too.
+
 ## Search
 
 ```kotlin
