@@ -801,6 +801,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     ) {
         // A group nested in a knockout group gets a layer, so its own paints do not knock each other out.
         val nested = knockingOut
+        if (nested && beginKnockoutElement(bbox, ctm, knockout, alpha, blendMode)) return
         val layered = isolated || knockout || nested || alpha < 1.0 || blendMode != KiteBlendMode.Normal
         groups.addLast(Group(layered, knockout))
         if (!layered) return
@@ -818,8 +819,89 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         layers++
     }
 
-    /** An open group: whether it opened a layer, and whether its paints knock out. */
-    private class Group(val layered: Boolean, val knockout: Boolean)
+    /** An open group: whether it opened a layer, whether its paints knock out, and the surface of a knockout element. */
+    private class Group(val layered: Boolean, val knockout: Boolean, val element: KnockoutElement? = null)
+
+    /**
+     * A group nested in a knockout group, which paints to its own [surface] at device pixel
+     * ([x], [y]), and the state of the canvas it paints over, which [endKnockoutElement] restores.
+     */
+    private class KnockoutElement(
+        val surface: org.jetbrains.skia.Surface, val x: Int, val y: Int,
+        val alpha: Double, val blendMode: KiteBlendMode,
+        val savedCanvas: SkCanvas, val savedOpen: Int, val savedLayers: Int,
+        val savedGroups: List<Group>, val savedClips: List<DoubleArray>, val savedPage: DoubleArray?,
+    )
+
+    /**
+     * ISO 32000-1, 11.4.4 and 11.4.6: a group nested in a knockout group is one element of it,
+     * and composites with the parent's initial backdrop, not with its earlier paints. A saved
+     * layer composites once, so the group paints to a surface of its own, and its end draws that
+     * surface twice: to take the earlier paints away where the group's shape is, then with the
+     * group's alpha and blend mode. Where the shape is 0 the earlier paints stay (#756). Returns
+     * false when the group covers no device pixel, so it takes the plain layer.
+     */
+    private fun beginKnockoutElement(bbox: KiteRectangle, ctm: KiteMatrix, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode): Boolean {
+        // The group's box on the device: what it can paint.
+        val m = canvas.localToDeviceAsMatrix33.makeConcat(pdfMatrixToSkia(ctm)).mat
+        val box = bbox.normalized()
+        val xs = DoubleArray(4)
+        val ys = DoubleArray(4)
+        for ((i, corner) in listOf(box.left to box.bottom, box.right to box.bottom, box.left to box.top, box.right to box.top).withIndex()) {
+            xs[i] = m[0] * corner.first + m[1] * corner.second + m[2]
+            ys[i] = m[3] * corner.first + m[4] * corner.second + m[5]
+        }
+        if (!(xs + ys).all { it.isFinite() }) return false
+        val left = kotlin.math.floor(xs.min()).toInt()
+        val top = kotlin.math.floor(ys.min()).toInt()
+        val width = kotlin.math.ceil(xs.max()).toInt() - left
+        val height = kotlin.math.ceil(ys.max()).toInt() - top
+        if (width <= 0 || height <= 0 || width.toLong() * height > KNOCKOUT_ELEMENT_PIXELS) return false
+        val clip = org.jetbrains.skia.IRect.makeXYWH(left, top, width, height)
+        val surface = org.jetbrains.skia.Surface.makeRaster(ImageInfo(width, height, ColorType.N32, ColorAlphaType.PREMUL))
+        val offscreen = surface.canvas
+        offscreen.translate(-clip.left.toFloat(), -clip.top.toFloat())
+        offscreen.concat(canvas.localToDeviceAsMatrix33)
+        val element = KnockoutElement(
+            surface, clip.left, clip.top, alpha.coerceIn(0.0, 1.0), blendMode,
+            canvas, openLayers, layers, groups.toList(), clipBounds.toList(), pageBounds,
+        )
+        canvas = offscreen
+        openLayers = 0
+        layers = 0
+        groups.addLast(Group(layered = false, knockout = knockout, element = element))
+        return true
+    }
+
+    private fun endKnockoutElement(element: KnockoutElement) {
+        canvas.restoreToCount(1)
+        canvas = element.savedCanvas
+        openLayers = element.savedOpen
+        layers = element.savedLayers
+        groups.clear()
+        groups.addAll(element.savedGroups)
+        clipBounds.clear()
+        clipBounds.addAll(element.savedClips)
+        pageBounds = element.savedPage
+        val image = element.surface.makeImageSnapshot()
+        try {
+            canvas.save()
+            canvas.resetMatrix()
+            Paint().closing { erase ->
+                erase.blendMode = SkiaBlendMode.DST_OUT
+                canvas.drawImage(image, element.x.toFloat(), element.y.toFloat(), erase)
+            }
+            Paint().closing { paint ->
+                paint.alpha = (element.alpha * 255).toInt()
+                paint.blendMode = element.blendMode.toSkia()
+                canvas.drawImage(image, element.x.toFloat(), element.y.toFloat(), paint)
+            }
+            canvas.restore()
+        } finally {
+            image.close()
+            element.surface.close()
+        }
+    }
 
     private val groups = ArrayDeque<Group>()
 
@@ -833,7 +915,9 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     private fun paintBlend(mode: KiteBlendMode): SkiaBlendMode = if (knockingOut) SkiaBlendMode.SRC else mode.toSkia()
 
     override fun endTransparencyGroup() {
-        if (groups.removeLastOrNull()?.layered != true) return
+        val ended = groups.removeLastOrNull()
+        ended?.element?.let { endKnockoutElement(it); return }
+        if (ended?.layered != true) return
         if (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -1169,3 +1253,6 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         KiteBlendMode.Luminosity -> SkiaBlendMode.LUMINOSITY
     }
 }
+
+/** The largest surface a group nested in a knockout group paints to; a larger one takes a plain layer (#756). */
+private const val KNOCKOUT_ELEMENT_PIXELS = 16_000_000L

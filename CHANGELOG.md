@@ -947,6 +947,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A long chapter whose style sheet has a rule such as `h1 ~ p` lays out in linear time: the subsequent-sibling
   combinator reuses the earlier sibling it found, and the first index lookup of a sibling gives every sibling its
   index, where n paragraphs still cost n² / 2 steps (#990).
+- On the AWT, Skia and Canvas2D canvases, a transparency group nested in a knockout group replaces the earlier
+  paints of its parent where it draws, as ISO 32000-1, 11.4.6 asks, where it composited over them (#756).
 
 ## [0.13.0] - 2026-10-09
 

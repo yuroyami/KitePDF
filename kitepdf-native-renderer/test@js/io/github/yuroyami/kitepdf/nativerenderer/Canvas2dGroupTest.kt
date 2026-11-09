@@ -74,6 +74,26 @@ class Canvas2dGroupTest {
         ctx.assertPixel(150, 150, listOf(0, 255, 0))
     }
 
+    @Test
+    fun a_group_nested_in_a_knockout_group_knocks_out_the_paints_before_it() {
+        // ISO 32000-1, 11.4.4 and 11.4.6: the half-transparent blue group replaces the red square
+        // of its knockout parent, so the page shows pale blue, not purple (#756).
+        val inner = "0 0 1 rg 0 0 $SIDE $SIDE re f"
+        val outer = "1 0 0 rg 0 0 $SIDE $SIDE re f /GA gs /In Do"
+        val ctx = renderOnCanvas(
+            testPage(
+                "1 1 1 rg 0 0 $SIDE $SIDE re f /Out Do",
+                "/XObject << /Out 5 0 R >>",
+                listOf(
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 $SIDE $SIDE] /Group << /S /Transparency /I true /K true >> " +
+                        "/Resources << /ExtGState << /GA << /ca 0.5 >> >> /XObject << /In 6 0 R >> >> /Length ${outer.length} >>\nstream\n$outer\nendstream",
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 $SIDE $SIDE] /Group << /S /Transparency /I true >> /Length ${inner.length} >>\nstream\n$inner\nendstream",
+                ),
+            ),
+        )
+        ctx.assertPixel(100, 100, listOf(128, 128, 255), tolerance = 4)
+    }
+
     /** A form over the whole page that is a non-isolated transparency group, [knockout] or not. */
     private fun nonIsolatedForm(content: String, resources: String, knockout: Boolean = false): String =
         "<< /Type /XObject /Subtype /Form /BBox [0 0 $SIDE $SIDE] /Group << /S /Transparency /I false /K $knockout >> " +

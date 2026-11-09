@@ -864,6 +864,8 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         val savedClips: ArrayDeque<ClipEntry>,
         val savedBlends: LayerBlends?,
         val knockout: Boolean = false,
+        /** True for a group nested in a knockout group, which replaces its parent's earlier paints (#756). */
+        val inKnockout: Boolean = false,
     ) {
         /** Clips from [savedClips] popped while the group was open, which end after it. */
         var deferredPops = 0
@@ -926,7 +928,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         layerGraphics.translate(-bounds.x.toDouble(), -bounds.y.toDouble())
         layerGraphics.transform(parent.transform)
         parent.clip?.let(layerGraphics::clip)
-        groupStack.addLast(GroupFrame(parent, layer, bounds, scale, a, blendMode, ArrayDeque(clipStack), layerBlends, knockout))
+        groupStack.addLast(GroupFrame(parent, layer, bounds, scale, a, blendMode, ArrayDeque(clipStack), layerBlends, knockout, inKnockout = nested))
         g = layerGraphics
         clipStack.clear()
         // The paints inside composite onto the layer, not onto a soft-masked layer outside.
@@ -959,14 +961,25 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         val target = g.create() as Graphics2D
         try {
             target.transform = AffineTransform()
+            fun draw() {
+                if (frame.scale == 1.0) {
+                    target.drawImage(layer, frame.bounds.x, frame.bounds.y, null)
+                } else {
+                    target.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                    target.drawImage(layer, frame.bounds.x, frame.bounds.y, frame.bounds.width, frame.bounds.height, null)
+                }
+            }
+            // ISO 32000-1, 11.4.4 and 11.4.6: a group nested in a knockout group is one element of it,
+            // and composites with the parent's initial backdrop, not with its earlier paints. So the
+            // earlier paints go where the group's shape is, at full strength, and the group then
+            // composites with its alpha and blend mode; where its shape is 0 they stay (#756).
+            if (frame.inKnockout) {
+                target.composite = AlphaComposite.DstOut
+                draw()
+            }
             target.composite = if (frame.blendMode == KiteBlendMode.Normal) AlphaComposite.SrcOver.derive(frame.alpha)
                 else PdfBlendComposite(frame.blendMode, frame.alpha)
-            if (frame.scale == 1.0) {
-                target.drawImage(layer, frame.bounds.x, frame.bounds.y, null)
-            } else {
-                target.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
-                target.drawImage(layer, frame.bounds.x, frame.bounds.y, frame.bounds.width, frame.bounds.height, null)
-            }
+            draw()
         } finally {
             target.dispose()
         }

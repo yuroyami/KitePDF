@@ -427,7 +427,11 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
      * when the group ends. Otherwise [layer] is null and the group paints straight onto
      * the page, which gives the same pixels.
      */
-    private class Group(val saved: Saved?, val layer: Layer?, val alpha: Double, val blendMode: KiteBlendMode, val knockout: Boolean = false)
+    private class Group(
+        val saved: Saved?, val layer: Layer?, val alpha: Double, val blendMode: KiteBlendMode, val knockout: Boolean = false,
+        /** True for a group nested in a knockout group, which replaces its parent's earlier paints (#756). */
+        val inKnockout: Boolean = false,
+    )
 
     /** An offscreen canvas whose top left corner is device pixel ([x], [y]). */
     private class Layer(val canvas: HTMLCanvasElement, val x: Double, val y: Double)
@@ -477,7 +481,7 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                 0.0, 0.0, area[2].toDouble(), area[3].toDouble())
             ctx.restore()
         }
-        groups.addLast(Group(saved, layer, a, blendMode, knockout))
+        groups.addLast(Group(saved, layer, a, blendMode, knockout, inKnockout = nested))
     }
 
     /**
@@ -515,6 +519,9 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         val group = groups.removeLastOrNull() ?: return
         val layer = group.layer ?: return
         closeLayer(group.saved ?: return)
+        // ISO 32000-1, 11.4.4 and 11.4.6: a group nested in a knockout group is one element of it,
+        // so it takes the parent's earlier paints away where its shape is before it composites (#756).
+        if (group.inKnockout) composite(layer, 1.0, "destination-out")
         composite(layer, group.alpha, group.blendMode.toCanvas())
         releaseCanvas(layer.canvas)
     }
