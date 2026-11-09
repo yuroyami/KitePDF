@@ -952,6 +952,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EPUB layout joins Korean conjoining jamo into the precomposed syllable that the font has, as HarfBuzz's Hangul
   shaper does, and gives the jamo that stay apart the `ljmo`, `vjmo` and `tjmo` features, where each jamo drew as
   a letter of its own (#635).
+- EPUB layout connects Arabic letters in a font that has no joining features: each letter takes the presentation
+  form its cmap maps, and lam with alef the lam-alef ligature, as HarfBuzz's Arabic fallback does, where every
+  letter drew isolated (#636).
 
 ## [0.13.0] - 2026-10-09
 

@@ -193,6 +193,9 @@ internal object TextShaper {
                     { face.gidFor(it) != 0 }, arabicMarks = arabic,
                 )
             }
+            // The characters and joining forms of the glyphs, for the fallback of a font with no joining features.
+            val glyphCodes = ArrayList<Int>()
+            val glyphForms = ArrayList<ArabicJoining.Form?>()
             for ((j, cp) in (normal?.codePoints ?: cps).withIndex()) {
                 val source = normal?.sources?.get(j) ?: j
                 val gid = if (cp == cps[source]) gs[source] else face.gidFor(cp)
@@ -202,7 +205,11 @@ internal object TextShaper {
                 val jamo = if (hangul) jamoFeature(cp) else null
                 val features = form?.let { setOf(ArabicJoining.feature(it)) } ?: jamo?.let { setOf(it) } ?: emptySet()
                 add(GsubGlyph(gid, source, features, isMark(cp), ignorable(cp)), cp)
+                glyphCodes += cp
+                glyphForms += form
             }
+            // A font with no init, medi or fina takes the presentation forms its cmap maps, as HarfBuzz falls back (#636).
+            if (script == "arab" && forms != null && !gsub.hasArabicJoining) ArabicFallback.apply(glyphs, glyphCodes, glyphForms, face::gidFor)
             val manualZwj = if (arabic) ARABIC_MANUAL_ZWJ else emptySet()
             gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL + MIRRORED + JAMO, manualZwj = manualZwj)
         }
