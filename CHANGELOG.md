@@ -979,6 +979,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the Compose canvas of the page rasterizer, a group nested in a knockout group takes the earlier paints of
   its parent away where it draws, as on AWT, Skia and Canvas2D. A half-transparent nested blue group over a red
   square showed purple, and now shows the half-transparent blue of a plain fill (#756).
+- The Skia canvas sizes the layer of a transparency group and of a soft-masked paint to its box, not to the whole
+  clip. 500 small transparency groups on a Letter page rendered at 300 dpi in 7.6 s and now in 0.45 s, and 500
+  small masked paints, which took over a minute, in 0.3 s (#824).
 
 ## [0.13.0] - 2026-10-09
 

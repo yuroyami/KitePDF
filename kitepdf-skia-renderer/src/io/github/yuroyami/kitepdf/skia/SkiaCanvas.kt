@@ -708,12 +708,32 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
 
     /**
      * The last clip's box, else the page's, in the space of the draw calls: Skia's canvas does
-     * not tell its own clip (#795). Null inside a raster step, whose page box is in the pixels of
-     * the step's surface rather than in that space.
+     * not tell its own clip (#795). Those boxes are in device pixels, so they map back through
+     * the canvas's own matrix where it only scales and shifts; under a turn, and inside a raster
+     * step, whose page box is in the pixels of the step's surface, this is null.
      */
     override fun clipDeviceBounds(): KiteRectangle? {
         if (stepDepth > 0) return null
-        return (clipBounds.lastOrNull() ?: pageBounds)?.let { KiteRectangle(it[0], it[1], maxOf(it[0], it[2]), maxOf(it[1], it[3])) }
+        val box = clipBounds.lastOrNull() ?: pageBounds ?: return null
+        val m = localMatrix()
+        if (m.b != 0.0 || m.c != 0.0 || m.a == 0.0 || m.d == 0.0) return null
+        val x0 = (box[0] - m.e) / m.a
+        val x1 = (box[2] - m.e) / m.a
+        val y0 = (box[1] - m.f) / m.d
+        val y1 = (box[3] - m.f) / m.d
+        return KiteRectangle(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
+    }
+
+    /**
+     * The box of [bbox] under [ctm] in the canvas's local space, which a saved layer takes as its
+     * bounds and cuts to the clip, or null when it is not finite (#824).
+     */
+    private fun layerBounds(bbox: KiteRectangle, ctm: KiteMatrix): org.jetbrains.skia.Rect? {
+        val b = bbox.normalized()
+        val xs = doubleArrayOf(ctm.transformX(b.left, b.bottom), ctm.transformX(b.right, b.bottom), ctm.transformX(b.left, b.top), ctm.transformX(b.right, b.top))
+        val ys = doubleArrayOf(ctm.transformY(b.left, b.bottom), ctm.transformY(b.right, b.bottom), ctm.transformY(b.left, b.top), ctm.transformY(b.right, b.top))
+        if (!(xs + ys).all { it.isFinite() && kotlin.math.abs(it) < 1e9 }) return null
+        return org.jetbrains.skia.Rect.makeLTRB(xs.min().toFloat(), ys.min().toFloat(), xs.max().toFloat(), ys.max().toFloat())
     }
 
     /** How many raster steps are drawing their content now. */
@@ -834,10 +854,12 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         Paint().closing { paint ->
             paint.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
             paint.blendMode = blendMode.toSkia()
+            // ISO 32000-1, 11.6.6: the group is clipped to its box, so its layer is no larger (#824).
+            val bounds = layerBounds(bbox, ctm)
             if (!isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal) {
-                canvas.saveLayer(SkCanvas.SaveLayerRec(null, paint, null, null, SkCanvas.SaveLayerFlags(SkCanvas.SaveLayerFlagsSet.InitWithPrevious)))
+                canvas.saveLayer(SkCanvas.SaveLayerRec(bounds, paint, null, null, SkCanvas.SaveLayerFlags(SkCanvas.SaveLayerFlagsSet.InitWithPrevious)))
             } else {
-                canvas.saveLayer(null, paint)
+                canvas.saveLayer(bounds, paint)
             }
         }
         openLayers++
@@ -968,7 +990,10 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     ) {
         // Outer layer captures the content. Inner layer paints the mask
         // group on top with DstIn so the mask's alpha clips the content.
-        Paint().closing { canvas.saveLayer(null, it) }
+        // Outside the mask's box the mask is its backdrop's value, and the renderer passes the
+        // page box when that is not 0 (ISO 32000-1, 11.6.5.2, #384), so both layers stop at the box (#824).
+        val bounds = layerBounds(maskBBox, maskCtm)
+        Paint().closing { canvas.saveLayer(bounds, it) }
         openLayers++
         layers++
         // The content and the mask composite as usual, also inside a knockout group.
@@ -1005,7 +1030,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                     if (table != null) org.jetbrains.skia.ColorFilter.makeComposed(table, lum).also { composed = it } else lum
                 }
             }
-            canvas.saveLayer(null, maskPaint)
+            canvas.saveLayer(bounds, maskPaint)
             // The layer keeps its own copy of the paint and its filter.
             maskPaint.close(); composed?.close(); luminance?.close(); table?.close()
             openLayers++
