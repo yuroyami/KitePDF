@@ -438,4 +438,4 @@ To check a signed file, open it and call `validate` on its signature (see [Signa
 
 ## Raw objects
 
-`allocateReference`, `addObject`, `updateObject` and `setTrailerEntry` change the objects of the file directly. They need an opt-in to `@KiteRawApi`, because a wrong object can make a file that readers refuse. `addFlateStream` adds a compressed stream and returns its reference.
+`allocateReference`, `addObject`, `updateObject` and `setTrailerEntry` change the objects of the file directly. They need an opt-in to `@KiteRawApi`, because a wrong object can make a file that readers refuse. `addFlateStream` adds a compressed stream and returns its reference, and takes the same opt-in.

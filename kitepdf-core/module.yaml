@@ -41,7 +41,7 @@ dependencies:
 
 settings:
   kotlin:
-    optIns: [ kotlin.RequiresOptIn, kotlin.experimental.ExperimentalNativeApi ]
+    optIns: [ kotlin.RequiresOptIn, io.github.yuroyami.kitepdf.core.KiteRawApi, kotlin.experimental.ExperimentalNativeApi ]
   android:
     namespace: io.github.yuroyami.kitepdf.core
   publishing:

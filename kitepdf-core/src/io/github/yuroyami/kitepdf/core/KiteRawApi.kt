@@ -7,6 +7,16 @@ package io.github.yuroyami.kitepdf.core
  * not, and may change between minor releases without a deprecation cycle.
  * High-level API (pages, outlines, form fields, rendering, search) never
  * requires this opt-in.
+ *
+ * It covers `IndirectResolver.resolve`, so a call through the interface or any
+ * helper that takes the document as a resolver needs it too, and the members
+ * that hand out raw dictionaries and references or stage raw objects: the
+ * document's `xref`, `trailer`, `rawBytes`, `catalog` and `resolve`, a page's
+ * `reference`, `resources` and `annotationReferences`, and the editor's
+ * `allocateReference`, `addObject`, `updateObject`, `setTrailerEntry` and
+ * `addFlateStream` (#712). The object classes themselves (`PdfDictionary`,
+ * `PdfArray` and the rest) are not marked; a caller reaches the graph only
+ * through a marked member.
  */
 @RequiresOptIn(
     message = "Raw PDF object-model API: stable file format, unstable Kotlin surface. " +

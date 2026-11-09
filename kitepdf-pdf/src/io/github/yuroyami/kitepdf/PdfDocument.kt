@@ -170,7 +170,8 @@ public class PdfDocument private constructor(
     }
     private val objStreamCache = HashMap<Long, Map<Int, PdfObject>>()
 
-    /** The document catalog (/Root in the trailer). */
+    /** The document catalog (/Root in the trailer): a raw dictionary, which takes the [KiteRawApi] opt-in. */
+    @property:KiteRawApi
     public val catalog: PdfDictionary by lazy {
         val rootRef = trailer.getRef("Root")
             ?: throw PdfFormatException("Trailer has no /Root reference")

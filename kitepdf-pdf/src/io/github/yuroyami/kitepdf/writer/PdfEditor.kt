@@ -125,6 +125,7 @@ public class PdfEditor internal constructor(
      * Stage a new `/FlateDecode`-compressed stream from uncompressed [data]
      * (see [PdfStreams.flate]); returns the reference to it.
      */
+    @KiteRawApi
     public fun addFlateStream(data: ByteArray, extra: Map<String, PdfObject> = emptyMap()): PdfReference =
         addObject(PdfStreams.flate(data, extra))
 

@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.core.parser
 
+import io.github.yuroyami.kitepdf.core.KiteRawApi
+
 /**
  * Sealed hierarchy of PDF value types (ISO 32000-1 §7.3).
  *
@@ -162,7 +164,12 @@ public data class PdfReference(val objectNumber: Long, val generation: Int) : Pd
     override fun toString(): String = "$objectNumber $generation R"
 }
 
-/** Functional interface implemented by the document's xref-driven object cache. */
+/**
+ * Functional interface implemented by the document's xref-driven object cache. Resolving an
+ * object through it is raw object-model access, so it takes the [KiteRawApi] opt-in, as
+ * `PdfDocument.resolve` does (#712).
+ */
 public fun interface IndirectResolver {
+    @KiteRawApi
     public fun resolve(ref: PdfReference): PdfObject?
 }

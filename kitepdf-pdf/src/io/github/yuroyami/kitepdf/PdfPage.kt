@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 
 import io.github.yuroyami.kitepdf.core.KitePage
+import io.github.yuroyami.kitepdf.core.KiteRawApi
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
 
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
@@ -46,7 +47,7 @@ public class PdfPage internal constructor(
      * that stands for a kid that is no dictionary keeps the kid's reference,
      * so it can be removed, though it names no page dictionary (#585).
      */
-    public val reference: PdfReference? = null,
+    @property:KiteRawApi public val reference: PdfReference? = null,
 ) : KitePage {
 
     /** The raw page dictionary. The writer uses it to rebuild the page on edit. */
@@ -137,6 +138,7 @@ public class PdfPage internal constructor(
             return (((r + 45) / 90) * 90) % 360
         }
 
+    @KiteRawApi
     public val resources: PdfDictionary?
         get() = missingAsNull { node.getDict("Resources", document) } ?: inherited.resources
 
@@ -379,6 +381,7 @@ public class PdfPage internal constructor(
      * A caller that has an annotation's reference, such as a form field's widget, uses this to
      * find which page holds it, without building every annotation.
      */
+    @property:KiteRawApi
     public val annotationReferences: List<PdfReference> by lazy {
         node.getArray("Annots", document)?.filterIsInstance<PdfReference>() ?: emptyList()
     }
