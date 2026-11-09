@@ -54,12 +54,13 @@ class ZoomedPanSceneTest {
     private fun withZoomedPager(
         direction: LayoutDirection = LayoutDirection.Ltr,
         userScrollEnabled: Boolean = true,
+        zoomSpec: KiteZoomSpec = KiteZoomSpec(),
         block: (ImageComposeScene, KiteDocViewState, SceneTestDriver) -> Unit,
     ) {
         val state = KiteDocViewState(pagesPdf(3))
         ImageComposeScene(width = 200, height = 300, density = Density(1f)) {
             CompositionLocalProvider(LocalLayoutDirection provides direction) {
-                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged(), userScrollEnabled = userScrollEnabled)
+                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged(), userScrollEnabled = userScrollEnabled, zoomSpec = zoomSpec)
             }
         }.use { scene ->
             val driver = SceneTestDriver(scene)
@@ -148,6 +149,16 @@ class ZoomedPanSceneTest {
             driver.pumpFrames(10)
             assertTrue(state.panOffset.y < before - 1f, "the wheel did not pan: ${state.panOffset.y}")
             assertEquals(0, state.currentPage)
+        }
+    }
+
+    /** A page the reader cannot pan does not hold the swipe, so a drag still turns it (#648). */
+    @Test
+    fun with_pan_off_a_zoomed_page_still_swipes() {
+        val spec = KiteZoomSpec(pinchEnabled = false, doubleTapEnabled = false, panEnabled = false, maxZoom = 4f)
+        withZoomedPager(zoomSpec = spec) { scene, state, driver ->
+            drag(scene, 190f, 10f, steps = 20, msPerStep = 10)
+            driver.pumpUntilState { state.currentPage == 1 }
         }
     }
 }

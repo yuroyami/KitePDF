@@ -194,9 +194,11 @@ public enum class KitePageFit {
  * @param doubleTapEnabled double-tap toggles between [minZoom] and [doubleTapZoom].
  * @param doubleTapZoom the zoom a double tap goes to. It must be finite and above 0, and a
  *   double tap clamps it into [minZoom]..[maxZoom], as every zoom change is clamped.
- * @param panEnabled one-finger pan while zoomed in. A quick release lets the pan go on and
- *   slow down, and in [KiteDocLayout.Paged] and [KiteDocLayout.Spread] a drag that goes on past
- *   the edge of the page turns it.
+ * @param panEnabled one-finger pan, and the wheel's pan, of a page that overflows the view:
+ *   zoomed in, or a page fit to the width that is taller than the view, as a `scrolled-doc`
+ *   chapter is. A quick release lets the pan go on and slow down, and in [KiteDocLayout.Paged]
+ *   and [KiteDocLayout.Spread] a drag that goes on past the edge of the page turns it. With it
+ *   off, a pager swipes whatever the page's size (#648).
  * @param resetZoomOnPageChange in [KiteDocLayout.Paged] and [KiteDocLayout.Spread], go back
  *   to fit, zoom 1 clamped into [minZoom]..[maxZoom], when the reader lands on another page or
  *   spread, as [KiteDocViewState.resetZoom] does. The page a
@@ -221,11 +223,15 @@ public data class KiteZoomSpec(
     }
 
     public companion object {
-        /** No zoom at all: gestures off, range pinned to 1. */
+        /**
+         * No zoom at all: pinch and double tap off, range pinned to 1. The pan stays on, since a
+         * page fit to the width that is taller than the view, as a `scrolled-doc` chapter is,
+         * reads by panning down it at zoom 1 (#648).
+         */
         public val Disabled: KiteZoomSpec = KiteZoomSpec(
             pinchEnabled = false,
             doubleTapEnabled = false,
-            panEnabled = false,
+            panEnabled = true,
             minZoom = 1f,
             maxZoom = 1f,
         )

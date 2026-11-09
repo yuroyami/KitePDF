@@ -430,6 +430,8 @@ internal fun Modifier.kiteWheelPaging(
     state: KiteDocViewState,
     layout: KiteDocLayout,
     enabled: Boolean,
+    /** [KiteZoomSpec.panEnabled]: the wheel pans a page that overflows only where the finger does (#648). */
+    panEnabled: Boolean = true,
     scope: CoroutineScope,
 ): Modifier {
     val spread = when (layout) {
@@ -438,7 +440,7 @@ internal fun Modifier.kiteWheelPaging(
         else -> null
     }
     // A continuous strip scrolls with the wheel itself.
-    val pans = layout !is KiteDocLayout.Continuous
+    val pans = layout !is KiteDocLayout.Continuous && panEnabled
     // Panning a page that overflows is not paging, so it stays on when [enabled] is false; only
     // the turn follows it (#650).
     val turns = spread.takeIf { enabled }

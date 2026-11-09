@@ -915,6 +915,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pixel wide, where they drew it a quality's share of one (#665).
 - With `userScrollEnabled = false`, no gesture turns the page: a drag past the edge of a page that overflows no
   longer turns it in `Paged` and `Spread`, while the wheel goes on panning such a page as the finger does (#650).
+- With `KiteZoomSpec.panEnabled` false, a page that overflows a pager no longer locks its swipe, so touch can
+  still turn it, and the wheel's pan follows the same flag. `KiteZoomSpec.Disabled` now keeps the pan on, so a
+  `scrolled-doc` chapter fit to the width can still be read down at zoom 1 (#648).
 
 ## [0.13.0] - 2026-10-09
 

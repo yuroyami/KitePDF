@@ -470,7 +470,7 @@ public fun KiteDocView(
                 true
             }
             .focusable()
-            .kiteWheelPaging(state, layout, enabled = userScrollEnabled, scope = tapScope)
+            .kiteWheelPaging(state, layout, enabled = userScrollEnabled, panEnabled = zoomSpec.panEnabled, scope = tapScope)
             .kitePointerKind(state)
             .pointerInput(keyFocus) {
                 awaitEachGesture {
@@ -1235,7 +1235,8 @@ private fun PagedLayout(
     val overflows by remember(state) { derivedStateOf { state.overflows } }
     // A page turn that code started keeps the pager's drag off, so a tap during it reaches the page (#455).
     val turning by remember(pagerAdapter) { derivedStateOf { pagerAdapter.isTurning } }
-    val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive && !turning
+    // A page the reader cannot pan does not take the swipe away, or a drag would reach neither (#648).
+    val pagerScrollEnabled = userScrollEnabled && !(overflows && zoomSpec.panEnabled) && !state.isSelectionActive && !turning
     val pagerModifier = Modifier.fillMaxSize().then(pagerPlace.modifier).kiteStrayTaps(onTap)
     when (layout.orientation) {
         Orientation.Horizontal -> HorizontalPager(
@@ -2287,7 +2288,8 @@ private fun SpreadLayout(
     val overflows by remember(state) { derivedStateOf { state.overflows } }
     // A spread turn that code started keeps the pager's drag off, so a tap during it reaches the page (#455).
     val turning by remember(state) { derivedStateOf { (state.adapter as? SpreadScrollAdapter)?.isTurning == true } }
-    val pagerScrollEnabled = userScrollEnabled && !overflows && !state.isSelectionActive && !turning
+    // A page the reader cannot pan does not take the swipe away, or a drag would reach neither (#648).
+    val pagerScrollEnabled = userScrollEnabled && !(overflows && zoomSpec.panEnabled) && !state.isSelectionActive && !turning
     val pagerPlace = remember { NodePlace() }
     val spreadContent: @Composable (Int) -> Unit = spreadContent@{ spread ->
         val isCurrent = spread == pagerState.currentPage
