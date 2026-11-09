@@ -439,6 +439,8 @@ public fun KiteDocView(
     }
 
     // A link that an element of the page overlay opens goes the way of a tapped link (#41).
+    // Snapshot state: an overlay that reads it recomposes when its page comes on screen or leaves (#709).
+    val overlayOnScreen: (Int) -> Boolean = remember(state) { { pageIndex -> pageIndex in state.visiblePages } }
     val overlayLinks: (Int, String, KiteRectangle) -> Boolean = remember(state, tapScope) {
         { pageIndex, href, rect -> followOverlayLink(state, tapScope, currentLinkTap, pageIndex, href, rect) }
     }
@@ -484,6 +486,7 @@ public fun KiteDocView(
                     LocalKitePageOverlay provides pageOverlay,
                     LocalViewerTap provides linkAwareTap,
                     LocalOverlayLinks provides overlayLinks,
+                    LocalOverlayOnScreen provides overlayOnScreen,
                 ) {
                     when (layout) {
                         is KiteDocLayout.Continuous -> ContinuousLayout(

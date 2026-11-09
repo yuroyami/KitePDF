@@ -874,6 +874,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tries again when the host changes either: the play button comes back, and an autoplay element starts (#716).
 - An open media player follows the `session` and `place` that `EpubMediaPlayer` is composed with now: a new
   session takes the player over without closing it, and the player keeps its position under the new place (#717).
+- In a Paged or Spread layout, a media element pauses when the reader turns its page away, and an autoplay
+  element waits until its page is on screen. The new `KitePageOverlayScope.isOnScreen` tells an overlay whether
+  its page is in the viewport, and `EpubMediaPlayer` takes it as `onScreen` (#709).
 
 ## [0.13.0] - 2026-10-09
 

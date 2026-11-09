@@ -33,6 +33,15 @@ public interface KitePageOverlayScope {
     public val page: KitePage
 
     /**
+     * True while the page is at least partly in the viewport, as [KiteDocViewState.visiblePages]
+     * counts it. A pager composes [KiteDocLayout.Paged.offscreenPages] pages on each side of the
+     * one on screen, so an element that plays or moves waits for this before it starts, and
+     * stops when it turns false (#709). It is snapshot state, so a composition that reads it
+     * recomposes when it changes. True by default.
+     */
+    public val isOnScreen: Boolean get() = true
+
+    /**
      * Sizes the element to [rect] and places it there. [rect] is in the display space of the
      * page: the space of [KiteDocViewState.hitTestDisplay], of search hits, and of the links and
      * media elements of an EPUB page.
@@ -60,6 +69,9 @@ public interface KitePageOverlayScope {
 
 /** The `pageOverlay` of the viewer that composes the page. */
 internal val LocalKitePageOverlay = compositionLocalOf<(@Composable KitePageOverlayScope.() -> Unit)?> { null }
+
+/** Whether the page of an index is in the viewport, which [KitePageOverlayScope.isOnScreen] reads. */
+internal val LocalOverlayOnScreen = staticCompositionLocalOf<(Int) -> Boolean> { { true } }
 
 /** Follows a link that an overlay element opens: a page index, an href and its area on the page. */
 internal val LocalOverlayLinks = staticCompositionLocalOf<(Int, String, KiteRectangle) -> Boolean> { { _, _, _ -> false } }
@@ -91,7 +103,8 @@ internal fun PageOverlay(
     modifier: Modifier,
 ) {
     val links = LocalOverlayLinks.current
-    val scope = remember(page, pageIndex, links) { PageOverlayScope(pageIndex, page, links) }
+    val onScreen = LocalOverlayOnScreen.current
+    val scope = remember(page, pageIndex, links, onScreen) { PageOverlayScope(pageIndex, page, links, onScreen) }
     Layout(content = { scope.content() }, modifier = modifier) { measurables, constraints ->
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth else 0
         val height = if (constraints.hasBoundedHeight) constraints.maxHeight else 0
@@ -123,7 +136,10 @@ private class PageOverlayScope(
     override val pageIndex: Int,
     override val page: KitePage,
     private val links: (Int, String, KiteRectangle) -> Boolean,
+    private val onScreen: (Int) -> Boolean,
 ) : KitePageOverlayScope {
+    override val isOnScreen: Boolean get() = onScreen(pageIndex)
+
     override fun Modifier.displayRect(rect: KiteRectangle): Modifier = this then OverlayRectElement(rect.normalized())
 
     override fun Modifier.pageRect(rect: KiteRectangle): Modifier = this then OverlayRectElement(page.pageToDisplay(rect))

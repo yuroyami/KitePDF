@@ -141,6 +141,35 @@ class MediaSessionSceneTest {
         assertTrue(paused, "the first element plays on with the element of its new session")
     }
 
+    /** In a pager, autoplay waits for its page, and a page the reader turns away from pauses (#709). */
+    @Test
+    fun a_pager_plays_only_the_page_on_screen() = runComposeUiTest {
+        val doc = book(
+            """<video src="clip.mp4" width="160" height="120" controls="controls" loop="loop"></video>""" +
+                """<div style="break-before: page"><video src="other.mp4" width="160" height="120" autoplay="autoplay" loop="loop"></video></div>""",
+            files = mapOf("clip.mp4" to fixture("clip.mp4"), "other.mp4" to fixture("clip.mp4")),
+        )
+        val session = KiteMediaSession()
+        val state = KiteDocViewState(doc)
+        setContent {
+            KiteDocView(state, Modifier.size(400.dp, 600.dp), layout = KiteDocLayout.Paged(), pageOverlay = { KiteMediaOverlay(newPlayer = ::newPlayer, session = session) })
+        }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithContentDescription("Play").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(2, doc.pageCount, "each video has a page of its own")
+        // The next page is composed beside the current one, and its autoplay element waits.
+        waitForIdle()
+        Thread.sleep(500)
+        waitForIdle()
+        assertTrue(players.isEmpty(), "the next page's element started before the reader turned to it")
+
+        onAllNodesWithContentDescription("Play")[0].performClick()
+        waitUntil(timeoutMillis = 30_000) { players.size == 1 && players[0].state.value.status.isActive }
+        runOnIdle { runBlocking { state.scrollTo(KiteLocation(0, 1), animate = false) } }
+        val paused = runCatching { waitUntil(timeoutMillis = 10_000) { !players[0].state.value.status.isActive } }.isSuccess
+        assertTrue(paused, "the page the reader turned away from plays on")
+        waitUntil(timeoutMillis = 30_000) { players.size == 2 && players[1].state.value.status.isActive }
+    }
+
     @Test
     fun a_session_forgets_the_oldest_places_past_its_bound() {
         val session = KiteMediaSession()

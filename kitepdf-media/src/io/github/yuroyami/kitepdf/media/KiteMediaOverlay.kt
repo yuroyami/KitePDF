@@ -131,6 +131,7 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
                 labels = labels,
                 session = session,
                 place = "$book|${epubPage.chapter}|$name|$twin",
+                onScreen = isOnScreen,
             )
         }
     }
@@ -167,7 +168,9 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  * video asks the window scene for landscape. Both turn back to the orientation they found when
  * full screen ends.
  *
- * The player is closed when this leaves the composition, so a page that scrolls away stops. With
+ * The player is closed when this leaves the composition, so a page that scrolls away stops. A
+ * pager keeps the pages next to the current one composed, so the element also pauses when
+ * [onScreen] turns false, and autoplay waits until it is true (#709). With
  * a [place], [session] keeps where it stopped, and the element shows that place, paused, when it
  * comes back. Starting it pauses any other element of [session] that plays. When the app leaves
  * the screen, a video pauses and an audio element follows [KiteMediaSession.audioInBackground].
@@ -180,6 +183,8 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
  *   under which [session] keeps where it stopped. Null keeps no place. The player belongs to the
  *   session and keeps its place under the name it is composed with when it closes, so a new
  *   [session] or [place] applies to an open player too.
+ * @param onScreen whether the page of the element is in the viewport. [KiteMediaOverlay] passes
+ *   [KitePageOverlayScope.isOnScreen].
  */
 @Composable
 public fun EpubMediaPlayer(
@@ -191,6 +196,7 @@ public fun EpubMediaPlayer(
     labels: KiteMediaLabels = KiteMediaLabels(),
     session: KiteMediaSession = KiteMediaSession.Default,
     place: String? = null,
+    onScreen: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
     val currentNewPlayer by rememberUpdatedState(newPlayer)
@@ -241,11 +247,12 @@ public fun EpubMediaPlayer(
 
     // Keyed on allowRemote too: an element that could not play its remote source tries again when
     // the host allows it. An element the reader opened has its player, so this does not restart it.
-    LaunchedEffect(media, allowRemote) {
+    LaunchedEffect(media, allowRemote, onScreen) {
         when {
             // An element the reader played shows where it stopped, paused, and autoplay does not start it again.
             place != null && session.placeOf(place) != null -> start(byAutoplay = false, paused = true)
-            media.autoplay -> start(byAutoplay = true)
+            // A pager composes the pages next to the current one, and autoplay waits until its page shows (#709).
+            media.autoplay && onScreen -> start(byAutoplay = true)
         }
     }
     val open = player
@@ -268,6 +275,16 @@ public fun EpubMediaPlayer(
         onDispose { if (open != null) session.unregister(open) }
     }
     if (open != null) {
+        // A page the reader turned away from pauses what it plays, though a pager keeps it composed (#709).
+        LaunchedEffect(open, onScreen) {
+            if (!onScreen && open.state.value.status.isActive) {
+                try {
+                    open.pause()
+                } catch (failure: IllegalStateException) {
+                    // Closed meanwhile.
+                }
+            }
+        }
         LaunchedEffect(open) {
             open.state.map { it.status.isActive }.distinctUntilChanged().collect { active -> if (active) currentSession.started(open) }
         }

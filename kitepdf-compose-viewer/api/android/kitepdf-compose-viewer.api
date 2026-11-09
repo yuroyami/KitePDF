@@ -388,11 +388,13 @@ public abstract interface class io/github/yuroyami/kitepdf/compose/KitePageOverl
 	public fun followLink (Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;)Z
 	public abstract fun getPage ()Lio/github/yuroyami/kitepdf/core/KitePage;
 	public abstract fun getPageIndex ()I
+	public fun isOnScreen ()Z
 	public abstract fun pageRect (Landroidx/compose/ui/Modifier;Lio/github/yuroyami/kitepdf/core/KiteRectangle;)Landroidx/compose/ui/Modifier;
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KitePageOverlayScope$DefaultImpls {
 	public static fun followLink (Lio/github/yuroyami/kitepdf/compose/KitePageOverlayScope;Ljava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteRectangle;)Z
+	public static fun isOnScreen (Lio/github/yuroyami/kitepdf/compose/KitePageOverlayScope;)Z
 }
 
 public final class io/github/yuroyami/kitepdf/compose/KitePageRasterizer {

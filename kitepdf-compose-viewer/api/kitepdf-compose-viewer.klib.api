@@ -61,6 +61,8 @@ abstract interface io.github.yuroyami.kitepdf.compose/KitePageOverlayScope { // 
         abstract fun <get-page>(): io.github.yuroyami.kitepdf.core/KitePage // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.page.<get-page>|<get-page>(){}[0]
     abstract val pageIndex // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.pageIndex|{}pageIndex[0]
         abstract fun <get-pageIndex>(): kotlin/Int // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.pageIndex.<get-pageIndex>|<get-pageIndex>(){}[0]
+    open val isOnScreen // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.isOnScreen|{}isOnScreen[0]
+        open fun <get-isOnScreen>(): kotlin/Boolean // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.isOnScreen.<get-isOnScreen>|<get-isOnScreen>(){}[0]
 
     abstract fun (androidx.compose.ui/Modifier).displayRect(io.github.yuroyami.kitepdf.core/KiteRectangle): androidx.compose.ui/Modifier // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.displayRect|displayRect@androidx.compose.ui.Modifier(io.github.yuroyami.kitepdf.core.KiteRectangle){}[0]
     abstract fun (androidx.compose.ui/Modifier).pageRect(io.github.yuroyami.kitepdf.core/KiteRectangle): androidx.compose.ui/Modifier // io.github.yuroyami.kitepdf.compose/KitePageOverlayScope.pageRect|pageRect@androidx.compose.ui.Modifier(io.github.yuroyami.kitepdf.core.KiteRectangle){}[0]
