@@ -972,7 +972,8 @@ public class ComposeCanvas internal constructor(
      * The raster step (#209, #308): its box is [region] under [ctm], in the units of the draw
      * scope, cut to the clip and rounded out to whole units. It works at [magnification] pixels a
      * unit, so a step on a zoomed Vectorized page keeps the detail on screen, and past
-     * [STEP_MAX_PIXELS] at a lower resolution. Only a rasterizer's canvas, which knows the bitmap
+     * [STEP_MAX_PIXELS] at a lower resolution. A step whose buffers would pass [stepMaxBytes]
+     * declines, so its group paints as a layer (#789). Only a rasterizer's canvas, which knows the bitmap
      * it draws into, reads a backdrop, and only outside every layer.
      */
     override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
@@ -990,6 +991,8 @@ public class ComposeCanvas internal constructor(
         val wanted = magnification.toDouble().coerceAtLeast(1.0)
         if (units * wanted * wanted > STEP_MAX_PIXELS * 16) return false
         val scale = if (units * wanted * wanted > STEP_MAX_PIXELS) sqrt(STEP_MAX_PIXELS / units) else wanted
+        val pixels = kotlin.math.ceil((right - left) * scale) * kotlin.math.ceil((bottom - top) * scale)
+        if (pixels * STEP_BYTES_PER_PIXEL > stepMaxBytes()) return false
         return step.run(ComposeRasterScope(left.toInt(), top.toInt(), (right - left).toInt(), (bottom - top).toInt(), scale, ctm))
     }
 

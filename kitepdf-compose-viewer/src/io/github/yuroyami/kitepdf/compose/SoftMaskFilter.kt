@@ -25,6 +25,25 @@ internal const val MASK_MAX_PIXELS: Double = 1_048_576.0
 internal const val STEP_MAX_PIXELS: Double = 16_777_216.0
 
 /**
+ * About the bytes a raster step holds at once for each of its pixels: the backdrop, two renders,
+ * each a bitmap and its copy read back, an RGBA copy of the backdrop, the group without its
+ * backdrop and the RGBA copy drawn back. 36, as measured with an A4 page (#789).
+ */
+internal const val STEP_BYTES_PER_PIXEL: Long = 36L
+
+/**
+ * The most bytes the buffers of one raster step take: a quarter of the heap where the platform
+ * tells its size, so a 192 MB heap gives 48 MB, about 1.3 million pixels. A larger step declines,
+ * and the group paints as a layer, as where the canvas cannot read the backdrop (#789).
+ */
+internal fun stepMaxBytes(): Long = stepBudgetForTest ?: platformStepMaxBytes()
+
+/** A budget a test sets in place of the platform's. */
+internal var stepBudgetForTest: Long? = null
+
+internal expect fun platformStepMaxBytes(): Long
+
+/**
  * A colour matrix that moves the luminosity of a colour into its alpha, with the weights of [kind]:
  * 0.30 R + 0.59 G + 0.11 B for a PDF mask, as every other canvas computes it, and the CSS weights
  * for an SVG mask (#799, #821). It clears the colour.
