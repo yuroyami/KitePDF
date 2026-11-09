@@ -4,6 +4,7 @@ public final class io/github/yuroyami/kitepdf/nativerenderer/AndroidNativeCanvas
 	public fun applySoftMask (Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)V
 	public fun beginPage (DDLio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public fun beginTransparencyGroup (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public fun clipDeviceBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public fun drawGlyphs (Ljava/util/List;DIZLio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;D)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V

@@ -1660,6 +1660,7 @@ public abstract interface class io/github/yuroyami/kitepdf/core/render/KiteCanva
 	public abstract fun beginPage (DDLio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public fun beginTransparencyGroup (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
 	public static synthetic fun beginTransparencyGroup$default (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;ILjava/lang/Object;)V
+	public fun clipDeviceBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public abstract fun drawGlyphs (Ljava/util/List;DIZLio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
 	public static synthetic fun drawGlyphs$default (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Ljava/util/List;DIZLio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;ILjava/lang/Object;)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;D)V
@@ -1685,6 +1686,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteCanvas$DefaultImpl
 	public static fun applySoftMask (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)V
 	public static fun beginTransparencyGroup (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
 	public static synthetic fun beginTransparencyGroup$default (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;ILjava/lang/Object;)V
+	public static fun clipDeviceBounds (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;)Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public static synthetic fun drawGlyphs$default (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Ljava/util/List;DIZLio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;ILjava/lang/Object;)V
 	public static fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;D)V
 	public static fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
@@ -2192,6 +2194,7 @@ public final class io/github/yuroyami/kitepdf/core/render/KiteRasterCanvas : io/
 	public fun beginTransparencyGroup (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
 	public final fun clear (Lio/github/yuroyami/kitepdf/core/render/RgbColor;D)V
 	public static synthetic fun clear$default (Lio/github/yuroyami/kitepdf/core/render/KiteRasterCanvas;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DILjava/lang/Object;)V
+	public fun clipDeviceBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public fun drawGlyphs (Ljava/util/List;DIZLio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;D)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
@@ -2422,6 +2425,7 @@ public final class io/github/yuroyami/kitepdf/core/render/NoopCanvas : io/github
 	public fun applySoftMask (Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)V
 	public fun beginPage (DDLio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public fun beginTransparencyGroup (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public fun clipDeviceBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public fun drawGlyphs (Ljava/util/List;DIZLio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;D)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
@@ -2471,6 +2475,7 @@ public final class io/github/yuroyami/kitepdf/core/render/RecordingCanvas : io/g
 	public fun applySoftMask (Lio/github/yuroyami/kitepdf/core/render/SoftMask$Kind;Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)V
 	public fun beginPage (DDLio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public fun beginTransparencyGroup (Lio/github/yuroyami/kitepdf/core/KiteRectangle;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;ZZDLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
+	public fun clipDeviceBounds ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
 	public fun drawGlyphs (Ljava/util/List;DIZLio/github/yuroyami/kitepdf/core/font/FontSpec;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/core/render/RgbColor;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;D)V
 	public fun drawImage (Lio/github/yuroyami/kitepdf/core/render/KiteImageData;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;DLio/github/yuroyami/kitepdf/core/render/KiteBlendMode;)V

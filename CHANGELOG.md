@@ -969,6 +969,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cache and was built again at every render. Five million `0 0 m` operators, a 44 KB file, rendered with a live
   heap of about 800 MB and now about 170 MB, in a fifth of the time. A move right after a move replaces it in the
   current path, since a lone move paints nothing (#978).
+- `KiteCanvas.clipDeviceBounds` tells the box that a paint can reach: the surface or layer cut to the clips.
+  `KiteRasterCanvas`, the Skia canvas and the Compose canvas of a rasterizer answer it, and a mesh shading
+  rasterizes only that box. A tile of a page zoomed 40 times rasterized the whole page at a third of a pixel to a
+  pixel, with an edge 5.5 pixels wide, and now rasterizes the tile at full resolution (#795).
 
 ## [0.13.0] - 2026-10-09
 

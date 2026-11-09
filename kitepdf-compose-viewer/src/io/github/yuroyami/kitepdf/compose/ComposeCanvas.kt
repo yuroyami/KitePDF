@@ -936,6 +936,18 @@ public class ComposeCanvas internal constructor(
         clipBounds.addLast(Rect(maxOf(inner.left, outer.left), maxOf(inner.top, outer.top), minOf(inner.right, outer.right), minOf(inner.bottom, outer.bottom)))
     }
 
+    /**
+     * For a rasterizer's canvas, the last clip's box, else a raster step's, else the bitmap, such
+     * as the tile of a zoomed page (#795). Null for any other canvas: the size of its draw scope
+     * is not in the units of the draw calls under a transform the host made, such as the scale of
+     * a mask group, and each clip box is cut to that size.
+     */
+    override fun clipDeviceBounds(): KiteRectangle? {
+        val bitmap = target ?: return null
+        val r = clipBounds.lastOrNull() ?: stepBounds ?: Rect(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat())
+        return KiteRectangle(r.left.toDouble(), r.top.toDouble(), maxOf(r.left, r.right).toDouble(), maxOf(r.top, r.bottom).toDouble())
+    }
+
     override fun popClip() {
         // The renderer pops a clip before it ends the group the clip was pushed in. A pop that
         // finds a layer on top would restore that layer instead, so it is ignored.

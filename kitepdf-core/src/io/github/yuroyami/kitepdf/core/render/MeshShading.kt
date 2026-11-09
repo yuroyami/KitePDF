@@ -465,7 +465,8 @@ public fun KiteCanvas.paintComplexShading(
  * it at the same points. d is at least 3, MuPDF's 8 by 8, and grows until no quad strays
  * more than [MESH_FLATNESS] device pixels from its corners.
  *
- * The image covers the mesh, cut to [clipPath] and to the /BBox of the shading. Past
+ * The image covers the mesh, cut to [clipPath], to the /BBox of the shading and to the
+ * canvas's [KiteCanvas.clipDeviceBounds], so it holds only what can show. Past
  * [MESH_MAX_PIXELS] it is drawn at a lower resolution and scaled up.
  */
 private fun KiteCanvas.paintMesh(shading: KiteShading, ctm: KiteMatrix, clipPath: KitePath?, alpha: Double, blendMode: KiteBlendMode) {
@@ -490,6 +491,10 @@ private fun KiteCanvas.paintMesh(shading: KiteShading, ctm: KiteMatrix, clipPath
         else -> return
     }
     if (clipPath != null) box.intersect(DeviceBox().apply { addPath(clipPath, ctm) })
+    // Only what can show: a tile of a zoomed page cuts the mesh to the tile (#795).
+    clipDeviceBounds()?.let { c ->
+        box.intersect(DeviceBox().apply { minX = c.left; minY = c.bottom; maxX = c.right; maxY = c.top })
+    }
     shading.bbox?.let { b ->
         box.intersect(DeviceBox().apply {
             add(ctm, b.left, b.bottom); add(ctm, b.right, b.bottom); add(ctm, b.right, b.top); add(ctm, b.left, b.top)

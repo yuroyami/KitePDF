@@ -694,6 +694,19 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         )
     }
 
+    /**
+     * The last clip's box, else the page's, in the space of the draw calls: Skia's canvas does
+     * not tell its own clip (#795). Null inside a raster step, whose page box is in the pixels of
+     * the step's surface rather than in that space.
+     */
+    override fun clipDeviceBounds(): KiteRectangle? {
+        if (stepDepth > 0) return null
+        return (clipBounds.lastOrNull() ?: pageBounds)?.let { KiteRectangle(it[0], it[1], maxOf(it[0], it[2]), maxOf(it[1], it[3])) }
+    }
+
+    /** How many raster steps are drawing their content now. */
+    private var stepDepth = 0
+
     override fun popClip() {
         if (openLayers > 0) {
             canvas.restore()
@@ -1095,8 +1108,10 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                     groups.clear()
                     clipBounds.clear()
                     pageBounds = doubleArrayOf(0.0, 0.0, width.toDouble(), height.toDouble())
+                    stepDepth++
                     content()
                 } finally {
+                    stepDepth--
                     // Saves the content left open end on the surface.
                     offscreen.restoreToCount(1)
                     canvas = savedCanvas

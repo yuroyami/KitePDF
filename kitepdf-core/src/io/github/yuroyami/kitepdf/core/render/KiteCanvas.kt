@@ -275,6 +275,17 @@ public interface KiteCanvas {
      * canvas, so a wrapper that delegates with `by` sees those paints without overriding this.
      */
     public fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean = false
+
+    /**
+     * A box that holds every pixel a paint can reach now: the surface, or the layer drawn into,
+     * cut to the clips pushed so far, in the space that the `ctm` of a draw call maps to. Its
+     * [KiteRectangle.left] and [KiteRectangle.bottom] hold the smaller x and y, whichever way y
+     * runs. A paint that rasterizes in its own box, such as a mesh shading, cuts that box to it,
+     * so a viewer tile at a high zoom rasterizes only the tile (#795).
+     *
+     * Null, the default, when the canvas does not know it; the paint then keeps its own box.
+     */
+    public fun clipDeviceBounds(): KiteRectangle? = null
 }
 
 /** The unit square that an image fills in its own space (ISO 32000-1, 8.9.4). */

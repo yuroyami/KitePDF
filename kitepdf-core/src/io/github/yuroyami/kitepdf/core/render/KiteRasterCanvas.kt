@@ -85,6 +85,19 @@ public class KiteRasterCanvas(
     /** The clip that drawing into the current layer goes through, or null for none. */
     private val clip: Clip? get() = if (clips.size > target.clipBase) clips.last() else null
 
+    override fun clipDeviceBounds(): KiteRectangle {
+        val layer = target
+        var left = layer.left
+        var top = layer.top
+        var right = layer.left + layer.w
+        var bottom = layer.top + layer.h
+        clip?.let { c ->
+            left = maxOf(left, c.left); top = maxOf(top, c.top)
+            right = minOf(right, c.right); bottom = minOf(bottom, c.bottom)
+        }
+        return KiteRectangle(left.toDouble(), top.toDouble(), maxOf(left, right).toDouble(), maxOf(top, bottom).toDouble())
+    }
+
     /** The pixels as straight ARGB. */
     public fun toRaster(): KiteRaster {
         val src = layers.first().pixels
