@@ -985,6 +985,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Compose canvas counts the buffers of a raster step, about 36 bytes a pixel, against a quarter of the heap,
   or 256 MB on Apple platforms and 128 MB in a browser. A non-isolated group whose paints blend, which needed 227
   MB to rasterize at 2160 by 3056 and failed in a 192 MB heap, paints as a layer past that budget (#789).
+- In EPUB layout a percentage width, min-width, max-width, margin, padding or text-indent is a share of its
+  containing block, not of the page. Two nested `width: 50%` boxes on a 300 point page were both 150 points wide
+  and are now 150 and 75, and a `width: 100%` table in a blockquote fills the blockquote instead of running past
+  the page (#838).
 
 ## [0.13.0] - 2026-10-09
 

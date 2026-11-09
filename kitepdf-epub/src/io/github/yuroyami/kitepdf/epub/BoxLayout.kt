@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.core.font.OpenTypeGsub
 import io.github.yuroyami.kitepdf.svg.SvgImage
 
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.within
 import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssClear
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
@@ -253,7 +254,8 @@ internal class BoxLayout(
      * each block between the root and the child it is at.
      */
     private inner class BlockFrame(val box: BlockBox, xLeft: Double, availWidth: Double, topY: Double, forcedWidth: Double?) {
-        private val s = box.style
+        // Percentages of widths are of this box's containing block, the room it is given (#838).
+        private val s = box.style.within(availWidth)
         // A positioned box is the containing block for its out-of-flow
         // descendants, so it opens one and fills it in once its size is known.
         private val savedCb = currentCb
@@ -1546,7 +1548,7 @@ internal class BoxLayout(
     // ---- tables --------------------------------------------------------------
 
     private fun layoutTable(box: TableBox, contentLeft: Double, availWidth: Double, topY: Double) {
-        val s = box.style
+        val s = box.style.within(availWidth)
         val bL = s.borderLeft.effective; val bR = s.borderRight.effective
         // border-spacing (or the cellspacing hint) separates cells; collapse zeroes it.
         val spacing = if (s.borderCollapse) 0.0 else s.borderSpacingPt.coerceAtLeast(0.0)
@@ -1668,7 +1670,7 @@ internal class BoxLayout(
         availWidth: Double,
         topY: Double,
     ) {
-        val s = box.style
+        val s = box.style.within(availWidth)
         val bL = s.borderLeft.effective; val bR = s.borderRight.effective
         val allCells = box.rows.flatMap { it.cells }
         val rowCount = box.rows.size
@@ -1827,6 +1829,8 @@ internal class BoxLayout(
         style: ComputedStyle, marker: String?, markerColor: RgbColor,
     ): List<PositionedLine> {
         val preserve = style.whiteSpace != WhiteSpaceMode.NORMAL && style.whiteSpace != WhiteSpaceMode.NOWRAP
+        // A percentage indent is of the block's width, which is the width of its lines here (CSS 2.1, 16.1; #838).
+        val textIndent = style.percents?.get("text-indent")?.let { it * contentW } ?: style.textIndentPt
         val baseLevel = if (style.direction == Direction.RTL) 1 else 0
         val rtl = baseLevel == 1
         val align = resolvedAlign(style)
@@ -1853,7 +1857,7 @@ internal class BoxLayout(
             tokenize(runs, style.hyphensAuto, contentW, bidiLevels(runs, baseLevel), inlineImageRoom(style)), contentW, preserve, availAt,
             // Negative (hanging) indents keep today's behaviour: only a
             // positive indent eats into the first line's budget.
-            firstLineIndent = style.textIndentPt.coerceAtLeast(0.0),
+            firstLineIndent = textIndent.coerceAtLeast(0.0),
             ends = ends,
         )
         val lengths = sourceLengths(cellLines, runs)
@@ -1900,7 +1904,7 @@ internal class BoxLayout(
             val (leftInset, rightInset) = insetsFor(i)
             val lineAvail = (contentW - leftInset - rightInset).coerceAtLeast(1.0)
             val (lineWidth, interiorSpaces) = measure(cells)
-            val firstIndent = if (i == 0) style.textIndentPt else 0.0
+            val firstIndent = if (i == 0) textIndent else 0.0
             val slack = (lineAvail - lineWidth - firstIndent).coerceAtLeast(0.0)
             val lastOfRun = i == cellLines.lastIndex || ends.getOrNull(i) == KiteLineEnd.HARD
             val lineAlign = if (lastOfRun) lastAlign else align

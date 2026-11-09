@@ -276,6 +276,13 @@ internal data class ComputedStyle(
      * draw an enlarged image with hard pixel edges (CSS Images 3; #936). Inherited.
      */
     val smoothImages: Boolean = true,
+    /**
+     * The width percentages of this style by property, as shares of 1: `width`, `min-width`,
+     * `max-width`, the margins, the paddings and `text-indent`. The fields above hold them
+     * resolved against the page's content width; [within] resolves them against the containing
+     * block the layout puts the box in (CSS 2.1, 8.3, 8.4, 10.2 and 16.1; #838). Null when none.
+     */
+    val percents: Map<String, Double>? = null,
     /** `font-weight` as a number from 1 to 1000, which an `@font-face` weight matches (CSS Fonts 4, 2.2; #929). Inherited. */
     val fontWeight: Int = 400,
     val tabLengthPt: Double? = null,
@@ -323,4 +330,23 @@ internal data class ComputedStyle(
             writingMode = WritingMode.HORIZONTAL,
         )
     }
+}
+
+/**
+ * This style with its width percentages resolved against [containingWidth], the content width of
+ * the containing block: `width: 50%` in a box 150 points wide is 75 points (CSS 2.1, 10.2; #838).
+ */
+internal fun ComputedStyle.within(containingWidth: Double): ComputedStyle {
+    val p = percents ?: return this
+    if (!containingWidth.isFinite() || containingWidth < 0.0) return this
+    fun of(name: String, fallback: Double): Double = p[name]?.let { it * containingWidth } ?: fallback
+    fun ofNullable(name: String, fallback: Double?): Double? = p[name]?.let { it * containingWidth } ?: fallback
+    return copy(
+        widthPt = ofNullable("width", widthPt), minWidthPt = ofNullable("min-width", minWidthPt), maxWidthPt = ofNullable("max-width", maxWidthPt),
+        textIndentPt = of("text-indent", textIndentPt),
+        marginTopPt = of("margin-top", marginTopPt), marginRightPt = of("margin-right", marginRightPt),
+        marginBottomPt = of("margin-bottom", marginBottomPt), marginLeftPt = of("margin-left", marginLeftPt),
+        paddingTopPt = of("padding-top", paddingTopPt), paddingRightPt = of("padding-right", paddingRightPt),
+        paddingBottomPt = of("padding-bottom", paddingBottomPt), paddingLeftPt = of("padding-left", paddingLeftPt),
+    )
 }

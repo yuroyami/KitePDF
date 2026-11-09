@@ -19,6 +19,13 @@ import io.github.yuroyami.kitepdf.epub.codePointsOf
  * UA important. Inline `style=""` counts as author CSS with above-selector
  * specificity.
  */
+/** The properties whose percentages are of the containing block's width, resolved again by the layout (#838). */
+internal val WIDTH_PERCENT_PROPERTIES: Set<String> = setOf(
+    "width", "min-width", "max-width", "text-indent",
+    "margin-top", "margin-right", "margin-bottom", "margin-left",
+    "padding-top", "padding-right", "padding-bottom", "padding-left",
+)
+
 internal class StyleResolver(
     authorRules: List<StyleRule>,
     private val rootFontSizePt: Double,
@@ -810,6 +817,13 @@ internal class StyleResolver(
             }
         }
         fun len(ref: Double) = CssValues.length(v, b.fontSizePt, remPt, ref, viewportW, viewportH)
+        // A percentage of a width is of the containing block's, which the layout knows: the value
+        // resolves here against the page, and the share stays for the layout (CSS 2.1, 8.3, 8.4, 10.2, 16.1; #838).
+        if (prop in WIDTH_PERCENT_PROPERTIES) {
+            b.percents.remove(prop)
+            val t = v.trim()
+            if (t.endsWith("%")) t.dropLast(1).trim().toDoubleOrNull()?.takeIf { it.isFinite() }?.let { b.percents[prop] = it / 100.0 }
+        }
         when (prop) {
             "display" -> parseDisplay(v)?.let { b.display = it }
             "font-weight" -> fontWeightOf(v, b.parent.fontWeight)?.let { b.fontWeight = it; b.bold = it >= 600 }
@@ -1028,6 +1042,10 @@ internal class StyleResolver(
      * longhands, and a name this resolver does not read changes nothing.
      */
     private fun takeValue(dst: Builder, name: String, src: Builder) {
+        if (name in WIDTH_PERCENT_PROPERTIES) {
+            dst.percents.remove(name)
+            src.percents[name]?.let { dst.percents[name] = it }
+        }
         when (name) {
             "display" -> dst.display = src.display
             "font-weight" -> { dst.bold = src.bold; dst.fontWeight = src.fontWeight }
@@ -1512,6 +1530,8 @@ internal class StyleResolver(
         var color = parent.color
         var textAlign = parent.textAlign
         var textIndentPt = parent.textIndentPt
+        /** The width percentages of this element by property, of which only `text-indent` inherits (#838). */
+        val percents: MutableMap<String, Double> = parent.percents?.get("text-indent")?.let { mutableMapOf("text-indent" to it) } ?: mutableMapOf()
         var lineHeightPt = parent.lineHeightPt
         var lineHeightFactor = parent.lineHeightFactor
         var language = parent.language
@@ -1596,6 +1616,8 @@ internal class StyleResolver(
          * them on any property (#579). A line [s] draws counts as its own.
          */
         fun takeAll(s: ComputedStyle): Builder = apply {
+            percents.clear()
+            s.percents?.let { percents.putAll(it) }
             display = s.display; backgroundColor = s.backgroundColor
             ownUnderline = s.underline != null; ownLineThrough = s.lineThrough != null; ownOverline = s.overline != null
             decorationColor = (s.underline ?: s.lineThrough ?: s.overline)?.color
@@ -1698,6 +1720,7 @@ internal class StyleResolver(
                 textCombineUpright = textCombineUpright,
                 tabSpaces = tabSpaces,
                 smoothImages = smoothImages,
+                percents = percents.takeIf { it.isNotEmpty() }?.toMap(),
                 fontWeight = fontWeight,
                 tabLengthPt = tabLengthPt,
                 lineHeightFactor = lineHeightFactor,
