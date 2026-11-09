@@ -65,8 +65,18 @@ public fun imageSampling(width: Int, height: Int, ctm: KiteMatrix, interpolate: 
         else -> !rectilinear || sx > 1.0 || sy > 1.0
     }
     val reduces = sx < 1.0 && sy < 1.0
+    var fx = shrinkFactor(sx, width)
+    var fy = shrinkFactor(sy, height)
+    val (fitX, fitY) = fx to fy
+    // ISO 32000-1, 8.9.5 gives an image no size limit. One whose samples at this size pass the
+    // raster limit averages down by one more power of two at a time until they fit, which draws
+    // it softer, where it drew as the grey placeholder box once drawn at more than half its size (#748).
+    while (((width + fx - 1) / fx).toLong() * ((height + fy - 1) / fy) > KITE_DEFAULT_MAX_RASTER_PIXELS && (fx < 256 || fy < 256)) {
+        if (fy >= 256 || (fx <= fy && fx < 256)) fx *= 2 else fy *= 2
+    }
     return KiteImageSampling(
-        shrinkFactor(sx, width), shrinkFactor(sy, height), smooth,
+        // An image averaged down past its fit to the limit is enlarged again on the device, so it draws smooth.
+        fx, fy, if (fx != fitX || fy != fitY) true else smooth,
         if (reduces) ceil(hypot(ctm.a, ctm.b)).toInt().coerceAtLeast(1) else 0,
         if (reduces) ceil(hypot(ctm.c, ctm.d)).toInt().coerceAtLeast(1) else 0,
     )

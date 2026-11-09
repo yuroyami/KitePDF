@@ -848,6 +848,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outline, with its caps, joins and dashes, where nothing drew before (#746).
 - A tiling pattern fill replays only the cells that can touch it, and loads the cell's resources and operators
   once a render, so a page of many small pattern-filled boxes renders far faster (#774).
+- An image above the 40 megapixel raster limit still draws when it is drawn at more than half its size: it
+  averages down by one more power of two until it fits, where it drew as the grey placeholder box, so a large
+  scan no longer turns grey when the reader zooms in (#748).
 
 ## [0.13.0] - 2026-10-09
 
