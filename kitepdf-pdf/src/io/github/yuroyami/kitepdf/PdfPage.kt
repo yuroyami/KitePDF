@@ -216,9 +216,29 @@ public class PdfPage internal constructor(
      * in the array were concatenated"). A `/Contents` that is null or of a type no
      * content can have is an empty page, which still draws its annotations (#583).
      */
-    public val contentBytes: ByteArray by lazy {
-        PageContents.concatenated(node["Contents"]) { document.resolve(it) as? PdfStream }
-            ?: ByteArray(0).also { kiteWarn { "page $index: /Contents is not a stream or an array" } }
+    public val contentBytes: ByteArray
+        get() = contentCache ?: (
+            PageContents.concatenated(node["Contents"]) { document.resolve(it) as? PdfStream }
+                ?: ByteArray(0).also { kiteWarn { "page $index: /Contents is not a stream or an array" } }
+            ).also { contentCache = it; document.pageCachesFilled(this) }
+
+    /**
+     * What this page keeps once it is read: its decoded content and its text. The document keeps
+     * them for the pages used last only, and [PdfDocument.dropPageCaches] frees them all, so a
+     * search through a long document does not keep each page's text for the life of the document
+     * (#819).
+     */
+    @kotlin.concurrent.Volatile
+    private var contentCache: ByteArray? = null
+
+    @kotlin.concurrent.Volatile
+    private var readingCache: List<io.github.yuroyami.kitepdf.core.KiteReadingItem>? = null
+
+    /** Drops [contentBytes], the structured text and the reading order; each is read again when next asked. */
+    internal fun dropCaches() {
+        contentCache = null
+        textCache = null
+        readingCache = null
     }
 
     /**
@@ -273,6 +293,7 @@ public class PdfPage internal constructor(
         val st = scoped { io.github.yuroyami.kitepdf.text.StructuredTextExtractor.extract(this) }
         val kite = lazy { io.github.yuroyami.kitepdf.text.KiteTextAdapter.toKite(st, pageToDeviceBase()) }
         textCache = Triple(version, st, kite)
+        document.pageCachesFilled(this)
         return st to kite
     }
 
@@ -295,9 +316,9 @@ public class PdfPage internal constructor(
      */
     override fun readingOrder(): List<io.github.yuroyami.kitepdf.core.KiteReadingItem> = readingItems
 
-    private val readingItems: List<io.github.yuroyami.kitepdf.core.KiteReadingItem> by lazy {
-        io.github.yuroyami.kitepdf.text.PdfReadingOrder.of(this, document)
-    }
+    private val readingItems: List<io.github.yuroyami.kitepdf.core.KiteReadingItem>
+        get() = readingCache ?: io.github.yuroyami.kitepdf.text.PdfReadingOrder.of(this, document)
+            .also { readingCache = it; document.pageCachesFilled(this) }
 
     /** Internal accessor used by the structured-text extractor to reach the document resolver. */
     internal val internalDocument: PdfDocument get() = document

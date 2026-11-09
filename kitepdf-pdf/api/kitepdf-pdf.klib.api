@@ -1062,6 +1062,7 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
     final fun dropFontCache() // io.github.yuroyami.kitepdf/PdfDocument.dropFontCache|dropFontCache(){}[0]
     final fun dropObjectCache() // io.github.yuroyami.kitepdf/PdfDocument.dropObjectCache|dropObjectCache(){}[0]
     final fun dropOperationCache() // io.github.yuroyami.kitepdf/PdfDocument.dropOperationCache|dropOperationCache(){}[0]
+    final fun dropPageCaches() // io.github.yuroyami.kitepdf/PdfDocument.dropPageCaches|dropPageCaches(){}[0]
     final fun edit(kotlin.random/Random? = ...): io.github.yuroyami.kitepdf.writer/PdfEditor // io.github.yuroyami.kitepdf/PdfDocument.edit|edit(kotlin.random.Random?){}[0]
     final fun exportFdf(kotlin/String? = ...): kotlin/ByteArray // io.github.yuroyami.kitepdf/PdfDocument.exportFdf|exportFdf(kotlin.String?){}[0]
     final fun exportXfdf(kotlin/String? = ...): kotlin/String // io.github.yuroyami.kitepdf/PdfDocument.exportXfdf|exportXfdf(kotlin.String?){}[0]

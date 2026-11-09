@@ -138,6 +138,36 @@ public class PdfDocument private constructor(
     public fun dropObjectCache() {
         lock.withLock { trimStreams(0L) }
     }
+
+    /** The pages that keep their decoded content or text, the one used last at the end (#819). */
+    private val pagesWithCaches = ArrayList<PdfPage>()
+
+    /** How many pages keep their content or text now, for a test. */
+    internal val pagesHoldingCaches: Int get() = lock.withLock { pagesWithCaches.size }
+
+    /**
+     * Notes that [page] keeps its decoded content or its text now. Past [PAGES_WITH_CACHES] pages,
+     * the one used longest ago drops them, so a search or a reader that stops on each page of a
+     * long document holds a few pages' text, not every page's.
+     */
+    internal fun pageCachesFilled(page: PdfPage) {
+        val dropped = lock.withLock {
+            pagesWithCaches.remove(page)
+            pagesWithCaches.add(page)
+            if (pagesWithCaches.size > PAGES_WITH_CACHES) pagesWithCaches.removeAt(0) else null
+        }
+        dropped?.dropCaches()
+    }
+
+    /**
+     * Frees the decoded content, the structured text and the reading order that the pages of this
+     * document keep, for example when the app runs low on memory. A page reads them again when
+     * next asked (#819).
+     */
+    public fun dropPageCaches() {
+        val held = lock.withLock { pagesWithCaches.toList().also { pagesWithCaches.clear() } }
+        for (page in held) page.dropCaches()
+    }
     private val objStreamCache = HashMap<Long, Map<Int, PdfObject>>()
 
     /** The document catalog (/Root in the trailer). */
@@ -387,6 +417,7 @@ public class PdfDocument private constructor(
         dropOperationCache()
         dropFontCache()
         dropObjectCache()
+        dropPageCaches()
     }
 
     /**
@@ -1434,6 +1465,9 @@ internal data class PageInheritable(
         rotate = (missingAsNull { node["Rotate"]?.resolve(refs) } as? PdfInt)?.value ?: rotate,
     )
 }
+
+/** How many pages keep their decoded content and text at once (#819). */
+private const val PAGES_WITH_CACHES = 32
 
 /** The bytes of stream objects a document keeps resolved, past which the first resolved leave (#820). */
 private const val OBJECT_STREAM_BYTES: Long = 32L shl 20

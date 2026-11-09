@@ -857,6 +857,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The stream objects a PDF document has resolved stay within 32 MB, the first resolved leaving first, and
   `PdfDocument.dropObjectCache()` frees them under memory pressure; each held a copy of its bytes for the life of
   the document (#820).
+- A PDF document keeps the parsed content and text of the 32 pages it used last, not of every page it has ever
+  drawn, and the new `PdfDocument.dropPageCaches()` frees them (#819).
 
 ## [0.13.0] - 2026-10-09
 

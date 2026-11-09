@@ -594,6 +594,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun dropFontCache ()V
 	public final fun dropObjectCache ()V
 	public final fun dropOperationCache ()V
+	public final fun dropPageCaches ()V
 	public final fun edit (Lkotlin/random/Random;)Lio/github/yuroyami/kitepdf/writer/PdfEditor;
 	public static synthetic fun edit$default (Lio/github/yuroyami/kitepdf/PdfDocument;Lkotlin/random/Random;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/writer/PdfEditor;
 	public final fun exportFdf (Ljava/lang/String;)[B
