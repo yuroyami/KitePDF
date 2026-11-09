@@ -12,7 +12,9 @@ import kotlin.test.assertTrue
  * Encrypted files that another program wrote: qpdf's RC4-128 (R3), AES-128 (R4) and AES-256 (R6)
  * handlers, each with a classic cross-reference and again with a cross-reference stream and object
  * streams, a file whose metadata stays in clear, and one with only an owner password (#908).
- * `testResources@jvm/encrypted/make.py` writes them.
+ * Two more, which qpdf cannot write, AES-128 files whose strings or streams take the /Identity
+ * crypt filter, are built by hand and decrypt in qpdf. `testResources@jvm/encrypted/make.py`
+ * writes them all.
  */
 class EncryptedFixturesTest {
 
@@ -29,6 +31,8 @@ class EncryptedFixturesTest {
     private val passworded = listOf(
         "rc4-128.pdf", "rc4-128-objstm.pdf", "aes-128.pdf", "aes-128-objstm.pdf", "aes-256.pdf", "aes-256-objstm.pdf",
         "aes-128-cleartext-metadata.pdf",
+        // Built by make.py, which qpdf cannot write: AES-128 with /StrF or /StmF /Identity (ISO 32000-1, 7.6.5).
+        "identity-strings.pdf", "identity-streams.pdf",
     )
 
     @Test
