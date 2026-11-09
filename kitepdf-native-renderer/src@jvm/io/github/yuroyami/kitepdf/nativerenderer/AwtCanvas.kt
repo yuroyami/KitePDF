@@ -684,7 +684,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
      * onto the page through the anti-aliased coverage of the shape when the clip pops.
      */
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
-        clipVersion++
+        clipIds.addLast(++nextClipId)
         val awt = toAwtPath(path, ctm).apply {
             windingRule = if (evenOdd) Path2D.WIND_EVEN_ODD else Path2D.WIND_NON_ZERO
         }
@@ -711,7 +711,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
     }
 
     override fun popClip() {
-        clipVersion++
+        clipIds.removeLastOrNull()
         clipStack.removeLastOrNull()?.let { entry ->
             val soft = entry.soft
             if (soft == null) g.clip = entry.saved else endSoftClip(soft)
@@ -1245,8 +1245,13 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
     /** How many times this canvas rendered a mask group, which a test counts (#912). */
     internal var maskRenders: Int = 0
 
-    /** Counts clip pushes and pops, so a mask rendered under another clip is not taken for this one. */
-    private var clipVersion = 0
+    /**
+     * An id for each clip on the stack, so a mask rendered under one clip is not taken for another.
+     * Pushes and pops that balance, such as those of a masked paint's own content, leave the same id on top.
+     */
+    private val clipIds = ArrayDeque<Int>()
+    private var nextClipId = 0
+    private val clipVersion: Int get() = clipIds.lastOrNull() ?: 0
 
     /**
      * Renders the mask group over the whole of a [width] by [height] box, and gives the value

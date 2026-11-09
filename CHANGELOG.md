@@ -1031,6 +1031,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AWT renders a soft mask once for all the paints under it: the second paint with the same mask, matrix, clip and
   box renders the mask over its whole box and keeps its coverage. 1,600 squares under one luminosity mask
   rendered in 42 ms and now in about 15 ms, with no page of the differential sweep moving (#912).
+- Skia renders a soft mask once for all the paints under it, as AWT does: the second paint with the same mask
+  keeps the mask group, filtered to its mask values, as an image, which the paints after it draw. 49 squares
+  under one luminosity mask rendered the group 98 times and now 3 times (#912).
 
 ## [0.13.0] - 2026-10-09
 

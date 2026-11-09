@@ -136,6 +136,8 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     private val clipBounds = ArrayDeque<DoubleArray>()
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
+        dropKeptMask()
+        lastMaskKey = null
         // The caller is responsible for sizing the surface; we don't clear.
         openLayers = 0
         layers = 0
@@ -171,6 +173,8 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     }
 
     override fun endPage() {
+        dropKeptMask()
+        lastMaskKey = null
         while (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -690,6 +694,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     }
 
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
+        clipIds.addLast(++nextClipId)
         canvas.save()
         openLayers++
         val sk = toSkPath(path, ctm).apply {
@@ -740,6 +745,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
     private var stepDepth = 0
 
     override fun popClip() {
+        clipIds.removeLastOrNull()
         if (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -991,6 +997,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         // Outside the mask's box the mask is its backdrop's value, and the renderer passes the
         // page box when that is not 0 (ISO 32000-1, 11.6.5.2, #384), so both layers stop at the box (#824).
         val bounds = layerBounds(maskBBox, maskCtm)
+        val mask = maskFor(kind, transfer, bounds, maskBBox, maskCtm, renderMask)
         // ISO 32000-1, 11.6.4.3 and 11.3.5: the mask scales the shape of each paint, which still
         // blends with the real backdrop in its own mode. Skia reads back only the canvas under
         // every layer, so outside one the content paints over a copy of the backdrop, and the mask
@@ -1000,7 +1007,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         val backdrop = if (layers == 0 && stepDepth == 0 && !knockingOut) readBackdrop(maskBBox, maskCtm) else null
         if (backdrop != null) {
             try {
-                maskLayer(kind, transfer, bounds, SkiaBlendMode.DST_OUT, renderMask)
+                mask(SkiaBlendMode.DST_OUT)
                 Paint().closing { it.blendMode = SkiaBlendMode.PLUS; canvas.saveLayer(bounds, it) }
                 openLayers++
                 layers++
@@ -1011,7 +1018,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                     Paint().closing { canvas.drawImage(backdrop.image, backdrop.x.toFloat(), backdrop.y.toFloat(), it.apply { blendMode = SkiaBlendMode.SRC }) }
                     canvas.restore()
                     render()
-                    maskLayer(kind, transfer, bounds, SkiaBlendMode.DST_IN, renderMask)
+                    mask(SkiaBlendMode.DST_IN)
                 } finally {
                     groups.removeLastOrNull()
                     canvas.restore()
@@ -1032,7 +1039,7 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
-            maskLayer(kind, transfer, bounds, SkiaBlendMode.DST_IN, renderMask)
+            mask(SkiaBlendMode.DST_IN)
         } finally {
             groups.removeLastOrNull()
             canvas.restore()
@@ -1079,7 +1086,119 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
      * every other canvas uses, and the CSS weights for an SVG mask (#799, #821). The /TR table
      * then maps the alpha, also where the group paints nothing.
      */
+    /** What a kept mask is kept by: everything that decides its device pixels (#912). */
+    private data class MaskKey(
+        val renderMask: (KiteCanvas) -> Unit,
+        val kind: SoftMask.Kind,
+        val transfer: KiteMaskTransfer?,
+        val box: KiteRectangle,
+        val maskCtm: KiteMatrix,
+        val matrix: List<Float>,
+        val clipVersion: Int,
+        val device: List<Int>,
+    )
+
+    /** The mask that two paints in a row used, rendered once in device pixels at [keptX], [keptY], until the key or the page changes. */
+    private var keptMask: Image? = null
+    private var keptKey: MaskKey? = null
+    private var keptX = 0
+    private var keptY = 0
+
+    /** The key of the last masked paint, so the second paint under one mask knows to keep it. */
+    private var lastMaskKey: MaskKey? = null
+
+    /**
+     * An id for each clip on the stack, so a mask kept under one clip is not taken for another.
+     * Pushes and pops that balance, such as a mask group's own box, leave the same id on top.
+     */
+    private val clipIds = ArrayDeque<Int>()
+    private var nextClipId = 0
+    private val clipVersion: Int get() = clipIds.lastOrNull() ?: 0
+
+    /** False renders the mask again for every paint, as before #912, so a test can compare. */
+    internal var keepMasks: Boolean = true
+
+    /** How many times this canvas rendered a mask group, which a test counts (#912). */
+    internal var maskRenders: Int = 0
+
+    private fun dropKeptMask() {
+        keptMask?.close()
+        keptMask = null
+        keptKey = null
+    }
+
+    /**
+     * How a masked paint applies its mask with a blend mode: from the kept image when the same
+     * mask, matrix and clip were kept, by rendering it once into an image when the paint before
+     * used the same, else as a layer of the mask group, as before (#912). The renderer hands the
+     * same [renderMask] for every paint under one mask in one coordinate system.
+     */
+    private fun maskFor(
+        kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: org.jetbrains.skia.Rect?,
+        box: KiteRectangle, maskCtm: KiteMatrix, renderMask: (KiteCanvas) -> Unit,
+    ): (SkiaBlendMode) -> Unit {
+        val layer: (SkiaBlendMode) -> Unit = { blend -> maskLayer(kind, transfer, bounds, blend, renderMask) }
+        val device = if (keepMasks && stepDepth == 0 && bounds != null) maskDeviceBox(bounds) else null
+        if (device == null) return layer
+        val key = MaskKey(renderMask, kind, transfer, box, maskCtm, canvas.localToDeviceAsMatrix33.mat.toList(), clipVersion, device.toList())
+        if (keptKey != key && lastMaskKey == key) keepMask(key, device, kind, transfer, bounds, renderMask)
+        lastMaskKey = key
+        val image = keptMask?.takeIf { keptKey == key } ?: return layer
+        val x = keptX
+        val y = keptY
+        return { blend ->
+            canvas.save()
+            canvas.resetMatrix()
+            Paint().closing { canvas.drawImage(image, x.toFloat(), y.toFloat(), it.apply { blendMode = blend }) }
+            canvas.restore()
+        }
+    }
+
+    /** The device pixels of [bounds] under the canvas's matrix, cut to the clip and the page, as left, top, right and bottom. */
+    private fun maskDeviceBox(bounds: org.jetbrains.skia.Rect): IntArray? {
+        val m = canvas.localToDeviceAsMatrix33.mat
+        val xs = floatArrayOf(bounds.left, bounds.right, bounds.left, bounds.right)
+        val ys = floatArrayOf(bounds.top, bounds.top, bounds.bottom, bounds.bottom)
+        var l = Double.MAX_VALUE; var t = Double.MAX_VALUE; var r = -Double.MAX_VALUE; var b = -Double.MAX_VALUE
+        for (i in 0 until 4) {
+            val w = m[6] * xs[i] + m[7] * ys[i] + m[8]
+            if (w == 0f) return null
+            val dx = (m[0] * xs[i] + m[1] * ys[i] + m[2]) / w.toDouble()
+            val dy = (m[3] * xs[i] + m[4] * ys[i] + m[5]) / w.toDouble()
+            l = minOf(l, dx); r = maxOf(r, dx); t = minOf(t, dy); b = maxOf(b, dy)
+        }
+        val clip = clipBounds.lastOrNull() ?: pageBounds ?: return null
+        val left = kotlin.math.floor(maxOf(l, clip[0], 0.0)).toInt()
+        val top = kotlin.math.floor(maxOf(t, clip[1], 0.0)).toInt()
+        val right = kotlin.math.ceil(minOf(r, clip[2])).toInt()
+        val bottom = kotlin.math.ceil(minOf(b, clip[3])).toInt()
+        if (right <= left || bottom <= top || (right - left).toLong() * (bottom - top) > KNOCKOUT_ELEMENT_PIXELS) return null
+        return intArrayOf(left, top, right, bottom)
+    }
+
+    /** Renders the mask group once, through the layer [maskLayer] would make, into an image of [device]. */
+    private fun keepMask(
+        key: MaskKey, device: IntArray, kind: SoftMask.Kind, transfer: KiteMaskTransfer?,
+        bounds: org.jetbrains.skia.Rect?, renderMask: (KiteCanvas) -> Unit,
+    ) {
+        dropKeptMask()
+        val surface = org.jetbrains.skia.Surface.makeRasterN32Premul(device[2] - device[0], device[3] - device[1])
+        try {
+            val off = surface.canvas
+            off.setMatrix(org.jetbrains.skia.Matrix33.makeTranslate(-device[0].toFloat(), -device[1].toFloat()).makeConcat(canvas.localToDeviceAsMatrix33))
+            SkiaCanvas(off).maskLayer(kind, transfer, bounds, SkiaBlendMode.SRC_OVER, renderMask)
+            maskRenders++
+            keptMask = surface.makeImageSnapshot()
+            keptKey = key
+            keptX = device[0]
+            keptY = device[1]
+        } finally {
+            surface.close()
+        }
+    }
+
     private fun maskLayer(kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: org.jetbrains.skia.Rect?, blend: SkiaBlendMode, renderMask: (KiteCanvas) -> Unit) {
+        if (blend != SkiaBlendMode.SRC_OVER) maskRenders++
         val table = transfer?.let { org.jetbrains.skia.ColorFilter.makeTableARGB(it.toByteArray(), null, null, null) }
         var luminance: org.jetbrains.skia.ColorFilter? = null
         var composed: org.jetbrains.skia.ColorFilter? = null
