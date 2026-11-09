@@ -11,6 +11,7 @@ import io.github.yuroyami.kitepdf.core.render.KitePath
 import io.github.yuroyami.kitepdf.core.render.NoopCanvas
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.core.render.SoftMask
+import io.github.yuroyami.kitepdf.core.render.strokeOutline
 import io.github.yuroyami.kitepdf.core.xml.KiteXmlNode
 
 internal data class XpsResource(val node: KiteXmlNode.Element, val base: String)
@@ -186,7 +187,8 @@ internal class XpsRenderer(
         val fillPath = transformPath(geo.fill, geo.transform)
         val strokePath = transformPath(geo.stroke, geo.transform)
         property(el, "fill", base, scope)?.let { brushes.fill(it, fillPath, geo.evenOdd, canvas, ctm, scope, depth + 1) }
-        val stroke = property(el, "stroke", base, scope)?.let { brushes.solid(it) } ?: return
+        val strokeBrush = property(el, "stroke", base, scope) ?: return
+        val stroke = brushes.solid(strokeBrush)
         val width = el.number("strokethickness", 1.0).coerceAtLeast(0.0)
         val dashes = el.attrs["strokedasharray"]?.let(::numbers)?.map { it * width }?.takeIf { d -> d.any { it > 0.0 } }
         // ECMA-388, 11.1: StrokeDashCap caps both ends of each dash, StrokeStartLineCap and
@@ -197,12 +199,25 @@ internal class XpsRenderer(
         val end = el.attrs["strokeendlinecap"]
         val oneCap = dashes != null || (start == end && start != "Triangle")
         val lineCap = if (dashes != null) capCode(el.attrs["strokedashcap"]) else if (oneCap) capCode(start) else 0
+        val lineJoin = when (el.attrs["strokelinejoin"]) { "Round" -> 1; "Bevel" -> 2; else -> 0 }
+        if (stroke == null) {
+            // ECMA-388, 11.1: Path.Stroke is a brush of any kind, which paints the area of the stroke.
+            // A gradient, image or visual brush fills the stroke's outline, its caps, joins and dashes
+            // included, as PDF (#284) and SVG (#286) strokes with a pattern do (#746).
+            if (width <= 0.0) return
+            val outline = strokePath.strokeOutline(
+                width, lineCap, lineJoin, el.number("strokemiterlimit", 10.0), dashes, el.number("strokedashoffset", 0.0) * width,
+            )
+            val area = if (oneCap) outline else KitePath(outline.segments + figureCaps(strokePath, width / 2, start, end).segments)
+            brushes.fill(strokeBrush, area, false, canvas, ctm, scope, depth + 1)
+            return
+        }
         canvas.strokePath(
             strokePath, ctm, stroke.color, width, alpha = stroke.alpha,
             dashArray = dashes,
             dashPhase = el.number("strokedashoffset", 0.0) * width,
             lineCap = lineCap,
-            lineJoin = when (el.attrs["strokelinejoin"]) { "Round" -> 1; "Bevel" -> 2; else -> 0 },
+            lineJoin = lineJoin,
             miterLimit = el.number("strokemiterlimit", 10.0),
         )
         if (!oneCap && width > 0.0) {

@@ -844,6 +844,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteRasterCanvas` honours the isolation and knockout of a transparency group, so a Multiply inside a non-
   isolated group blends with the page and a knockout group's later paints replace its earlier ones (#759). A
   soft-masked paint there keeps its blend mode (#764).
+- An XPS path whose stroke is a gradient, image or visual brush draws its stroke: the brush fills the stroke's
+  outline, with its caps, joins and dashes, where nothing drew before (#746).
 
 ## [0.13.0] - 2026-10-09
 

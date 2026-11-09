@@ -73,4 +73,18 @@ class XpsPaintTest {
         b[34 + 8] = 3 // centimetres
         assertEquals(762.0, imageDpi(b).first, 1e-9)
     }
+
+    @Test fun aGradientStrokePaintsTheAreaOfTheStroke() {
+        // ECMA-388, 11.1: Path.Stroke is a brush of any kind; a gradient stroke drew nothing (#746).
+        val canvas = render("""<Path Data="M10,48 L180,48" StrokeThickness="20"><Path.Stroke>
+            <LinearGradientBrush MappingMode="Absolute" StartPoint="0,0" EndPoint="192,0"><LinearGradientBrush.GradientStops>
+            <GradientStop Offset="0" Color="#FFFF0000"/><GradientStop Offset="1" Color="#FF0000FF"/>
+            </LinearGradientBrush.GradientStops></LinearGradientBrush></Path.Stroke></Path>""")
+        // The page clips first; the stroke's area is the clip the gradient then fills.
+        val b = assertNotNull(
+            canvas.calls.filterIsInstance<RecordingCanvas.Call.PushClip>().mapNotNull { it.path.bounds() }.firstOrNull { it.right - it.left < 190.0 },
+            "the gradient fills a clip of the stroke",
+        )
+        assertTrue(b.left in 9.0..11.0 && b.right in 179.0..181.0 && b.bottom in 37.0..39.0 && b.top in 57.0..59.0, "the stroke's area: $b")
+    }
 }
