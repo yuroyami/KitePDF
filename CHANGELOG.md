@@ -928,6 +928,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a right-to-left app, `reverseLayout` keeps its meaning: a left-to-right book pages to the right and a right-
   to-left book to the left, and a spread reads and turns in that one direction. The pager used to mirror with the
   app, against the order inside a spread (#652).
+- Page Down, Page Up, Space and the up and down arrows scroll a page that is taller than the view before they
+  turn it, as in a browser: by about one view, or a step for the arrows. A vertical strip scrolls by a view, and
+  a `scrolled-doc` chapter reads to its end from the keyboard (#661).
 
 ## [0.13.0] - 2026-10-09
 

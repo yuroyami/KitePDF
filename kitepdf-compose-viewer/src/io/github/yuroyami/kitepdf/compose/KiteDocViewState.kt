@@ -3023,10 +3023,8 @@ internal class LazyListScrollAdapter(private val listState: LazyListState) : Kit
 
     suspend fun animateScrollToPageOffset(page: Int, offsetPx: Int) = listState.animateScrollToItem(page, offsetPx)
 
-    /** Scrolls the strip by [px], back toward its start when [px] is negative. */
-    suspend fun animateScrollBy(px: Float) {
-        listState.animateScrollBy(px)
-    }
+    /** Scrolls the strip by [px], back toward its start when [px] is negative. Returns the distance it moved (#661). */
+    suspend fun animateScrollBy(px: Float): Float = listState.animateScrollBy(px)
 
     /** Jumps the strip by [px], back toward its start when [px] is negative. */
     suspend fun scrollBy(px: Float) {

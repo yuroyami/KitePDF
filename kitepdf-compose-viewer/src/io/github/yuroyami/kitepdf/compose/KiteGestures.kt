@@ -523,13 +523,45 @@ private const val WHEEL_TURN_DELTA = 0.5f
 /** The zoom factor of one wheel notch with Ctrl or Cmd held. A trackpad sends parts of a notch. */
 private const val WHEEL_ZOOM_STEP = 1.1f
 
+/**
+ * Moves the view by about one view, with [byView], or by a step along the vertical reading axis,
+ * instead of turning the page (#661): a vertical strip scrolls, and the page of a pager or a
+ * single page pans while it overflows the view. Returns false when nothing moved, at the edge of
+ * the page or where the axis is horizontal, so the key turns the page instead.
+ */
+internal suspend fun KiteDocViewState.scrollWithinPage(layout: KiteDocLayout, forward: Boolean, byView: Boolean): Boolean {
+    val height = viewportSize.height
+    if (height <= 0) return false
+    val amount = height * if (byView) PAGE_KEY_SHARE else ARROW_KEY_SHARE
+    if (layout is KiteDocLayout.Continuous) {
+        if (layout.orientation != Orientation.Vertical) return false
+        val list = adapter as? LazyListScrollAdapter ?: return false
+        // The strip scales about the view, so a view of it is the viewport over the zoom.
+        val moved = list.animateScrollBy((if (forward) amount else -amount) / zoom.coerceAtLeast(EPSILON_ZOOM))
+        return abs(moved) > 0.5f
+    }
+    if (!overflows) return false
+    val moved = panBy(Offset(0f, if (forward) -amount else amount))
+    return abs(moved.y) > 0.5f
+}
+
+/** The share of the view that Page Down, Page Up and Space move, so a line of the last view stays in sight. */
+private const val PAGE_KEY_SHARE = 0.9f
+
+/** The share of the view that an arrow key moves. */
+private const val ARROW_KEY_SHARE = 0.1f
+
+private const val EPSILON_ZOOM = 0.01f
+
 /** The zoom factor of one Ctrl or Cmd with plus or minus. */
 private const val KEY_ZOOM_STEP = 1.25f
 
 /**
  * What [event] asks the view to do in [layout], or null for a key the view does not use (#411).
  * Page Down, Space and the arrow keys go forward in reading order, Page Up, Shift with Space and
- * the other arrows go back, and Home and End go to the ends. Where pages advance to the left, in
+ * the other arrows go back, and Home and End go to the ends. Along a vertical reading axis, Page
+ * Down, Page Up, Space and the up and down arrows first scroll a strip, or pan a page taller than
+ * the view, and turn only at its edge (#661). Where pages advance to the left, in
  * a horizontal layout that is right to left or reversed, the left arrow goes forward. Ctrl or Cmd
  * with plus, minus and 0 zooms in, out and back to fit. [paging] and [zooming] turn either set off.
  */
@@ -562,10 +594,17 @@ internal fun keyAction(
     }
     // A pager's reverseLayout is absolute, the book's direction (#652); a strip mirrors with the app.
     val forwardIsLeft = horizontal && if (layout is KiteDocLayout.Continuous) direction == LayoutDirection.Rtl else reversed
+    // Along a vertical reading axis, a page taller than the view scrolls before it turns, as in a
+    // browser: Page Down and Space by about one view, the arrows by a step (#661).
+    fun within(forward: Boolean, byView: Boolean): suspend (KiteDocViewState) -> Unit = { state ->
+        if (!state.scrollWithinPage(layout, forward, byView)) (if (forward) next else previous)(state)
+    }
     return when (event.key) {
-        Key.PageDown, Key.DirectionDown -> next
-        Key.PageUp, Key.DirectionUp -> previous
-        Key.Spacebar -> if (event.isShiftPressed) previous else next
+        Key.PageDown -> within(forward = true, byView = true)
+        Key.DirectionDown -> within(forward = true, byView = false)
+        Key.PageUp -> within(forward = false, byView = true)
+        Key.DirectionUp -> within(forward = false, byView = false)
+        Key.Spacebar -> within(forward = !event.isShiftPressed, byView = true)
         Key.DirectionRight -> if (forwardIsLeft) previous else next
         Key.DirectionLeft -> if (forwardIsLeft) next else previous
         Key.MoveHome -> { state -> state.animateScrollToPage(0) }

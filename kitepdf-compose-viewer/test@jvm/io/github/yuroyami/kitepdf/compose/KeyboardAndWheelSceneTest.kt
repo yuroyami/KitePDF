@@ -262,4 +262,45 @@ class KeyboardAndWheelSceneTest {
             assertEquals(0, state.currentPage, "the wheel turned a zoomed page")
         }
     }
+
+    /** A view twice as wide as its pages, so a page fit to the width is twice as tall as the view. */
+    private fun withWideViewer(layout: KiteDocLayout, block: (ImageComposeScene, KiteDocViewState, SceneTestDriver) -> Unit) {
+        val state = KiteDocViewState(pagesPdf(4))
+        ImageComposeScene(width = 400, height = 300, density = Density(1f)) {
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = layout)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntilState { state.pageGeometry.isNotEmpty() }
+            block(scene, state, driver)
+        }
+    }
+
+    /** In a strip, Page Down scrolls by about one view, so the lower half of a tall page shows (#661). */
+    @Test
+    fun page_down_scrolls_a_strip_by_a_view() {
+        withWideViewer(KiteDocLayout.Continuous()) { scene, state, driver ->
+            click(scene)
+            driver.pumpFrames(30)
+            key(scene, Key.PageDown)
+            driver.pumpUntilState { (state.adapter?.scrollOffsetPx ?: 0) > 200 && state.adapter?.isScrollInProgress != true }
+            assertEquals(0, state.adapter?.leadingPage, "Page Down skipped the rest of page 0")
+        }
+    }
+
+    /** In a pager, Page Down scrolls down a page fit to the width before it turns it (#661). */
+    @Test
+    fun page_down_scrolls_down_a_tall_page_before_it_turns() {
+        withWideViewer(KiteDocLayout.Paged(fit = KitePageFit.WIDTH)) { scene, state, driver ->
+            click(scene)
+            driver.pumpFrames(30)
+            key(scene, Key.PageDown)
+            driver.pumpFrames(10)
+            assertEquals(0, state.currentPage, "Page Down turned a page that goes on below the view")
+            assertTrue(state.panOffset.y < -100f, "Page Down did not scroll down the page: ${state.panOffset}")
+            key(scene, Key.PageDown)
+            driver.pumpFrames(10)
+            key(scene, Key.PageDown)
+            driver.pumpUntilState { state.currentPage == 1 }
+        }
+    }
 }
