@@ -1036,6 +1036,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under one luminosity mask rendered the group 98 times and now 3 times (#912).
 - The Compose canvas renders a soft mask once for all the paints under it, as AWT and Skia do: 49 squares under
   one luminosity mask rendered the mask group 98 times and now 3 times (#912).
+- Canvas2D renders a soft mask once for all the paints under it, as AWT, Skia and Compose do: 49 squares under
+  one luminosity mask rendered and converted the mask group 49 times and now 2 times (#912).
 
 ## [0.13.0] - 2026-10-09
 

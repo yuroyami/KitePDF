@@ -74,11 +74,13 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
     private val groups = ArrayDeque<Group>()
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
+        dropKeptMask()
         while (groups.isNotEmpty()) endTransparencyGroup()
         openLayers = 0
     }
 
     override fun endPage() {
+        dropKeptMask()
         // Close any group left open, then roll back leftover clips (defensive).
         while (groups.isNotEmpty()) endTransparencyGroup()
         while (openLayers > 0) {
@@ -568,6 +570,13 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         val exact = !knockingOut
         // The content and the mask composite as usual, also inside a knockout group.
         groups.addLast(Group(null, null, 1.0, KiteBlendMode.Normal))
+        // The renderer hands the same callback for every paint under one mask in one coordinate
+        // system, so a second paint in a row with the same mask over the same pixels keeps its
+        // mask layer, turned to alpha, and the paints after it use that (#912).
+        val key = MaskKey(renderMask, kind, transfer, maskBBox, maskCtm, area.toList(), ctx, originX, originY)
+        val kept = keptMask?.takeIf { keepMasks && keptKey == key }
+        val keep = kept == null && keepMasks && lastMaskKey == key
+        lastMaskKey = key
         val content: Layer?
         val mask: Layer?
         try {
@@ -577,7 +586,8 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                 render()
                 return
             }
-            mask = paintInLayer(area) {
+            mask = kept ?: paintInLayer(area) {
+                maskRenders++
                 if (kind.readsColor) {
                     // Unpainted parts of the group show the black backdrop, whose luminosity is zero.
                     ctx.save()
@@ -591,11 +601,15 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         } finally {
             groups.removeLastOrNull()
         }
+        if (mask != null && kept == null && (kind.readsColor || transfer != null)) maskToAlpha(mask.canvas, kind, transfer)
+        if (keep && mask != null) {
+            dropKeptMask()
+            keptMask = mask
+            keptKey = key
+        }
         try {
             val contentCtx = context2d(content.canvas)
             if (mask != null && contentCtx != null) {
-                val luminosity = kind.readsColor
-                if (luminosity || transfer != null) maskToAlpha(mask.canvas, kind, transfer)
                 contentCtx.setTransform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
                 contentCtx.globalCompositeOperation = "destination-in"
                 contentCtx.drawImage(mask.canvas, 0.0, 0.0)
@@ -610,8 +624,41 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
             composite(content, 1.0, "source-over")
         } finally {
             releaseCanvas(content.canvas)
-            mask?.let { releaseCanvas(it.canvas) }
+            mask?.let { if (it !== keptMask) releaseCanvas(it.canvas) }
         }
+    }
+
+    /** What a kept mask layer is kept by: everything that decides its pixels (#912). */
+    private data class MaskKey(
+        val renderMask: (KiteCanvas) -> Unit,
+        val kind: SoftMask.Kind,
+        val transfer: KiteMaskTransfer?,
+        val box: KiteRectangle,
+        val maskCtm: KiteMatrix,
+        val area: List<Int>,
+        val ctx: CanvasRenderingContext2D,
+        val originX: Double,
+        val originY: Double,
+    )
+
+    /** The mask layer, as alpha, that two paints in a row used, until the key or the page changes. */
+    private var keptMask: Layer? = null
+    private var keptKey: MaskKey? = null
+
+    /** The key of the last masked paint, so the second paint under one mask knows to keep it. */
+    private var lastMaskKey: MaskKey? = null
+
+    /** False renders the mask again for every paint, as before #912, so a test can compare. */
+    internal var keepMasks: Boolean = true
+
+    /** How many times this canvas rendered a mask group, which a test counts (#912). */
+    internal var maskRenders: Int = 0
+
+    private fun dropKeptMask() {
+        keptMask?.let { releaseCanvas(it.canvas) }
+        keptMask = null
+        keptKey = null
+        lastMaskKey = null
     }
 
     /**
