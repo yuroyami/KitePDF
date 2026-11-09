@@ -65,8 +65,15 @@ public data class KitePath(val segments: List<Segment>) {
         private var startX = 0.0
         private var startY = 0.0
 
+        /**
+         * Starts a subpath at ([x], [y]). A move right after a move replaces it: a subpath of one
+         * point that is not closed paints nothing (ISO 32000-1, 8.5.3.2, where a degenerate subpath
+         * that a stroke paints is a closed point or two equal points), so a stream of five million
+         * `m` operators keeps one segment, not five million (#978).
+         */
         public fun moveTo(x: Double, y: Double) {
-            segments.add(Segment.MoveTo(x, y))
+            if (segments.lastOrNull() is Segment.MoveTo) segments[segments.size - 1] = Segment.MoveTo(x, y)
+            else segments.add(Segment.MoveTo(x, y))
             lastX = x; lastY = y
             startX = x; startY = y
         }

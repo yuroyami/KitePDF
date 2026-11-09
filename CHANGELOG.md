@@ -964,6 +964,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinned oracle's commit, `hb-shape`, `pdfsig`, `opj_compress` and `woff2_compress`. With
   `KITEPDF_REQUIRE_ORACLES=1`, which CI sets, a missing font or tool fails such a test instead of skipping it
   (#688).
+- A page whose decoded content is longer than 1 MiB is drawn as it is parsed, one operation at a time, and never
+  becomes a list of operations, which took about 16 bytes for each byte of content, could not fit the operation
+  cache and was built again at every render. Five million `0 0 m` operators, a 44 KB file, rendered with a live
+  heap of about 800 MB and now about 170 MB, in a fifth of the time. A move right after a move replaces it in the
+  current path, since a lone move paints nothing (#978).
 
 ## [0.13.0] - 2026-10-09
 

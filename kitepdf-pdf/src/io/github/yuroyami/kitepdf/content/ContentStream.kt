@@ -130,10 +130,23 @@ public object ContentStreamParser {
 
     /** Resource names determine inline sample counts (ISO 32000-1, 8.9.7). */
     internal fun parse(bytes: ByteArray, colorSpaces: Map<String, KiteColorSpace>): List<Operation> {
+        val ops = mutableListOf<Operation>()
+        forEachOperation(bytes, colorSpaces) { ops.add(it); true }
+        return ops
+    }
+
+    /**
+     * Hands each operation of [bytes] to [action] as soon as it is read, so a long stream costs
+     * time and no list: the parse keeps one operator's operands at a time, as MuPDF's
+     * `pdf_process_stream` does (#978). [parse] collects the same operations, with the same
+     * recovery and the same [MAX_OPS_PER_STREAM]. The parse stops when [action] returns false,
+     * so a cancelled render does not read the rest of the stream.
+     */
+    internal fun forEachOperation(bytes: ByteArray, colorSpaces: Map<String, KiteColorSpace>, action: (Operation) -> Boolean) {
         val reader = ByteReader(bytes)
         val lexer = Lexer(reader)
         val parser = Parser(lexer, keywordsAsNull = false)
-        val ops = mutableListOf<Operation>()
+        var count = 0
         val operandStack = ArrayDeque<PdfObject>()
         var overflowWarned = false
 
@@ -159,7 +172,8 @@ public object ContentStreamParser {
                             consumeInlineImage(reader, colorSpaces)
                             // Capture the whole "BI…EI" run verbatim so it survives a
                             // parse → edit → re-serialize round-trip.
-                            ops.add(Operation("BI", emptyList(), bytes.copyOfRange(tok.offset, reader.pos())))
+                            if (!action(Operation("BI", emptyList(), bytes.copyOfRange(tok.offset, reader.pos())))) return
+                            count++
                         } catch (_: Exception) {
                             // Malformed inline image: skip past it best-effort but keep
                             // the rest of the page.
@@ -167,10 +181,11 @@ public object ContentStreamParser {
                         }
                         operandStack.clear()
                     } else {
-                        ops.add(Operation(tok.value, operandStack.toList()))
+                        if (!action(Operation(tok.value, operandStack.toList()))) return
+                        count++
                         operandStack.clear()
                     }
-                    if (ops.size >= MAX_OPS_PER_STREAM) return ops
+                    if (count >= MAX_OPS_PER_STREAM) return
                 }
                 Token.EndOfFile -> break
                 else -> {
@@ -200,7 +215,6 @@ public object ContentStreamParser {
                 reader.readByte()
             }
         }
-        return ops
     }
 
     /**

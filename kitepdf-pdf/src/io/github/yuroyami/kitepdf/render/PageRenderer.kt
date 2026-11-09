@@ -359,14 +359,18 @@ public class PageRenderer(
         // A stray d1 on an earlier page must not freeze this page's colours (#52).
         type3IgnoreColor = false
         val pathBuilder = KitePath.Builder()
-        val ops = page.operations(colorSpaces)
 
         // Size the device surface for the ROTATED page: pageToDeviceBase() maps
         // into [0,rotatedWidth] x [0,rotatedHeight], so width/height must be
         // swapped for /Rotate 90/270 to match.
         canvas.beginPage(page.rotatedWidth, page.rotatedHeight, deviceCtm)
         try {
-            for (op in ops) dispatch(op, state, pathBuilder, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
+            // One operation at a time: a long content stream is drawn as it is parsed (#978).
+            page.forEachOperation(colorSpaces) { op ->
+                dispatch(op, state, pathBuilder, fonts, xobjects, colorSpaces, extGStates, shadings, patterns, properties)
+                // Past the operator budget or once cancelled, dispatch draws nothing more, so the parse can stop.
+                !cancelled && dispatchedOps <= MAX_DISPATCHED_OPS
+            }
             // Page content may leave the graphics stack unbalanced (a stray `cm`
             // with no matching q/Q). Annotations must render on a clean page CTM,
             // not that leftover state, else an unbalanced cm skews every annotation.

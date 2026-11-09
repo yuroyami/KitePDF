@@ -248,6 +248,27 @@ public class PdfPage internal constructor(
      * [colorSpaces] names the colour spaces an inline image may use, so every reader
      * splits the content at the same bytes (#266).
      */
+    /**
+     * Hands each operation of the page's content to [action], in order. Operations the
+     * document has cached replay from the cache. A content stream longer than
+     * [PdfDocument.streamedContentBytes] is parsed as it is drawn, one operation at a time, and never
+     * becomes a list: its list would take about 16 bytes for each byte of content and could not
+     * fit the cache anyway, so a 4 MB plot needed 220 MB and was parsed again at every render
+     * (#978). A shorter one goes through [operations] and its cache. The walk stops when
+     * [action] returns false.
+     */
+    internal fun forEachOperation(
+        colorSpaces: Map<String, io.github.yuroyami.kitepdf.core.render.KiteColorSpace>,
+        action: (io.github.yuroyami.kitepdf.content.Operation) -> Boolean,
+    ) {
+        val number = reference?.objectNumber
+        val cached = number?.let { document.cachedOperations(it) }
+            ?: if (contentBytes.size > document.streamedContentBytes) {
+                return io.github.yuroyami.kitepdf.content.ContentStreamParser.forEachOperation(contentBytes, colorSpaces, action)
+            } else operations(colorSpaces)
+        for (op in cached) if (!action(op)) return
+    }
+
     internal fun operations(colorSpaces: Map<String, io.github.yuroyami.kitepdf.core.render.KiteColorSpace>): List<io.github.yuroyami.kitepdf.content.Operation> {
         val parse = { io.github.yuroyami.kitepdf.content.ContentStreamParser.parse(contentBytes, colorSpaces) }
         val number = reference?.objectNumber ?: return parse()

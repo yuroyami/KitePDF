@@ -466,6 +466,21 @@ public class PdfDocument private constructor(
         }
 
     /**
+     * Page content longer than this, decoded, is drawn as it is parsed and never kept as a list
+     * (#978). Its list would take about 16 bytes for each byte, the default budget of the
+     * operation cache for 1 MiB, so it could not be kept anyway. Tests lower or raise it.
+     */
+    internal var streamedContentBytes: Int = 1 shl 20
+
+    /** The cached operations of object [objectNumber], or null on a miss, which parses nothing. */
+    internal fun cachedOperations(objectNumber: Long): List<Operation>? = lock.withLock {
+        operationCache.remove(objectNumber)?.let { hit ->
+            operationCache[objectNumber] = hit
+            hit.operations
+        }
+    }
+
+    /**
      * The operations of the content that object [objectNumber] holds. On a miss, [parse]
      * makes them outside the lock, and the first result stored wins.
      */
