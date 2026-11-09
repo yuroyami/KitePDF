@@ -16,7 +16,9 @@ final class io.github.yuroyami.kitepdf.xps/XpsDocument : io.github.yuroyami.kite
 
     final object Companion { // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion|null[0]
         final fun isXps(kotlin/ByteArray): kotlin/Boolean // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion.isXps|isXps(kotlin.ByteArray){}[0]
+        final fun open(io.github.yuroyami.kitepdf.core/KiteByteSource): io.github.yuroyami.kitepdf.xps/XpsDocument // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion.open|open(io.github.yuroyami.kitepdf.core.KiteByteSource){}[0]
         final fun open(kotlin/ByteArray): io.github.yuroyami.kitepdf.xps/XpsDocument // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion.open|open(kotlin.ByteArray){}[0]
+        final fun openOrNull(io.github.yuroyami.kitepdf.core/KiteByteSource): io.github.yuroyami.kitepdf.xps/XpsDocument? // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion.openOrNull|openOrNull(io.github.yuroyami.kitepdf.core.KiteByteSource){}[0]
         final fun openOrNull(kotlin/ByteArray): io.github.yuroyami.kitepdf.xps/XpsDocument? // io.github.yuroyami.kitepdf.xps/XpsDocument.Companion.openOrNull|openOrNull(kotlin.ByteArray){}[0]
     }
 }

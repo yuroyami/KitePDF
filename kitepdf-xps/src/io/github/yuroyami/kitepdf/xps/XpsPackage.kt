@@ -11,13 +11,18 @@ import io.github.yuroyami.kitepdf.core.zip.ZipReader
 
 /** OPC part access, ECMA-388 §9 and the OPC ZIP mapping in ISO/IEC 29500-2. */
 internal class XpsPackage(
-    bytes: ByteArray,
+    private val zip: ZipReader,
     /** The markup of the parsed pages the package keeps. */
     parsedPageBytes: Long = PARSED_PAGE_BYTES,
     /** The decoded image brushes the package keeps. */
     imageBytes: Long = IMAGE_BYTES,
 ) {
-    private val zip = ZipReader(bytes)
+    constructor(
+        bytes: ByteArray,
+        parsedPageBytes: Long = PARSED_PAGE_BYTES,
+        imageBytes: Long = IMAGE_BYTES,
+    ) : this(ZipReader(bytes), parsedPageBytes, imageBytes)
+
     private val names = buildMap {
         for (name in zip.names) {
             put(name.lowercase(), name)

@@ -27,7 +27,9 @@ public final class io/github/yuroyami/kitepdf/xps/XpsDocument : io/github/yuroya
 
 public final class io/github/yuroyami/kitepdf/xps/XpsDocument$Companion {
 	public final fun isXps ([B)Z
+	public final fun open (Lio/github/yuroyami/kitepdf/core/KiteByteSource;)Lio/github/yuroyami/kitepdf/xps/XpsDocument;
 	public final fun open ([B)Lio/github/yuroyami/kitepdf/xps/XpsDocument;
+	public final fun openOrNull (Lio/github/yuroyami/kitepdf/core/KiteByteSource;)Lio/github/yuroyami/kitepdf/xps/XpsDocument;
 	public final fun openOrNull ([B)Lio/github/yuroyami/kitepdf/xps/XpsDocument;
 }
 

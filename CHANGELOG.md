@@ -1044,6 +1044,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The differential sweep scores the mean error of the worst 24-pixel tile of each page too, so a page that loses
   or gains a small shape of any colour fails: a pale 40-pixel square that vanished from a Letter page moved the
   page scores by less than their margins and scores 0.15 in its tile (#775).
+- `CbzDocument.open` and `XpsDocument.open`, and their `openOrNull`, take a `KiteByteSource` too, so a comic or
+  an XPS package larger than the heap opens: the archive reader fetches the directory, each page image or part
+  when it is drawn, and nothing else (#906).
 
 ## [0.13.0] - 2026-10-09
 

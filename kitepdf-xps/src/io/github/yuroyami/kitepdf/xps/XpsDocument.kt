@@ -4,7 +4,9 @@ import io.github.yuroyami.kitepdf.core.KiteCancellation
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.KiteLink
+import io.github.yuroyami.kitepdf.core.KiteByteSource
 import io.github.yuroyami.kitepdf.core.KiteMetadata
+import io.github.yuroyami.kitepdf.core.zip.ZipReader
 import io.github.yuroyami.kitepdf.core.KitePage
 import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.core.KiteStructuredText
@@ -47,8 +49,26 @@ public class XpsDocument private constructor(
          * references can be recovered from the package.
          */
         @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class)
-        public fun open(bytes: ByteArray): XpsDocument {
-            val packageData = XpsPackage(bytes)
+        public fun open(bytes: ByteArray): XpsDocument = open(XpsPackage(bytes))
+
+        /**
+         * [open] from a [KiteByteSource], holding only the package's directory and the parts that
+         * the pages read: each page's markup, font and image is read from [source] when it is drawn
+         * (#906). The caller keeps [source] open while it uses the document, and closes it after.
+         *
+         * @throws KiteFormatException as [open] does.
+         */
+        @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class)
+        public fun open(source: KiteByteSource): XpsDocument = open(XpsPackage(ZipReader(source)))
+
+        /** [open] from a [KiteByteSource], but null instead of an exception for an unreadable package. */
+        public fun openOrNull(source: KiteByteSource): XpsDocument? = try {
+            open(source)
+        } catch (_: Exception) {
+            null
+        }
+
+        private fun open(packageData: XpsPackage): XpsDocument {
             val sequencePart = packageData.sequencePart()
                 ?: throw KiteFormatException("xps: no fixed document sequence")
             val sequence = packageData.xml(sequencePart)

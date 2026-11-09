@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.cbz
 
+import io.github.yuroyami.kitepdf.core.KiteByteSource
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteMetadata
 import io.github.yuroyami.kitepdf.core.KiteOutlineItem
@@ -84,6 +85,41 @@ public class CbzDocument private constructor(
             archiveKindOf(bytes)?.let { throw KiteFormatException("$it archives are not supported: a comic opens from a ZIP archive (CBZ)") }
             val zip = runCatching { ZipReader(bytes) }.getOrNull()
                 ?: throw KiteFormatException("not a readable ZIP archive (${bytes.size} bytes)")
+            return open(zip)
+        }
+
+        /**
+         * [open] from a [KiteByteSource], holding only the archive's directory and the pages that
+         * are drawn: each image is read from [source] when its page needs it, so a comic larger
+         * than the heap opens (#906). The caller keeps [source] open while it uses the document,
+         * and closes it after.
+         *
+         * @throws KiteFormatException as [open] does.
+         */
+        @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class)
+        public fun open(source: KiteByteSource): CbzDocument {
+            val head = ByteArray(minOf(source.size, 8L).toInt())
+            var got = 0
+            while (got < head.size) {
+                val n = runCatching { source.read(got.toLong(), head, got, head.size - got) }.getOrDefault(-1)
+                if (n <= 0) break
+                got += n
+            }
+            archiveKindOf(head.copyOf(got))?.let { throw KiteFormatException("$it archives are not supported: a comic opens from a ZIP archive (CBZ)") }
+            val zip = runCatching { ZipReader(source) }.getOrNull()
+                ?: throw KiteFormatException("not a readable ZIP archive (${source.size} bytes)")
+            return open(zip)
+        }
+
+        /** [open] from a [KiteByteSource], but null instead of an exception on anything unreadable. */
+        public fun openOrNull(source: KiteByteSource): CbzDocument? =
+            try {
+                open(source)
+            } catch (_: Exception) {
+                null
+            }
+
+        private fun open(zip: ZipReader): CbzDocument {
             val names = zip.names
                 .filter { !isJunkEntry(it) }
                 .filter { it.substringAfterLast('.').lowercase() in CBZ_IMAGE_EXTENSIONS }
