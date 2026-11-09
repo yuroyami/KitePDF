@@ -120,15 +120,15 @@ internal class LinearizedWriter(
 
         val openDocumentKeys = setOf("ViewerPreferences", "PageMode", "Threads", "OpenAction", "AcroForm")
         val outlinesFirst = root.getName("PageMode") == "UseOutlines" && root.map["Outlines"] != null
-        val openDocument = sortedSetOf<Long>()
-        val firstPrivate = sortedSetOf<Long>()
-        val firstShared = sortedSetOf<Long>()
-        val otherPrivate = sortedSetOf<Long>()
-        val otherShared = sortedSetOf<Long>()
-        val thumbPrivate = sortedSetOf<Long>()
-        val thumbShared = sortedSetOf<Long>()
-        val other = sortedSetOf<Long>()
-        val outlines = sortedSetOf<Long>()
+        val openDocument = HashSet<Long>()
+        val firstPrivate = HashSet<Long>()
+        val firstShared = HashSet<Long>()
+        val otherPrivate = HashSet<Long>()
+        val otherShared = HashSet<Long>()
+        val thumbPrivate = HashSet<Long>()
+        val thumbShared = HashSet<Long>()
+        val other = HashSet<Long>()
+        val outlines = HashSet<Long>()
         for ((obj, users) in usersOf) {
             var inOpen = false; var inFirst = false; var otherPages = 0; var thumbs = 0; var others = 0
             var inOutlines = false; var isRoot = false
@@ -157,19 +157,19 @@ internal class LinearizedWriter(
             }
         }
 
-        val part4 = listOf(catalog) + openDocument
+        val part4 = listOf(catalog) + openDocument.sorted()
         val part6 = ArrayList<Long>()
         firstPrivate.remove(pages[0])
         part6 += pages[0]
-        part6 += firstPrivate
-        part6 += firstShared
+        part6 += firstPrivate.sorted()
+        part6 += firstShared.sorted()
         val outlineRoot = (root.map["Outlines"] as? PdfReference)?.objectNumber
         fun outlinesTo(part: MutableList<Long>): Int {
             if (outlineRoot == null || outlineRoot !in outlines) return 0
             val start = part.size
             part += outlineRoot
             outlines.remove(outlineRoot)
-            part += outlines
+            part += outlines.sorted()
             outlines.clear()
             return part.size - start
         }
@@ -184,7 +184,7 @@ internal class LinearizedWriter(
             for (obj in objectsOf[User.Page(i)].orEmpty().sorted()) if (otherPrivate.remove(obj)) { part7 += obj; n++ }
             pageObjectCount[i] = n
         }
-        val part8 = ArrayList(otherShared)
+        val part8 = ArrayList(otherShared.sorted())
         val part9 = ArrayList<Long>()
         for (obj in objectsOf[User.RootKey("Pages")].orEmpty().sorted()) if (other.remove(obj)) part9 += obj
         for ((i, page) in pages.withIndex()) {
@@ -192,10 +192,10 @@ internal class LinearizedWriter(
             if (thumb != null && thumbPrivate.remove(thumb)) part9 += thumb
             for (obj in objectsOf[User.Thumb(i)].orEmpty().sorted()) if (thumbPrivate.remove(obj)) part9 += obj
         }
-        part9 += thumbShared
+        part9 += thumbShared.sorted()
         val outlineStart9 = part9.size
         val outlineCount9 = if (!outlinesFirst) outlinesTo(part9) else 0
-        part9 += other
+        part9 += other.sorted()
         // An object no user reaches, such as a stream's indirect /Length, is not written.
 
         // Numbers: the second half from 1, then the linearization dictionary, part 4, the
