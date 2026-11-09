@@ -955,6 +955,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EPUB layout connects Arabic letters in a font that has no joining features: each letter takes the presentation
   form its cmap maps, and lam with alef the lam-alef ligature, as HarfBuzz's Arabic fallback does, where every
   letter drew isolated (#636).
+- EPUB layout moves Thai tone marks and vowels in a font that has no GSUB for Thai: they take the Private Use
+  Area variants that such fonts carry, lower or further left, and a consonant drops its descender before a lower
+  vowel, as HarfBuzz does (#637).
 
 ## [0.13.0] - 2026-10-09
 

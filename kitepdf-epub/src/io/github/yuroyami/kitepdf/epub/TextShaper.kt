@@ -210,6 +210,8 @@ internal object TextShaper {
             }
             // A font with no init, medi or fina takes the presentation forms its cmap maps, as HarfBuzz falls back (#636).
             if (script == "arab" && forms != null && !gsub.hasArabicJoining) ArabicFallback.apply(glyphs, glyphCodes, glyphForms, face::gidFor)
+            // A font with no GSUB for Thai takes the Private Use Area variants of its marks, as HarfBuzz falls back (#637).
+            if (script == "thai" && !gsub.hasScript("thai")) ThaiPuaFallback.apply(glyphs, glyphCodes, face::gidFor)
             val manualZwj = if (arabic) ARABIC_MANUAL_ZWJ else emptySet()
             gsub.substitute(glyphs, script, null, stages(script, optionalLigatures), POSITIONAL + MIRRORED + JAMO, manualZwj = manualZwj)
         }
