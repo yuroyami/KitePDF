@@ -854,6 +854,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A triangle or patch mesh painted with `sh` rasterizes over the page, not its whole box, and up to 8 megapixels
   at device resolution, so a mesh that runs past the page or covers a page at print resolution no longer comes
   out soft (#795).
+- The stream objects a PDF document has resolved stay within 32 MB, the first resolved leaving first, and
+  `PdfDocument.dropObjectCache()` frees them under memory pressure; each held a copy of its bytes for the life of
+  the document (#820).
 
 ## [0.13.0] - 2026-10-09
 

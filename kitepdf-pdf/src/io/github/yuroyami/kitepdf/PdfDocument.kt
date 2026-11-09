@@ -107,7 +107,37 @@ public class PdfDocument private constructor(
      * proceed in parallel; on a race the first non-null write wins.
      */
     private val lock = KiteLock()
-    private val objectCache = HashMap<Long, PdfObject?>()
+    private val objectCache = LinkedHashMap<Long, PdfObject?>()
+
+    /**
+     * The bytes of the streams [objectCache] holds. Each holds its own copy of its body, so past
+     * [OBJECT_STREAM_BYTES] the streams resolved first leave, and resolve again from the file when
+     * asked; dictionaries and arrays are small and stay (#820).
+     */
+    private var cachedStreamBytes = 0L
+
+    /** [cachedStreamBytes], for a test. */
+    internal val heldStreamBytes: Long get() = lock.withLock { cachedStreamBytes }
+
+    /** Under [lock]: drops the streams resolved first until those cached fit [budget]. */
+    private fun trimStreams(budget: Long) {
+        if (cachedStreamBytes <= budget) return
+        val it = objectCache.entries.iterator()
+        while (cachedStreamBytes > budget && it.hasNext()) {
+            val value = it.next().value as? PdfStream ?: continue
+            cachedStreamBytes -= value.rawBytes.size
+            it.remove()
+        }
+    }
+
+    /**
+     * Frees the stream objects this document has resolved, each of which holds a copy of its
+     * bytes, for example when the app runs low on memory. A stream resolves again from the file
+     * when it is next read (#820).
+     */
+    public fun dropObjectCache() {
+        lock.withLock { trimStreams(0L) }
+    }
     private val objStreamCache = HashMap<Long, Map<Int, PdfObject>>()
 
     /** The document catalog (/Root in the trailer). */
@@ -356,6 +386,7 @@ public class PdfDocument private constructor(
         dropDecodedImageCache()
         dropOperationCache()
         dropFontCache()
+        dropObjectCache()
     }
 
     /**
@@ -861,6 +892,10 @@ public class PdfDocument private constructor(
             if (existing != null) existing
             else {
                 objectCache[ref.objectNumber] = resolved
+                if (resolved is PdfStream) {
+                    cachedStreamBytes += resolved.rawBytes.size
+                    trimStreams(OBJECT_STREAM_BYTES)
+                }
                 resolved
             }
         }
@@ -1399,3 +1434,6 @@ internal data class PageInheritable(
         rotate = (missingAsNull { node["Rotate"]?.resolve(refs) } as? PdfInt)?.value ?: rotate,
     )
 }
+
+/** The bytes of stream objects a document keeps resolved, past which the first resolved leave (#820). */
+private const val OBJECT_STREAM_BYTES: Long = 32L shl 20
