@@ -735,6 +735,9 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
                     groups.clear()
                     content()
                 } finally {
+                    // The clips and layers the content left open end on the bitmap, so a group
+                    // still open composites into it before its pixels are read (#893).
+                    offscreen.restoreToCount(1)
                     canvas = savedCanvas
                     openLayers = savedOpen
                     layers = savedLayers

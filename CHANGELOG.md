@@ -1076,6 +1076,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   offset with positional reads, for the source openers of every format (#906).
 - `KitePrintAdapter` in `kitepdf-native-renderer` prints a document on Android through `PrintManager`: each page
   fitted and centred on the picked paper, as it prints (#951).
+- A raster step on the Android canvas ends the groups and clips its content left open before it reads the step's
+  bitmap, as on Skia. A group still open there drew nothing, because its layer had not composited yet. The canvas's
+  soft masks, groups, image blends and sampling, stroke pen and raster steps now have host tests under
+  Robolectric (#893).
 
 ## [0.13.0] - 2026-10-09
 
