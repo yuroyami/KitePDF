@@ -866,6 +866,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PdfDocument.catalog`, `PdfPage.reference`, `resources` and `annotationReferences`, and
   `PdfEditor.addFlateStream`. A call through the resolver interface or a helper that takes the document as a
   resolver warns too (#712).
+- The platform page says how an Apple app uses KitePDF: a Kotlin Multiplatform app adds the klibs, and a Swift-
+  only app links an XCFramework with `scripts/apple_frameworks.py` (#729).
 
 ## [0.13.0] - 2026-10-09
 

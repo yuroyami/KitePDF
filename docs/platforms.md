@@ -34,6 +34,27 @@ On the JVM and Android, every artifact is Java 11 bytecode (class file version 5
 - `kitepdf-skia-renderer` builds for the targets of Skiko, the Kotlin binding for Skia. Skiko has no build for Windows native or watchOS.
 - `kitepdf-native-renderer` draws with the 2D API of each platform: `Graphics2D` on the JVM, `android.graphics.Canvas` on Android, CoreGraphics on Apple platforms and Canvas2D in the browser. On wasmJs, use the Skia renderer.
 
+## Apple apps
+
+The Apple artifacts on Maven Central are klibs, which only a Kotlin Multiplatform build reads. There is no framework, Swift package or CocoaPods spec to download, and the releases attach none.
+
+- A Kotlin Multiplatform app adds the coordinates to its shared module, as [Getting started](getting-started.md#1-add-the-dependency) shows,, and can export a framework of its own to Swift code. The iOS sample, `sample-ios`, is an app of this kind, written in Kotlin.
+- A Swift-only app links frameworks from a checkout of this repository. `scripts/apple_frameworks.py` runs the Kotlin/Native compiler on the klibs that `./kotlin build` writes. It needs a Mac with Xcode, because it calls `lipo` and `xcodebuild`.
+
+Build the klibs of each platform first:
+
+```bash
+./kotlin build -p iosArm64 -p iosSimulatorArm64 -p iosX64
+```
+
+Then link a release XCFramework, here of the PDF module:
+
+```bash
+python3 scripts/apple_frameworks.py --platforms iosArm64,iosSimulatorArm64,iosX64 --framework KitePDF
+```
+
+The XCFramework lands in `<module>/build/XCFrameworks/release/<Name>.xcframework`, and the per-platform frameworks in `<module>/build/bin/<platform>/releaseFramework/`. Leave out `--framework` to link all ten, add `--build-type debug` for debug frameworks, and `--no-xcframework` to skip the merge. The frameworks are `KitePDFBundle` (`kitepdf`), `KitePDFCore`, `KitePDF` (`kitepdf-pdf`), `KitePDFEpub`, `KitePDFCbz`, `KitePDFXps`, `KitePDFSvg`, `KitePDFJavaScript`, `KitePDFCompose` (no iOS x64) and `KitePDFNativeRenderer`. The klibs keep their KDoc, so the framework headers carry the docs.
+
 ## Android minimum API levels
 
 Each artifact needs its own minimum API level. The `minSdk` of your app must be at least the highest level of the artifacts that it adds.
