@@ -161,8 +161,13 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
                     val glyphMatrix = textToDevice
                         .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                    emitPath(outline, glyphMatrix)
-                    paint(blendMode) { ctx.asDynamic().fill("nonzero") }
+                    // The outline's Path2D, in font units, made once and filled under the glyph's
+                    // matrix: a page of 3,000 glyphs emitted each outline's commands on every draw (#911).
+                    val path = glyphPath(outline)
+                    ctx.save()
+                    ctx.transform(glyphMatrix.a, glyphMatrix.b, glyphMatrix.c, glyphMatrix.d, glyphMatrix.e, glyphMatrix.f)
+                    paint(blendMode) { ctx.asDynamic().fill(path, "nonzero") }
+                    ctx.restore()
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
@@ -834,6 +839,23 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         }
     }
 
+    /** Glyph outlines as Path2D objects in font units, the ones used last kept, up to [GLYPH_PATHS] (#911). */
+    private val glyphPaths = LinkedHashMap<KitePath, Path2D>()
+
+    /** How many glyph outlines this canvas has turned into a Path2D, for a test. */
+    internal var glyphPathConversions: Int = 0
+        private set
+
+    private fun glyphPath(outline: KitePath): Path2D {
+        // Taken out and put back, so the map's order is the order of last use.
+        glyphPaths.remove(outline)?.let { glyphPaths[outline] = it; return it }
+        glyphPathConversions++
+        val path = toPath2D(outline, KiteMatrix.IDENTITY)
+        glyphPaths[outline] = path
+        if (glyphPaths.size > GLYPH_PATHS) glyphPaths.remove(glyphPaths.keys.first())
+        return path
+    }
+
     private fun toPath2D(src: KitePath, ctm: KiteMatrix): Path2D {
         val p = Path2D()
         for (seg in src.segments) {
@@ -897,3 +919,6 @@ public class Canvas2dCanvas(ctx: CanvasRenderingContext2D) : KiteCanvas {
         KiteBlendMode.Luminosity -> "luminosity"
     }
 }
+
+/** The glyph outlines a [Canvas2dCanvas] keeps as Path2D objects, the count AWT keeps glyph rasters for (#911). */
+private const val GLYPH_PATHS = 4096
