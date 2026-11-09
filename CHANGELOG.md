@@ -944,6 +944,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteStructuredText.words()` gives the words of a page in reading order, each with its text, char range and
   bounds, and `wordAt(x, y)` the word under a point, by the rules of UAX #29 that need no dictionary. PDF, EPUB
   and XPS pages give them alike (#639).
+- A long chapter whose style sheet has a rule such as `h1 ~ p` lays out in linear time: the subsequent-sibling
+  combinator reuses the earlier sibling it found, and the first index lookup of a sibling gives every sibling its
+  index, where n paragraphs still cost n² / 2 steps (#990).
 
 ## [0.13.0] - 2026-10-09
 

@@ -41,8 +41,15 @@ public sealed class KiteXmlNode {
             val siblings = parent?.children ?: return -1
             val hint = siblingHint
             if (hint in siblings.indices && siblings[hint] === this) return hint
-            val found = siblings.indexOfFirst { it === this }
-            siblingHint = found
+            // One pass gives every sibling its index, so the first call for each of n siblings
+            // does not scan the parent again: n calls cost n steps, not n^2 / 2 (#990).
+            var found = -1
+            for (i in siblings.indices) {
+                val c = siblings[i]
+                if (c is Element) c.siblingHint = i
+                if (c === this) found = i
+            }
+            if (found < 0) siblingHint = -1
             return found
         }
     }

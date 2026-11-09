@@ -450,16 +450,38 @@ internal class Selector(
                 return match(index - 1, s, cx, anchor)
             }
             Combinator.SUBSEQUENT_SIBLING -> {
+                // `X ~ Y` with X a single compound: one sibling before that matches X is enough.
+                // The last one found is checked again and reused, so the siblings of a long
+                // chapter are not scanned again from each one (#990).
+                val simple = index == 1 && anchor == null
+                if (simple) {
+                    val known = siblingWitness
+                    if (known != null && known.parent === el.parent && known.witness.parent === el.parent &&
+                        known.witness !== el && known.witness.indexInParent() < el.indexInParent() &&
+                        parts[0].matches(known.witness, cx)
+                    ) {
+                        return match(0, known.witness, cx, null)
+                    }
+                }
                 var s = previousElement(el)
                 while (s != null) {
                     val r = match(index - 1, s, cx, anchor)
-                    if (r != FAILS_LOCALLY) return r
+                    if (r != FAILS_LOCALLY) {
+                        if (simple && r == MATCHES) siblingWitness = SiblingWitness(el.parent, s)
+                        return r
+                    }
                     s = previousElement(s)
                 }
                 return FAILS_ALL_SIBLINGS
             }
         }
     }
+
+    /** A sibling that matched the first compound of `X ~ Y`, and its parent, which [match] checks again before it reuses it. */
+    private class SiblingWitness(val parent: KiteXmlNode.Element?, val witness: KiteXmlNode.Element)
+
+    @kotlin.concurrent.Volatile
+    private var siblingWitness: SiblingWitness? = null
 
     /** Whether [el] stands to [anchor] as [combinator] says. */
     private fun related(anchor: KiteXmlNode.Element, el: KiteXmlNode.Element, combinator: Combinator): Boolean = when (combinator) {
