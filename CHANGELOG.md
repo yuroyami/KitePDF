@@ -1057,6 +1057,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on demand, and SVG, FB2, MOBI and HTML are read whole up to `maxWholeBytes` (#906).
 - `KiteDoc.openUrlRanged` in `kitepdf-net` opens a remote document by HTTP range requests, fetching only the
   parts a page or a chapter reads; a server that ignores ranges gets a whole download. Not on JS and Wasm (#906).
+- `KiteFileSource` in `kitepdf-core` on the JVM and Android: a file on disk as a `KiteByteSource`, read at an
+  offset with positional reads, for the source openers of every format (#906).
 
 ## [0.13.0] - 2026-10-09
 

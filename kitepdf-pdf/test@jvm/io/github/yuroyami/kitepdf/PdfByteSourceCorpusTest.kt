@@ -1,10 +1,10 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.core.KiteByteSource
+import io.github.yuroyami.kitepdf.core.KiteFileSource
 import io.github.yuroyami.kitepdf.difftest.CorpusSelection
 import org.junit.Assume.assumeTrue
 import java.io.File
-import java.io.RandomAccessFile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -16,21 +16,19 @@ import kotlin.test.assertTrue
  */
 class PdfByteSourceCorpusTest {
 
-    /** A file on disk, read at each offset the parser asks for. */
+    /** A [KiteFileSource] that counts what the parser fetches. */
     private class FileSource(file: File) : KiteByteSource, AutoCloseable {
-        private val raf = RandomAccessFile(file, "r")
+        private val file = KiteFileSource(file)
         var fetched = 0L
-        override val size: Long = raf.length()
+        override val size: Long get() = file.size
 
         override fun read(position: Long, into: ByteArray, offset: Int, length: Int): Int {
-            if (position >= size) return -1
-            raf.seek(position)
-            val n = raf.read(into, offset, length)
+            val n = file.read(position, into, offset, length)
             if (n > 0) fetched += n
             return n
         }
 
-        override fun close() = raf.close()
+        override fun close() = file.close()
     }
 
     private fun texts(doc: PdfDocument): List<String> =

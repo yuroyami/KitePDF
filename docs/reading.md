@@ -20,21 +20,16 @@ println("${doc.pageCount} pages, PDF ${doc.version}")
 
 ```kotlin
 import io.github.yuroyami.kitepdf.PdfDocument
-import io.github.yuroyami.kitepdf.core.KiteByteSource
-import java.io.RandomAccessFile
+import io.github.yuroyami.kitepdf.core.KiteFileSource
+import java.io.File
 
-val file = RandomAccessFile("/scans/archive.pdf", "r")
-val source = object : KiteByteSource {
-    override val size = file.length()
-    override fun read(position: Long, into: ByteArray, offset: Int, length: Int): Int {
-        file.seek(position)
-        return file.read(into, offset, length)
-    }
+KiteFileSource(File("/scans/archive.pdf")).use { source ->
+    val doc = PdfDocument.open(source, password = null)
+    // ... read the document ...
 }
-val doc = PdfDocument.open(source, password = null)
-// ... read the document ...
-file.close()
 ```
+
+`KiteFileSource` is in `kitepdf-core` on the JVM and Android. On another platform, implement `KiteByteSource` over your own file handle: `size` and a `read` at an offset.
 
 A file whose cross-reference table is damaged is rebuilt from a scan of the whole source, a page at a time. Saving or signing the document reads the whole source again, because an incremental update copies the original bytes. A source holds at most 2 GiB.
 

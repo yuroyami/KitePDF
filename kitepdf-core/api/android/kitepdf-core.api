@@ -152,6 +152,13 @@ public final class io/github/yuroyami/kitepdf/core/KiteDocument$DefaultImpls {
 	public static fun topOf (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/core/KiteBookmark;)Ljava/lang/Double;
 }
 
+public final class io/github/yuroyami/kitepdf/core/KiteFileSource : io/github/yuroyami/kitepdf/core/KiteByteSource, java/lang/AutoCloseable {
+	public fun <init> (Ljava/io/File;)V
+	public fun close ()V
+	public fun getSize ()J
+	public fun read (J[BII)I
+}
+
 public class io/github/yuroyami/kitepdf/core/KiteFormatException : java/lang/RuntimeException {
 	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
