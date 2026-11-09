@@ -222,7 +222,8 @@ private fun ThumbnailStripContent(
             val paper = paperColor(pageBackground, theme)
             // A remote picture that lands in the page draws the thumbnail again (#38).
             val contentVersion = page?.let { state.contentVersionOf(it) } ?: 0
-            val raster by produceState<PageRaster?>(null, page, heightPx, paper, theme, decorator, contentVersion) {
+            // Keyed on the rasterizer too, which a new font environment replaces, so the thumbnail follows the new fonts (#664).
+            val raster by produceState<PageRaster?>(null, page, heightPx, paper, theme, decorator, contentVersion, rasterizer) {
                 // Same mandatory guard as KitePageRaster: an exception escaping
                 // produceState aborts the host app, so a failed thumbnail must
                 // degrade to its placeholder instead. A chapter still laying out

@@ -106,4 +106,26 @@ class ThumbnailCacheSceneTest {
             }
         }
     }
+
+    /** A new font environment draws the thumbnails again, as it draws the page again (#664). */
+    @Test
+    fun a_new_font_environment_draws_the_thumbnails_again() {
+        forBothEffectOrders { queued ->
+            val doc = Pages(2)
+            val state = KiteDocViewState(doc)
+            var resolver by mutableStateOf(testFontFamilyResolver())
+            val (scene, driver) = drivenScene(400, 100, queued) {
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalFontFamilyResolver provides resolver) {
+                    Box(Modifier.width(400.dp).height(100.dp)) { KiteThumbnailStrip(state = state) }
+                }
+            }
+            scene.use {
+                driver.pumpUntilState { doc.renders.get() >= 2 }
+                driver.pumpFrames(20)
+                val shown = doc.renders.get()
+                resolver = testFontFamilyResolver()
+                driver.pumpUntilState { doc.renders.get() >= shown + 2 }
+            }
+        }
+    }
 }
