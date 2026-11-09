@@ -1094,6 +1094,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mask draws as alpha, and 400 such squares rendered under Robolectric in 0.65 s instead of 2.3 s. Below API 35
   it draws through the mask's colour filter, which keeps the pixels exact and saves only the group's render
   (#912).
+- The Android canvas turns each embedded glyph outline into a native path once and keeps the 4,096 used last, as
+  the Skia and Canvas2D canvases do, where it built a path segment by segment for every glyph on every draw. The
+  pixels are the same (#911).
 
 ## [0.13.0] - 2026-10-09
 

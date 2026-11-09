@@ -180,14 +180,38 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
                 val glyphMatrix = textToDevice
                     .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                     .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                val p = toAndroidPath(outline, glyphMatrix, scratchPath).apply { fillType = Path.FillType.WINDING }
-                canvas.drawPath(p, paint)
+                // The outline's path, in font units, made once, where a page of 3,000 glyphs built
+                // a path segment by segment for each glyph on every draw (#911). One native call
+                // maps it to the device: filled under the glyph's matrix instead, with a save
+                // and a restore of the canvas, it drew the same pixels a fifth slower.
+                glyphPath(outline).transform(pdfMatrixToAndroid(glyphMatrix), scratchPath)
+                canvas.drawPath(scratchPath, paint)
             }
             penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
         }
         // A glyph that the embedded program gives no outline draws nothing, on every canvas: the
         // program is the source of the glyphs (ISO 32000-1, 9.9), and a host face in its place
         // hid a font that KitePDF could not read (#280, #853).
+    }
+
+    /**
+     * Glyph outlines as paths in font units, the ones used last kept, up to [GLYPH_PATHS], the
+     * count AWT keeps glyph rasters for (#911). A font gives each glyph one outline object.
+     */
+    private val glyphPaths = LinkedHashMap<KitePath, Path>()
+
+    /** How many glyph outlines this canvas has turned into a path, for a test. */
+    internal var glyphPathConversions: Int = 0
+        private set
+
+    private fun glyphPath(outline: KitePath): Path {
+        // Taken out and put back, so the map's order is the order of last use.
+        glyphPaths.remove(outline)?.let { glyphPaths[outline] = it; return it }
+        glyphPathConversions++
+        val path = toAndroidPath(outline, KiteMatrix.IDENTITY).apply { fillType = Path.FillType.WINDING }
+        glyphPaths[outline] = path
+        if (glyphPaths.size > GLYPH_PATHS) glyphPaths.remove(glyphPaths.keys.first())
+        return path
     }
 
     /**
@@ -1129,7 +1153,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
 
     /**
      * One path that fills, strokes, glyphs and shadings reuse, since a draw copies the path it
-     * paints. A clip builds its own (#130).
+     * paints. A clip builds its own (#130). A glyph maps its outline's kept path into it (#911).
      */
     private val scratchPath = Path()
 
@@ -1215,6 +1239,9 @@ private const val MASK_MAX_PIXELS = 1_048_576.0
 
 /** The most pixels a radial shading between two circles draws below API 31: 4 MB of them, scaled up past it. */
 private const val TWO_CIRCLE_MAX_PIXELS = 1_048_576.0
+
+/** The glyph outlines an [AndroidNativeCanvas] keeps as paths, the count AWT keeps glyph rasters for (#911). */
+private const val GLYPH_PATHS = 4096
 
 /** The first API level on which a mask kept as alpha was measured to draw what the mask group's layer draws (#912). */
 private const val KEPT_ALPHA_SDK = 35
