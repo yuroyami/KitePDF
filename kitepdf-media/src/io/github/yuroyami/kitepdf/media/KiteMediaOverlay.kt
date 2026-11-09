@@ -193,11 +193,15 @@ public fun EpubMediaPlayer(
     val scope = rememberCoroutineScope()
     val currentNewPlayer by rememberUpdatedState(newPlayer)
     var player by remember(media) { mutableStateOf<KitePlayer?>(null) }
-    var unplayable by remember(media) { mutableStateOf(false) }
+    // The inputs under which the element could not play. A change of either clears the failure, so a
+    // host that turns allowRemote on, or brings a player, gets the play button back (#716).
+    var failedUnder by remember(media) { mutableStateOf<Pair<Boolean, () -> KitePlayer?>?>(null) }
+    val unplayable = failedUnder == (allowRemote to newPlayer)
 
     /** Opens the element, at the place the session kept for it, and plays it unless [paused]. */
     fun start(byAutoplay: Boolean, paused: Boolean = false) {
         if (player != null || unplayable) return
+        val attempt = allowRemote to newPlayer
         // Null, or a failure, on a platform without a player stack, such as a desktop with no audio output.
         val created = try {
             currentNewPlayer()
@@ -205,7 +209,7 @@ public fun EpubMediaPlayer(
             null
         }
         if (created == null) {
-            unplayable = true
+            failedUnder = attempt
             return
         }
         player = created
@@ -223,7 +227,7 @@ public fun EpubMediaPlayer(
                 null
             }
             if (opened == null) {
-                unplayable = true
+                failedUnder = attempt
                 // Dropping it closes it, through the effect below.
                 player = null
             } else {
@@ -233,7 +237,9 @@ public fun EpubMediaPlayer(
         }
     }
 
-    LaunchedEffect(media) {
+    // Keyed on allowRemote too: an element that could not play its remote source tries again when
+    // the host allows it. An element the reader opened has its player, so this does not restart it.
+    LaunchedEffect(media, allowRemote) {
         when {
             // An element the reader played shows where it stopped, paused, and autoplay does not start it again.
             place != null && session.placeOf(place) != null -> start(byAutoplay = false, paused = true)

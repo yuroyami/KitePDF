@@ -66,6 +66,23 @@ class MediaOverlaySceneTest {
         assertEquals(1, players.size, "one element starts one player")
     }
 
+    /** An element that could not play its remote source tries again once the host allows remote media (#716). */
+    @Test
+    fun a_remote_element_tries_again_when_the_host_allows_it() = runComposeUiTest {
+        val doc = book("""<video src="https://example.test/movie.mp4" width="160" height="120" autoplay="autoplay"></video>""")
+        val remote = androidx.compose.runtime.mutableStateOf(false)
+        setContent {
+            KiteDocView(rememberKiteDocViewState(doc), Modifier.size(400.dp, 600.dp), pageOverlay = { KiteMediaOverlay(allowRemote = remote.value, newPlayer = ::newPlayer) })
+        }
+        // Autoplay makes a player, which finds no source it may play, so the element gives up.
+        waitUntil(timeoutMillis = 10_000) { players.size == 1 }
+        waitForIdle()
+        assertTrue(onAllNodesWithContentDescription("Play").fetchSemanticsNodes().isEmpty(), "an unplayable element shows a play button")
+        remote.value = true
+        val retried = runCatching { waitUntil(timeoutMillis = 10_000) { players.size == 2 } }.isSuccess
+        assertTrue(retried, "the element did not try its source again, players ${players.size}")
+    }
+
     @Test
     fun a_page_plays_nothing_until_an_element_starts() = runComposeUiTest {
         val doc = book(videoBook, files = mapOf("clip.mp4" to fixture("clip.mp4")))
