@@ -125,17 +125,25 @@ Each published module carries `LICENSE` and `NOTICE` in `resources/META-INF`, so
 
 ### Consumer check
 
-`consumer-test/` is an application that uses KitePDF the way the app of a user does: by coordinates, from a repository, never from the source tree. It opens a PDF, a book and an SVG and draws them. It also runs the script of a book and the script of a form through `kitepdf-javascript`, which gets KiteJS from Maven Central. So a broken POM, a missing dependency or a packaging mistake fails there. `consumer-test/` stays a Gradle project with a wrapper of its own, because it checks what a Gradle application sees. CI publishes the libraries to Maven Local and runs it on every push. Before a release, run the same two steps:
+`consumer-test/` is an application that uses KitePDF the way the app of a user does: by coordinates, from a repository, never from the source tree. It opens a PDF, a book and an SVG and draws them. It also runs the script of a book and the script of a form through `kitepdf-javascript`, which gets KiteJS from Maven Central. So a broken POM, a missing dependency or a packaging mistake fails there. `consumer-test/` stays a Gradle project with a wrapper of its own, because it checks what a Gradle application sees.
+
+`consumer-test/` resolves only the JVM jars. `consumer-test-kmp/` resolves the rest (#678): it is a Kotlin Multiplatform library with a JVM and an Android target whose `commonMain` adds `kitepdf` and `kitepdf-compose-viewer` as the README does, so Gradle reads the common metadata, the Android AAR of each module and the viewer's POM. A `wasmJs` target only compiles: with the JVM and Android alone, Gradle skips the compile of `commonMain` against the common metadata. It compiles a composable with `KiteDocView` in common code and in Android code, opens a PDF from the Android artifacts in an Android host test, and on the JVM draws a PDF and a book with `kitepdf-skia-renderer`, opens a PDF from a URL with `kitepdf-net` and a Ktor engine, and loads `kitepdf-media`. It needs an Android SDK with `platforms;android-37.2`, found through `ANDROID_HOME` or a `local.properties`.
+
+CI publishes every module to Maven Local and runs both on every push. Before a release, run the same steps:
 
 ```bash
-./kotlin publish mavenLocal --transitive -m kitepdf -m kitepdf-native-renderer -m kitepdf-javascript
+./kotlin publish mavenLocal --non-transitive -m kitepdf -m kitepdf-core -m kitepdf-pdf -m kitepdf-epub -m kitepdf-cbz -m kitepdf-svg -m kitepdf-xps -m kitepdf-javascript -m kitepdf-media -m kitepdf-net -m kitepdf-native-renderer -m kitepdf-skia-renderer -m kitepdf-compose-viewer
 ```
 
 ```bash
 cd consumer-test && ./gradlew test
 ```
 
-Before a release the check takes the KitePDF modules from Maven Local only, so a module that the publish left out fails it rather than coming from the last release on Maven Central. KiteJS and ImageKodec still come from Maven Central.
+```bash
+cd consumer-test-kmp && ./gradlew build
+```
+
+Before a release the checks take the KitePDF modules from Maven Local only, so a module that the publish left out fails them rather than coming from the last release on Maven Central. KiteJS, KitePlayer, ImageKodec and the other libraries still come from Maven Central. Where Central answers 429 Too Many Requests, `consumer-test-kmp` takes a mirror for those with `-PcentralMirror=https://maven-central.storage-download.googleapis.com/maven2/`. The mirror never serves a KitePDF module.
 
 The publish signs the artifacts, so it needs a signing key in `KOTLIN_TOOLCHAIN_SIGNING_KEY` (and `KOTLIN_TOOLCHAIN_SIGNING_KEY_PASSPHRASE` when the key has one). For Maven Local, a throwaway key is enough. The CI workflow shows how to make one.
 
@@ -143,6 +151,10 @@ After the release reaches Maven Central, check the released artifacts too:
 
 ```bash
 cd consumer-test && ./gradlew test -PkitepdfRepo=central
+```
+
+```bash
+cd consumer-test-kmp && ./gradlew build -PkitepdfRepo=central
 ```
 
 The publish writes to `~/.m2`, where other projects on the machine can pick up the build.
@@ -155,7 +167,7 @@ The publish writes to `~/.m2`, where other projects on the machine can pick up t
 2. publishes every module to Maven Local, signed;
 3. inspects those artifacts with `scripts/inspect_artifacts.py`: Java 11 class files, `META-INF/LICENSE` and `NOTICE`, and the minSdk of each AAR;
 4. publishes to Maven Central, unless it is a dry run;
-5. waits until Central serves the release, then runs `consumer-test` with `-PkitepdfRepo=central`.
+5. waits until Central serves the release, then runs `consumer-test` and `consumer-test-kmp` with `-PkitepdfRepo=central`.
 
 It needs four repository secrets, the names ImageKodec's workflow uses: `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY` (the armoured secret key) and `SIGNING_KEY_PASSWORD`. Only the steps that sign or upload see them.
 

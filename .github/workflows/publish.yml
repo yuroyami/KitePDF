@@ -1,7 +1,7 @@
 name: Publish
 
 # A release of KitePDF: every module and every target built on one Mac, checked, signed and sent
-# to Maven Central, then checked again by the consumer test against what Central serves (#732).
+# to Maven Central, then checked again by the consumer tests against what Central serves (#732, #678).
 # It runs when the owner publishes a GitHub release, and by hand as a dry run that builds and
 # signs without uploading. It never runs on a pull request.
 
@@ -150,3 +150,11 @@ jobs:
       - name: Build and test a consumer against Maven Central
         working-directory: consumer-test
         run: ./gradlew test --stacktrace -PkitepdfRepo=central
+
+      # The multiplatform consumer compiles for Android, so it needs the SDK platform (#678).
+      - name: Install the Android SDK platform
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2" "build-tools;37.0.0"'
+
+      - name: Build and test a multiplatform consumer against Maven Central
+        working-directory: consumer-test-kmp
+        run: ./gradlew build --stacktrace -PkitepdfRepo=central

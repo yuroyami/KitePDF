@@ -15,8 +15,9 @@ name: CI
 #   tvOS and watchOS.
 # - `api` compiles the libraries of every target on macOS, the one host that compiles them all, and checks
 #   the public API of each published module against the dumps in its api/ directory. It then publishes the
-#   libraries to Maven Local and builds the Gradle project in consumer-test/ against them, by coordinates,
-#   as an application does. A broken POM or a missing dependency fails there before a release.
+#   libraries to Maven Local and builds the Gradle projects in consumer-test/ (a JVM application) and
+#   consumer-test-kmp/ (a multiplatform library with JVM and Android targets) against them, by coordinates,
+#   as an application does. A broken POM, a missing dependency or a bad AAR fails there before a release.
 
 on:
   push:
@@ -412,7 +413,7 @@ jobs:
 
   api:
     runs-on: macos-latest
-    # The libraries of every target, then a publish of the JVM consumers' dependencies.
+    # The libraries of every target, then a publish of every module for the two consumers.
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -444,15 +445,22 @@ jobs:
       - name: Check the public API against the dumps, and KITEPDF_VERSION
         run: ./kotlin check abi androidAbi klibAbi version
 
-      # Maven Local needs no real signing key, so this job signs with a throwaway one.
-      - name: Publish the consumer's dependencies to Maven Local
+      # Maven Local needs no real signing key, so this job signs with a throwaway one. Every module that
+      # publish.yml releases, so the consumers resolve each one from here, never from Maven Central (#678).
+      - name: Publish the consumers' dependencies to Maven Local
         run: |
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           mkdir -m 700 "$GNUPGHOME"
           gpg --batch --pinentry-mode loopback --passphrase '' --quick-gen-key 'KitePDF CI <ci@invalid>' rsa3072 sign never
           KOTLIN_TOOLCHAIN_SIGNING_KEY="$(gpg --batch --pinentry-mode loopback --passphrase '' --armor --export-secret-keys)"
           export KOTLIN_TOOLCHAIN_SIGNING_KEY
-          ./kotlin publish mavenLocal --transitive -m kitepdf -m kitepdf-native-renderer -m kitepdf-javascript
+          args=""
+          for m in kitepdf kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps \
+            kitepdf-javascript kitepdf-media kitepdf-net kitepdf-native-renderer kitepdf-skia-renderer kitepdf-compose-viewer; do
+            args="$args -m $m"
+          done
+          # shellcheck disable=SC2086
+          ./kotlin publish mavenLocal --non-transitive $args
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -463,3 +471,9 @@ jobs:
       - name: Build and test a consumer against them
         working-directory: consumer-test
         run: ./gradlew test --stacktrace
+
+      # The common metadata, the Android AAR, the viewer and the optional artifacts, as a
+      # multiplatform app resolves them (#678). ANDROID_HOME points the Android plugin at the SDK.
+      - name: Build and test a multiplatform consumer against them
+        working-directory: consumer-test-kmp
+        run: ./gradlew build --stacktrace
