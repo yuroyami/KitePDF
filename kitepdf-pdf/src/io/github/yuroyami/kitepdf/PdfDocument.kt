@@ -31,6 +31,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteColorSpace
 import io.github.yuroyami.kitepdf.render.DefaultColorSpaces
 import io.github.yuroyami.kitepdf.core.parser.PdfObject
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
+import io.github.yuroyami.kitepdf.parser.PdfFile
 import io.github.yuroyami.kitepdf.parser.PdfRepair
 import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.parser.PdfString
@@ -55,8 +56,9 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
  * val updated: ByteArray = editor.saveIncremental()
  * ```
  *
- * Holds the raw byte buffer plus the xref table; pages and indirect objects
- * are resolved lazily and cached.
+ * Holds the raw byte buffer, or the [io.github.yuroyami.kitepdf.core.KiteByteSource]
+ * it was opened from, plus the xref table; pages and indirect objects are
+ * resolved lazily and cached.
  *
  * Thread-safe for concurrent reads and rendering after construction:
  * object resolution parses from per-call readers and synchronizes only its
@@ -65,7 +67,7 @@ import io.github.yuroyami.kitepdf.writer.PdfEditor
  */
 public class PdfDocument private constructor(
     public val version: String,
-    private val input: ByteArray,
+    private val file: PdfFile,
     @property:KiteRawApi public val xref: Map<Long, XrefEntry>,
     @property:KiteRawApi public val trailer: PdfDictionary,
     private val security: StandardSecurityHandler?,
@@ -78,16 +80,20 @@ public class PdfDocument private constructor(
 
     /**
      * A copy of the document's bytes. Mutating it cannot affect this
-     * document; for zero-copy access use [rawBytes].
+     * document; for zero-copy access use [rawBytes]. A document opened from a
+     * [io.github.yuroyami.kitepdf.core.KiteByteSource] reads the whole source
+     * into it on each call.
      */
-    public val bytes: ByteArray get() = input.copyOf()
+    public val bytes: ByteArray get() = file.array?.copyOf() ?: file.bytes()
 
     /**
      * The live backing array, zero-copy. Mutating it corrupts lazy object
      * resolution, which is why touching it takes the [KiteRawApi] opt-in.
+     * A document opened from a [io.github.yuroyami.kitepdf.core.KiteByteSource]
+     * has no backing array, so each call reads the whole source into a new one.
      */
     @property:KiteRawApi
-    public val rawBytes: ByteArray get() = input
+    public val rawBytes: ByteArray get() = file.bytes()
 
     /** True if the document is encrypted. */
     public val isEncrypted: Boolean get() = security != null
@@ -97,8 +103,6 @@ public class PdfDocument private constructor(
 
     /** The security handler, for the write path ([PdfEditor] re-encrypts staged objects). */
     internal val securityHandler: StandardSecurityHandler? get() = security
-
-    private val reader = ByteReader(input)
 
     /**
      * Guards the resolution caches ([objectCache], [objStreamCache],
@@ -858,8 +862,17 @@ public class PdfDocument private constructor(
         formFields.filter { it.type == PdfFormField.FieldType.Signature }.mapNotNull { PdfSignature.of(it, this) }
     }
 
-    /** The file's bytes, zero-copy, for code in this module that only reads them. */
-    internal val fileBytes: ByteArray get() = input
+    /** The file's bytes, zero-copy for an array, for code in this module that only reads them. */
+    internal val fileBytes: ByteArray get() = file.bytes()
+
+    /** The length of the file in bytes, without reading a source. */
+    internal val fileSize: Int get() = file.size
+
+    /** A new cursor on the file. */
+    internal fun fileReader(): ByteReader = file.reader()
+
+    /** The byte at [index] of the file, or -1 outside it. */
+    internal fun fileByteAt(index: Int): Int = file.byteAt(index)
 
     /**
      * The document as it was when the file ended at byte [end]: the revision that a signature
@@ -867,10 +880,10 @@ public class PdfDocument private constructor(
      * one encryption. Null when those bytes do not hold a readable revision (#448).
      */
     internal fun revisionEndingAt(end: Int): PdfDocument? = runCatching {
-        if (end <= 0 || end > input.size) return null
-        val bytes = input.copyOf(end)
-        val chain = parseWithPrevChain(ByteReader(bytes))
-        PdfDocument(version, bytes, chain.entries, chain.trailer, security).takeIf { isStructurallyUsable(it) }
+        if (end <= 0 || end > file.size) return null
+        val revision = file.prefix(end)
+        val chain = parseWithPrevChain(revision.reader())
+        PdfDocument(version, revision, chain.entries, chain.trailer, security).takeIf { isStructurallyUsable(it) }
     }.getOrNull()
 
     /** Look up a form field by its fully-qualified name; null if not present. */
@@ -957,7 +970,8 @@ public class PdfDocument private constructor(
             if (existing != null) existing
             else {
                 objectCache[ref.objectNumber] = resolved
-                if (resolved is PdfStream) {
+                // A stream of a source holds no copy of its bytes, so it costs nothing to keep (#906).
+                if (resolved is PdfStream && !file.streamsOnDemand) {
                     cachedStreamBytes += resolved.rawBytes.size
                     trimStreams(OBJECT_STREAM_BYTES)
                 }
@@ -1027,9 +1041,9 @@ public class PdfDocument private constructor(
         withCycleClaim(entry.objectNumber) {
             // Per-call reader: the old shared seek-based reader interleaved
             // positions across threads and produced garbage parses.
-            val localReader = ByteReader(input)
+            val localReader = file.reader()
             localReader.seek(entry.byteOffset)
-            val parser = Parser(Lexer(localReader), resolver = this)
+            val parser = Parser(Lexer(localReader), resolver = this, streamsOnDemand = file.streamsOnDemand)
             val indirect = parser.readIndirectObject()
             // M9: a stale/wrong xref offset can land us on a different object.
             // Reject a number mismatch (throw -> cached null) rather than silently
@@ -1045,7 +1059,7 @@ public class PdfDocument private constructor(
     private fun maybeDecrypt(objNum: Long, genNum: Int, value: PdfObject): PdfObject {
         val s = security ?: return value
         if (!s.isAuthenticated) return value
-        return Decryptor.decryptIndirect(objNum, genNum, value, s)
+        return Decryptor.decryptIndirect(objNum, genNum, value, s, streamsOnDemand = file.streamsOnDemand)
     }
 
     private fun resolveFromObjectStream(entry: XrefEntry.Compressed): PdfObject? {
@@ -1076,7 +1090,7 @@ public class PdfDocument private constructor(
         // Look up directly via xref (avoid recursion through resolve cache).
         val entry = xref[objStreamRef] as? XrefEntry.InUse
             ?: throw PdfFormatException("ObjStm $objStreamRef not in xref as in-use")
-        val localReader = ByteReader(input) // per-call reader
+        val localReader = file.reader() // per-call reader
         localReader.seek(entry.byteOffset)
         val parser = Parser(Lexer(localReader), resolver = this)
         val indirect = parser.readIndirectObject()
@@ -1219,8 +1233,36 @@ public class PdfDocument private constructor(
             bytes: ByteArray,
             password: ByteArray = byteArrayOf(),
             allowInvalidPassword: Boolean = false,
-        ): PdfDocument {
-            val reader = ByteReader(bytes)
+        ): PdfDocument = open(PdfFile(bytes), password, allowInvalidPassword)
+
+        /**
+         * Opens a PDF from [source], which holds the file, such as a file on disk, and stays open
+         * for as long as the document lives; close it after the document. The parser reads the
+         * trailer and the cross-reference (ISO 32000-1, 7.5.4 and 7.5.5) from the source, then
+         * each object at its offset when something asks for it, through a few cached pages, and
+         * a stream keeps where its body lies and reads it when it is decoded. So a file larger
+         * than the heap opens, and a stream that no page draws is never fetched. A file whose
+         * cross-reference is broken is repaired by a scan of the whole source, a page at a time.
+         *
+         * [password] opens an encrypted file as the String overload of [open] does. A source of
+         * 2 GiB or more throws [PdfFormatException]. Saving or signing the document reads the
+         * whole source again, since an incremental update appends to the original bytes (7.5.6).
+         */
+        @Throws(io.github.yuroyami.kitepdf.core.PdfFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
+        public fun open(source: io.github.yuroyami.kitepdf.core.KiteByteSource, password: String? = null): PdfDocument {
+            val file = PdfFile(source)
+            return withPassword(password ?: "", allowInvalidPassword = false) { pw, allow -> open(file, pw, allow) }
+        }
+
+        /** [open] from a [io.github.yuroyami.kitepdf.core.KiteByteSource], but null instead of an exception on a malformed or unauthenticated file. */
+        public fun openOrNull(source: io.github.yuroyami.kitepdf.core.KiteByteSource, password: String? = null): PdfDocument? = try {
+            open(source, password)
+        } catch (_: Exception) {
+            null
+        }
+
+        private fun open(file: PdfFile, password: ByteArray, allowInvalidPassword: Boolean): PdfDocument {
+            val reader = file.reader()
             // Header garbage is tolerated; a missing %PDF- marker is not fatal.
             val version = runCatching { parseHeader(reader) }.getOrElse { "1.4" }
 
@@ -1244,8 +1286,8 @@ public class PdfDocument private constructor(
             // on a structurally-good doc throws rather than falling to repair.
             val normal = runCatching {
                 val m = parseWithPrevChain(reader)
-                val sec = buildSecurityHandler(m.entries, m.trailer, bytes, password)
-                val doc = PdfDocument(version, bytes, m.entries, m.trailer, sec)
+                val sec = buildSecurityHandler(m.entries, m.trailer, file, password)
+                val doc = PdfDocument(version, file, m.entries, m.trailer, sec)
                 require(isStructurallyUsable(doc)) { "xref did not resolve a page tree" }
                 doc
             }.getOrNull()
@@ -1255,15 +1297,15 @@ public class PdfDocument private constructor(
             // catalog that leads to a page tree. A file with none is no document, so it fails
             // here instead of at its first use (#584).
             kiteWarn { "open: xref chain unusable, rebuilding by byte scan" }
-            var repaired = PdfRepair.rebuild(reader)
-            val sec = buildSecurityHandler(repaired.entries, repaired.trailer, bytes, password)
+            var repaired = PdfRepair.rebuild(reader, file.streamsOnDemand)
+            val sec = buildSecurityHandler(repaired.entries, repaired.trailer, file, password)
             // Repair reads the members of each object stream, which an encrypted file stores as
             // ciphertext, so once the handler authenticates it reads them again, decrypted (#793).
             if (sec != null && sec.isAuthenticated) {
-                repaired = PdfRepair.rebuild(reader) { num, gen, stream -> Decryptor.decryptIndirect(num, gen, stream, sec) as PdfStream }
+                repaired = PdfRepair.rebuild(reader, file.streamsOnDemand) { num, gen, stream -> Decryptor.decryptIndirect(num, gen, stream, sec) as PdfStream }
             }
             val candidates = repaired.roots.asSequence().map { root ->
-                finish(PdfDocument(version, bytes, repaired.entries, repaired.trailerWith(root), sec, isRepaired = true))
+                finish(PdfDocument(version, file, repaired.entries, repaired.trailerWith(root), sec, isRepaired = true))
             }
             return candidates.firstOrNull { isStructurallyUsable(it) }
                 // Without its password an encrypted file reads its objects as ciphertext, so
@@ -1298,17 +1340,27 @@ public class PdfDocument private constructor(
             password: String,
             allowInvalidPassword: Boolean = false,
         ): PdfDocument {
+            val file = PdfFile(bytes)
+            return withPassword(password, allowInvalidPassword) { pw, allow -> open(file, pw, allow) }
+        }
+
+        /** Tries [password] as UTF-8, then as Latin-1, as the String overload of [open] says. */
+        private inline fun withPassword(
+            password: String,
+            allowInvalidPassword: Boolean,
+            open: (ByteArray, Boolean) -> PdfDocument,
+        ): PdfDocument {
             val utf8 = password.encodeToByteArray()
-            if (password.all { it.code <= 0x7F }) return open(bytes, utf8, allowInvalidPassword)
+            if (password.all { it.code <= 0x7F }) return open(utf8, allowInvalidPassword)
             val latin1 = ByteArray(password.length) { i ->
                 val c = password[i].code
                 (if (c <= 0xFF) c else '?'.code).toByte()
             }
             val first = try {
-                open(bytes, utf8, allowInvalidPassword)
+                open(utf8, allowInvalidPassword)
             } catch (e: KiteWrongPasswordException) {
                 return try {
-                    open(bytes, latin1, allowInvalidPassword)
+                    open(latin1, allowInvalidPassword)
                 } catch (_: KiteWrongPasswordException) {
                     throw e
                 }
@@ -1316,7 +1368,7 @@ public class PdfDocument private constructor(
             if (first.isEncrypted && !first.isAuthenticated) {
                 // allowInvalidPassword=true path: the UTF-8 attempt opened
                 // read-only without authenticating; give Latin-1 one shot.
-                val second = open(bytes, latin1, allowInvalidPassword = true)
+                val second = open(latin1, true)
                 if (second.isAuthenticated) return second
             }
             return first
@@ -1351,13 +1403,13 @@ public class PdfDocument private constructor(
         private fun buildSecurityHandler(
             entries: Map<Long, XrefEntry>,
             trailer: PdfDictionary,
-            bytes: ByteArray,
+            file: PdfFile,
             password: ByteArray,
         ): StandardSecurityHandler? {
             val encryptObj = trailer["Encrypt"] ?: return null
             val encryptDict = when (encryptObj) {
                 is PdfDictionary -> encryptObj
-                is PdfReference -> resolveDictDirect(bytes, entries, encryptObj) ?: return null
+                is PdfReference -> resolveDictDirect(file, entries, encryptObj) ?: return null
                 else -> return null
             }
             val fileIdFirst = (trailer["ID"] as? PdfArray)?.let {
@@ -1379,12 +1431,12 @@ public class PdfDocument private constructor(
          * which must be an unencrypted in-file dictionary (never in an ObjStm).
          */
         private fun resolveDictDirect(
-            bytes: ByteArray,
+            file: PdfFile,
             entries: Map<Long, XrefEntry>,
             ref: PdfReference,
         ): PdfDictionary? {
             val entry = entries[ref.objectNumber] as? XrefEntry.InUse ?: return null
-            val reader = ByteReader(bytes)
+            val reader = file.reader()
             reader.seek(entry.byteOffset)
             return runCatching {
                 Parser(Lexer(reader)).readIndirectObject().value as? PdfDictionary
@@ -1467,7 +1519,7 @@ public class PdfDocument private constructor(
                     val sb = StringBuilder()
                     var p = i + signature.size
                     while (p < reader.size && p < i + signature.size + 8) {
-                        val b = reader.bytes[p].toInt() and 0xFF
+                        val b = reader.byteAt(p)
                         if (b == '\r'.code || b == '\n'.code) break
                         sb.append(b.toChar())
                         p++

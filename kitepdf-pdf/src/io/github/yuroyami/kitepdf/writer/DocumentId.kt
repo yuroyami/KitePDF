@@ -24,10 +24,11 @@ internal object DocumentId {
      * The `/ID` of a file that an edit wrote: the first string of [existing], or one made from
      * [original] when there is none, and a second string from [contents], the file as written.
      * ISO 32000-1, 14.4: the first is permanent, and the file key of an encrypted document is made
-     * from it, while the second changes with each update (#738).
+     * from it, while the second changes with each update (#738). [original] reads the original
+     * file, which a document opened from a source fetches again, so it runs only when needed.
      */
-    fun updated(existing: PdfObject?, original: ByteArray, contents: ByteArray): PdfArray {
-        val first = ((existing as? PdfArray)?.getOrNull(0) as? PdfString) ?: PdfString(Md5.hash(original))
+    fun updated(existing: PdfObject?, original: () -> ByteArray, contents: ByteArray): PdfArray {
+        val first = ((existing as? PdfArray)?.getOrNull(0) as? PdfString) ?: PdfString(Md5.hash(original()))
         return PdfArray(listOf(first, PdfString(Md5.hash(first.bytes + contents))))
     }
 }

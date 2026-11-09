@@ -34,10 +34,9 @@ internal object PdfRepair {
     private val OBJ = "obj".encodeToByteArray()
     private val ENDSTREAM = "endstream".encodeToByteArray()
 
-    /** Every offset where [needle] starts in [bytes], in order. */
-    private fun keywordOffsets(bytes: ByteArray, needle: ByteArray): IntArray {
+    /** Every offset where [needle] starts in the file of [r], in order. */
+    private fun keywordOffsets(r: ByteReader, needle: ByteArray): IntArray {
         val out = ArrayList<Int>()
-        val r = ByteReader(bytes)
         var from = 0
         while (true) {
             val at = r.indexOf(needle, from)
@@ -51,9 +50,17 @@ internal object PdfRepair {
     private const val MAX_OBJ_NUM = 50_000_000L
     private const val MAX_GEN = 65_535
 
-    /** [decryptStream], when given, decrypts an object stream before its members are read (#793). */
-    fun rebuild(reader: ByteReader, decryptStream: ((Long, Int, PdfStream) -> PdfStream)? = null): RepairedFile {
-        val bytes = reader.bytes
+    /**
+     * [decryptStream], when given, decrypts an object stream before its members are read (#793).
+     * The scan reads [reader]'s file through forks of it, so a file opened from a source is read
+     * a window at a time, and with [streamsOnDemand] its streams are not copied (#906).
+     */
+    fun rebuild(
+        reader: ByteReader,
+        streamsOnDemand: Boolean = false,
+        decryptStream: ((Long, Int, PdfStream) -> PdfStream)? = null,
+    ): RepairedFile {
+        val bytes = reader.fork()
         val entries = HashMap<Long, XrefEntry>()
         val objStreamNums = LinkedHashSet<Long>()
 
@@ -89,10 +96,10 @@ internal object PdfRepair {
             // Parse the object body to recover trailer fields and note object streams. Only a copy
             // that parses is kept, as MuPDF's pdf_repair_xref keeps it: a later copy cut off by a
             // partial download replaced the complete one before it, and the page went blank (#811).
-            val r = ByteReader(bytes)
+            val r = reader.fork()
             val obj = runCatching {
                 r.seek(headerStart)
-                Parser(Lexer(r), endstreamAfter = endstreamAfter).readIndirectObject().value
+                Parser(Lexer(r), endstreamAfter = endstreamAfter, streamsOnDemand = streamsOnDemand).readIndirectObject().value
             }.getOrNull() ?: continue
             entries[num] = XrefEntry.InUse(num, gen, headerStart)
             // The scan resumes after a stream it parsed, as MuPDF's pdf_repair_xref does, so the
@@ -125,7 +132,7 @@ internal object PdfRepair {
             if (t < 0) break
             tsearch = t + TRAILER.size
             val dict = runCatching {
-                val r = ByteReader(bytes)
+                val r = reader.fork()
                 r.seek(t + TRAILER.size)
                 Parser(Lexer(r)).readObject() as? PdfDictionary
             }.getOrNull() ?: continue
@@ -171,13 +178,13 @@ internal object PdfRepair {
 
     /** Decode an /ObjStm at [offset]; returns (indexInStream → objectNumber). */
     private fun objStreamMembers(
-        bytes: ByteArray,
+        bytes: ByteReader,
         offset: Int,
         num: Long,
         gen: Int,
         decryptStream: ((Long, Int, PdfStream) -> PdfStream)?,
     ): List<Pair<Int, Long>> {
-        val r = ByteReader(bytes)
+        val r = bytes.fork()
         r.seek(offset)
         val raw = Parser(Lexer(r)).readIndirectObject().value as? PdfStream ?: return emptyList()
         val stream = decryptStream?.invoke(num, gen, raw) ?: raw
@@ -200,21 +207,18 @@ internal object PdfRepair {
      * preceded by whitespace (or start) and followed by whitespace/delimiter/EOF.
      * This rejects "obj" inside "endobj" and "trailer" inside arbitrary text.
      */
-    private fun indexOfToken(bytes: ByteArray, needle: ByteArray, from: Int): Int {
+    private fun indexOfToken(bytes: ByteReader, needle: ByteArray, from: Int): Int {
         var i = from.coerceAtLeast(0)
-        val last = bytes.size - needle.size
-        outer@ while (i <= last) {
-            for (k in needle.indices) {
-                if (bytes[i + k] != needle[k]) { i++; continue@outer }
-            }
-            val before = if (i == 0) -1 else bytes[i - 1].toInt() and 0xFF
-            val after = if (i + needle.size >= bytes.size) -1 else bytes[i + needle.size].toInt() and 0xFF
+        while (true) {
+            i = bytes.indexOf(needle, i)
+            if (i < 0) return -1
+            val before = bytes.byteAt(i - 1)
+            val after = bytes.byteAt(i + needle.size)
             val beforeOk = before == -1 || Lexer.isWhitespace(before)
             val afterOk = after == -1 || Lexer.isWhitespace(after) || Lexer.isDelimiter(after)
             if (beforeOk && afterOk) return i
             i++
         }
-        return -1
     }
 
     /**
@@ -222,20 +226,20 @@ internal object PdfRepair {
      * the object and generation numbers. Returns (objNum, gen, headerStartOffset)
      * or null if the bytes before "obj" aren't a valid header.
      */
-    private fun parseHeaderBackwards(bytes: ByteArray, objKwStart: Int): Triple<Long, Int, Int>? {
+    private fun parseHeaderBackwards(bytes: ByteReader, objKwStart: Int): Triple<Long, Int, Int>? {
         var p = objKwStart - 1
         p = skipWsBack(bytes, p)
         val gen = readDigitsBack(bytes, p) ?: return null
         if (gen.value > MAX_GEN) return null
         p = gen.start - 1
-        if (p < 0 || !Lexer.isWhitespace(bytes[p].toInt() and 0xFF)) return null
+        if (p < 0 || !Lexer.isWhitespace(bytes.byteAt(p))) return null
         p = skipWsBack(bytes, p)
         val num = readDigitsBack(bytes, p) ?: return null
         if (num.value < 0 || num.value > MAX_OBJ_NUM) return null
         // The char before the object number must be whitespace/delimiter/start.
         val before = num.start - 1
         if (before >= 0) {
-            val c = bytes[before].toInt() and 0xFF
+            val c = bytes.byteAt(before)
             if (!Lexer.isWhitespace(c) && !Lexer.isDelimiter(c)) return null
         }
         return Triple(num.value, gen.value.toInt(), num.start)
@@ -243,23 +247,23 @@ internal object PdfRepair {
 
     private data class Digits(val value: Long, val start: Int)
 
-    private fun readDigitsBack(bytes: ByteArray, fromInclusive: Int): Digits? {
+    private fun readDigitsBack(bytes: ByteReader, fromInclusive: Int): Digits? {
         var p = fromInclusive
         var end = p
-        while (p >= 0 && (bytes[p].toInt() and 0xFF) in '0'.code..'9'.code) p--
+        while (p >= 0 && bytes.byteAt(p) in '0'.code..'9'.code) p--
         val start = p + 1
         if (start > end) return null
         var v = 0L
         for (i in start..end) {
-            v = v * 10 + ((bytes[i].toInt() and 0xFF) - '0'.code)
+            v = v * 10 + (bytes.byteAt(i) - '0'.code)
             if (v < 0) return null  // overflow
         }
         return Digits(v, start)
     }
 
-    private fun skipWsBack(bytes: ByteArray, fromInclusive: Int): Int {
+    private fun skipWsBack(bytes: ByteReader, fromInclusive: Int): Int {
         var p = fromInclusive
-        while (p >= 0 && Lexer.isWhitespace(bytes[p].toInt() and 0xFF)) p--
+        while (p >= 0 && Lexer.isWhitespace(bytes.byteAt(p))) p--
         return p
     }
 }

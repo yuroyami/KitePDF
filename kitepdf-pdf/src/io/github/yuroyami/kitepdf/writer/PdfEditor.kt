@@ -8,7 +8,6 @@ import io.github.yuroyami.kitepdf.core.KiteRectangle
 import io.github.yuroyami.kitepdf.content.ContentStreamParser
 import io.github.yuroyami.kitepdf.content.Operation
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
-import io.github.yuroyami.kitepdf.core.ByteReader
 import io.github.yuroyami.kitepdf.core.font.PdfFont
 import io.github.yuroyami.kitepdf.core.parser.PdfBoolean
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
@@ -1787,14 +1786,14 @@ public class PdfEditor internal constructor(
             "Redaction was staged; call saveRewritten() instead. An incremental save " +
                 "would leave the original, unredacted content recoverable in the file."
         }
-        if (staged.isEmpty() && trailerOverrides.isEmpty()) return base.rawBytes.copyOf()
+        if (staged.isEmpty() && trailerOverrides.isEmpty()) return base.bytes
 
-        val out = ByteArrayBuilder(base.rawBytes.size + 1024)
-        out.append(base.rawBytes)
+        val out = ByteArrayBuilder(base.fileSize + 1024)
+        out.append(base.fileBytes)
         // The appended section must start on its own line so byte offsets and
         // the "N G obj" header parse cleanly regardless of how the original ended.
-        val last = base.rawBytes.lastOrNull()
-        if (last != null && last != '\n'.code.toByte() && last != '\r'.code.toByte()) {
+        val last = base.fileByteAt(base.fileSize - 1)
+        if (last != -1 && last != '\n'.code && last != '\r'.code) {
             out.append('\n'.code.toByte())
         }
 
@@ -1840,7 +1839,7 @@ public class PdfEditor internal constructor(
      * all and names none.
      */
     private fun writeTrailer(out: ByteArrayBuilder, xrefOffset: Int) {
-        val prevXref = if (base.isRepaired) null else XrefParser.findStartXref(ByteReader(base.rawBytes))
+        val prevXref = if (base.isRepaired) null else XrefParser.findStartXref(base.fileReader())
         val maxNum = maxOf(
             base.xref.keys.maxOrNull() ?: 0L,
             staged.keys.maxOrNull() ?: 0L,
@@ -1853,7 +1852,7 @@ public class PdfEditor internal constructor(
         base.trailer["Encrypt"]?.let { dict["Encrypt"] = it }
         // Keep the permanent first /ID string (the encryption key is made from it) and write a new
         // second one, as an update does (ISO 32000-1, 14.4; #738).
-        dict["ID"] = DocumentId.updated(base.trailer["ID"], base.rawBytes, out.toByteArray())
+        dict["ID"] = DocumentId.updated(base.trailer["ID"], { base.fileBytes }, out.toByteArray())
         prevXref?.let { dict["Prev"] = PdfInt(it.toLong()) }
         for ((k, v) in trailerOverrides) dict[k] = v
 
@@ -1977,7 +1976,7 @@ public class PdfEditor internal constructor(
 
     /** The `/ID` of a rewrite: a new one when the key is new, else the first string kept (ISO 32000-1, 14.4). */
     private fun rewriteId(encryption: Encryption?, contents: ByteArray): io.github.yuroyami.kitepdf.core.parser.PdfArray =
-        if (encryption?.newId == true) DocumentId.generate(contents) else DocumentId.updated(base.trailer["ID"], base.rawBytes, contents)
+        if (encryption?.newId == true) DocumentId.generate(contents) else DocumentId.updated(base.trailer["ID"], { base.fileBytes }, contents)
 
     private fun fileHeader(out: ByteArrayBuilder, version: String) {
         out.append("%PDF-$version\n".encodeToByteArray())
@@ -1993,7 +1992,7 @@ public class PdfEditor internal constructor(
 
     /** Full rewrite with a classic xref table (PDF 1.4-shaped output). */
     private fun writeWithClassicXref(ordered: List<Long>, remap: Map<Long, Long>, encryption: Encryption?): ByteArray {
-        val out = ByteArrayBuilder(base.rawBytes.size)
+        val out = ByteArrayBuilder(base.fileSize)
         fileHeader(out, "1.7")
 
         val xrefEntries = ArrayList<ClassicXrefWriter.Entry>(ordered.size)
@@ -2048,7 +2047,7 @@ public class PdfEditor internal constructor(
         val encryptNum = maxNew + 3
         val encryptor = encryption?.encryptor
 
-        val out = ByteArrayBuilder(base.rawBytes.size)
+        val out = ByteArrayBuilder(base.fileSize)
         fileHeader(out, "1.5")
         val entries = ArrayList<XRefStreamWriter.XEntry>(ordered.size + 3)
         entries.add(XRefStreamWriter.XEntry(0, 0, 0, 0))   // free-list head

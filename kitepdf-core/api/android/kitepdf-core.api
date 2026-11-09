@@ -15,8 +15,11 @@ public final class io/github/yuroyami/kitepdf/core/ByteArrayBuilder {
 }
 
 public final class io/github/yuroyami/kitepdf/core/ByteReader {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteByteSource;)V
 	public fun <init> ([B)V
 	public final fun advance (I)V
+	public final fun byteAt (I)I
+	public final fun fork ()Lio/github/yuroyami/kitepdf/core/ByteReader;
 	public final fun getBytes ()[B
 	public final fun getSize ()I
 	public final fun indexOf ([BI)I
@@ -1291,6 +1294,7 @@ public final class io/github/yuroyami/kitepdf/core/parser/PdfReference : io/gith
 }
 
 public final class io/github/yuroyami/kitepdf/core/parser/PdfStream : io/github/yuroyami/kitepdf/core/parser/PdfObject {
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/parser/PdfDictionary;Lkotlin/jvm/functions/Function0;)V
 	public fun <init> (Lio/github/yuroyami/kitepdf/core/parser/PdfDictionary;[B)V
 	public final fun component1 ()Lio/github/yuroyami/kitepdf/core/parser/PdfDictionary;
 	public final fun component2 ()[B

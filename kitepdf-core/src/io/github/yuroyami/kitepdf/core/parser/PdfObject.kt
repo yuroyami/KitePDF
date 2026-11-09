@@ -137,18 +137,42 @@ public data class PdfDictionary(val map: Map<String, PdfObject>) : PdfObject(), 
 /**
  * A stream object: a dictionary describing the stream + the raw (still-encoded)
  * bytes. Decoding is deferred until someone calls a filter on it.
+ *
+ * A stream of a document opened from a `KiteByteSource` holds no copy of its bytes: it reads
+ * them from the source each time [rawBytes] is read, so a file with large streams that no page
+ * draws does not hold them (ISO 32000-1, 7.3.8.1 places the body at an offset of its own). Read
+ * [rawBytes] once into a local where it is needed twice.
  */
-public data class PdfStream(
-    val dict: PdfDictionary,
-    val rawBytes: ByteArray,
+public class PdfStream private constructor(
+    public val dict: PdfDictionary,
+    private val stored: ByteArray?,
+    private val body: (() -> ByteArray)?,
 ) : PdfObject() {
 
+    public constructor(dict: PdfDictionary, rawBytes: ByteArray) : this(dict, rawBytes, null)
+
+    /**
+     * A stream whose raw bytes [body] reads when asked, each time, such as from the file that
+     * holds it. [body] throws as a damaged stream does, so a decode of it fails as one would.
+     */
+    public constructor(dict: PdfDictionary, body: () -> ByteArray) : this(dict, null, body)
+
+    /** The raw, still-encoded bytes. A stream that reads them on demand reads them again on each call. */
+    public val rawBytes: ByteArray get() = stored ?: body!!.invoke()
+
+    public operator fun component1(): PdfDictionary = dict
+
+    public operator fun component2(): ByteArray = rawBytes
+
+    public fun copy(dict: PdfDictionary = this.dict, rawBytes: ByteArray = this.rawBytes): PdfStream = PdfStream(dict, rawBytes)
+
     override fun equals(other: Any?): Boolean =
-        other is PdfStream && dict == other.dict && rawBytes.contentEquals(other.rawBytes)
+        other === this || other is PdfStream && dict == other.dict && rawBytes.contentEquals(other.rawBytes)
 
     override fun hashCode(): Int = 31 * dict.hashCode() + rawBytes.contentHashCode()
 
-    override fun toString(): String = "stream(${rawBytes.size} bytes, dict=$dict)"
+    override fun toString(): String =
+        if (stored != null) "stream(${stored.size} bytes, dict=$dict)" else "stream(on demand, dict=$dict)"
 }
 
 /** "N G R": an indirect object reference. Use [resolve] with the document's resolver. */

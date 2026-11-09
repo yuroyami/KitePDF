@@ -278,7 +278,7 @@ public class PdfSigner(
         val bytes = editor.saveIncremental()
         // The placeholders are in the revision just written, after the original bytes: a document
         // that keeps an unfilled placeholder from an earlier saveForSigning must not match it (#922).
-        val revisionStart = doc.rawBytes.size
+        val revisionStart = doc.fileSize
 
         // Find the placeholder: a hex string of exactly 2*placeholderSize
         // ASCII zeros. Verify the closing delimiter so a shorter zero run

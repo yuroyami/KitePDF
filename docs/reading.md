@@ -14,6 +14,30 @@ println("${doc.pageCount} pages, PDF ${doc.version}")
 
 `open` throws `PdfFormatException` for a file that it cannot read, and `KiteWrongPasswordException` when the password is wrong. A file whose cross-reference table is damaged still opens, because KitePDF rebuilds the table from the bytes.
 
+### Opening a file larger than the heap
+
+`open(bytes)` holds the whole file in memory. Give `open` a `KiteByteSource` instead, and KitePDF reads the trailer and the cross-reference table from it, then each object when a page needs it, through a few cached 16 KiB pages. A stream keeps only where its bytes are, and reads them when it is decoded, so a large image or attachment that no page you show draws is never read. Keep the source open while you use the document, and close it after:
+
+```kotlin
+import io.github.yuroyami.kitepdf.PdfDocument
+import io.github.yuroyami.kitepdf.core.KiteByteSource
+import java.io.RandomAccessFile
+
+val file = RandomAccessFile("/scans/archive.pdf", "r")
+val source = object : KiteByteSource {
+    override val size = file.length()
+    override fun read(position: Long, into: ByteArray, offset: Int, length: Int): Int {
+        file.seek(position)
+        return file.read(into, offset, length)
+    }
+}
+val doc = PdfDocument.open(source, password = null)
+// ... read the document ...
+file.close()
+```
+
+A file whose cross-reference table is damaged is rebuilt from a scan of the whole source, a page at a time. Saving or signing the document reads the whole source again, because an incremental update copies the original bytes. A source holds at most 2 GiB.
+
 ### Encrypted PDFs
 
 Pass the password, and KitePDF decrypts each object as it reads it:

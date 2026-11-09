@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it, so a book larger than the heap opens. A 210 MiB book with one large resource failed on a
   192 MB Android heap; it now holds only what its chapters read. Contributed by alvechy in #645.
   The PDF parser and `kitepdf-net` still read one array (#906).
+- `PdfDocument.open` and `openOrNull` take a `KiteByteSource` too, with an optional password. The parser
+  reads the trailer and the cross-reference from it, then each object at its offset when something asks for
+  it, through 32 cached 16 KiB pages, and a stream keeps its offset and length instead of a copy and reads
+  its body when it is decoded. A file with a 32 MiB stream that no page uses draws its first page after
+  fetching 17 KB. Repair scans the source a page at a time, and saving or signing reads it back. `ByteReader`
+  takes a source and gains `fork` and `byteAt`, and `PdfStream` takes a body that it reads on demand (#906).
 - `KiteXmlNode.Element.indexInParent()`: an element's index among its parent's children, remembered and
   checked on the next call, so the selector matcher's sibling steps cost O(1) (#990).
 - `PdfScriptRunner.droppedFailures`: how many failures `failures` no longer holds, since it keeps the last

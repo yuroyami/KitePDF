@@ -23,8 +23,20 @@ public object Decryptor {
         genNum: Int,
         value: PdfObject,
         handler: StandardSecurityHandler,
+    ): PdfObject = decryptIndirect(objNum, genNum, value, handler, streamsOnDemand = false)
+
+    /**
+     * [decryptIndirect], where [streamsOnDemand] keeps a stream that reads its body when asked
+     * as one: it decrypts the body each time it reads it, so it holds no copy (#906).
+     */
+    internal fun decryptIndirect(
+        objNum: Long,
+        genNum: Int,
+        value: PdfObject,
+        handler: StandardSecurityHandler,
+        streamsOnDemand: Boolean,
     ): PdfObject = when (value) {
-        is PdfStream -> decryptStream(objNum, genNum, value, handler)
+        is PdfStream -> decryptStream(objNum, genNum, value, handler, streamsOnDemand)
         is PdfString -> PdfString(handler.decryptString(objNum, genNum, value.bytes))
         is PdfDictionary -> decryptDict(objNum, genNum, value, handler)
         is PdfArray -> decryptArray(objNum, genNum, value, handler)
@@ -36,6 +48,7 @@ public object Decryptor {
         genNum: Int,
         stream: PdfStream,
         handler: StandardSecurityHandler,
+        streamsOnDemand: Boolean,
     ): PdfStream {
         // Streams marked as /XRef or /Metadata (when EncryptMetadata=false) are not encrypted.
         val type = stream.dict.getName("Type")
@@ -45,7 +58,12 @@ public object Decryptor {
         // ISO 32000-1, 7.4.10 and 7.6.5: a stream whose filters start with /Crypt is decrypted by the
         // crypt filter that its /DecodeParms /Name names, /Identity by default, not by /StmF. An
         // /Identity stream is stored in clear, and decrypting it with /StmF scrambled it (#817).
-        if (cryptFilterName(stream.dict) == "Identity") return PdfStream(decryptedDict, stream.rawBytes)
+        val identity = cryptFilterName(stream.dict) == "Identity"
+        if (streamsOnDemand) {
+            return if (identity) PdfStream(decryptedDict) { stream.rawBytes }
+            else PdfStream(decryptedDict) { handler.decryptStream(objNum, genNum, stream.rawBytes) }
+        }
+        if (identity) return PdfStream(decryptedDict, stream.rawBytes)
         val decryptedBytes = handler.decryptStream(objNum, genNum, stream.rawBytes)
         return PdfStream(decryptedDict, decryptedBytes)
     }

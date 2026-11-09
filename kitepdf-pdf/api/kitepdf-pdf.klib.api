@@ -1090,9 +1090,11 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
         final const val DEFAULT_OPERATION_CACHE_BUDGET_BYTES // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_OPERATION_CACHE_BUDGET_BYTES|{}DEFAULT_OPERATION_CACHE_BUDGET_BYTES[0]
             final fun <get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_OPERATION_CACHE_BUDGET_BYTES.<get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>|<get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>(){}[0]
 
+        final fun open(io.github.yuroyami.kitepdf.core/KiteByteSource, kotlin/String? = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(io.github.yuroyami.kitepdf.core.KiteByteSource;kotlin.String?){}[0]
         final fun open(kotlin/ByteArray, kotlin/ByteArray = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.ByteArray;kotlin.Boolean){}[0]
         final fun open(kotlin/ByteArray, kotlin/String, io.github.yuroyami.kitepdf.core/KiteWarningListener?): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.String;io.github.yuroyami.kitepdf.core.KiteWarningListener?){}[0]
         final fun open(kotlin/ByteArray, kotlin/String, kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.String;kotlin.Boolean){}[0]
+        final fun openOrNull(io.github.yuroyami.kitepdf.core/KiteByteSource, kotlin/String? = ...): io.github.yuroyami.kitepdf/PdfDocument? // io.github.yuroyami.kitepdf/PdfDocument.Companion.openOrNull|openOrNull(io.github.yuroyami.kitepdf.core.KiteByteSource;kotlin.String?){}[0]
         final fun openOrNull(kotlin/ByteArray, kotlin/ByteArray = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument? // io.github.yuroyami.kitepdf/PdfDocument.Companion.openOrNull|openOrNull(kotlin.ByteArray;kotlin.ByteArray;kotlin.Boolean){}[0]
     }
 }

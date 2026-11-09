@@ -46,6 +46,12 @@ internal class Parser(
      * and the operator must be found, not swallowed.
      */
     private val keywordsAsNull: Boolean = true,
+    /**
+     * Whether a stream keeps where its body lies instead of a copy of it, and reads it from a fork
+     * of the reader when asked. A document opened from a source sets it, so a stream that no page
+     * draws is never fetched (#906).
+     */
+    private val streamsOnDemand: Boolean = false,
 ) {
 
     public constructor(bytes: ByteArray) : this(Lexer(ByteReader(bytes)))
@@ -237,30 +243,42 @@ internal class Parser(
             // The EOL immediately before "endstream" is part of the keyword delimiter,
             // not the stream data (§7.3.8.1). Strip one trailing CR, LF, or CRLF.
             var e = es
-            if (e > streamStart && reader.bytes[e - 1] == '\n'.code.toByte()) {
+            if (e > streamStart && reader.byteAt(e - 1) == '\n'.code) {
                 e--
-                if (e > streamStart && reader.bytes[e - 1] == '\r'.code.toByte()) e--
-            } else if (e > streamStart && reader.bytes[e - 1] == '\r'.code.toByte()) {
+                if (e > streamStart && reader.byteAt(e - 1) == '\r'.code) e--
+            } else if (e > streamStart && reader.byteAt(e - 1) == '\r'.code) {
                 e--
             }
             bodyEnd = e
         }
 
-        val raw = reader.bytes.copyOfRange(streamStart, bodyEnd)
+        val stream = if (streamsOnDemand) {
+            val origin = bodyOrigin ?: reader.fork().also { bodyOrigin = it }
+            val length = bodyEnd - streamStart
+            PdfStream(dict) { origin.fork().apply { seek(streamStart) }.readBytes(length) }
+        } else {
+            reader.seek(streamStart)
+            PdfStream(dict, reader.readBytes(bodyEnd - streamStart))
+        }
         reader.seek(bodyEnd)
         // Consume up to and including the "endstream" keyword, leniently.
         skipToAfterEndstream()
         // Optional trailing "endobj" is handled by readIndirectObject.
-        return PdfStream(dict, raw)
+        return stream
     }
+
+    /**
+     * A fork of the reader that never reads, for the streams of [streamsOnDemand] to fork from: a
+     * stream that kept the parsing reader would keep the page that reader last read.
+     */
+    private var bodyOrigin: ByteReader? = null
 
     /** True if (after optional whitespace) "endstream" starts at/just after [at]. */
     private fun endstreamAppearsAt(at: Int): Boolean {
         var p = at
-        val b = reader.bytes
         // Allow a small run of whitespace between the body and the keyword.
         var slack = 0
-        while (p < b.size && slack < 3 && Lexer.isWhitespace(b[p].toInt() and 0xFF)) { p++; slack++ }
+        while (p < reader.size && slack < 3 && Lexer.isWhitespace(reader.byteAt(p))) { p++; slack++ }
         return reader.matches(ENDSTREAM, p)
     }
 

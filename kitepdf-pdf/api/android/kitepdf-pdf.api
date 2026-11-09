@@ -669,12 +669,16 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 }
 
 public final class io/github/yuroyami/kitepdf/PdfDocument$Companion {
+	public final fun open (Lio/github/yuroyami/kitepdf/core/KiteByteSource;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public final fun open ([BLjava/lang/String;Lio/github/yuroyami/kitepdf/core/KiteWarningListener;)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public final fun open ([BLjava/lang/String;Z)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public final fun open ([B[BZ)Lio/github/yuroyami/kitepdf/PdfDocument;
+	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/PdfDocument$Companion;Lio/github/yuroyami/kitepdf/core/KiteByteSource;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/PdfDocument$Companion;[BLjava/lang/String;ZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/PdfDocument$Companion;[B[BZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfDocument;
+	public final fun openOrNull (Lio/github/yuroyami/kitepdf/core/KiteByteSource;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public final fun openOrNull ([B[BZ)Lio/github/yuroyami/kitepdf/PdfDocument;
+	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/PdfDocument$Companion;Lio/github/yuroyami/kitepdf/core/KiteByteSource;Ljava/lang/String;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfDocument;
 	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/PdfDocument$Companion;[B[BZILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfDocument;
 }
 

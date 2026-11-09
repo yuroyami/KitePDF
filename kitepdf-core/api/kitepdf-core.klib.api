@@ -1014,6 +1014,7 @@ final class io.github.yuroyami.kitepdf.core.parser/PdfReference : io.github.yuro
 
 final class io.github.yuroyami.kitepdf.core.parser/PdfStream : io.github.yuroyami.kitepdf.core.parser/PdfObject { // io.github.yuroyami.kitepdf.core.parser/PdfStream|null[0]
     constructor <init>(io.github.yuroyami.kitepdf.core.parser/PdfDictionary, kotlin/ByteArray) // io.github.yuroyami.kitepdf.core.parser/PdfStream.<init>|<init>(io.github.yuroyami.kitepdf.core.parser.PdfDictionary;kotlin.ByteArray){}[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core.parser/PdfDictionary, kotlin/Function0<kotlin/ByteArray>) // io.github.yuroyami.kitepdf.core.parser/PdfStream.<init>|<init>(io.github.yuroyami.kitepdf.core.parser.PdfDictionary;kotlin.Function0<kotlin.ByteArray>){}[0]
 
     final val dict // io.github.yuroyami.kitepdf.core.parser/PdfStream.dict|{}dict[0]
         final fun <get-dict>(): io.github.yuroyami.kitepdf.core.parser/PdfDictionary // io.github.yuroyami.kitepdf.core.parser/PdfStream.dict.<get-dict>|<get-dict>(){}[0]
@@ -2058,6 +2059,7 @@ final class io.github.yuroyami.kitepdf.core/ByteArrayBuilder { // io.github.yuro
 }
 
 final class io.github.yuroyami.kitepdf.core/ByteReader { // io.github.yuroyami.kitepdf.core/ByteReader|null[0]
+    constructor <init>(io.github.yuroyami.kitepdf.core/KiteByteSource) // io.github.yuroyami.kitepdf.core/ByteReader.<init>|<init>(io.github.yuroyami.kitepdf.core.KiteByteSource){}[0]
     constructor <init>(kotlin/ByteArray) // io.github.yuroyami.kitepdf.core/ByteReader.<init>|<init>(kotlin.ByteArray){}[0]
 
     final val bytes // io.github.yuroyami.kitepdf.core/ByteReader.bytes|{}bytes[0]
@@ -2066,6 +2068,8 @@ final class io.github.yuroyami.kitepdf.core/ByteReader { // io.github.yuroyami.k
         final fun <get-size>(): kotlin/Int // io.github.yuroyami.kitepdf.core/ByteReader.size.<get-size>|<get-size>(){}[0]
 
     final fun advance(kotlin/Int) // io.github.yuroyami.kitepdf.core/ByteReader.advance|advance(kotlin.Int){}[0]
+    final fun byteAt(kotlin/Int): kotlin/Int // io.github.yuroyami.kitepdf.core/ByteReader.byteAt|byteAt(kotlin.Int){}[0]
+    final fun fork(): io.github.yuroyami.kitepdf.core/ByteReader // io.github.yuroyami.kitepdf.core/ByteReader.fork|fork(){}[0]
     final fun indexOf(kotlin/ByteArray, kotlin/Int = ...): kotlin/Int // io.github.yuroyami.kitepdf.core/ByteReader.indexOf|indexOf(kotlin.ByteArray;kotlin.Int){}[0]
     final fun isAtEnd(): kotlin/Boolean // io.github.yuroyami.kitepdf.core/ByteReader.isAtEnd|isAtEnd(){}[0]
     final fun lastIndexOf(kotlin/ByteArray, kotlin/Int = ...): kotlin/Int // io.github.yuroyami.kitepdf.core/ByteReader.lastIndexOf|lastIndexOf(kotlin.ByteArray;kotlin.Int){}[0]
