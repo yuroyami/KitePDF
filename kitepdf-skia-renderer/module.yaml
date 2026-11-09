@@ -22,6 +22,12 @@ description: >-
   Compose-free Skia (Skiko) rasterizer for KitePDF - headless page-to-PNG rendering of PDF and EPUB for JVM servers
   and CLIs.
 
+# The targets whose tests draw through Skiko on this machine's kind of host: the JVM and Linux.
+# Android host tests cannot load Skiko's Android library, and the Apple targets link through Xcode,
+# which only a Mac checks (#768).
+aliases:
+  - skikoHost: [ jvm, linuxX64, linuxArm64 ]
+
 apply:
   - //common.module-template.yaml
   - //library.module-template.yaml
@@ -135,9 +141,11 @@ test-settings@tvosSimulatorArm64:
   kotlin:
     freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
 
+# Skiko's Linux library draws text through fontconfig and FreeType, which a program must link itself,
+# so the test program names them (#768).
 test-settings@linuxX64:
   kotlin:
-    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test ]
+    freeCompilerArgs: [ -module-name=kitepdf-skia-renderer_test, -Xshort-module-name=kitepdf-skia-renderer_test, -linker-option, -L/usr/lib/x86_64-linux-gnu, -linker-option, -lfontconfig, -linker-option, -lfreetype, -linker-option, -l:libGL.so.1 ]
 
 test-settings@linuxArm64:
   kotlin:

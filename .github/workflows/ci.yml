@@ -333,6 +333,11 @@ jobs:
           key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
           restore-keys: kotlin-toolchain-${{ runner.os }}-
 
+      # Skiko's Linux library needs fontconfig, FreeType and libGL at link time, and the Skia
+      # renderer's common tests link a program against it (#768).
+      - name: Install the libraries that Skiko links
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig-dev libfreetype-dev libgl1
+
       - name: Test the Linux x64 suites
         run: ./kotlin test -p linuxX64
 
