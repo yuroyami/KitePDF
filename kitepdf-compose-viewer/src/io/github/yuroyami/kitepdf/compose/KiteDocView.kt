@@ -149,7 +149,7 @@ import kotlinx.coroutines.launch
  *
  * @param state the hoisted control surface. See [rememberKiteDocViewState].
  * @param layout continuous strip (any orientation), snap pager (any
- *   orientation) or a single fixed page. See [KiteDocLayout].
+ *   orientation), a pager of two-page spreads or a single fixed page. See [KiteDocLayout].
  * @param zoomSpec pinch/double-tap/pan behaviour and zoom bounds. Programmatic
  *   zoom through [KiteDocViewState.setZoom] honours the same bounds, so external
  *   controls (sliders, loupes) work with gestures fully disabled.
@@ -157,8 +157,9 @@ import kotlinx.coroutines.launch
  *   (bitmap-cached, with quality/memory/crisp-zoom/hairline knobs) or
  *   [KiteRenderSpec.Vectorized] (live vector draw). See [KiteRenderSpec].
  * @param colors page paper + viewport letterbox colours.
- * @param pageSpacing gap between pages (continuous gutter / pager spacing). A strip shows the
- *   pages of an EPUB roll with no gap, whatever this says (#506).
+ * @param pageSpacing gap between pages (continuous gutter / pager spacing). In
+ *   [KiteDocLayout.Spread] it is the gap between two spreads, and the two pages of a spread
+ *   touch. A strip shows the pages of an EPUB roll with no gap, whatever this says (#506).
  * @param selectionEnabled whether the reader may select text at all. The
  *   default, true, is the long-press-to-select behaviour with draggable
  *   thumbs. False removes the gesture entirely: no long press selects, no wash
@@ -180,8 +181,9 @@ import kotlinx.coroutines.launch
  *   the page on screen, and one that recycles it breaks the next frame (#705).
  *   To export a page, or to get a bitmap of your own, use
  *   [KitePageRasterizer.rasterize] with the form state.
- * @param pagePlaceholder shown in a page's slot until its raster is ready.
- *   Defaults to a plain [KiteDocViewColors.pageBackground] box.
+ * @param pagePlaceholder shown in a page's slot until its raster is ready, in
+ *   [KiteRenderSpec.Rasterized] mode. Defaults to a plain [KiteDocViewColors.pageBackground]
+ *   box. A [KiteRenderSpec.Vectorized] page shows its paper instead.
  * @param chapterPlaceholder shown in the slot a chapter holds while it is still
  *   being laid out. A reflowable EPUB reaches this, and so does a PDF of more than
  *   200 pages for its first frames, while it builds its page list off the main

@@ -91,11 +91,11 @@ fun Reader(document: KiteDocument) {
     | `zoomSpec` | Pinch, double tap, pan and the zoom limits, see [Zoom and gestures](#zoom-and-gestures) |
     | `renderSpec` | How a page becomes pixels, see [Rasterized or vectorized](#rasterized-or-vectorized) |
     | `colors` | The paper, the viewport, the reading theme, the highlights and the selection, see [Colors and themes](#colors-and-themes) |
-    | `pageSpacing` | The gap between two pages. The pages of an EPUB roll have no gap. |
+    | `pageSpacing` | The gap between two pages, or between two spreads in `Spread`, whose two pages touch. The pages of an EPUB roll have no gap. |
     | `userScrollEnabled` | Lets a swipe, the mouse wheel and the page keys move the view |
     | `selectionEnabled` | Lets the reader select text, see [Text selection](#text-selection) |
     | `onPageRendered` | Gets each new screen bitmap of a page, see [When a page renders](#when-a-page-renders) |
-    | `pagePlaceholder` | Shows in a page's place until its bitmap is ready |
+    | `pagePlaceholder` | Shows in a page's place until its bitmap is ready, in `Rasterized` mode only |
     | `chapterPlaceholder` | Shows in the place of a chapter that is not laid out yet |
     | `overlay` | Composables that float over the viewport, see [The overlay slot](#the-overlay-slot) |
     | `pageOverlay` | Composables that draw over each page and move with it, see [Draw over a place on a page](#draw-over-a-place-on-a-page) |
@@ -140,7 +140,7 @@ state.setZoom(2.5f)
 // Zoom with an animation, about a point of the viewport
 scope.launch { state.animateZoomTo(3f, focal = tapPosition) }
 
-// Go back to the smallest zoom
+// Go back to fit: zoom 1, clamped into the zoom range
 state.resetZoom()
 
 // Move the view, inside the bounds of the content
@@ -169,7 +169,7 @@ KiteDocView(
 ```
 
 - `fit`: `KitePageFit.WIDTH` (the default) fills the width of a vertical strip, so a tall page scrolls through the viewport. `KitePageFit.PAGE` shrinks each page until the whole page shows.
-- `prefetchPages`: when the strip stops, the viewer draws this many pages on each side of the screen into its cache, so a scroll to them shows them at once. The default is 1, and 0 draws nothing ahead.
+- `prefetchPages`: when the strip stops, the viewer draws this many pages on each side of the screen into its cache, so a scroll to them shows them at once. The default is 1, and 0 draws nothing ahead. It needs `Rasterized` mode and a cache budget above 0: a `Vectorized` page has no bitmap to draw ahead.
 - `contentPadding`: space at the ends of the strip for your own controls. The pages still scroll under them.
 
 Use it for documents that people read from start to end, such as papers and reports.
@@ -258,7 +258,7 @@ val spec = KiteZoomSpec(
     maxZoom = 8f,
     // The zoom that a double tap goes to
     doubleTapZoom = 2.5f,
-    // Go back to minZoom on a page turn
+    // Go back to fit, zoom 1 clamped into the range, on a page turn
     resetZoomOnPageChange = true,
 )
 KiteDocView(state, zoomSpec = spec)
@@ -1078,7 +1078,7 @@ These rules also apply when you draw on a `ComposeCanvas` of your own:
 
 ## Placeholders and fades
 
-`pagePlaceholder` sets what a page shows while its bitmap renders. By default, the page shows its `pageBackground` color.
+`pagePlaceholder` sets what a page shows while its bitmap renders, in `Rasterized` mode. By default, the page shows its `pageBackground` color. A `Vectorized` page has no bitmap, and shows its paper until it draws.
 
 ```kotlin
 KiteDocView(

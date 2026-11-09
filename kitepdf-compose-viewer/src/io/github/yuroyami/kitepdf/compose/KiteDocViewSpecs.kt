@@ -20,7 +20,8 @@ public sealed interface KiteDocLayout {
      * not composed). Pages fill the cross axis at their natural aspect ratio,
      * or, with [fit] [KitePageFit.PAGE], shrink until the whole page shows.
      * Once the strip rests, [prefetchPages] pages on each side of the pages on
-     * screen draw into the bitmap cache.
+     * screen draw into the bitmap cache, with [KiteRenderSpec.Rasterized] and a
+     * cache budget above 0.
      *
      * Zoom in this mode is magnifier-style: the strip is scaled around the
      * viewport centre, pan across the strip is a clamped transform, and the
@@ -43,6 +44,8 @@ public sealed interface KiteDocLayout {
          * Pages drawn ahead on each side of the pages on screen once the strip rests, into the
          * bitmap cache, so a scroll to them finds their bitmap ready. 0 draws nothing ahead. The
          * strip draws them itself, because Compose's own prefetch runs on Android only (#437).
+         * It applies to [KiteRenderSpec.Rasterized] with a `cacheBudgetBytes` above 0: in
+         * [KiteRenderSpec.Vectorized] mode, or with no cache, nothing is drawn ahead.
          */
         val prefetchPages: Int = 1,
     ) : KiteDocLayout {
@@ -53,7 +56,9 @@ public sealed interface KiteDocLayout {
 
     /**
      * One page at a time with snap paging (swipe, or drive programmatically
-     * via [KiteDocViewState]). Each page is letterboxed to fit the viewport.
+     * via [KiteDocViewState]). With [fit] [KitePageFit.PAGE], each page is letterboxed to fit
+     * the viewport; with [KitePageFit.WIDTH], a page fills the width and a tall page starts at
+     * its top.
      *
      * @param offscreenPages pages kept composed (and rastered) on each side of
      *   the visible one. This trades memory for instant page turns. Defaults to 1 so
@@ -192,8 +197,9 @@ public enum class KitePageFit {
  * @param panEnabled one-finger pan while zoomed in. A quick release lets the pan go on and
  *   slow down, and in [KiteDocLayout.Paged] and [KiteDocLayout.Spread] a drag that goes on past
  *   the edge of the page turns it.
- * @param resetZoomOnPageChange in [KiteDocLayout.Paged] and [KiteDocLayout.Spread], snap
- *   zoom back to [minZoom] when the reader lands on another page or spread. The page a
+ * @param resetZoomOnPageChange in [KiteDocLayout.Paged] and [KiteDocLayout.Spread], go back
+ *   to fit, zoom 1 clamped into [minZoom]..[maxZoom], when the reader lands on another page or
+ *   spread, as [KiteDocViewState.resetZoom] does. The page a
  *   pager first shows is not a change, so a zoom set before the pager appears stays.
  *   Disable when zoom is driven externally and should persist across pages.
  */
@@ -228,8 +234,11 @@ public data class KiteZoomSpec(
 
 /**
  * How [KiteDocView] turns pages into pixels. Pick a variant; each carries only the
- * knobs that actually apply to it, so there are no settings that silently do
- * nothing. Defaults to [Rasterized] via [KiteRenderSpec.Default].
+ * knobs that apply to it, so no setting of a spec silently does nothing. A few
+ * parameters of [KiteDocView] and of its layouts apply to [Rasterized] only, and
+ * say so: `pagePlaceholder`, `onPageRendered` and
+ * [KiteDocLayout.Continuous.prefetchPages]. Defaults to [Rasterized] via
+ * [KiteRenderSpec.Default].
  */
 @Immutable
 public sealed interface KiteRenderSpec {
