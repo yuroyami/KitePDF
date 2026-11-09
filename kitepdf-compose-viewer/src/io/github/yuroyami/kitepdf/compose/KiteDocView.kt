@@ -168,8 +168,9 @@ import kotlinx.coroutines.launch
  *   where a text selection means nothing and a stray long press only gets in
  *   the way of panning.
  * @param userScrollEnabled gesture scrolling/swiping of the layout itself, the wheel that turns
- *   the page of a horizontal paged layout, and the page keys of a keyboard once a press gives
- *   the view the focus.
+ *   the page of a horizontal paged layout, a drag past the edge of a page that overflows, and
+ *   the page keys of a keyboard once a press gives the view the focus. Panning a page that
+ *   overflows is not paging: the finger and the wheel keep it, under [KiteZoomSpec.panEnabled].
  *   Disable to drive paging exclusively through [KiteDocViewState] (nav buttons).
  * @param onPageRendered fires whenever a page finishes a FRESH screen raster:
  *   once per page and bitmap size, so again at each settled zoom when crisp zoom
@@ -1213,7 +1214,7 @@ private fun PagedLayout(
             zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
             pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             gestures = if (isCurrent) {
-                pagePlace.modifier.kiteTransformGestures(state, zoomSpec, scope, pageTap, pageTurn).kiteSelectionGestures(state, haptics)
+                pagePlace.modifier.kiteTransformGestures(state, zoomSpec, scope, pageTap, pageTurn.takeIf { userScrollEnabled }).kiteSelectionGestures(state, haptics)
             } else Modifier,
             settledZoom = if (isCurrent) settledZoom else 1f,
             renderSpec = renderSpec,
@@ -2302,7 +2303,7 @@ private fun SpreadLayout(
             zoom = if (isCurrent) ({ state.zoom }) else NO_ZOOM,
             pan = if (isCurrent) ({ state.panOffset }) else NO_PAN,
             gestures = if (isCurrent) {
-                spreadPlace.modifier.kiteTransformGestures(state, zoomSpec, scope, spreadTap, pageTurn).kiteSelectionGestures(state, haptics)
+                spreadPlace.modifier.kiteTransformGestures(state, zoomSpec, scope, spreadTap, pageTurn.takeIf { userScrollEnabled }).kiteSelectionGestures(state, haptics)
             } else Modifier,
             recordGeometry = isCurrent,
             settledZoom = if (isCurrent) settledZoom else 1f,

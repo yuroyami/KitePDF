@@ -913,6 +913,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pixels over the page (#662).
 - With `Rasterized(quality > 1)` and `preserveHairlines`, the deep-zoom tiles draw a zero-width stroke one screen
   pixel wide, where they drew it a quality's share of one (#665).
+- With `userScrollEnabled = false`, no gesture turns the page: a drag past the edge of a page that overflows no
+  longer turns it in `Paged` and `Spread`, while the wheel goes on panning such a page as the finger does (#650).
 
 ## [0.13.0] - 2026-10-09
 

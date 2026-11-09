@@ -439,8 +439,11 @@ internal fun Modifier.kiteWheelPaging(
     }
     // A continuous strip scrolls with the wheel itself.
     val pans = layout !is KiteDocLayout.Continuous
-    if (!enabled || (spread == null && !pans)) return this
-    return pointerInput(state, spread, pans) {
+    // Panning a page that overflows is not paging, so it stays on when [enabled] is false; only
+    // the turn follows it (#650).
+    val turns = spread.takeIf { enabled }
+    if (turns == null && !pans) return this
+    return pointerInput(state, turns, pans) {
         val step = WHEEL_PAN_PER_NOTCH.toPx() / wheelUnitsPerNotch
         var last = -1L
         var armed = true
@@ -470,7 +473,7 @@ internal fun Modifier.kiteWheelPaging(
                         continue
                     }
                 } else if (state.isZoomed) continue
-                if (spread == null) continue
+                val turnsSpread = turns ?: continue
                 sumX += change.scrollDelta.x
                 sumY += change.scrollDelta.y
                 if (abs(sumY) <= abs(sumX)) continue
@@ -478,7 +481,7 @@ internal fun Modifier.kiteWheelPaging(
                 if (!armed || abs(sumY) < WHEEL_TURN_DELTA) continue
                 armed = false
                 val forward = sumY > 0f
-                scope.launch { state.turn(forward, spread) }
+                scope.launch { state.turn(forward, turnsSpread) }
             }
         }
     }

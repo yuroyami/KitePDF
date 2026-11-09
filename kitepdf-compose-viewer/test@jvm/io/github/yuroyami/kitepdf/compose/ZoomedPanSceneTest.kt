@@ -51,11 +51,15 @@ class ZoomedPanSceneTest {
         scene.sendPointerEvent(PointerEventType.Release, Offset(toX, 150f), timeMillis = clock, type = PointerType.Touch)
     }
 
-    private fun withZoomedPager(direction: LayoutDirection = LayoutDirection.Ltr, block: (ImageComposeScene, KiteDocViewState, SceneTestDriver) -> Unit) {
+    private fun withZoomedPager(
+        direction: LayoutDirection = LayoutDirection.Ltr,
+        userScrollEnabled: Boolean = true,
+        block: (ImageComposeScene, KiteDocViewState, SceneTestDriver) -> Unit,
+    ) {
         val state = KiteDocViewState(pagesPdf(3))
         ImageComposeScene(width = 200, height = 300, density = Density(1f)) {
             CompositionLocalProvider(LocalLayoutDirection provides direction) {
-                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged())
+                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged(), userScrollEnabled = userScrollEnabled)
             }
         }.use { scene ->
             val driver = SceneTestDriver(scene)
@@ -112,6 +116,38 @@ class ZoomedPanSceneTest {
             drag(scene, 10f, 190f, steps = 30, msPerStep = 30)
             driver.pumpUntilState { state.currentPage == 1 }
             assertEquals(1, state.currentPage)
+        }
+    }
+
+    /** With userScrollEnabled false, a drag past the edge pans but never turns the page (#650). */
+    @Test
+    fun with_user_scroll_off_a_drag_past_the_edge_does_not_turn() {
+        withZoomedPager(userScrollEnabled = false) { scene, state, driver ->
+            drag(scene, 190f, 10f, steps = 30, msPerStep = 30)
+            driver.pumpFrames(30)
+            val panned = state.panOffset.x
+            assertTrue(panned < -50f, "the drag did not pan the page: $panned")
+            drag(scene, 190f, 10f, steps = 30, msPerStep = 30)
+            driver.pumpFrames(60)
+            assertEquals(0, state.currentPage, "a drag turned the page with user scroll off")
+        }
+    }
+
+    /** With userScrollEnabled false, the wheel still pans a page that overflows (#650). */
+    @Test
+    fun with_user_scroll_off_the_wheel_still_pans() {
+        withZoomedPager(userScrollEnabled = false) { scene, state, driver ->
+            val before = state.panOffset.y
+            onTestUiThread {
+                scene.sendPointerEvent(
+                    androidx.compose.ui.input.pointer.PointerEventType.Scroll, androidx.compose.ui.geometry.Offset(100f, 150f),
+                    scrollDelta = androidx.compose.ui.geometry.Offset(0f, 1f),
+                    type = androidx.compose.ui.input.pointer.PointerType.Mouse,
+                )
+            }
+            driver.pumpFrames(10)
+            assertTrue(state.panOffset.y < before - 1f, "the wheel did not pan: ${state.panOffset.y}")
+            assertEquals(0, state.currentPage)
         }
     }
 }
