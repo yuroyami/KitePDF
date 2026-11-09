@@ -946,7 +946,7 @@ if (showOutline) {
 }
 ```
 
-- A tap on an entry starts the scroll to its target, then calls `onNavigate`.
+- A tap on an entry starts the scroll to its target, then calls `onNavigate`. The scroll runs in the viewer's scope, so a panel that `onNavigate` closes does not stop it.
 - An entry without a target, such as a group label, shows in `disabledTextColor` and does not take a tap.
 - The entry of the current page shows in `currentPageColor`.
 - In an EPUB that is still paginating, a tap lays out only the chapter of the entry.

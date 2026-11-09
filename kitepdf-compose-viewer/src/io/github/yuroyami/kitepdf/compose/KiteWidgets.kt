@@ -290,7 +290,8 @@ private fun ThumbnailStripContent(
  * @param outline defaults to the document's own [KiteDocument.outline];
  *   pass a subtree to scope the panel.
  * @param onNavigate observe navigation (e.g. to close a drawer). The scroll
- *   itself already happened.
+ *   has started when it is called, and runs in the viewer's scope, so it ends
+ *   even when this callback removes the panel (#663).
  */
 @Composable
 public fun KiteOutlinePanel(
@@ -341,11 +342,11 @@ public fun KiteOutlinePanel(
                     .then(
                         when {
                             target != null -> Modifier.clickable(role = Role.Button) {
-                                scope.launch { state.scrollTo(target, animate = true) }
+                                (state.navigationScope ?: scope).launch { state.scrollTo(target, animate = true) }
                                 onNavigate?.invoke(item)
                             }
                             page != null -> Modifier.clickable(role = Role.Button) {
-                                scope.launch { state.animateScrollToPage(page) }
+                                (state.navigationScope ?: scope).launch { state.animateScrollToPage(page) }
                                 onNavigate?.invoke(item)
                             }
                             else -> Modifier

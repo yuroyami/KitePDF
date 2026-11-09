@@ -619,6 +619,12 @@ public class KiteDocViewState(
     /** Where script work is posted, so a long script never runs on the thread that draws. */
     internal var scriptScope: kotlinx.coroutines.CoroutineScope? = null
 
+    /**
+     * The viewer's own scope, where a widget beside it starts a navigation, so the navigation ends
+     * even when the widget leaves the composition, as a panel closed in its callback does (#663).
+     */
+    internal var navigationScope: kotlinx.coroutines.CoroutineScope? = null
+
     /** The lane this state's view calls the scripts on, one call at a time (#365). */
     internal var scriptLane: kotlinx.coroutines.CoroutineDispatcher? = null
 

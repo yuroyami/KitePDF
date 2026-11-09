@@ -901,6 +901,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does (#664).
 - A read-only form field is a disabled node with no click action for a screen reader, as a read-only choice field
   already was, and it follows a script that makes it read-only or writable again (#671).
+- A tap on a `KiteOutlinePanel` entry scrolls to its target even when `onNavigate` closes the panel, as the docs
+  show: the scroll runs in the viewer's scope, not the panel's (#663).
 
 ## [0.13.0] - 2026-10-09
 

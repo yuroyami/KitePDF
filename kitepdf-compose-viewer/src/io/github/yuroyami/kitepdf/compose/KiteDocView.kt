@@ -277,6 +277,7 @@ public fun KiteDocView(
         state.replaceScripts(scripts)
         state.epubScripts = epubScripts
         state.scriptScope = scriptScope
+        state.navigationScope = scriptScope
         state.scriptLane = scriptLane
         state.externalLinks = externalLinks
         state.showMarkupErrors = showMarkupErrors
