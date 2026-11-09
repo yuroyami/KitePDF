@@ -27,12 +27,13 @@ ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 # The modules whose tests run on each platform. The browser JS tests draw on a real Canvas2D.
 JS_MODULES = ("kitepdf-core", "kitepdf-pdf", "kitepdf-epub", "kitepdf-cbz", "kitepdf-svg", "kitepdf-xps", "kitepdf",
-              "kitepdf-javascript")
+              "kitepdf-javascript", "kitepdf-net")
 JS_BROWSER_MODULES = ("kitepdf-native-renderer",)
 WASI_MODULES = ("kitepdf-core", "kitepdf-pdf", "kitepdf-epub", "kitepdf-cbz", "kitepdf-svg", "kitepdf-xps", "kitepdf")
 # wasmJs in Node. `./kotlin test -p wasmJs` runs wasmJs in Chrome, but gives each module 30 seconds in all,
 # and the kitepdf-pdf tests need more.
-WASM_JS_MODULES = WASI_MODULES + ("kitepdf-javascript",)
+# kitepdf-net has no wasmWasi target, since Ktor ships none (#768).
+WASM_JS_MODULES = WASI_MODULES + ("kitepdf-javascript", "kitepdf-net")
 ARTIFACTS = ROOT / "build/artifacts/CompiledWebArtifact"
 CACHE = Path.home() / ("Library/Caches/JetBrains/Kotlin" if sys.platform == "darwin" else ".cache/JetBrains/Kotlin")
 

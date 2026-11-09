@@ -34,9 +34,13 @@ dependencies:
   - //kitepdf: exported
   - $libs.ktor.client.core: exported
 
+# MockEngine and kotlinx-coroutines-test are multiplatform, so the remote loading tests run on every target (#768).
+test-dependencies:
+  - $libs.ktor.client.mock
+  - $libs.kotlinx.coroutines.test
+
 test-dependencies@jvm:
   - $libs.ktor.client.cio
-  - $libs.ktor.client.mock
 
 settings:
   kotlin:
