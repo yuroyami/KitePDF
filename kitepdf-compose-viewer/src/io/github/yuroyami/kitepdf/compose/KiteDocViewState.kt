@@ -1552,6 +1552,12 @@ public class KiteDocViewState(
     ): Unit = onViewerThread {
         if (!target.isFinite()) return@onViewerThread
         val clamped = target.coerceIn(zoomRange.start, zoomRange.endInclusive)
+        // With no view and no frame clock there is nothing to animate on: the zoom goes to its target (#659).
+        if (kotlinx.coroutines.currentCoroutineContext()[MonotonicFrameClock] == null) {
+            stopZoomAnimation()
+            applyZoom(clamped, focal)
+            return@onViewerThread
+        }
         kotlinx.coroutines.coroutineScope {
             stopZoomAnimation()
             val job = coroutineContext[kotlinx.coroutines.Job]
@@ -2080,7 +2086,15 @@ public class KiteDocViewState(
      */
     private suspend fun <T> onViewerThread(block: suspend () -> T): T {
         val viewer = viewerThread
-        if (viewer == null || currentThreadMarker() == viewer.marker) return block()
+        if (viewer == null) return block()
+        if (currentThreadMarker() == viewer.marker) {
+            // A coroutine on the viewer's thread that no composition started, as in viewModelScope,
+            // lifecycleScope, a Swing scope or MainScope(), has no frame clock, and an animation
+            // would throw for want of one (#659). It takes the viewer's, and stays on its thread.
+            val clock = viewer.context[MonotonicFrameClock]
+            if (clock == null || kotlinx.coroutines.currentCoroutineContext()[MonotonicFrameClock] != null) return block()
+            return withContext(clock) { block() }
+        }
         return withContext(viewer.context) {
             backOnComposeThread()
             block()

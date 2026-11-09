@@ -903,6 +903,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already was, and it follows a script that makes it read-only or writable again (#671).
 - A tap on a `KiteOutlinePanel` entry scrolls to its target even when `onNavigate` closes the panel, as the docs
   show: the scroll runs in the viewer's scope, not the panel's (#663).
+- An animated navigation or zoom call from a main-thread coroutine that no composition started, such as
+  `viewModelScope`, `lifecycleScope`, a Swing scope or `MainScope()`, moves the view instead of throwing for want
+  of a frame clock, and `animateZoomTo` with no view applies its target (#659).
 
 ## [0.13.0] - 2026-10-09
 
