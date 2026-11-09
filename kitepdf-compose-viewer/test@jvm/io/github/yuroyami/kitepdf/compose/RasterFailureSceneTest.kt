@@ -63,9 +63,11 @@ class RasterFailureSceneTest {
     fun a_thumbnail_that_fails_to_render_again_keeps_the_old_one() {
         forBothEffectOrders { queued ->
             val page = FlakyPage()
+            // One document: a new one in each composition would be a new state, and a new strip (#684).
+            val doc = OnePage(page)
             var background by mutableStateOf(Color.White)
             val (scene, driver) = drivenScene(200, 100, queued) {
-                val state = rememberKiteDocViewState(OnePage(page))
+                val state = rememberKiteDocViewState(doc)
                 KiteThumbnailStrip(state = state, modifier = Modifier.fillMaxSize(), pageBackground = background)
             }
             scene.use {

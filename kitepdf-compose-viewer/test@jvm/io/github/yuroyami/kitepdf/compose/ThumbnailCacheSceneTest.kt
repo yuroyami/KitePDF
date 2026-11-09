@@ -17,6 +17,8 @@ import io.github.yuroyami.kitepdf.core.render.RgbColor
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import java.lang.ref.WeakReference
 
 /** A thumbnail that scrolls out of the strip and back is a cache lookup, not a new raster (#391). */
 class ThumbnailCacheSceneTest {
@@ -63,6 +65,44 @@ class ThumbnailCacheSceneTest {
                 width = 400
                 driver.pumpFrames(60)
                 assertEquals(shown, doc.renders.get(), "the thumbnails that came back were rendered again")
+            }
+        }
+    }
+
+    private fun opened(seen: (Pages) -> Unit): KiteDocViewState {
+        val doc = Pages(6)
+        seen(doc)
+        return KiteDocViewState(doc)
+    }
+
+    /** A new state gives the strip a new cache, so nothing of the old document stays reachable from it (#684). */
+    @Test
+    fun a_new_state_lets_the_old_document_go() {
+        forBothEffectOrders { queued ->
+            // The test keeps no strong reference to the first document, only its counter.
+            lateinit var gone: WeakReference<KiteDocument>
+            lateinit var firstRenders: AtomicInteger
+            var supplied by mutableStateOf(opened { doc -> gone = WeakReference(doc); firstRenders = doc.renders })
+            val second = Pages(6)
+            val (scene, driver) = drivenScene(400, 100, queued) {
+                Box(Modifier.width(400.dp).height(100.dp)) {
+                    KiteThumbnailStrip(state = supplied)
+                }
+            }
+            scene.use {
+                driver.pumpUntilState { firstRenders.get() >= 4 }
+                driver.runOnUi { supplied = KiteDocViewState(second) }
+                driver.pumpUntilState { second.renders.get() >= 4 }
+                driver.pumpFrames(10)
+                var collected = false
+                repeat(20) {
+                    if (!collected) {
+                        System.gc()
+                        driver.pumpFrames(1)
+                        collected = gone.get() == null
+                    }
+                }
+                assertNull(gone.get(), "the strip keeps the old document after a new state")
             }
         }
     }

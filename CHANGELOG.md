@@ -877,6 +877,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a Paged or Spread layout, a media element pauses when the reader turns its page away, and an autoplay
   element waits until its page is on screen. The new `KitePageOverlayScope.isOnScreen` tells an overlay whether
   its page is in the viewport, and `EpubMediaPlayer` takes it as `onScreen` (#709).
+- `KiteThumbnailStrip` lets the previous document go when it gets a new `KiteDocViewState`: a new state gives it
+  a new bitmap cache and rasterizer, where the old cache held the old pages and, through them, the old document
+  (#684).
 
 ## [0.13.0] - 2026-10-09
 

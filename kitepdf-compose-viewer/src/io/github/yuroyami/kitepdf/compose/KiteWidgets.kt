@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
@@ -179,13 +180,30 @@ public fun KiteThumbnailStrip(
     selectedBorderColor: Color = Color(0xFF4A90D9),
     pageBackground: Color = Color.White,
 ) {
+    // A new state gets a new strip, cache and rasterizer and all, so nothing of the old document
+    // stays reachable from it (#684), as KiteDocView keys its layouts.
+    key(state) {
+        ThumbnailStripContent(state, modifier, thumbnailHeight, spacing, contentPadding, selectedBorderColor, pageBackground)
+    }
+}
+
+@Composable
+private fun ThumbnailStripContent(
+    state: KiteDocViewState,
+    modifier: Modifier,
+    thumbnailHeight: Dp,
+    spacing: Dp,
+    contentPadding: PaddingValues,
+    selectedBorderColor: Color,
+    pageBackground: Color,
+) {
     val rasterizer = rememberKitePageRasterizer().also { it.textOffMain = state.hostTextOffMain }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val heightPx = with(density) { thumbnailHeight.roundToPx() }.coerceAtLeast(1)
     // Thumbnails keep their bitmaps in a small cache of their own, so one that scrolls out and
     // back is a lookup, not a raster (#391). A new decorator draws differently: a new cache.
-    val thumbnails = remember(state.viewerDecorator) { PageBitmapCache(THUMBNAIL_CACHE_BYTES) }
+    val thumbnails = remember(state, state.viewerDecorator) { PageBitmapCache(THUMBNAIL_CACHE_BYTES) }
     val strings = LocalKiteViewerStrings.current
 
     LazyRow(
