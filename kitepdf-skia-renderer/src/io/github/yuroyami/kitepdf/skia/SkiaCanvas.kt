@@ -988,11 +988,43 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
-        // Outer layer captures the content. Inner layer paints the mask
-        // group on top with DstIn so the mask's alpha clips the content.
         // Outside the mask's box the mask is its backdrop's value, and the renderer passes the
         // page box when that is not 0 (ISO 32000-1, 11.6.5.2, #384), so both layers stop at the box (#824).
         val bounds = layerBounds(maskBBox, maskCtm)
+        // ISO 32000-1, 11.6.4.3 and 11.3.5: the mask scales the shape of each paint, which still
+        // blends with the real backdrop in its own mode. Skia reads back only the canvas under
+        // every layer, so outside one the content paints over a copy of the backdrop, and the mask
+        // mixes it in: backdrop x (1 - m) + content x m, a DstOut of the page by the mask and the
+        // masked content added with Plus (#764). Inside a layer the content layer starts
+        // transparent, where a blend mode sees no backdrop.
+        val backdrop = if (layers == 0 && stepDepth == 0 && !knockingOut) readBackdrop(maskBBox, maskCtm) else null
+        if (backdrop != null) {
+            try {
+                maskLayer(kind, transfer, bounds, SkiaBlendMode.DST_OUT, renderMask)
+                Paint().closing { it.blendMode = SkiaBlendMode.PLUS; canvas.saveLayer(bounds, it) }
+                openLayers++
+                layers++
+                groups.addLast(Group(layered = false, knockout = false))
+                try {
+                    canvas.save()
+                    canvas.resetMatrix()
+                    Paint().closing { canvas.drawImage(backdrop.image, backdrop.x.toFloat(), backdrop.y.toFloat(), it.apply { blendMode = SkiaBlendMode.SRC }) }
+                    canvas.restore()
+                    render()
+                    maskLayer(kind, transfer, bounds, SkiaBlendMode.DST_IN, renderMask)
+                } finally {
+                    groups.removeLastOrNull()
+                    canvas.restore()
+                    openLayers--
+                    layers--
+                }
+            } finally {
+                backdrop.image.close()
+            }
+            return
+        }
+        // Outer layer captures the content. Inner layer paints the mask
+        // group on top with DstIn so the mask's alpha clips the content.
         Paint().closing { canvas.saveLayer(bounds, it) }
         openLayers++
         layers++
@@ -1000,57 +1032,83 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
         groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
-
-            // The mask layer resolves to alpha via DstIn. For an Alpha mask we
-            // use the mask group's own alpha directly. For a Luminosity mask,
-            // the spec (ISO 32000-1 §11.6.5.2) composites the mask group over a
-            // fully-opaque BLACK backdrop and derives alpha from the result's
-            // luminance, so unpainted areas (luminance 0) mask fully out. We
-            // realise that with a colour matrix that maps each pixel's luminance
-            // into its alpha, applied as the layer's restore paint. Its weights are
-            // the mask kind's: 0.30, 0.59 and 0.11 for PDF (ISO 32000-1, 10.3.2), as
-            // every other canvas uses, not the Rec. 709 row of Skia's luma filter,
-            // and the CSS weights for an SVG mask (#799, #821).
-            // The /TR table then maps the alpha, also where the group paints nothing.
-            val table = transfer?.let { org.jetbrains.skia.ColorFilter.makeTableARGB(it.toByteArray(), null, null, null) }
-            var luminance: org.jetbrains.skia.ColorFilter? = null
-            var composed: org.jetbrains.skia.ColorFilter? = null
-            val maskPaint = Paint().apply {
-                blendMode = SkiaBlendMode.DST_IN
-                colorFilter = if (!kind.readsColor) table else {
-                    val lum = org.jetbrains.skia.ColorFilter.makeMatrix(
-                        org.jetbrains.skia.ColorMatrix(
-                            0f, 0f, 0f, 0f, 0f,
-                            0f, 0f, 0f, 0f, 0f,
-                            0f, 0f, 0f, 0f, 0f,
-                            kind.red.toFloat(), kind.green.toFloat(), kind.blue.toFloat(), 0f, 0f,
-                        ),
-                    )
-                    luminance = lum
-                    if (table != null) org.jetbrains.skia.ColorFilter.makeComposed(table, lum).also { composed = it } else lum
-                }
-            }
-            canvas.saveLayer(bounds, maskPaint)
-            // The layer keeps its own copy of the paint and its filter.
-            maskPaint.close(); composed?.close(); luminance?.close(); table?.close()
-            openLayers++
-            layers++
-            try {
-                // Opaque black backdrop for the luminosity group: unpainted
-                // pixels stay luminance 0 → alpha 0. (Harmless for Alpha masks,
-                // where LUMA isn't applied; but only paint it for Luminosity to
-                // avoid tinting an alpha mask's own colours.)
-                if (kind.readsColor) {
-                    canvas.clear(Color.BLACK)
-                }
-                renderMask(this)
-            } finally {
-                canvas.restore()
-                openLayers--
-                layers--
-            }
+            maskLayer(kind, transfer, bounds, SkiaBlendMode.DST_IN, renderMask)
         } finally {
             groups.removeLastOrNull()
+            canvas.restore()
+            openLayers--
+            layers--
+        }
+    }
+
+    /** The device pixels of a box, read back from the canvas, and where they go. */
+    private class Backdrop(val image: Image, val x: Int, val y: Int)
+
+    /** The pixels under [box] under [ctm], cut to the page, or null where the canvas cannot read them. */
+    private fun readBackdrop(box: KiteRectangle, ctm: KiteMatrix): Backdrop? {
+        val b = box.normalized()
+        val corners = KitePath.Builder().apply {
+            moveTo(b.left, b.bottom); lineTo(b.right, b.bottom); lineTo(b.right, b.top); lineTo(b.left, b.top); close()
+        }.build()
+        val d = deviceBoxOf(corners, ctm) ?: return null
+        val page = pageBounds ?: return null
+        val left = kotlin.math.floor(maxOf(d[0], page[0], 0.0)).toInt()
+        val top = kotlin.math.floor(maxOf(d[1], page[1], 0.0)).toInt()
+        val right = kotlin.math.ceil(minOf(d[2], page[2])).toInt()
+        val bottom = kotlin.math.ceil(minOf(d[3], page[3])).toInt()
+        if (right <= left || bottom <= top || (right - left).toLong() * (bottom - top) > KNOCKOUT_ELEMENT_PIXELS) return null
+        val info = ImageInfo(right - left, bottom - top, ColorType.N32, ColorAlphaType.PREMUL)
+        val bitmap = org.jetbrains.skia.Bitmap()
+        try {
+            if (!bitmap.allocPixels(info) || !canvas.readPixels(bitmap, left, top)) return null
+            // A copy of the pixels, which outlives the bitmap.
+            val bytes = bitmap.readPixels(info, info.width * 4, 0, 0) ?: return null
+            return Backdrop(Image.makeRaster(info, bytes, info.width * 4), left, top)
+        } finally {
+            bitmap.close()
+        }
+    }
+
+    /**
+     * Paints the mask group in a layer that composites in [blend]: DstIn gates the content by
+     * the mask, and DstOut takes the mask's share out of the page. For an Alpha mask the layer
+     * uses the mask group's own alpha. For a Luminosity mask, the spec (ISO 32000-1, 11.6.5.2)
+     * composites the group over an opaque black backdrop and derives the alpha from the result's
+     * luminance, so unpainted areas mask fully out. A colour matrix maps each pixel's luminance
+     * into its alpha, with the mask kind's weights: 0.30, 0.59 and 0.11 for PDF (10.3.2), as
+     * every other canvas uses, and the CSS weights for an SVG mask (#799, #821). The /TR table
+     * then maps the alpha, also where the group paints nothing.
+     */
+    private fun maskLayer(kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: org.jetbrains.skia.Rect?, blend: SkiaBlendMode, renderMask: (KiteCanvas) -> Unit) {
+        val table = transfer?.let { org.jetbrains.skia.ColorFilter.makeTableARGB(it.toByteArray(), null, null, null) }
+        var luminance: org.jetbrains.skia.ColorFilter? = null
+        var composed: org.jetbrains.skia.ColorFilter? = null
+        val maskPaint = Paint().apply {
+            blendMode = blend
+            colorFilter = if (!kind.readsColor) table else {
+                val lum = org.jetbrains.skia.ColorFilter.makeMatrix(
+                    org.jetbrains.skia.ColorMatrix(
+                        0f, 0f, 0f, 0f, 0f,
+                        0f, 0f, 0f, 0f, 0f,
+                        0f, 0f, 0f, 0f, 0f,
+                        kind.red.toFloat(), kind.green.toFloat(), kind.blue.toFloat(), 0f, 0f,
+                    ),
+                )
+                luminance = lum
+                if (table != null) org.jetbrains.skia.ColorFilter.makeComposed(table, lum).also { composed = it } else lum
+            }
+        }
+        canvas.saveLayer(bounds, maskPaint)
+        // The layer keeps its own copy of the paint and its filter.
+        maskPaint.close(); composed?.close(); luminance?.close(); table?.close()
+        openLayers++
+        layers++
+        try {
+            // Opaque black backdrop for the luminosity group: unpainted pixels stay luminance 0,
+            // so alpha 0. Only for Luminosity, so an alpha mask's own colours are not tinted.
+            if (kind.readsColor) canvas.clear(Color.BLACK)
+            renderMask(this)
+        } finally {
             canvas.restore()
             openLayers--
             layers--
