@@ -83,6 +83,12 @@ public class PageRenderer(
     private var cancellation: io.github.yuroyami.kitepdf.core.KiteCancellation? = null
 
     /**
+     * Renders the page as it prints (#951): each annotation by its Print and Hidden flags, not its
+     * NoView flag (ISO 32000-1, 12.5.3), and the layers in their print states (8.11.4.4).
+     */
+    internal var forPrint: Boolean = false
+
+    /**
      * The canvas the content draws on: the caller's, or a [KnockoutCanvas] over it while a
      * non-isolated knockout group whose paints blend renders (#308).
      */
@@ -286,7 +292,7 @@ public class PageRenderer(
     ) {
         if (pageResources !== page.resources) pageFormResourceCache.clear()
         pageResources = page.resources
-        optionalContent = page.internalDocument.layers
+        optionalContent = if (forPrint) page.internalDocument.printLayers else page.internalDocument.layers
         activeClipCount = 0
         clipSaveStack.clear()
         pendingClip = 0
@@ -347,7 +353,7 @@ public class PageRenderer(
         formDepth = 0
         dispatchedOps = 0L
         cancelled = false
-        optionalContent = page.internalDocument.layers
+        optionalContent = if (forPrint) page.internalDocument.printLayers else page.internalDocument.layers
         markedContentStack.clear()
         ocHiddenDepth = 0
         clipCapWarned = false
@@ -548,7 +554,7 @@ public class PageRenderer(
             val name = io.github.yuroyami.kitepdf.PdfFormField.qualifiedNameOf(annot.raw, resolver)
             if (name != null) state.hiddenOverride(name)?.let { return it }
         }
-        return annot.isHidden
+        return if (forPrint) !annot.isPrinted else annot.isHidden
     }
 
     /**

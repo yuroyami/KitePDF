@@ -495,6 +495,16 @@ public class PdfPage internal constructor(
     }
 
     /**
+     * Paints the page as it prints, not as it shows (#951): an annotation draws when its Print flag
+     * is set and its Hidden flag is not, whatever its NoView flag (ISO 32000-1, 12.5.3), and each
+     * layer takes its print state (8.11.4.4), unless the host set [PdfDocument.layers]. The form
+     * draws from [formState] as it does on screen. A print path calls this in place of [renderTo].
+     */
+    public fun renderForPrint(canvas: KiteCanvas, deviceCtm: KiteMatrix, formState: PdfFormState? = null) {
+        PageRenderer(canvas, document, formState).also { it.forPrint = true }.render(this, deviceCtm) { true }
+    }
+
+    /**
      * [renderTo] with the form being filled: a widget whose field has a value in [formState] is
      * drawn from that value, and a field the state hides is not drawn. Pass null to render the
      * file as it arrived.

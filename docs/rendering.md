@@ -258,6 +258,26 @@ To draw a form with the values that the reader filled in, pass a `PdfFormState` 
 page.renderTo(canvas, deviceCtm, formState)
 ```
 
+## Print
+
+A page prints differently from how it shows. `PdfPage.renderForPrint` draws an annotation when its Print flag is set and its Hidden flag is not, whatever its NoView flag. It also gives each layer its print state, unless you set `PdfDocument.layers` yourself:
+
+```kotlin
+page.renderForPrint(canvas, deviceCtm, formState)
+```
+
+On the JVM, `KitePrintable` of `kitepdf-native-renderer` prints any document with `java.awt.print`. It draws each page onto the printer's own `Graphics2D`, so text and paths stay vector. Each page is centred in the paper's printable area, turned to landscape when it is wider than tall, and scaled to fit, unless the PDF asks for `/PrintScaling /None`. The print dialog starts from the file's `/NumCopies`, `/Duplex` and `/PrintPageRange`:
+
+```kotlin
+KitePrintable.print(document)                       // the print dialog, then the printer
+
+val job = PrinterJob.getPrinterJob()                // or drive the job yourself
+job.setPageable(KitePrintable(document, job.defaultPage(), formState))
+job.print(KitePrintable.attributesOf(document))
+```
+
+Android, Apple and the web have no print path in the library yet (#951).
+
 ## Memory
 
 A `PdfDocument` keeps three caches, so that a page that draws again (at another zoom or after a scroll back) costs less:

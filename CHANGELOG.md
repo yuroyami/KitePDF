@@ -1018,6 +1018,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   elements made on a timer and dropped kept 24 MB of Java heap, and now keep under 4 MB. A wrapper still lives
   while the document holds its node or while the script holds a wrapper of any node in its tree, so expandos and
   listeners on a detached tree survive until it is attached (#885).
+- PdfPage.renderForPrint draws a page as it prints: annotations by their Print and Hidden flags, whatever NoView
+  says, and layers in their print states. On the JVM, KitePrintable of kitepdf-native-renderer prints any
+  document through java.awt.print, as vectors, fitted to the paper and turned for a wide page, with the PDF's
+  /NumCopies, /Duplex and /PrintPageRange as the dialog's defaults (#951).
 
 ## [0.13.0] - 2026-10-09
 

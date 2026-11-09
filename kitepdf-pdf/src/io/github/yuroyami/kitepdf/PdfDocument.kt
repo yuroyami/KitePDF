@@ -793,6 +793,13 @@ public class PdfDocument private constructor(
     private var layerOverride: PdfOptionalContent? = null
 
     /**
+     * The layer states a print follows (#951): the ones a host set in [layers], else the default
+     * configuration's states for the Print event (ISO 32000-1, 8.11.4.4).
+     */
+    internal val printLayers: PdfOptionalContent?
+        get() = layerOverride ?: optionalContent?.forEvent("Print")
+
+    /**
      * Where this document's salvage warnings go, each with the page it came from (#899), or null
      * for the process's [io.github.yuroyami.kitepdf.core.KiteWarnings.sink]. Drawing a page and
      * reading its text report here, and so does opening the document with the [open] overload

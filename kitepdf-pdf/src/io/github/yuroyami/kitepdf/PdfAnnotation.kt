@@ -86,6 +86,12 @@ public data class PdfAnnotation(
     val isInvisible: Boolean get() = (flags and FLAG_INVISIBLE) != 0
 
     /**
+     * True when the annotation prints: its Print flag is set and its Hidden flag is not (ISO
+     * 32000-1, 12.5.3). NoView does not matter, so an annotation can print and stay off the screen.
+     */
+    val isPrinted: Boolean get() = (flags and FLAG_PRINT) != 0 && (flags and FLAG_HIDDEN) == 0
+
+    /**
      * The NoZoom flag (§12.5.3, Table 165, bit 4): the appearance keeps its own
      * size, with the upper-left corner of the rectangle fixed, instead of
      * stretching to the rectangle.
@@ -199,6 +205,7 @@ public data class PdfAnnotation(
 
         private const val FLAG_INVISIBLE = 1      // bit 1
         private const val FLAG_HIDDEN = 1 shl 1   // bit 2
+        private const val FLAG_PRINT = 1 shl 2    // bit 3
         private const val FLAG_NOZOOM = 1 shl 3   // bit 4
         private const val FLAG_NOVIEW = 1 shl 5   // bit 6
 

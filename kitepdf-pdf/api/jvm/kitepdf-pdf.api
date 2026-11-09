@@ -307,6 +307,7 @@ public final class io/github/yuroyami/kitepdf/PdfAnnotation {
 	public final fun isHidden ()Z
 	public final fun isInvisible ()Z
 	public final fun isNoZoom ()Z
+	public final fun isPrinted ()Z
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -988,6 +989,8 @@ public final class io/github/yuroyami/kitepdf/PdfPage : io/github/yuroyami/kitep
 	public fun readingOrder ()Ljava/util/List;
 	public final fun renderAnnotationsTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun renderAnnotationsTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public final fun renderForPrint (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;)V
+	public static synthetic fun renderForPrint$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;ILjava/lang/Object;)V
 	public fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;)V
 	public final fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/core/KiteCancellation;Lkotlin/jvm/functions/Function1;)V
 	public final fun renderTo (Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;)V
