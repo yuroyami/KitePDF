@@ -1,5 +1,5 @@
-# The shared core: geometry, the render Canvas, the font engine, compression, hyphenation data and the
-# shared value model. Every document handler and every render backend depends on it.
+# The shared core: geometry, the render Canvas, the font engine, compression and the shared value
+# model. Every document handler and every render backend depends on it.
 
 product:
   type: kmp/lib

@@ -1,5 +1,6 @@
 # The EPUB handler: reflowable HTML and CSS layout on kitepdf-core. kotlinx.coroutines is its one library
 # besides KitePDF's own: a resource that a book names by an https URL is fetched in the background (#38).
+# It carries the hyphenation patterns, which only its layout and the umbrella's text writer read (#687).
 
 product:
   type: kmp/lib

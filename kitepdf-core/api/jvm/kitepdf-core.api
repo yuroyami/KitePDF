@@ -2854,18 +2854,6 @@ public final class io/github/yuroyami/kitepdf/core/text/Bidi {
 	public final fun resolveLevels ([II)[I
 }
 
-public final class io/github/yuroyami/kitepdf/core/text/Hyphenator {
-	public static final field Companion Lio/github/yuroyami/kitepdf/core/text/Hyphenator$Companion;
-	public fun <init> (Ljava/util/List;II)V
-	public synthetic fun <init> (Ljava/util/List;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun hyphenate (Ljava/lang/String;)Ljava/util/List;
-}
-
-public final class io/github/yuroyami/kitepdf/core/text/Hyphenator$Companion {
-	public final fun enUs ()Lio/github/yuroyami/kitepdf/core/text/Hyphenator;
-	public final fun forLanguage (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/text/Hyphenator;
-}
-
 public final class io/github/yuroyami/kitepdf/core/text/TextEncoding {
 	public static final field INSTANCE Lio/github/yuroyami/kitepdf/core/text/TextEncoding;
 	public final fun decode ([BLjava/lang/String;)Ljava/lang/String;

@@ -161,6 +161,17 @@ abstract interface io.github.yuroyami.kitepdf.epub/EpubScriptHandler { // io.git
     open suspend fun tap(io.github.yuroyami.kitepdf.epub/EpubPage, kotlin/Double, kotlin/Double): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubScriptHandler.tap|tap(io.github.yuroyami.kitepdf.epub.EpubPage;kotlin.Double;kotlin.Double){}[0]
 }
 
+final class io.github.yuroyami.kitepdf.core.text/Hyphenator { // io.github.yuroyami.kitepdf.core.text/Hyphenator|null[0]
+    constructor <init>(kotlin.collections/List<kotlin/String>, kotlin/Int = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.core.text/Hyphenator.<init>|<init>(kotlin.collections.List<kotlin.String>;kotlin.Int;kotlin.Int){}[0]
+
+    final fun hyphenate(kotlin/String): kotlin.collections/List<kotlin/Int> // io.github.yuroyami.kitepdf.core.text/Hyphenator.hyphenate|hyphenate(kotlin.String){}[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.core.text/Hyphenator.Companion|null[0]
+        final fun enUs(): io.github.yuroyami.kitepdf.core.text/Hyphenator // io.github.yuroyami.kitepdf.core.text/Hyphenator.Companion.enUs|enUs(){}[0]
+        final fun forLanguage(kotlin/String?): io.github.yuroyami.kitepdf.core.text/Hyphenator? // io.github.yuroyami.kitepdf.core.text/Hyphenator.Companion.forLanguage|forLanguage(kotlin.String?){}[0]
+    }
+}
+
 final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.kitepdf.core/KiteDocument { // io.github.yuroyami.kitepdf.epub/EpubDocument|null[0]
     final val chapterChanges // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterChanges|{}chapterChanges[0]
         final fun <get-chapterChanges>(): kotlinx.coroutines.flow/StateFlow<kotlin/Int> // io.github.yuroyami.kitepdf.epub/EpubDocument.chapterChanges.<get-chapterChanges>|<get-chapterChanges>(){}[0]

@@ -1,3 +1,15 @@
+public final class io/github/yuroyami/kitepdf/core/text/Hyphenator {
+	public static final field Companion Lio/github/yuroyami/kitepdf/core/text/Hyphenator$Companion;
+	public fun <init> (Ljava/util/List;II)V
+	public synthetic fun <init> (Ljava/util/List;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun hyphenate (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class io/github/yuroyami/kitepdf/core/text/Hyphenator$Companion {
+	public final fun enUs ()Lio/github/yuroyami/kitepdf/core/text/Hyphenator;
+	public final fun forLanguage (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/text/Hyphenator;
+}
+
 public final class io/github/yuroyami/kitepdf/epub/EpubDocument : io/github/yuroyami/kitepdf/core/KiteDocument {
 	public static final field Companion Lio/github/yuroyami/kitepdf/epub/EpubDocument$Companion;
 	public final fun awaitLayoutResources-8Mi8wO0 (IJLkotlin/coroutines/Continuation;)Ljava/lang/Object;

@@ -1989,17 +1989,6 @@ final class io.github.yuroyami.kitepdf.core.script/KiteScriptException : kotlin/
     constructor <init>(kotlin/String, kotlin/Throwable? = ...) // io.github.yuroyami.kitepdf.core.script/KiteScriptException.<init>|<init>(kotlin.String;kotlin.Throwable?){}[0]
 }
 
-final class io.github.yuroyami.kitepdf.core.text/Hyphenator { // io.github.yuroyami.kitepdf.core.text/Hyphenator|null[0]
-    constructor <init>(kotlin.collections/List<kotlin/String>, kotlin/Int = ..., kotlin/Int = ...) // io.github.yuroyami.kitepdf.core.text/Hyphenator.<init>|<init>(kotlin.collections.List<kotlin.String>;kotlin.Int;kotlin.Int){}[0]
-
-    final fun hyphenate(kotlin/String): kotlin.collections/List<kotlin/Int> // io.github.yuroyami.kitepdf.core.text/Hyphenator.hyphenate|hyphenate(kotlin.String){}[0]
-
-    final object Companion { // io.github.yuroyami.kitepdf.core.text/Hyphenator.Companion|null[0]
-        final fun enUs(): io.github.yuroyami.kitepdf.core.text/Hyphenator // io.github.yuroyami.kitepdf.core.text/Hyphenator.Companion.enUs|enUs(){}[0]
-        final fun forLanguage(kotlin/String?): io.github.yuroyami.kitepdf.core.text/Hyphenator? // io.github.yuroyami.kitepdf.core.text/Hyphenator.Companion.forLanguage|forLanguage(kotlin.String?){}[0]
-    }
-}
-
 final class io.github.yuroyami.kitepdf.core.xml/KiteXmlError { // io.github.yuroyami.kitepdf.core.xml/KiteXmlError|null[0]
     constructor <init>(kotlin/Int, kotlin/Int, kotlin/String) // io.github.yuroyami.kitepdf.core.xml/KiteXmlError.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.String){}[0]
 

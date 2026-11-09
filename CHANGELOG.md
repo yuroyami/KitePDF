@@ -1010,6 +1010,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attachment (lookup types 1, 3, 7 and 8), so an Urdu Nastaliq word rises on its slope where HarfBuzz puts it. A
   mark that nothing attaches no longer becomes the base of the marks after it, and a mark on a ligature goes on
   the component it was typed after (#877).
+- The hyphenation patterns and Hyphenator moved from kitepdf-core to kitepdf-epub, the only artifact that reads
+  them, so an app that depends only on kitepdf-pdf no longer carries 3.1 MB of pattern classes; the kitepdf-core
+  jar shrinks from 3.2 MB to 2.2 MB. Hyphenator keeps its package, so code that imports it and depends on
+  kitepdf-epub or kitepdf still compiles (#687).
 
 ## [0.13.0] - 2026-10-09
 

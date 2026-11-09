@@ -42,6 +42,24 @@ The other artifacts are optional:
 
 Each optional artifact runs on its own set of targets, which [Platform support](platforms.md) lists.
 
+### What each artifact adds to an app
+
+The size of each JVM jar of KitePDF's own code, as the build writes it. A dependency, such as ImageKodec or KiteJS, adds its own jar, and an Android app that runs R8 keeps less: only the code it reaches.
+
+| Artifact | Jar | Holds |
+| --- | --- | --- |
+| `kitepdf-core` | 2.2 MB | geometry, the canvas, fonts, compression, the 14 standard fonts and the predefined CMaps |
+| `kitepdf-pdf` | 1.3 MB | the PDF reader, renderer and writer |
+| `kitepdf-epub` | 3.8 MB | the EPUB layout, and 1.3 MB of hyphenation patterns for more than 60 languages |
+| `kitepdf-svg` | 0.3 MB | SVG |
+| `kitepdf-xps` | 0.1 MB | XPS and OpenXPS |
+| `kitepdf-cbz` | less than 0.1 MB | CBZ |
+| `kitepdf-compose-viewer` | 1.2 MB | `KiteDocView` |
+| `kitepdf-javascript` | 0.3 MB | the script runners, without KiteJS |
+| `kitepdf-media` | 0.2 MB | the media players, without KitePlayer |
+
+An app that opens only PDFs depends on `kitepdf-pdf` and carries no hyphenation patterns. Only the EPUB layout and the text writer of `kitepdf` read them (#687).
+
 ## 2. Open a document
 
 ```kotlin

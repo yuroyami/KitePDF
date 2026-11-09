@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes the hyphenation pattern sets of kitepdf-core from a checkout of hyph-utf8 (#207).
+"""Writes the hyphenation pattern sets of kitepdf-epub from a checkout of hyph-utf8 (#207).
 
     git clone --depth 1 https://github.com/hyphenation/tex-hyphen /path/to/tex-hyphen
     python3 tools/generate_hyphenation.py /path/to/tex-hyphen
@@ -32,7 +32,7 @@ import unicodedata
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CORE = os.path.join(ROOT, "kitepdf-core")
+CORE = os.path.join(ROOT, "kitepdf-epub")
 PACKAGE_PATH = os.path.join("io", "github", "yuroyami", "kitepdf", "core", "text", "hyphen")
 MAIN_DIR = os.path.join(CORE, "src", PACKAGE_PATH)
 TEST_FILE = os.path.join(CORE, "test", "io", "github", "yuroyami", "kitepdf", "core",
