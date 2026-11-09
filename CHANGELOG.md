@@ -846,6 +846,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   soft-masked paint there keeps its blend mode (#764).
 - An XPS path whose stroke is a gradient, image or visual brush draws its stroke: the brush fills the stroke's
   outline, with its caps, joins and dashes, where nothing drew before (#746).
+- A tiling pattern fill replays only the cells that can touch it, and loads the cell's resources and operators
+  once a render, so a page of many small pattern-filled boxes renders far faster (#774).
 
 ## [0.13.0] - 2026-10-09
 

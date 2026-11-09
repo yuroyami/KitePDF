@@ -201,4 +201,22 @@ class MaskPatternShadingTest {
             "the cells paint at full alpha inside the group",
         )
     }
+
+    @Test
+    fun a_tiling_fill_replays_only_the_cells_that_can_touch_it() {
+        // ISO 32000-1, 8.7.3.1: cell i spans i * XStep + BBox.left to i * XStep + BBox.right. A fill
+        // of one cell, on the lattice, needs that cell alone; the inclusive range replayed nine (#774).
+        val calls = TestPdf.calls(
+            TestPdf.onePage(
+                content = "/Pattern cs /P1 scn 20 20 10 10 re f 45 45 10 10 re f",
+                resources = "/Pattern << /P1 5 0 R >>",
+                extra = listOf(
+                    TestPdf.stream("0 0 1 rg 2 2 6 6 re f", "/PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 10 10] /XStep 10 /YStep 10 /Resources << >>"),
+                ),
+            ),
+        )
+        val cells = calls.filterIsInstance<RecordingCanvas.Call.Fill>().count { it.color == RgbColor(0.0, 0.0, 1.0) }
+        // One cell for the box on the lattice, and four for the one that straddles four cells.
+        assertEquals(5, cells, "cells replayed")
+    }
 }

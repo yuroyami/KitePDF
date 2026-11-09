@@ -1885,10 +1885,13 @@ public class PageRenderer(
         // The lattice is unbounded (ISO 32000-1, 8.7.3.1), so the range is weighed in Double before
         // any Int is taken: Int spans of a saturated range wrapped, two spans of -1 made a count of
         // 1, and the loops then ran over 1.8e19 cells (#971).
-        val fi0 = kotlin.math.floor((pMinX - pat.bbox.right) / axs)
-        val fi1 = kotlin.math.ceil((pMaxX - pat.bbox.left) / axs)
-        val fj0 = kotlin.math.floor((pMinY - pat.bbox.top) / ays)
-        val fj1 = kotlin.math.ceil((pMaxY - pat.bbox.bottom) / ays)
+        // Cell i spans i * XStep + BBox.left to i * XStep + BBox.right, so it can touch the fill only
+        // when that span overlaps it, both ends strict: the inclusive ends replayed a ring of cells
+        // past the fill on every side, 9 to 16 cells for a fill of one cell's size (#774).
+        val fi0 = kotlin.math.floor((pMinX - pat.bbox.right) / axs) + 1
+        val fi1 = kotlin.math.ceil((pMaxX - pat.bbox.left) / axs) - 1
+        val fj0 = kotlin.math.floor((pMinY - pat.bbox.top) / ays) + 1
+        val fj1 = kotlin.math.ceil((pMaxY - pat.bbox.bottom) / ays) - 1
         val spanI = fi1 - fi0 + 1
         val spanJ = fj1 - fj0 + 1
         if (!(spanI >= 1.0 && spanJ >= 1.0 && spanI * spanJ <= MAX_TILES)) return
@@ -1912,6 +1915,16 @@ public class PageRenderer(
     /** The tiling patterns whose cells are being painted, for the cycle check of [renderTilingPattern]. */
     private val activeTilings = HashSet<KitePattern.Tiling>()
 
+    /** What a tiling pattern's cell draws with, loaded once a render for each pattern (#774). */
+    private class TilingCell(
+        val fonts: Map<String, PdfFont>, val xobjects: Map<String, XObjectSlot>, val colorSpaces: Map<String, KiteColorSpace>,
+        val extGStates: Map<String, ExtGState>, val shadings: Map<String, KiteShading>, val patterns: Map<String, KitePattern>,
+        val properties: Map<String, PdfObject>, val ops: List<Operation>,
+    )
+
+    /** By the pattern object itself: a pattern is a data class, whose hash would walk its resources on each lookup. */
+    private val tilingCells = ArrayList<Pair<KitePattern.Tiling, TilingCell>>()
+
     private fun renderTilingCells(
         pat: KitePattern.Tiling, clipPath: KitePath, s: GraphicsState, evenOdd: Boolean, alpha: Double,
         color: RgbColor, patternCtm: KiteMatrix, i0: Int, i1: Int, j0: Int, j1: Int,
@@ -1919,15 +1932,25 @@ public class PageRenderer(
         val xs = pat.xStep
         val ys = pat.yStep
 
-        val res = pat.resources
-        val fonts = loadFonts(res)
-        val xobjects = loadXObjects(res)
-        val colorSpaces = loadColorSpaces(res)
-        val extGStates = loadExtGStates(res)
-        val shadings = loadShadings(res, colorSpaces)
-        val patterns = loadPatterns(res, shadings, colorSpaces)
-        val properties = loadProperties(res)
-        val ops = ContentStreamParser.parse(pat.contentBytes, colorSpaces)
+        // The cell's resources and operators load once a render for each pattern, as a form's do,
+        // not again for each fill (#774).
+        val cell = tilingCells.firstOrNull { it.first === pat }?.second ?: run {
+            val res = pat.resources
+            val colorSpaces = loadColorSpaces(res)
+            val shadings = loadShadings(res, colorSpaces)
+            TilingCell(
+                loadFonts(res), loadXObjects(res), colorSpaces, loadExtGStates(res), shadings,
+                loadPatterns(res, shadings, colorSpaces), loadProperties(res), ContentStreamParser.parse(pat.contentBytes, colorSpaces),
+            ).also { tilingCells += pat to it }
+        }
+        val fonts = cell.fonts
+        val xobjects = cell.xobjects
+        val colorSpaces = cell.colorSpaces
+        val extGStates = cell.extGStates
+        val shadings = cell.shadings
+        val patterns = cell.patterns
+        val properties = cell.properties
+        val ops = cell.ops
         val uncolored = pat.paintType == 2
         // ISO 32000-1, 8.7.3.1, Table 75: the pattern's box clips each cell, so a
         // cell that draws past it cannot flood the fill (#95).
