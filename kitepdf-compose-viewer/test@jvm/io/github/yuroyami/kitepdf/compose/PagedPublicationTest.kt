@@ -181,4 +181,49 @@ class PagedPublicationTest {
         state.publishChapter()
         assertEquals(8, state.selection?.pageIndex, "the selection stays on its content")
     }
+
+    /** A pager whose first animation a publication interrupts, as Compose's mutator does with a snap. */
+    private class InterruptedAdapter(private val publish: () -> Unit) : KiteScrollAdapter {
+        var page = 0
+        var interruptions = 1
+        override val currentPage: Int get() = page
+        override val followsKeys: Boolean get() = false
+        override suspend fun scrollToPage(page: Int) { this.page = page }
+        override suspend fun animateScrollToPage(page: Int) {
+            if (interruptions-- > 0) {
+                // A chapter lands mid-animation, and the publication's snap interrupts the animation.
+                publish()
+                throw kotlinx.coroutines.CancellationException("Mutation interrupted")
+            }
+            this.page = page
+        }
+        override fun captureAnchor() = ScrollAnchor(page)
+        override fun requestSlot(slot: Int, anchor: ScrollAnchor) { page = slot }
+    }
+
+    /** A page turn that a publication interrupts goes on, and the reader lands on the next page (#629). */
+    @Test
+    fun a_turn_that_a_publication_interrupts_still_lands() = runBlocking {
+        val doc = FakeDoc(4, 3).also { it.prepareChapter(0) }
+        val state = KiteDocViewState(doc)
+        val adapter = InterruptedAdapter {
+            doc.prepareChapter(1)
+            state.publishNow()
+        }
+        state.attachPagedForTest(adapter)
+        state.nextPage()
+        assertEquals(KiteLocation(0, 1), state.currentLocation, "the interrupted turn was lost")
+    }
+
+    /** A turn that a newer navigation interrupts gives way to it (#629). */
+    @Test
+    fun a_turn_that_a_newer_navigation_interrupts_gives_way() = runBlocking {
+        val doc = FakeDoc(4, 3).also { it.prepareChapter(0) }
+        val state = KiteDocViewState(doc)
+        lateinit var adapter: InterruptedAdapter
+        adapter = InterruptedAdapter { kotlinx.coroutines.runBlocking { state.scrollToPage(2) } }
+        state.attachPagedForTest(adapter)
+        runCatching { state.nextPage() }
+        assertEquals(2, adapter.page, "the interrupted turn fought the newer navigation")
+    }
 }

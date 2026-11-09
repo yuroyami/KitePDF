@@ -55,6 +55,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -2114,6 +2115,7 @@ public class KiteDocViewState(
 
     /** Jumps to slot [page] (coerced into range) without animation. See [scrollToSlot]. */
     public suspend fun scrollToPage(page: Int): Unit = onViewerThread {
+        navigations++
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         leaveSelectionFor(target)
         park(target)
@@ -2122,6 +2124,7 @@ public class KiteDocViewState(
 
     /** Animates to slot [page] (coerced into range). */
     public suspend fun animateScrollToPage(page: Int): Unit = onViewerThread {
+        navigations++
         val target = page.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
         leaveSelectionFor(target)
         park(target)
@@ -2260,12 +2263,38 @@ public class KiteDocViewState(
                 park(index, offsetPx = offsetPx)
                 continuous.scrollToPageOffset(index, offsetPx)
             } else {
-                if (animate) animateScrollToPage(index) else scrollToPage(index)
+                if (animate) animateSurvivingPublication(location, index) else scrollToPage(index)
                 if (adapter == null) pendingScrollOffset = offsetPx
             }
         } finally {
             navigationTarget = null
         }
+    }
+
+    /**
+     * Animates to [index], the slot of [location]. A chapter that lands meanwhile publishes a new
+     * strip, and its correction snaps the container, which interrupts the animation with a
+     * cancellation that is not the caller's. The turn then goes on against the new strip, so a
+     * page turn while a book still lays out is not lost (#629).
+     */
+    private suspend fun animateSurvivingPublication(location: KiteLocation, index: Int) {
+        var slot = index
+        repeat(INTERRUPTED_TURN_TRIES) {
+            val corrections = publicationCorrections
+            val mine = navigations + 1
+            try {
+                animateScrollToPage(slot)
+                return
+            } catch (interrupted: CancellationException) {
+                // The caller's own cancellation goes on up, and so does an interruption by a newer
+                // navigation: only a publication's correction makes the turn go on.
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (navigations != mine || publicationCorrections == corrections) throw interrupted
+                backOnComposeThread()
+                slot = navigableSlot(location)
+            }
+        }
+        scrollToPage(slot)
     }
 
     /**
@@ -2342,6 +2371,12 @@ public class KiteDocViewState(
         kiteWarn { "navigation: $bookmark could not be resolved: ${failure.message ?: failure::class.simpleName}" }
         null
     }
+
+    /** Counts the navigations that move the container, so a turn knows a newer one interrupted it (#629). */
+    private var navigations = 0
+
+    /** Counts the corrections a publication makes to the container, which interrupt an animation (#629). */
+    private var publicationCorrections = 0
 
     /** How many [KiteDocView]s show this state now, which should be one (#656). */
     internal var attachedViews: Int = 0
@@ -2461,6 +2496,7 @@ public class KiteDocViewState(
         if (captured == null) return
         // A navigation in flight wins: its target goes to the leading edge, as the jump puts it.
         if (navigationTarget != null) {
+            publicationCorrections++
             adapter.requestSlot(target, ScrollAnchor(target))
             return
         }
@@ -2469,7 +2505,12 @@ public class KiteDocViewState(
         val keyedAfter = keyed?.let { item -> items.indexOfFirst { it.key == item.key } } ?: -1
         val keyedLands = if (adapter.followsKeys && keyedAfter >= 0 && abs(keyedAfter - keyedSlot) < KEY_REACH) keyedAfter else keyedSlot
         val readerLands = keyedLands + (readerSlot - keyedSlot)
-        if (readerLands != target) adapter.requestSlot(target, captured) else adapter.expectSlot(target, keyedLands)
+        if (readerLands != target) {
+            publicationCorrections++
+            adapter.requestSlot(target, captured)
+        } else {
+            adapter.expectSlot(target, keyedLands)
+        }
     }
 
     /** Publishes when a ready chapter still holds a placeholder, as it does when someone else laid it out (#341). */
@@ -3253,3 +3294,6 @@ internal class FixedPageAdapter(private val pageIndex: Int) : KiteScrollAdapter 
 
 /** Spaces the frame numbers of [KiteDocViewState.animationVersionOf] away from the small counts of [KiteDocViewState.contentVersionOf]. */
 private const val ANIMATION_VERSION_STEP = 1_000_003
+
+/** How many times a page turn goes on after a publication interrupted it, before it jumps (#629). */
+private const val INTERRUPTED_TURN_TRIES = 8

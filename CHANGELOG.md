@@ -931,6 +931,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Page Down, Page Up, Space and the up and down arrows scroll a page that is taller than the view before they
   turn it, as in a browser: by about one view, or a step for the arrows. A vertical strip scrolls by a view, and
   a `scrolled-doc` chapter reads to its end from the keyboard (#661).
+- A page turn while an EPUB still lays out, such as `nextPage()` from an edge tap, is no longer cancelled with
+  `MutationInterruptedException` when a chapter lands: a turn that a page-table publication interrupts goes on
+  against the new strip, and a newer navigation still wins. Read-aloud keeps track of where its own turn left the
+  view, even an interrupted one, so it does not read a clip again (#629).
 
 ## [0.13.0] - 2026-10-09
 

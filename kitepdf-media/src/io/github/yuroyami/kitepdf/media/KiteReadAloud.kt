@@ -400,8 +400,13 @@ internal class ReadAloud(
         if (view.currentLocation != page) {
             turn?.cancel()
             turn = scope.launch {
-                view.scrollTo(page, animate = true)
-                settled = view.currentLocation
+                // Where its own turn left the view, even a turn that failed, is not a move by the
+                // reader, so the reading does not start the page again (#629).
+                try {
+                    view.scrollTo(page, animate = true)
+                } finally {
+                    settled = view.currentLocation
+                }
             }
         }
     }
