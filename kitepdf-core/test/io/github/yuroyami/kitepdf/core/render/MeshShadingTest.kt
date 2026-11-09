@@ -106,7 +106,8 @@ class MeshShadingTest {
         val canvas = RecordingCanvas()
         canvas.paintComplexShading(triangle(), scaling(100_000.0), clipPath = null)
         val call = canvas.calls.filterIsInstance<RecordingCanvas.Call.Image>().single()
-        assertTrue(call.image.width.toLong() * call.image.height <= 2_100_000, "${call.image.width} by ${call.image.height}")
+        // The budget is a Letter page at 300 dpi (#795).
+        assertTrue(call.image.width.toLong() * call.image.height <= 8_400_000, "${call.image.width} by ${call.image.height}")
         assertTrue(call.ctm.a >= 100_000.0 && -call.ctm.d >= 100_000.0)
     }
 

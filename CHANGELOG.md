@@ -851,6 +851,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An image above the 40 megapixel raster limit still draws when it is drawn at more than half its size: it
   averages down by one more power of two until it fits, where it drew as the grey placeholder box, so a large
   scan no longer turns grey when the reader zooms in (#748).
+- A triangle or patch mesh painted with `sh` rasterizes over the page, not its whole box, and up to 8 megapixels
+  at device resolution, so a mesh that runs past the page or covers a page at print resolution no longer comes
+  out soft (#795).
 
 ## [0.13.0] - 2026-10-09
 

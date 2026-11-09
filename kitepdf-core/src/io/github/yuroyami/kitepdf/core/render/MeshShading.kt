@@ -776,4 +776,5 @@ private const val MESH_FLATNESS = 0.5
 private const val MESH_MAX_QUADS = 1L shl 19
 
 /** The most pixels in the image of one mesh, about 1448 by 1448. */
-private const val MESH_MAX_PIXELS = 2_097_152.0
+/** The most device pixels a mesh rasterizes at its own resolution: a Letter page at 300 dpi, 32 MB of ARGB (#795). */
+private const val MESH_MAX_PIXELS = 8_388_608.0

@@ -1536,11 +1536,14 @@ public class PageRenderer(
                 val s = state.current
                 // sh paints under the active soft mask like every other painting
                 // operator (ISO 32000-1, 11.6.5.1, #65).
+                // A mesh rasterizes over its own box, which sh does not cut, so it is cut to the page: a
+                // mesh that runs past the page counted in full against its pixel budget and drew soft (#795).
+                val meshClip = if (shading is KiteShading.TriangleMesh || shading is KiteShading.PatchMesh) pageClipIn(s.ctm) else null
                 element(state) {
                     withSoftMask(s) {
                         fillShadingInBBox(
                             shading.withIntent(s.renderingIntent, s.blackPointCompensation), s.ctm,
-                            clipPath = null, alpha = s.fillAlpha, blendMode = s.blendMode,
+                            clipPath = meshClip, alpha = s.fillAlpha, blendMode = s.blendMode,
                         )
                     }
                 }
@@ -2013,6 +2016,19 @@ public class PageRenderer(
 
     /** The device bounds of the page's crop box, which bound the cells a pattern fill counts (#769). */
     private var pageDeviceBounds: DoubleArray? = null
+
+    /** The page's device box as a path in the user space of [ctm], or null when [ctm] has no inverse. */
+    private fun pageClipIn(ctm: KiteMatrix): KitePath? {
+        val d = pageDeviceBounds ?: return null
+        val inverse = ctm.invert() ?: return null
+        return KitePath.Builder().apply {
+            moveTo(inverse.transformX(d[0], d[1]), inverse.transformY(d[0], d[1]))
+            lineTo(inverse.transformX(d[2], d[1]), inverse.transformY(d[2], d[1]))
+            lineTo(inverse.transformX(d[2], d[3]), inverse.transformY(d[2], d[3]))
+            lineTo(inverse.transformX(d[0], d[3]), inverse.transformY(d[0], d[3]))
+            close()
+        }.build()
+    }
 
     /** The device bounds of [box] under [ctm]. */
     private fun deviceBounds(box: io.github.yuroyami.kitepdf.core.KiteRectangle, ctm: KiteMatrix): DoubleArray? =
