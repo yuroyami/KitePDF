@@ -1100,8 +1100,10 @@ public class ComposeCanvas internal constructor(
         // A group nested in a knockout group gets a layer, so its own paints do not knock each other out.
         val nested = knockingOut
         val layered = isolated || knockout || nested || alpha < 1.0 || blendMode != KiteBlendMode.Normal
-        groups.addLast(Group(layered, knockout))
-        if (!layered) return
+        if (!layered) {
+            groups.addLast(Group(false, knockout))
+            return
+        }
         // Compute the layer's pixel bounds in device space.
         val x0 = ctm.transformX(bbox.left, bbox.bottom)
         val y0 = ctm.transformY(bbox.left, bbox.bottom)
@@ -1118,18 +1120,78 @@ public class ComposeCanvas internal constructor(
             maxOf(maxOf(y0, y1), maxOf(y2, y3)).toFloat(),
         )
 
+        if (nested && beginKnockoutElement(rect, knockout, alpha, blendMode)) return
+
         val paint = Paint().apply {
             this.alpha = alpha.toFloat().coerceIn(0f, 1f)
             this.blendMode = blendMode.toCompose()
         }
         val canvas = drawScope.drawContext.canvas
         val overBackdrop = !isolated && !knockout && !nested && blendMode == KiteBlendMode.Normal
+        groups.addLast(Group(true, knockout))
         if (!overBackdrop || !saveLayerOverBackdrop(canvas, rect, paint)) canvas.saveLayer(rect, paint)
         saves.addLast(Save.Layer)
     }
 
-    /** An open group: whether it opened a layer, and whether its paints knock out. */
-    private class Group(val layered: Boolean, val knockout: Boolean)
+    /** An open group: whether it opened a layer, whether its paints knock out, and the bitmap of a knockout element. */
+    private class Group(val layered: Boolean, val knockout: Boolean, val element: KnockoutElement? = null)
+
+    /**
+     * A group nested in a knockout group, painting into a [bitmap] of its own whose corner is at
+     * ([x], [y]), and what its end puts back.
+     */
+    private class KnockoutElement(
+        val bitmap: ImageBitmap, val x: Int, val y: Int, val alpha: Float, val blendMode: ComposeBlendMode,
+        val savedScope: DrawScope, val savedSaves: List<Save>, val savedClips: List<Rect>,
+    )
+
+    /**
+     * ISO 32000-1, 11.4.4 and 11.4.6: a group nested in a knockout group is one element of it,
+     * and takes the parent's earlier paints away where it draws. A saved layer composites once,
+     * so on a rasterizer's canvas, whose units are the pixels of its bitmap, the group paints into
+     * a bitmap of [box], and its end draws that bitmap twice: with DstOut at full strength, then
+     * with the group's alpha and blend mode, as AWT and Skia do (#756). Returns false where the
+     * units are not pixels, inside a raster step or on screen, and the group takes a layer.
+     */
+    private fun beginKnockoutElement(box: Rect, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode): Boolean {
+        val bitmapTarget = target ?: return false
+        if (stepBounds != null) return false
+        val left = kotlin.math.floor(maxOf(box.left, 0f)).toInt()
+        val top = kotlin.math.floor(maxOf(box.top, 0f)).toInt()
+        val right = kotlin.math.ceil(minOf(box.right, bitmapTarget.width.toFloat())).toInt()
+        val bottom = kotlin.math.ceil(minOf(box.bottom, bitmapTarget.height.toFloat())).toInt()
+        if (right <= left || bottom <= top) return false
+        val bitmap = ImageBitmap(right - left, bottom - top)
+        val scope = CanvasDrawScope()
+        scope.drawContext.canvas = androidx.compose.ui.graphics.Canvas(bitmap)
+        scope.drawContext.size = Size((right - left).toFloat(), (bottom - top).toFloat())
+        scope.drawContext.density = drawScope.drawContext.density
+        scope.drawContext.layoutDirection = drawScope.layoutDirection
+        scope.drawContext.canvas.translate(-left.toFloat(), -top.toFloat())
+        val element = KnockoutElement(
+            bitmap, left, top, alpha.toFloat().coerceIn(0f, 1f), blendMode.toCompose(),
+            drawScope, saves.toList(), clipBounds.toList(),
+        )
+        drawScope = scope
+        saves.clear()
+        clipBounds.clear()
+        groups.addLast(Group(layered = false, knockout = knockout, element = element))
+        return true
+    }
+
+    private fun endKnockoutElement(element: KnockoutElement) {
+        while (saves.isNotEmpty()) {
+            saves.removeLast()
+            drawScope.drawContext.canvas.restore()
+        }
+        drawScope = element.savedScope
+        saves.addAll(element.savedSaves)
+        clipBounds.clear()
+        clipBounds.addAll(element.savedClips)
+        val at = androidx.compose.ui.unit.IntOffset(element.x, element.y)
+        drawScope.drawImage(element.bitmap, dstOffset = at, blendMode = ComposeBlendMode.DstOut)
+        drawScope.drawImage(element.bitmap, dstOffset = at, alpha = element.alpha, blendMode = element.blendMode)
+    }
 
     private val groups = ArrayDeque<Group>()
 
@@ -1143,7 +1205,9 @@ public class ComposeCanvas internal constructor(
     private fun paintBlend(mode: KiteBlendMode): ComposeBlendMode = if (knockingOut) ComposeBlendMode.Src else mode.toCompose()
 
     override fun endTransparencyGroup() {
-        if (groups.removeLastOrNull()?.layered != true) return
+        val ended = groups.removeLastOrNull()
+        ended?.element?.let { endKnockoutElement(it); return }
+        if (ended?.layered != true) return
         if (Save.Layer !in saves) return
         restoreThroughLayer()
     }

@@ -976,6 +976,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Skia canvas draws a glyph of an embedded font from a coverage mask that it fills once for each outline,
   size and subpixel position, as AWT does, and places glyphs on the same subpixel grid as AWT and MuPDF. Three
   thousand glyphs drew in 20 ms on every draw, and now in 8 to 10 ms once their masks are filled (#911).
+- On the Compose canvas of the page rasterizer, a group nested in a knockout group takes the earlier paints of
+  its parent away where it draws, as on AWT, Skia and Canvas2D. A half-transparent nested blue group over a red
+  square showed purple, and now shows the half-transparent blue of a plain fill (#756).
 
 ## [0.13.0] - 2026-10-09
 
