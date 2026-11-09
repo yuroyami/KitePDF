@@ -96,6 +96,19 @@ PdfScriptRunner(doc, onRequest = { request ->
 
 The requests are `LaunchUrl`, `SubmitForm`, `Print`, `Mail`, `Document`, `Beep`, `GoTo`, `Focus` and `MenuItem`.
 
+A script's `this.print()` sends `Print`. KitePDF never prints on its own. Hand it to the print path of your platform (see [Print](rendering.md#print)):
+
+```kotlin
+PdfScriptRunner(doc, onRequest = { request ->
+    if (request == PdfScriptRequest.Print) {
+        KitePrintable.print(doc)          // JVM: the print dialog, then the printer
+        // KiteBrowserPrint.print(doc)    // in a web page
+    }
+})
+```
+
+`Print` carries none of the script's options, so a script cannot ask for a silent print. Open the dialog, as `KitePrintable.print` does unless you pass `dialog = false`, so that the reader chooses the printer and the pages.
+
 `onAlert` shows `app.alert` and returns the button that the reader pressed (1 is OK). `onResponse` answers `app.response`, or returns null when the reader cancels. `onConsole` gets `console.println`.
 
 ### Limits

@@ -292,7 +292,7 @@ In a web page, `KiteBrowserPrint` of `kitepdf-native-renderer` draws each page o
 KiteBrowserPrint.print(document)
 ```
 
-Android and Apple have no print path in the library yet (#951).
+A document script that asks to print sends a `PdfScriptRequest.Print` to its runner's `onRequest`, which can call either of these (see [Requests to the host](javascript.md#requests-to-the-host)). Android and Apple have no print path in the library yet (#951).
 
 ## Memory
 
