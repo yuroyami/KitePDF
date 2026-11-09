@@ -1690,9 +1690,13 @@ internal class BoxLayout(
         val tContentLeft = box.x + bL + s.paddingLeftPt
         val tContentTop = box.y + s.borderTop.effective + s.paddingTopPt
 
-        // Pass A: lay cells at their column width to measure heights.
+        // Pass A: lay cells at their column width to measure heights. A cell is as wide as its
+        // columns whatever its own width says, which the column widths took in already: a
+        // `width: 20%` of the table taken again of a 60 point column left 12 points for a
+        // speaker's name, and a play's acts wrapped a letter to a line (CSS 2.1, 17.5.2; #838).
         for (cell in allCells) {
-            layoutBlock(cell, tContentLeft + colX[cell.gridCol], spanWidth(cell.gridCol, cell.colspan), tContentTop)
+            val span = spanWidth(cell.gridCol, cell.colspan)
+            layoutBlock(cell, tContentLeft + colX[cell.gridCol], span, tContentTop, forcedWidth = span)
         }
         // Row heights: single-row cells set the base; rowspan cells top up their last spanned row.
         val rowHeight = DoubleArray(rowCount)
