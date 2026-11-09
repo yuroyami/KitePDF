@@ -53,7 +53,7 @@ class RepairedIncrementalSaveTest {
         )
         for (entry in listed) {
             val header = "${entry.objectNumber} ${entry.generation} obj"
-            assertEquals(header, saved.copyOfRange(entry.byteOffset, entry.byteOffset + header.length).decodeToString(), what)
+            assertEquals(header, saved.copyOfRange(entry.offset.toInt(), entry.offset.toInt() + header.length).decodeToString(), what)
         }
 
         val reopened = PdfDocument.open(saved, password)

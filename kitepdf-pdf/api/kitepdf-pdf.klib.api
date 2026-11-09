@@ -2016,6 +2016,7 @@ sealed class io.github.yuroyami.kitepdf.parser/XrefEntry { // io.github.yuroyami
 
     final class InUse : io.github.yuroyami.kitepdf.parser/XrefEntry { // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse|null[0]
         constructor <init>(kotlin/Long, kotlin/Int, kotlin/Int) // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.<init>|<init>(kotlin.Long;kotlin.Int;kotlin.Int){}[0]
+        constructor <init>(kotlin/Long, kotlin/Int, kotlin/Long) // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.<init>|<init>(kotlin.Long;kotlin.Int;kotlin.Long){}[0]
 
         final val byteOffset // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.byteOffset|{}byteOffset[0]
             final fun <get-byteOffset>(): kotlin/Int // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.byteOffset.<get-byteOffset>|<get-byteOffset>(){}[0]
@@ -2023,6 +2024,8 @@ sealed class io.github.yuroyami.kitepdf.parser/XrefEntry { // io.github.yuroyami
             final fun <get-generation>(): kotlin/Int // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.generation.<get-generation>|<get-generation>(){}[0]
         final val objectNumber // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.objectNumber|{}objectNumber[0]
             final fun <get-objectNumber>(): kotlin/Long // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.objectNumber.<get-objectNumber>|<get-objectNumber>(){}[0]
+        final val offset // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.offset|{}offset[0]
+            final fun <get-offset>(): kotlin/Long // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.offset.<get-offset>|<get-offset>(){}[0]
 
         final fun component1(): kotlin/Long // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.component1|component1(){}[0]
         final fun component2(): kotlin/Int // io.github.yuroyami.kitepdf.parser/XrefEntry.InUse.component2|component2(){}[0]

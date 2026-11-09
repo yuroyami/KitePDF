@@ -82,7 +82,8 @@ public class PdfDocument private constructor(
      * A copy of the document's bytes. Mutating it cannot affect this
      * document; for zero-copy access use [rawBytes]. A document opened from a
      * [io.github.yuroyami.kitepdf.core.KiteByteSource] reads the whole source
-     * into it on each call.
+     * into it on each call, and one larger than an array holds throws
+     * [UnsupportedOperationException].
      */
     public val bytes: ByteArray get() = file.array?.copyOf() ?: file.bytes()
 
@@ -90,7 +91,8 @@ public class PdfDocument private constructor(
      * The live backing array, zero-copy. Mutating it corrupts lazy object
      * resolution, which is why touching it takes the [KiteRawApi] opt-in.
      * A document opened from a [io.github.yuroyami.kitepdf.core.KiteByteSource]
-     * has no backing array, so each call reads the whole source into a new one.
+     * has no backing array, so each call reads the whole source into a new one,
+     * and one larger than an array holds throws [UnsupportedOperationException].
      */
     @property:KiteRawApi
     public val rawBytes: ByteArray get() = file.bytes()
@@ -865,21 +867,24 @@ public class PdfDocument private constructor(
     /** The file's bytes, zero-copy for an array, for code in this module that only reads them. */
     internal val fileBytes: ByteArray get() = file.bytes()
 
-    /** The length of the file in bytes, without reading a source. */
-    internal val fileSize: Int get() = file.size
+    /**
+     * The length of the file in bytes, without reading a source, for code that holds the whole
+     * file in one array. A source larger than that throws [UnsupportedOperationException] (#906).
+     */
+    internal val fileSize: Int get() = file.arraySize()
 
     /** A new cursor on the file. */
     internal fun fileReader(): ByteReader = file.reader()
 
     /** The byte at [index] of the file, or -1 outside it. */
-    internal fun fileByteAt(index: Int): Int = file.byteAt(index)
+    internal fun fileByteAt(index: Int): Int = file.byteAt(index.toLong())
 
     /**
      * The document as it was when the file ended at byte [end]: the revision that a signature
      * covers. It shares this document's security handler, since every revision of a file keeps
      * one encryption. Null when those bytes do not hold a readable revision (#448).
      */
-    internal fun revisionEndingAt(end: Int): PdfDocument? = runCatching {
+    internal fun revisionEndingAt(end: Long): PdfDocument? = runCatching {
         if (end <= 0 || end > file.size) return null
         val revision = file.prefix(end)
         val chain = parseWithPrevChain(revision.reader())
@@ -1042,7 +1047,7 @@ public class PdfDocument private constructor(
             // Per-call reader: the old shared seek-based reader interleaved
             // positions across threads and produced garbage parses.
             val localReader = file.reader()
-            localReader.seek(entry.byteOffset)
+            localReader.seek(entry.offset)
             val parser = Parser(Lexer(localReader), resolver = this, streamsOnDemand = file.streamsOnDemand)
             val indirect = parser.readIndirectObject()
             // M9: a stale/wrong xref offset can land us on a different object.
@@ -1091,7 +1096,7 @@ public class PdfDocument private constructor(
         val entry = xref[objStreamRef] as? XrefEntry.InUse
             ?: throw PdfFormatException("ObjStm $objStreamRef not in xref as in-use")
         val localReader = file.reader() // per-call reader
-        localReader.seek(entry.byteOffset)
+        localReader.seek(entry.offset)
         val parser = Parser(Lexer(localReader), resolver = this)
         val indirect = parser.readIndirectObject()
         // An object stream is encrypted as a whole, with its own object number, and its members are
@@ -1244,9 +1249,12 @@ public class PdfDocument private constructor(
          * than the heap opens, and a stream that no page draws is never fetched. A file whose
          * cross-reference is broken is repaired by a scan of the whole source, a page at a time.
          *
-         * [password] opens an encrypted file as the String overload of [open] does. A source of
-         * 2 GiB or more throws [PdfFormatException]. Saving or signing the document reads the
-         * whole source again, since an incremental update appends to the original bytes (7.5.6).
+         * [password] opens an encrypted file as the String overload of [open] does. A source may
+         * pass 2 GiB, since a cross-reference entry gives an offset in ten digits (7.5.4), though
+         * one stream body must fit an array to decode. Saving or signing the document reads the
+         * whole source again, since an incremental update appends to the original bytes (7.5.6),
+         * so for a source larger than one array holds, [bytes], [rawBytes], a save and a check of
+         * a signature throw [UnsupportedOperationException].
          */
         @Throws(io.github.yuroyami.kitepdf.core.PdfFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
         public fun open(source: io.github.yuroyami.kitepdf.core.KiteByteSource, password: String? = null): PdfDocument {
@@ -1437,7 +1445,7 @@ public class PdfDocument private constructor(
         ): PdfDictionary? {
             val entry = entries[ref.objectNumber] as? XrefEntry.InUse ?: return null
             val reader = file.reader()
-            reader.seek(entry.byteOffset)
+            reader.seek(entry.offset)
             return runCatching {
                 Parser(Lexer(reader)).readIndirectObject().value as? PdfDictionary
             }.getOrNull()
@@ -1453,7 +1461,7 @@ public class PdfDocument private constructor(
          * from the newest trailer that defines it.
          */
         private fun parseWithPrevChain(reader: ByteReader): io.github.yuroyami.kitepdf.parser.XrefAndTrailer {
-            val visited = HashSet<Int>()
+            val visited = HashSet<Long>()
             val merged = HashMap<Long, XrefEntry>()
             var newestTrailer: PdfDictionary? = null
 
@@ -1468,7 +1476,7 @@ public class PdfDocument private constructor(
                 // entries for compressed objects (listed as free in the classic
                 // table). Overlay those onto this section before merging.
                 var sectionEntries: Map<Long, XrefEntry> = section.entries
-                val xrefStm = section.trailer.getInt("XRefStm")?.toInt()
+                val xrefStm = section.trailer.getInt("XRefStm")
                 if (xrefStm != null && xrefStm >= 0 && visited.add(xrefStm)) {
                     val stm = runCatching { XrefParser(reader).parseFromOffset(xrefStm) }.getOrNull()
                     if (stm != null) {
@@ -1486,7 +1494,8 @@ public class PdfDocument private constructor(
                     if (num !in merged) merged[num] = entry
                 }
                 if (newestTrailer == null) newestTrailer = section.trailer
-                val prev = section.trailer.getInt("Prev")?.toInt() ?: -1
+                // /Prev and /XRefStm are byte offsets, which in a source may pass 2 GiB (7.5.5, 7.5.8.4).
+                val prev = section.trailer.getInt("Prev") ?: -1L
                 startOffset = prev
                 safetyCounter++
             }
@@ -1514,11 +1523,11 @@ public class PdfDocument private constructor(
         private fun parseHeader(reader: ByteReader): String {
             // The header may have up to 1024 leading bytes of garbage before %PDF-.
             val signature = "%PDF-".encodeToByteArray()
-            for (i in 0 until minOf(1024, reader.size - signature.size)) {
+            for (i in 0 until minOf(1024L, reader.sizeLong - signature.size).toInt()) {
                 if (reader.matches(signature, at = i)) {
                     val sb = StringBuilder()
                     var p = i + signature.size
-                    while (p < reader.size && p < i + signature.size + 8) {
+                    while (p < reader.sizeLong && p < i + signature.size + 8) {
                         val b = reader.byteAt(p)
                         if (b == '\r'.code || b == '\n'.code) break
                         sb.append(b.toChar())

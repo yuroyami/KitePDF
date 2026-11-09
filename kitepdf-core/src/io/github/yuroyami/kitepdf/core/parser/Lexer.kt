@@ -25,7 +25,8 @@ public class Lexer(public val reader: ByteReader) {
         skipWhitespaceAndComments()
         if (reader.isAtEnd()) return Token.EndOfFile
 
-        val start = reader.pos()
+        // A token offset is an Int and only messages read it, so one past 2 GiB holds at Int.MAX_VALUE (#906).
+        val start = reader.tokenOffset()
         val c = reader.peek()
         return when {
             c == '<'.code -> {
@@ -366,6 +367,10 @@ public class Lexer(public val reader: ByteReader) {
     }
 }
 
+/**
+ * A token of [Lexer]. Its `offset` is where it starts, as an [Int]: in a source past 2 GiB it
+ * holds at [Int.MAX_VALUE], and a parser reads the position from [ByteReader.posLong] (#906).
+ */
 public sealed class Token {
     public data class Integer(val value: Long, val offset: Int) : Token()
     public data class Real(val value: Double, val offset: Int) : Token()

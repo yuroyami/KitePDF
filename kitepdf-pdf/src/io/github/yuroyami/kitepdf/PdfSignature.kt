@@ -79,8 +79,7 @@ public class PdfSignature internal constructor(
     private fun changesAfterSigning(): List<PdfRevisionChange>? {
         if (byteRange.size < 2) return null
         val end = byteRange[byteRange.size - 2] + byteRange[byteRange.size - 1]
-        if (end > Int.MAX_VALUE) return null
-        val signed = document.revisionEndingAt(end.toInt()) ?: return null
+        val signed = document.revisionEndingAt(end) ?: return null
         return runCatching {
             val level = certificationLevelOf(signed)
             val signedLock = signed.signatures.firstOrNull { it.field.fullyQualifiedName == field.fullyQualifiedName }?.lock

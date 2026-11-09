@@ -1776,6 +1776,10 @@ public class PdfEditor internal constructor(
      * the appended table stands alone: it lists every object at the offset repair found
      * and names no `/Prev`, and the objects that lived inside an object stream, which a
      * classic table cannot point into, are written out again (#586).
+     *
+     * The result is one array, so a document opened from a source larger than an array holds
+     * cannot be saved: this and [saveRewritten] throw [UnsupportedOperationException] for it
+     * rather than write offsets that wrapped (#906).
      */
     public fun saveIncremental(): ByteArray {
         check(securityChange == null && !removesEncryption) {
@@ -1815,7 +1819,8 @@ public class PdfEditor internal constructor(
             for ((num, entry) in base.xref.entries.sortedBy { it.key }) {
                 if (num <= 0L || num in staged) continue
                 when (entry) {
-                    is XrefEntry.InUse -> entries.add(ClassicXrefWriter.Entry(num, entry.byteOffset, entry.generation))
+                    // The save holds the file in one array, and fileSize throws for a larger one, so the offset fits an Int.
+                    is XrefEntry.InUse -> entries.add(ClassicXrefWriter.Entry(num, entry.offset.toInt(), entry.generation))
                     is XrefEntry.Compressed -> {
                         val value = base.resolve(PdfReference(num, 0)) ?: continue
                         append(num, 0, if (num == encryptNum) value else encryptor?.encryptIndirect(num, 0, value) ?: value)
@@ -1853,7 +1858,7 @@ public class PdfEditor internal constructor(
         // Keep the permanent first /ID string (the encryption key is made from it) and write a new
         // second one, as an update does (ISO 32000-1, 14.4; #738).
         dict["ID"] = DocumentId.updated(base.trailer["ID"], { base.fileBytes }, out.toByteArray())
-        prevXref?.let { dict["Prev"] = PdfInt(it.toLong()) }
+        prevXref?.let { dict["Prev"] = PdfInt(it) }
         for ((k, v) in trailerOverrides) dict[k] = v
 
         out.append("trailer\n".encodeToByteArray())

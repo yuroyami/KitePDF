@@ -19,23 +19,30 @@ public final class io/github/yuroyami/kitepdf/core/ByteReader {
 	public fun <init> ([B)V
 	public final fun advance (I)V
 	public final fun byteAt (I)I
+	public final fun byteAt (J)I
 	public final fun fork ()Lio/github/yuroyami/kitepdf/core/ByteReader;
 	public final fun getBytes ()[B
 	public final fun getSize ()I
+	public final fun getSizeLong ()J
 	public final fun indexOf ([BI)I
+	public final fun indexOf ([BJ)J
 	public static synthetic fun indexOf$default (Lio/github/yuroyami/kitepdf/core/ByteReader;[BIILjava/lang/Object;)I
 	public final fun isAtEnd ()Z
 	public final fun lastIndexOf ([BI)I
+	public final fun lastIndexOf ([BJ)J
 	public static synthetic fun lastIndexOf$default (Lio/github/yuroyami/kitepdf/core/ByteReader;[BIILjava/lang/Object;)I
 	public final fun matches ([BI)Z
+	public final fun matches ([BJ)Z
 	public static synthetic fun matches$default (Lio/github/yuroyami/kitepdf/core/ByteReader;[BIILjava/lang/Object;)Z
 	public final fun peek ()I
 	public final fun peek (I)I
 	public final fun pos ()I
+	public final fun posLong ()J
 	public final fun readByte ()I
 	public final fun readBytes (I)[B
 	public final fun remaining ()I
 	public final fun seek (I)V
+	public final fun seek (J)V
 	public final fun unread ()V
 }
 

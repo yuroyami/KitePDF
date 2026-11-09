@@ -34,17 +34,17 @@ internal object PdfRepair {
     private val OBJ = "obj".encodeToByteArray()
     private val ENDSTREAM = "endstream".encodeToByteArray()
 
-    /** Every offset where [needle] starts in the file of [r], in order. */
-    private fun keywordOffsets(r: ByteReader, needle: ByteArray): IntArray {
-        val out = ArrayList<Int>()
-        var from = 0
+    /** Every offset where [needle] starts in the file of [r], in order, as a Long, since a source can pass 2 GiB (#906). */
+    private fun keywordOffsets(r: ByteReader, needle: ByteArray): LongArray {
+        val out = ArrayList<Long>()
+        var from = 0L
         while (true) {
             val at = r.indexOf(needle, from)
             if (at < 0) break
             out.add(at)
             from = at + needle.size
         }
-        return out.toIntArray()
+        return out.toLongArray()
     }
     private val TRAILER = "trailer".encodeToByteArray()
     private const val MAX_OBJ_NUM = 50_000_000L
@@ -77,15 +77,15 @@ internal object PdfRepair {
         // Every "endstream" of the file, found in one pass, so a stream whose /Length is missing or
         // wrong finds its end by a binary search instead of a scan of the rest of the file (#966).
         val endstreams = keywordOffsets(bytes, ENDSTREAM)
-        val endstreamAfter = { from: Int ->
+        val endstreamAfter = { from: Long ->
             var lo = 0
             var hi = endstreams.size
             while (lo < hi) { val mid = (lo + hi) ushr 1; if (endstreams[mid] < from) lo = mid + 1 else hi = mid }
-            if (lo < endstreams.size) endstreams[lo] else -1
+            if (lo < endstreams.size) endstreams[lo] else -1L
         }
 
         // ── Pass 1: find every "N G obj" header. ───────────────────────────
-        var search = 0
+        var search = 0L
         while (true) {
             val kw = indexOfToken(bytes, OBJ, search)
             if (kw < 0) break
@@ -104,7 +104,7 @@ internal object PdfRepair {
             entries[num] = XrefEntry.InUse(num, gen, headerStart)
             // The scan resumes after a stream it parsed, as MuPDF's pdf_repair_xref does, so the
             // bytes of one stream are read once, however many objects follow it.
-            if (obj is PdfStream) search = maxOf(search, r.pos())
+            if (obj is PdfStream) search = maxOf(search, r.posLong())
 
             val dict = when (obj) {
                 is PdfStream -> obj.dict
@@ -126,7 +126,7 @@ internal object PdfRepair {
 
         // ── Pass 2: recover the trailer dict(s) for /Root etc. ──────────────
         // A classic "trailer" dictionary is the most authoritative source.
-        var tsearch = 0
+        var tsearch = 0L
         while (true) {
             val t = indexOfToken(bytes, TRAILER, tsearch)
             if (t < 0) break
@@ -145,14 +145,14 @@ internal object PdfRepair {
         // ── Pass 3: decode object streams to recover compressed members. ────
         for (osNum in objStreamNums) {
             val entry = entries[osNum] as? XrefEntry.InUse ?: continue
-            val members = runCatching { objStreamMembers(bytes, entry.byteOffset, osNum, entry.generation, decryptStream) }.getOrNull() ?: continue
+            val members = runCatching { objStreamMembers(bytes, entry.offset, osNum, entry.generation, decryptStream) }.getOrNull() ?: continue
             for ((index, memberNum) in members) {
                 // The copy later in the file is the newer revision, direct or compressed (ISO 32000-1,
                 // 7.5.6 and 7.5.7), as MuPDF's pdf_repair_obj_stm decides. The direct copy always won,
                 // so an update that moved a changed object into an object stream repaired to the old
                 // version (#812).
                 val direct = entries[memberNum] as? XrefEntry.InUse
-                if (direct != null && direct.byteOffset > entry.byteOffset) continue
+                if (direct != null && direct.offset > entry.offset) continue
                 entries[memberNum] = XrefEntry.Compressed(memberNum, osNum, index)
             }
         }
@@ -179,7 +179,7 @@ internal object PdfRepair {
     /** Decode an /ObjStm at [offset]; returns (indexInStream → objectNumber). */
     private fun objStreamMembers(
         bytes: ByteReader,
-        offset: Int,
+        offset: Long,
         num: Long,
         gen: Int,
         decryptStream: ((Long, Int, PdfStream) -> PdfStream)?,
@@ -207,7 +207,7 @@ internal object PdfRepair {
      * preceded by whitespace (or start) and followed by whitespace/delimiter/EOF.
      * This rejects "obj" inside "endobj" and "trailer" inside arbitrary text.
      */
-    private fun indexOfToken(bytes: ByteReader, needle: ByteArray, from: Int): Int {
+    private fun indexOfToken(bytes: ByteReader, needle: ByteArray, from: Long): Long {
         var i = from.coerceAtLeast(0)
         while (true) {
             i = bytes.indexOf(needle, i)
@@ -226,7 +226,7 @@ internal object PdfRepair {
      * the object and generation numbers. Returns (objNum, gen, headerStartOffset)
      * or null if the bytes before "obj" aren't a valid header.
      */
-    private fun parseHeaderBackwards(bytes: ByteReader, objKwStart: Int): Triple<Long, Int, Int>? {
+    private fun parseHeaderBackwards(bytes: ByteReader, objKwStart: Long): Triple<Long, Int, Long>? {
         var p = objKwStart - 1
         p = skipWsBack(bytes, p)
         val gen = readDigitsBack(bytes, p) ?: return null
@@ -245,9 +245,9 @@ internal object PdfRepair {
         return Triple(num.value, gen.value.toInt(), num.start)
     }
 
-    private data class Digits(val value: Long, val start: Int)
+    private data class Digits(val value: Long, val start: Long)
 
-    private fun readDigitsBack(bytes: ByteReader, fromInclusive: Int): Digits? {
+    private fun readDigitsBack(bytes: ByteReader, fromInclusive: Long): Digits? {
         var p = fromInclusive
         var end = p
         while (p >= 0 && bytes.byteAt(p) in '0'.code..'9'.code) p--
@@ -261,7 +261,7 @@ internal object PdfRepair {
         return Digits(v, start)
     }
 
-    private fun skipWsBack(bytes: ByteReader, fromInclusive: Int): Int {
+    private fun skipWsBack(bytes: ByteReader, fromInclusive: Long): Long {
         var p = fromInclusive
         while (p >= 0 && Lexer.isWhitespace(bytes.byteAt(p))) p--
         return p

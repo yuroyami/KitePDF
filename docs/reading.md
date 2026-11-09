@@ -31,7 +31,12 @@ KiteFileSource(File("/scans/archive.pdf")).use { source ->
 
 `KiteFileSource` is in `kitepdf-core` on the JVM and Android. On another platform, implement `KiteByteSource` over your own file handle: `size` and a `read` at an offset.
 
-A file whose cross-reference table is damaged is rebuilt from a scan of the whole source, a page at a time. Saving or signing the document reads the whole source again, because an incremental update copies the original bytes. A source holds at most 2 GiB.
+A file whose cross-reference table is damaged is rebuilt from a scan of the whole source, a page at a time. Saving or signing the document reads the whole source again, because an incremental update copies the original bytes.
+
+A source may be larger than 2 GiB, since a cross-reference entry gives an offset in ten digits. Two limits remain, because each needs one array:
+
+- A stream body must be smaller than 2 GiB to decode. A larger one fails when it is read, as a damaged stream does, and the rest of the document still reads.
+- A document larger than 2 GiB cannot be saved, signed or read whole. `saveIncremental`, `saveRewritten`, `bytes` and `rawBytes` throw `UnsupportedOperationException` for it.
 
 ### Encrypted PDFs
 

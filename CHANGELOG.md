@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its body when it is decoded. A file with a 32 MiB stream that no page uses draws its first page after
   fetching 17 KB. Repair scans the source a page at a time, and saving or signing reads it back. `ByteReader`
   takes a source and gains `fork` and `byteAt`, and `PdfStream` takes a body that it reads on demand (#906).
+- A PDF larger than 2 GiB opens from a `KiteByteSource`. Offsets in the parser, the cross-reference
+  (classic tables, streams, `/Prev` and `/XRefStm`) and repair are `Long`. `ByteReader` gains `sizeLong`,
+  `posLong`, and `Long` overloads of `seek`, `byteAt`, `matches`, `indexOf` and `lastIndexOf`; its `Int`
+  members throw `PdfFormatException` past 2 GiB rather than wrap. `XrefEntry.InUse` gains `offset: Long`
+  and a constructor that takes it, and `byteOffset`, `component3` and `copy` are deprecated. It is no longer
+  a data class, but it keeps every member the data class had, so code built against it still links. A stream body
+  must still fit an array to decode, and saving such a document throws `UnsupportedOperationException` (#906).
 - `KiteXmlNode.Element.indexInParent()`: an element's index among its parent's children, remembered and
   checked on the next call, so the selector matcher's sibling steps cost O(1) (#990).
 - `PdfScriptRunner.droppedFailures`: how many failures `failures` no longer holds, since it keeps the last

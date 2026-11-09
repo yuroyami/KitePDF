@@ -34,14 +34,15 @@ internal class XrefParser(private val reader: ByteReader) {
         return parseFromOffset(startXref)
     }
 
-    public fun parseFromOffset(offset: Int): XrefAndTrailer {
+    /** The section at [offset], which in a source may lie past 2 GiB (ISO 32000-1, 7.5.4, #906). */
+    public fun parseFromOffset(offset: Long): XrefAndTrailer {
         reader.seek(offset)
         // Peek: classic "xref" keyword OR an indirect object (xref stream).
-        val savedPos = reader.pos()
+        val savedPos = reader.posLong()
         val firstToken = Lexer(reader).nextToken()
         return when {
             firstToken is Token.Keyword && firstToken.value == "xref" -> {
-                parseClassicXrefAt(reader.pos())
+                parseClassicXrefAt(reader.posLong())
             }
             firstToken is Token.Integer -> {
                 reader.seek(savedPos)
@@ -53,7 +54,7 @@ internal class XrefParser(private val reader: ByteReader) {
 
     /* ─── Classic textual xref table ─────────────────────────────────────── */
 
-    private fun parseClassicXrefAt(bodyStart: Int): XrefAndTrailer {
+    private fun parseClassicXrefAt(bodyStart: Long): XrefAndTrailer {
         reader.seek(bodyStart)
         val entries = HashMap<Long, XrefEntry>()
         val lexer = Lexer(reader)
@@ -79,10 +80,11 @@ internal class XrefParser(private val reader: ByteReader) {
                     ?: throw PdfFormatException("Bad xref flag")
                 val objNum = first + i
                 if (flagTok.value == "n") {
+                    // The offset has ten digits (7.5.4), so it can pass 2 GiB and stays a Long (#906).
                     entries[objNum] = XrefEntry.InUse(
                         objectNumber = objNum,
                         generation = genTok.value.toInt(),
-                        byteOffset = offsetTok.value.toInt(),
+                        offset = offsetTok.value,
                     )
                 } else if (flagTok.value == "f") {
                     entries[objNum] = XrefEntry.Free(objNum)
@@ -120,7 +122,7 @@ internal class XrefParser(private val reader: ByteReader) {
 
     /* ─── PDF 1.5+ cross-reference stream ────────────────────────────────── */
 
-    private fun parseXrefStreamAt(offset: Int): XrefAndTrailer {
+    private fun parseXrefStreamAt(offset: Long): XrefAndTrailer {
         // It's an indirect object whose payload is a stream with /Type /XRef.
         reader.seek(offset)
         val parser = Parser(Lexer(reader))
@@ -173,7 +175,8 @@ internal class XrefParser(private val reader: ByteReader) {
                 val objNum = first + i
                 when (type) {
                     0 -> entries[objNum] = XrefEntry.Free(objNum)
-                    1 -> entries[objNum] = XrefEntry.InUse(objNum, f3.toInt(), f2.toInt())
+                    // Field 2 is the byte offset, /W bytes wide (7.5.8.3, Table 18), so it stays a Long (#906).
+                    1 -> entries[objNum] = XrefEntry.InUse(objNum, f3.toInt(), f2)
                     2 -> entries[objNum] = XrefEntry.Compressed(
                         objectNumber = objNum,
                         containingObjectStream = f2,
@@ -197,10 +200,10 @@ internal class XrefParser(private val reader: ByteReader) {
 
     public companion object {
         /** Walks back from EOF to find "startxref OFFSET". Returns the OFFSET. */
-        public fun findStartXref(reader: ByteReader): Int {
-            val tail = (reader.size - 2048).coerceAtLeast(0)
+        public fun findStartXref(reader: ByteReader): Long {
+            val tail = (reader.sizeLong - 2048).coerceAtLeast(0)
             val startXrefBytes = "startxref".encodeToByteArray()
-            val idx = reader.lastIndexOf(startXrefBytes, reader.size - 1)
+            val idx = reader.lastIndexOf(startXrefBytes, reader.sizeLong - 1)
             if (idx < tail) {
                 throw PdfFormatException("startxref not found in last 2048 bytes")
             }
@@ -208,7 +211,7 @@ internal class XrefParser(private val reader: ByteReader) {
             val lexer = Lexer(reader)
             val tok = lexer.nextToken()
             if (tok !is Token.Integer) throw PdfFormatException("Expected integer after startxref, got $tok")
-            return tok.value.toInt()
+            return tok.value
         }
     }
 }
@@ -217,12 +220,50 @@ internal class XrefParser(private val reader: ByteReader) {
 public sealed class XrefEntry {
     public abstract val objectNumber: Long
 
-    /** Live object stored at [byteOffset] in the file with [generation] N. */
-    public data class InUse(
+    /**
+     * Live object stored at [offset] in the file with [generation] N.
+     *
+     * A cross-reference table gives the offset in ten digits (ISO 32000-1, 7.5.4) and a
+     * cross-reference stream in up to eight bytes (7.5.8.3), so a file read from a source can
+     * put an object past 2 GiB, and [offset] is a [Long] (#906). This was a data class whose
+     * [byteOffset] was an [Int]. Its members stay, so code built against it still runs.
+     */
+    public class InUse(
         override val objectNumber: Long,
-        val generation: Int,
-        val byteOffset: Int,
-    ) : XrefEntry()
+        public val generation: Int,
+        /** The byte offset of the object's `N G obj` header. */
+        public val offset: Long,
+    ) : XrefEntry() {
+
+        /** An entry whose offset fits an [Int], as the data class made it. */
+        public constructor(objectNumber: Long, generation: Int, byteOffset: Int) : this(objectNumber, generation, byteOffset.toLong())
+
+        /** [offset] as an [Int]. Throws [IllegalStateException] for an object past 2 GiB, which only [offset] names. */
+        @Deprecated("An object of a large file lies past 2 GiB; read offset", ReplaceWith("offset"))
+        public val byteOffset: Int
+            get() = if (offset <= Int.MAX_VALUE) offset.toInt() else throw IllegalStateException("Object $objectNumber lies at $offset, past 2 GiB; read offset")
+
+        public operator fun component1(): Long = objectNumber
+
+        public operator fun component2(): Int = generation
+
+        @Deprecated("An object of a large file lies past 2 GiB; read offset", ReplaceWith("offset"))
+        public operator fun component3(): Int = @Suppress("DEPRECATION") byteOffset
+
+        @Deprecated("An object of a large file lies past 2 GiB; call the constructor with a Long offset")
+        public fun copy(
+            objectNumber: Long = this.objectNumber,
+            generation: Int = this.generation,
+            byteOffset: Int = @Suppress("DEPRECATION") this.byteOffset,
+        ): InUse = InUse(objectNumber, generation, byteOffset.toLong())
+
+        override fun equals(other: Any?): Boolean =
+            other is InUse && objectNumber == other.objectNumber && generation == other.generation && offset == other.offset
+
+        override fun hashCode(): Int = (objectNumber.hashCode() * 31 + generation) * 31 + offset.hashCode()
+
+        override fun toString(): String = "InUse(objectNumber=$objectNumber, generation=$generation, offset=$offset)"
+    }
 
     /** Object number is unused / freed. */
     public data class Free(override val objectNumber: Long) : XrefEntry()

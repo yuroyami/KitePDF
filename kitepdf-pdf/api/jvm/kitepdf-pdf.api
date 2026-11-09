@@ -1559,6 +1559,7 @@ public final class io/github/yuroyami/kitepdf/parser/XrefEntry$Free : io/github/
 
 public final class io/github/yuroyami/kitepdf/parser/XrefEntry$InUse : io/github/yuroyami/kitepdf/parser/XrefEntry {
 	public fun <init> (JII)V
+	public fun <init> (JIJ)V
 	public final fun component1 ()J
 	public final fun component2 ()I
 	public final fun component3 ()I
@@ -1568,6 +1569,7 @@ public final class io/github/yuroyami/kitepdf/parser/XrefEntry$InUse : io/github
 	public final fun getByteOffset ()I
 	public final fun getGeneration ()I
 	public fun getObjectNumber ()J
+	public final fun getOffset ()J
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

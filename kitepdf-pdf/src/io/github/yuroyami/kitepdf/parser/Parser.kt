@@ -39,7 +39,7 @@ internal class Parser(
      * objects of one file and has every such offset at hand. Without it each stream whose /Length is
      * wrong scans on to the next keyword, which repair paid once per stream (#966).
      */
-    private val endstreamAfter: ((Int) -> Int)? = null,
+    private val endstreamAfter: ((Long) -> Long)? = null,
     /**
      * Whether a keyword that is no value reads as null inside an array or a dictionary (#806). A
      * content stream turns it off: there such a keyword is an operator after an unterminated array,
@@ -112,7 +112,7 @@ internal class Parser(
      * dictionaries do not call it: they hold the integer until the next token decides.
      */
     private fun readNumberOrReferenceOrInt(first: Token.Integer): PdfObject {
-        val checkpoint = reader.pos()
+        val checkpoint = reader.posLong()
         val second = lexer.nextToken()
         if (second is Token.Integer) {
             val third = lexer.nextToken()
@@ -194,7 +194,7 @@ internal class Parser(
             }
             tok = lexer.nextToken()
             if (tok is Token.Integer) {
-                val afterSecond = reader.pos()
+                val afterSecond = reader.posLong()
                 val third = lexer.nextToken()
                 if (third is Token.Keyword && third.value == "R") {
                     entries[key] = PdfReference(first.value, tok.value.toInt())
@@ -218,23 +218,23 @@ internal class Parser(
      */
     private fun readDictionaryThenMaybeStream(): PdfObject {
         val dict = readDictionary()
-        val checkpoint = reader.pos()
+        val checkpoint = reader.posLong()
         val next = lexer.nextToken()
         if (next !is Token.Keyword || next.value != "stream") {
             reader.seek(checkpoint)
             return dict
         }
         consumeStreamEol()
-        val streamStart = reader.pos()
+        val streamStart = reader.posLong()
 
         // Determine the stream body length. The declared /Length is preferred, but
         // real-world PDFs frequently carry a wrong or missing /Length (or an indirect
         // /Length we can't resolve in this context), so we fall back to scanning for
         // the "endstream" keyword, mirroring MuPDF's pdf_load_raw_stream recovery.
         val declared = resolveStreamLengthOrNull(dict)
-        var bodyEnd = -1
-        if (declared != null && declared in 0..(reader.size - streamStart).toLong()) {
-            val candidate = streamStart + declared.toInt()
+        var bodyEnd = -1L
+        if (declared != null && declared in 0..(reader.sizeLong - streamStart)) {
+            val candidate = streamStart + declared
             if (endstreamAppearsAt(candidate)) bodyEnd = candidate
         }
         if (bodyEnd < 0) {
@@ -255,10 +255,16 @@ internal class Parser(
         val stream = if (streamsOnDemand) {
             val origin = bodyOrigin ?: reader.fork().also { bodyOrigin = it }
             val length = bodyEnd - streamStart
-            PdfStream(dict) { origin.fork().apply { seek(streamStart) }.readBytes(length) }
+            // A source can start a stream past 2 GiB (#906), but its body becomes one array when it
+            // is decoded, so a body that no array holds fails then, as damage, and not at parse time:
+            // the object around it and every other object still read.
+            PdfStream(dict) {
+                if (length > MAX_BODY) throw PdfFormatException("Stream from $streamStart has $length bytes, more than an array holds")
+                origin.fork().apply { seek(streamStart) }.readBytes(length.toInt())
+            }
         } else {
             reader.seek(streamStart)
-            PdfStream(dict, reader.readBytes(bodyEnd - streamStart))
+            PdfStream(dict, reader.readBytes((bodyEnd - streamStart).toInt()))
         }
         reader.seek(bodyEnd)
         // Consume up to and including the "endstream" keyword, leniently.
@@ -274,17 +280,17 @@ internal class Parser(
     private var bodyOrigin: ByteReader? = null
 
     /** True if (after optional whitespace) "endstream" starts at/just after [at]. */
-    private fun endstreamAppearsAt(at: Int): Boolean {
+    private fun endstreamAppearsAt(at: Long): Boolean {
         var p = at
         // Allow a small run of whitespace between the body and the keyword.
         var slack = 0
-        while (p < reader.size && slack < 3 && Lexer.isWhitespace(reader.byteAt(p))) { p++; slack++ }
+        while (p < reader.sizeLong && slack < 3 && Lexer.isWhitespace(reader.byteAt(p))) { p++; slack++ }
         return reader.matches(ENDSTREAM, p)
     }
 
     /** Advance the reader past the next "endstream" keyword (best effort). */
     private fun skipToAfterEndstream() {
-        val es = endstreamAfter?.invoke(reader.pos()) ?: reader.indexOf(ENDSTREAM, reader.pos())
+        val es = endstreamAfter?.invoke(reader.posLong()) ?: reader.indexOf(ENDSTREAM, reader.posLong())
         if (es >= 0) reader.seek(es + ENDSTREAM.size)
     }
 
@@ -299,7 +305,7 @@ internal class Parser(
                 // cap multiplied, and 150 KB of such streams needed a 16 MB stack (#965).
                 if (depth > 0) return null
                 val r = resolver ?: return null
-                val resolvedPosBefore = reader.pos()
+                val resolvedPosBefore = reader.posLong()
                 val resolved = runCatching { r.resolve(raw) }.getOrNull()
                 // The resolver may have moved the reader; restore our position.
                 reader.seek(resolvedPosBefore)
@@ -332,7 +338,7 @@ internal class Parser(
         }
         val payload = readObject()
         // Some producers omit 'endobj' or put trailing whitespace. We're lenient.
-        val checkpoint = reader.pos()
+        val checkpoint = reader.posLong()
         val maybeEnd = runCatching { lexer.nextToken() }.getOrNull()
         if (maybeEnd !is Token.Keyword || maybeEnd.value != "endobj") {
             reader.seek(checkpoint)
@@ -342,6 +348,9 @@ internal class Parser(
 
     private companion object {
         val ENDSTREAM = "endstream".encodeToByteArray()
+
+        /** The longest stream body that one array holds on every platform. */
+        const val MAX_BODY = Int.MAX_VALUE - 8L
 
         /** The keywords that are values (ISO 32000-1, 7.3.2 and 7.3.9). */
         val VALUE_KEYWORDS = setOf("true", "false", "null")
