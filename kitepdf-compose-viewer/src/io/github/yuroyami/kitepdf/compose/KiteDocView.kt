@@ -176,8 +176,9 @@ import kotlinx.coroutines.launch
  *   once per page and bitmap size, so again at each settled zoom when crisp zoom
  *   is on. It is the bitmap on screen, not an export: it leaves out the form
  *   widgets when a form layer draws them (a `scripts` handler on a PDF), and it
- *   never fires in [KiteRenderSpec.Vectorized] mode (#431). Cache hits from the
- *   page-bitmap LRU do not re-fire it. The bitmap is the one the viewer's cache
+ *   never fires in [KiteRenderSpec.Vectorized] mode (#431). A page that a
+ *   [KiteDocLayout.Continuous] strip draws ahead fires it when it is drawn (#654).
+ *   Cache hits from the page-bitmap LRU do not re-fire it. The bitmap is the one the viewer's cache
  *   keeps and draws, so treat it as read-only: a host that writes into it changes
  *   the page on screen, and one that recycles it breaks the next frame (#705).
  *   To export a page, or to get a bitmap of your own, use
@@ -840,6 +841,9 @@ private fun ContinuousLayout(
     // first, into the bitmap cache with the key their slot asks for at zoom 1. A zoomed strip
     // draws nothing ahead: its slots draw at the zoom. A slot that is composed draws itself (#437).
     val cache = rasterSpec?.let { state.bitmapCacheFor(it.cacheBudgetBytes) }
+    // A page drawn ahead is the bitmap its slot then shows from the cache, so it is reported here,
+    // once, when it is drawn, as onPageRendered promises for each page and size (#654).
+    val onPrefetched by rememberUpdatedState(onPageRendered)
     if (rasterSpec != null && rasterizer != null && cache != null && layout.prefetchPages > 0 && crossPx > 0) {
         LaunchedEffect(state, listState, layout, rasterSpec, colors, rasterizer, cache, crossPx, lengthLimitPx) {
             snapshotFlow {
@@ -866,7 +870,10 @@ private fun ContinuousLayout(
                         contentVersion = state.contentVersionOf(page),
                     )
                     backOnComposeThread()
-                    if (drawn != null) state.prefetchedPages = state.prefetchedPages + index
+                    if (drawn != null) {
+                        state.prefetchedPages = state.prefetchedPages + index
+                        if (drawn.fresh) onPrefetched?.invoke(index, drawn.bitmap)
+                    }
                 }
             }
         }

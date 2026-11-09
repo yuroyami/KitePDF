@@ -48,11 +48,12 @@ class ContinuousPrefetchSceneTest {
         scene.use {
             driver.pumpUntilState { 0 in rendered }
             driver.pumpUntilState { 1 in state.prefetchedPages }
-            assertEquals(listOf(0), rendered.toList(), "only the page on screen drew in its slot")
+            // The page drawn ahead is reported when it is drawn, once (#654).
+            assertEquals(listOf(0, 1), rendered.toList(), "the page drawn ahead was not reported")
             driver.runOnUi { state.scrollToPage(1) }
             driver.pumpUntilState { state.pageRenderState(1) == KitePageRenderState.Ready }
             // onPageRendered fires on a fresh raster only, never on a cache hit.
-            assertEquals(listOf(0), rendered.toList(), "page 1 came from the cache, not from a fresh raster")
+            assertEquals(listOf(0, 1), rendered.toList(), "page 1 came from the cache, not from a fresh raster")
         }
     }
 
@@ -72,11 +73,11 @@ class ContinuousPrefetchSceneTest {
             driver.pumpUntilState { 0 in rendered }
             driver.pumpUntilState { state.prefetchedPages.isNotEmpty() }
             val ahead = state.prefetchedPages.max()
-            assertEquals(false, ahead in rendered.toList(), "page $ahead drew in a slot before the strip drew it ahead")
+            assertEquals(1, rendered.count { it == ahead }, "page $ahead was not reported once when the strip drew it ahead: $rendered")
             driver.runOnUi { state.scrollToPage(ahead) }
             driver.pumpUntilState { state.pageRenderState(ahead) == KitePageRenderState.Ready }
             // onPageRendered fires on a fresh raster only, never on a cache hit.
-            assertEquals(false, ahead in rendered.toList(), "page $ahead came from a fresh raster, not from the cache")
+            assertEquals(1, rendered.count { it == ahead }, "page $ahead came from a fresh raster, not from the cache: $rendered")
         }
     }
 

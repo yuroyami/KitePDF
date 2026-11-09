@@ -920,6 +920,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scrolled-doc` chapter fit to the width can still be read down at zoom 1 (#648).
 - Two views of one book keep the chapters of both: the new `KiteDocument.keepChapters(owner, chapters)` keeps a
   set for each viewer, an EPUB keeps them all, and a view that leaves lets go of its own only (#658).
+- `onPageRendered` reports a page that a `Continuous` strip draws ahead, once, when it is drawn; such a page was
+  never reported, since its slot then finds it in the cache (#654).
 
 ## [0.13.0] - 2026-10-09
 

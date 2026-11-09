@@ -1013,7 +1013,7 @@ KiteDocView(state, overlay = {
 
 ## When a page renders
 
-`onPageRendered` gets each new screen bitmap of a page. The viewer calls it once for each page and bitmap size, so again after each zoom when `rerasterizeOnZoom` is on. A bitmap from the cache does not call it again.
+`onPageRendered` gets each new screen bitmap of a page. The viewer calls it once for each page and bitmap size, so again after each zoom when `rerasterizeOnZoom` is on. A page that a `Continuous` strip draws ahead calls it when it is drawn, before its slot shows. A bitmap from the cache does not call it again.
 
 ```kotlin
 KiteDocView(
