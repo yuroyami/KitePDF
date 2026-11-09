@@ -1,0 +1,152 @@
+name: Publish
+
+# A release of KitePDF: every module and every target built on one Mac, checked, signed and sent
+# to Maven Central, then checked again by the consumer test against what Central serves (#732).
+# It runs when the owner publishes a GitHub release, and by hand as a dry run that builds and
+# signs without uploading. It never runs on a pull request.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and sign the artifacts without uploading them
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  KOTLIN_CLI_NO_WELCOME_BANNER: 1
+
+# Apple targets build only on a Mac, and a multiplatform release publishes every target from one
+# build, so the release runs on macOS. The secrets sit on the steps that sign or publish, not on
+# the job, so the steps that download and run the toolchain never see them.
+jobs:
+  publish:
+    name: Publish to Maven Central
+    runs-on: macos-latest
+    timeout-minutes: 180
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Cache the Kotlin Toolchain downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/JetBrains/Kotlin
+          key: kotlin-toolchain-${{ runner.os }}-${{ hashFiles('kotlin', 'project.yaml', '**/module.yaml', '*.module-template.yaml', 'libs.versions.toml', 'build-plugins/**/plugin.yaml') }}
+          restore-keys: kotlin-toolchain-${{ runner.os }}-
+
+      - name: Install the Android SDK platform
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2" "build-tools;37.0.0"'
+
+      # settings.publishing.version of library.module-template.yaml, which every module publishes at.
+      - name: Read the version
+        id: version
+        run: |
+          version=$(sed -nE 's/^    version: ([^ ]+)$/\1/p' library.module-template.yaml | head -1)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing KitePDF $version"
+
+      # A release of a tag whose name is not the version would publish another version than it says.
+      - name: Check the tag names the version
+        if: ${{ github.event_name == 'release' }}
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "$TAG" != "$VERSION" ] && [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::the release tag $TAG does not name version $VERSION of library.module-template.yaml"
+            exit 1
+          fi
+
+      - name: Check the public corpus
+        run: ./kotlin check corpus
+
+      # The API checks read the library klibs of every platform and the Android classes, as in CI.
+      - name: Compile the libraries that the API checks read
+        run: |
+          tasks=$(./kotlin show tasks | sed -nE 's/^task (:kitepdf[a-z-]*:compile[A-Za-z0-9]+)( .*)?$/\1/p' | grep -vE 'Test|Release|Metadata|Jvm$')
+          test -n "$tasks"
+          # shellcheck disable=SC2086
+          ./kotlin task $tasks
+
+      - name: Check the public API against the dumps, and KITEPDF_VERSION
+        run: ./kotlin check abi androidAbi klibAbi version
+
+      # The modules the template publishes, kitepdf-difftest excepted, which is test infrastructure.
+      - name: List the published modules
+        id: modules
+        run: |
+          args=""
+          for m in kitepdf kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps \
+            kitepdf-javascript kitepdf-media kitepdf-net kitepdf-native-renderer kitepdf-skia-renderer kitepdf-compose-viewer; do
+            test -f "$m/module.yaml" || { echo "::error::$m has no module.yaml"; exit 1; }
+            args="$args -m $m"
+          done
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+
+      # Every run first publishes to Maven Local, signed, and inspects what a user would get: the
+      # class files' version, the licence files and the Android minSdk (#683, #703, #721). Only
+      # artifacts that pass go to Maven Central.
+      - name: Build and sign into Maven Local
+        env:
+          KOTLIN_TOOLCHAIN_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KOTLIN_TOOLCHAIN_SIGNING_KEY_PASSPHRASE: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        # shellcheck disable=SC2086
+        run: ./kotlin publish mavenLocal --non-transitive ${{ steps.modules.outputs.args }}
+
+      - name: Inspect the built artifacts
+        run: python3 scripts/inspect_artifacts.py --version "${{ steps.version.outputs.version }}"
+
+      - name: Publish to Maven Central
+        if: ${{ github.event_name == 'release' || !inputs.dry_run }}
+        env:
+          KOTLIN_TOOLCHAIN_MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          KOTLIN_TOOLCHAIN_MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          KOTLIN_TOOLCHAIN_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KOTLIN_TOOLCHAIN_SIGNING_KEY_PASSPHRASE: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        # shellcheck disable=SC2086
+        run: ./kotlin publish mavenCentral --non-transitive ${{ steps.modules.outputs.args }}
+
+  # The consumer test against Maven Central, once Central serves the release, as CONTRIBUTING.md,
+  # Consumer check, asks after a release.
+  verify:
+    name: Check the release on Maven Central
+    needs: publish
+    if: ${{ github.event_name == 'release' || !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Wait for Maven Central to serve the release
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          url="https://repo1.maven.org/maven2/io/github/yuroyami/kitepdf/$VERSION/kitepdf-$VERSION.pom"
+          for i in $(seq 1 90); do
+            if curl -fsSI "$url" > /dev/null; then echo "Central serves $url"; exit 0; fi
+            echo "not yet ($i of 90)"; sleep 60
+          done
+          echo "::error::Maven Central did not serve $url within 90 minutes"
+          exit 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build and test a consumer against Maven Central
+        working-directory: consumer-test
+        run: ./gradlew test --stacktrace -PkitepdfRepo=central

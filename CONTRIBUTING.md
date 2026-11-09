@@ -144,6 +144,18 @@ cd consumer-test && ./gradlew test -PkitepdfRepo=central
 
 The publish writes to `~/.m2`, where other projects on the machine can pick up the build.
 
+### Releasing
+
+`.github/workflows/publish.yml` releases from CI (#732). It runs when a GitHub release is published, whose tag must be the version of `library.module-template.yaml` (`0.14.0` or `v0.14.0`), and by hand from the Actions tab, where it defaults to a dry run. On a Mac runner it:
+
+1. checks the corpus, the public API dumps and `KITEPDF_VERSION`;
+2. publishes every module to Maven Local, signed;
+3. inspects those artifacts with `scripts/inspect_artifacts.py`: Java 11 class files, `META-INF/LICENSE` and `NOTICE`, and the minSdk of each AAR;
+4. publishes to Maven Central, unless it is a dry run;
+5. waits until Central serves the release, then runs `consumer-test` with `-PkitepdfRepo=central`.
+
+It needs four repository secrets, the names ImageKodec's workflow uses: `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY` (the armoured secret key) and `SIGNING_KEY_PASSWORD`. Only the steps that sign or upload see them.
+
 ### Benchmarks
 
 The performance benchmark runs only when you ask for it:

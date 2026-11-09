@@ -82,6 +82,9 @@ jobs:
       - name: Test the public-corpus tool
         run: python3 -m unittest discover -s tools -p test_corpus.py -v
 
+      - name: Test the release's artifact inspector
+        run: python3 -m unittest discover -s scripts -p test_inspect_artifacts.py -v
+
       # Each published module's resources/META-INF carries LICENSE and NOTICE into its jar, and
       # kitepdf-core also the licence texts of its bundled fonts, patterns and PDFium data, which
       # ask for their notice in binary copies (#703).
