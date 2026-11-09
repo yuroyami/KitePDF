@@ -14,6 +14,14 @@ public interface PdfRenderOracle {
     fun describe(): String
     fun pageCountDetailed(pdf: File): MuPdfOracle.PageCountResult
     fun renderDetailed(pdf: File, page: Int, dpi: Int): MuPdfOracle.RenderResult
+
+    /** [pageCountDetailed] of an encrypted [pdf] opened with [password]; an oracle that takes none fails it. */
+    fun pageCountDetailed(pdf: File, password: String?): MuPdfOracle.PageCountResult =
+        if (password == null) pageCountDetailed(pdf) else MuPdfOracle.PageCountResult.Failure("${describe()} takes no password")
+
+    /** [renderDetailed] of an encrypted [pdf] opened with [password]; an oracle that takes none fails it. */
+    fun renderDetailed(pdf: File, page: Int, dpi: Int, password: String?): MuPdfOracle.RenderResult =
+        if (password == null) renderDetailed(pdf, page, dpi) else MuPdfOracle.RenderResult.Failure("${describe()} takes no password")
 }
 
 /**
@@ -94,6 +102,16 @@ public object MuPdfOracle : PdfRenderOracle {
         return renderWith(tool, pdf, page, dpi)
     }
 
+    override fun pageCountDetailed(pdf: File, password: String?): PageCountResult {
+        val tool = binary ?: return PageCountResult.Failure("mutool is unavailable")
+        return pageCountWith(tool, pdf, password = password)
+    }
+
+    override fun renderDetailed(pdf: File, page: Int, dpi: Int, password: String?): RenderResult {
+        val tool = binary ?: return RenderResult.Failure("mutool is unavailable")
+        return renderWith(tool, pdf, page, dpi, password = password)
+    }
+
     /**
      * Invoke a specific binary. Kept internal both as a test seam and so all
      * process/error handling lives in one place.
@@ -104,6 +122,7 @@ public object MuPdfOracle : PdfRenderOracle {
         page: Int,
         dpi: Int,
         timeoutMillis: Long = 60_000L,
+        password: String? = null,
     ): RenderResult {
         var out: File? = null
         var log: File? = null
@@ -112,13 +131,9 @@ public object MuPdfOracle : PdfRenderOracle {
             val outFile = File.createTempFile("kite-ref-", ".png").also { out = it }
             val logFile = File.createTempFile("kite-ref-", ".log").also { log = it }
             val process = ProcessBuilder(
-                tool.absolutePath,
-                "draw",
-                "-r", dpi.toString(),
-                "-F", "png",
-                "-o", outFile.absolutePath,
-                pdf.absolutePath,
-                page.toString(),
+                listOf(tool.absolutePath, "draw") +
+                    (if (password != null) listOf("-p", password) else emptyList()) +
+                    listOf("-r", dpi.toString(), "-F", "png", "-o", outFile.absolutePath, pdf.absolutePath, page.toString()),
             )
                 .redirectErrorStream(true)
                 .redirectOutput(logFile)
@@ -183,16 +198,16 @@ public object MuPdfOracle : PdfRenderOracle {
         tool: File,
         pdf: File,
         timeoutMillis: Long = 60_000L,
+        password: String? = null,
     ): PageCountResult {
         var log: File? = null
         var proc: Process? = null
         return try {
             val logFile = File.createTempFile("kite-ref-pages-", ".log").also { log = it }
             val process = ProcessBuilder(
-                tool.absolutePath,
-                "show",
-                pdf.absolutePath,
-                "trailer/Root/Pages/Count",
+                listOf(tool.absolutePath, "show") +
+                    (if (password != null) listOf("-p", password) else emptyList()) +
+                    listOf(pdf.absolutePath, "trailer/Root/Pages/Count"),
             )
                 .redirectErrorStream(true)
                 .redirectOutput(logFile)

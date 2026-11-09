@@ -6,6 +6,7 @@ import io.github.yuroyami.kitepdf.difftest.MuPdfOracle
 import io.github.yuroyami.kitepdf.difftest.PdfRenderOracle
 
 import io.github.yuroyami.kitepdf.KitePDF
+import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import java.io.File
 import javax.imageio.ImageIO
@@ -169,7 +170,7 @@ object DiffHarness {
 
         for (entry in corpus) {
             val doc = try {
-                KitePDF.open(entry.pdf.readBytes())
+                entry.password?.let { PdfDocument.open(entry.pdf.readBytes(), it) } ?: KitePDF.open(entry.pdf.readBytes())
             } catch (e: Exception) {
                 results += fail(entry, 0, "open: ${e.message}")
                 continue
@@ -183,7 +184,7 @@ object DiffHarness {
                 continue
             }
             val documentOracleError = if (oracleAvailable) {
-                when (val countResult = oracle.pageCountDetailed(entry.pdf)) {
+                when (val countResult = oracle.pageCountDetailed(entry.pdf, entry.password)) {
                     is MuPdfOracle.PageCountResult.Success ->
                         if (countResult.count == kitePageCount) null
                         else "page count differs: KitePDF=$kitePageCount, MuPDF=${countResult.count}"
@@ -213,7 +214,7 @@ object DiffHarness {
                     var oracleError: String? = documentOracleError.takeIf { i == 0 }
 
                     if (oracleAvailable) {
-                        when (val oracleResult = oracle.renderDetailed(entry.pdf, i + 1, dpi)) {
+                        when (val oracleResult = oracle.renderDetailed(entry.pdf, i + 1, dpi, entry.password)) {
                             is MuPdfOracle.RenderResult.Success -> {
                                 val refPng = File(docOut, "p$i.ref.png")
                                 ImageIO.write(oracleResult.image, "png", refPng)

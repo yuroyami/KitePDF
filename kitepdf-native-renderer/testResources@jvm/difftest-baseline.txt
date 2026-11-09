@@ -2,6 +2,16 @@
 # Fixture name or corpus document hash, page, mean absolute error, fraction of changed pixels,
 # largest channel error, and the largest mean error of a 24-pixel tile where it was recorded.
 # Rewrite with -Dkitepdf.diff.updateBaseline=true and say why in the commit.
+enc-aes-128 p0 0.00018 0.00051 30 0.00609
+enc-aes-128-cleartext-metadata p0 0.00018 0.00051 30 0.00609
+enc-aes-128-objstm p0 0.00018 0.00051 30 0.00609
+enc-aes-256 p0 0.00018 0.00051 30 0.00609
+enc-aes-256-objstm p0 0.00018 0.00051 30 0.00609
+enc-identity-streams p0 0.00018 0.00051 30 0.00609
+enc-identity-strings p0 0.00018 0.00051 30 0.00609
+enc-owner-only p0 0.00018 0.00051 30 0.00609
+enc-rc4-128 p0 0.00018 0.00051 30 0.00609
+enc-rc4-128-objstm p0 0.00018 0.00051 30 0.00609
 gen-cmyk-swatches p0 0.00046 0.00055 17
 gen-gray-ramp p0 0.00030 0.00007 17 0.00437
 gen-multipage-mixed p0 0.00003 0.00007 38 0.00526

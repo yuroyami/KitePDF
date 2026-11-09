@@ -127,7 +127,7 @@ class DifferentialTest {
                 val key = DiffBaseline.key(entry, r.page)
                 current[key] = score
                 names[key] = "${r.doc} p${r.page}"
-                println("[difftest] page $key ${"%.5f".format(score.mae)} ${"%.5f".format(score.diffFraction)} ${score.maxDelta} (${r.doc})")
+                println("[difftest] page $key ${"%.5f".format(score.mae)} ${"%.5f".format(score.diffFraction)} ${score.maxDelta}${score.tile?.let { " " + "%.5f".format(it) } ?: ""} (${r.doc})")
             }
             val file = DiffBaseline.file()
             val baseline = DiffBaseline.read(file)
