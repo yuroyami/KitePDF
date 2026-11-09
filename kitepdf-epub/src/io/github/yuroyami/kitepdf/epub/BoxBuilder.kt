@@ -12,6 +12,7 @@ import io.github.yuroyami.kitepdf.epub.css.BorderStyle
 import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
 import io.github.yuroyami.kitepdf.epub.css.CssBackground
 import io.github.yuroyami.kitepdf.epub.css.CssFloat
+import io.github.yuroyami.kitepdf.epub.css.CssVAlign
 import io.github.yuroyami.kitepdf.epub.css.Display
 import io.github.yuroyami.kitepdf.epub.css.TextAlign
 import io.github.yuroyami.kitepdf.epub.css.WritingMode
@@ -1310,7 +1311,8 @@ internal class BoxBuilder(
         private fun makeRun(text: String, style: ComputedStyle) = InlineRun(
             text = text, fontSizePt = style.fontSizePt,
             bold = style.bold, fontWeight = style.fontWeight, italic = style.italic, family = style.fontFamily,
-            color = style.color, valign = style.verticalAlign, underline = style.underline,
+            // An inline-block's vertical-align moves its whole box, which the layout places, and not its text (#840).
+            color = style.color, valign = if (style === box?.style) CssVAlign.BASELINE else style.verticalAlign, underline = style.underline,
             fontFamilyNames = style.fontFamilyNames,
             rubyGroup = rubyGroup, rubyText = rubyText,
             href = linkHref,

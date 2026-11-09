@@ -91,6 +91,89 @@ class InlineBlockTest {
         assertEquals(50.0, min.runs.single { it.box != null }.paintWidth, 1e-6, "min-width: 25% of 200pt")
     }
 
+    // The geometry below follows from the generic font at 12pt, which has no face: an ascent of
+    // 0.8 em and a descent of 0.2 em, a normal line-height of 1.4 em, so a line of plain text is
+    // 16.8pt with its baseline 12pt down (CSS 2.1, 10.8.1). A box's own line is the same.
+
+    private fun PositionedLine.run(text: String) = runs.first { r -> r.glyphs.any { it.text == text } }
+
+    /** How far the box run's border box reaches over the line's baseline, at its bottom and its top. */
+    private fun PlacedRun.boxEdges(): Pair<Double, Double> = (baselineShift + boxBottom) to (baselineShift + boxBottom + boxHeight)
+
+    @Test
+    fun the_margin_box_of_an_inline_block_is_its_height_in_the_line() {
+        // CSS 2.1, 10.8: the box reaches 12 + 5 + 1 + 2 = 20 over the baseline and 4.8 + 5 + 1 + 2 = 12.8 under it.
+        val line = lines(
+            """<p>a <span style="display:inline-block;padding:5pt 0;border:1pt solid red;margin:2pt 0">b</span> c</p>""",
+        ).single()
+        assertEquals(20.0, line.ascent, 1e-6)
+        assertEquals(32.8, line.height, 1e-6)
+        val box = line.runs.single { it.box != null }
+        assertEquals(0.0, box.baselineShift, 1e-6, "on the baseline, the box's text shares the line's baseline")
+        assertEquals(-10.8, box.boxEdges().first, 1e-6, "the border box's bottom")
+        assertEquals(18.0, box.boxEdges().second, 1e-6, "the border box's top")
+        assertEquals(0.0, line.run("b").baselineShift, 1e-6)
+        assertEquals(0.0, line.run("a").baselineShift, 1e-6)
+    }
+
+    @Test
+    fun a_height_sets_the_content_box_under_the_box_line() {
+        // CSS 2.1, 10.6.6: the content box is 30pt tall, its line at its top, so it reaches 18 under the baseline.
+        val line = lines("""<p>a <span style="display:inline-block;height:30pt">b</span></p>""").single()
+        assertEquals(12.0, line.ascent, 1e-6)
+        assertEquals(30.0, line.height, 1e-6)
+        val (low, high) = line.runs.single { it.box != null }.boxEdges()
+        assertEquals(-18.0, low, 1e-6)
+        assertEquals(12.0, high, 1e-6)
+    }
+
+    @Test
+    fun vertical_align_top_and_bottom_put_the_box_at_the_edges_of_the_line() {
+        // CSS 2.1, 10.8.1: the line's text sets a line 16.8 tall; a top box 46.8 tall grows it downward.
+        val top = lines("""<p>a <span style="display:inline-block;vertical-align:top;padding-top:30pt">b</span> c</p>""").single()
+        assertEquals(12.0, top.ascent, 1e-6, "the text keeps its baseline")
+        assertEquals(46.8, top.height, 1e-6)
+        assertEquals(12.0, top.runs.single { it.box != null }.boxEdges().second, 1e-6, "the box's top is the line's top")
+        assertEquals(-30.0, top.run("b").baselineShift, 1e-6, "the box's text sits under its padding")
+        assertEquals(0.0, top.run("c").baselineShift, 1e-6)
+        // A bottom box grows the line upward, and its bottom is the line's bottom.
+        val bottom = lines("""<p>a <span style="display:inline-block;vertical-align:bottom;padding-bottom:30pt">b</span> c</p>""").single()
+        assertEquals(42.0, bottom.ascent, 1e-6)
+        assertEquals(46.8, bottom.height, 1e-6)
+        assertEquals(bottom.ascent - bottom.height, bottom.runs.single { it.box != null }.boxEdges().first, 1e-6, "the box's bottom is the line's bottom")
+        assertEquals(30.0, bottom.run("b").baselineShift, 1e-6)
+    }
+
+    @Test
+    fun vertical_align_middle_centres_the_box_half_an_x_height_over_the_baseline() {
+        // CSS 2.1, 10.8.1: the box's midpoint at the baseline plus half the parent's x-height, 0.5 em of 12pt.
+        val line = lines("""<p>a <span style="display:inline-block;vertical-align:middle;padding:10pt 0">b</span> c</p>""").single()
+        val (low, high) = line.runs.single { it.box != null }.boxEdges()
+        assertEquals(3.0, (low + high) / 2, 1e-6)
+        assertEquals(36.8, high - low, 1e-6, "16.8 of line and 10 of padding on each side")
+        assertEquals(high, line.ascent, 1e-6, "the box is the tallest thing over the baseline")
+        assertEquals(-low, line.height - line.ascent, 1e-6, "and under it")
+    }
+
+    @Test
+    fun vertical_align_super_raises_the_box_and_its_text_once() {
+        // The box rises by a third of its em, as raised text does, and its text rises with it, not again.
+        val line = lines("""<p>a <span style="display:inline-block;vertical-align:super">b</span> c</p>""").single()
+        assertEquals(3.96, line.runs.single { it.box != null }.baselineShift, 1e-6)
+        assertEquals(3.96, line.run("b").baselineShift, 1e-6)
+        assertEquals(15.96, line.ascent, 1e-6, "the raised box reaches 12 + 3.96 over the baseline")
+    }
+
+    @Test
+    fun the_text_of_aligned_inline_blocks_reads_in_line_order() {
+        val doc = EpubDocument.open(EpubFixtures.epub(
+            """<body><p>a <span style="display:inline-block;vertical-align:top;padding-top:30pt">b</span> c """ +
+                """<span style="display:inline-block;vertical-align:bottom;padding-bottom:30pt">d</span></p><p>e</p></body>""",
+        ))
+        val text = doc.pages[0].textContent().plainText.replace(Regex("\\s+"), " ").trim()
+        assertEquals("a b c d e", text)
+    }
+
     @Test
     fun an_inline_block_with_a_block_inside_keeps_the_inline_layout() {
         val all = lines("""<p>a <span style="display:inline-block"><span style="display:block">b</span></span> c</p>""")

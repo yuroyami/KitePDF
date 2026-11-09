@@ -2550,11 +2550,11 @@ public class EpubPage internal constructor(
             // Inline images: bottom on the baseline, next to the text runs.
             for (im in line.images) {
                 if (paintsRemote(im.image, im.svg, im.zipPath)) {
-                    paintRemoteImage(canvas, ctm, im.zipPath, im.width, im.height, margin + im.x, base, im.objectFit)
+                    paintRemoteImage(canvas, ctm, im.zipPath, im.width, im.height, margin + im.x, base + im.rise, im.objectFit)
                     continue
                 }
                 paintImage(canvas, ctm, im.image, im.svg, im.width, im.height,
-                    margin + im.x, base, im.objectFit, resourceDir(im.zipPath), smooth = im.smooth)
+                    margin + im.x, base + im.rise, im.objectFit, resourceDir(im.zipPath), smooth = im.smooth)
             }
             // Formulas: their baselines on the line's (#32).
             for (m in line.maths) paintMath(canvas, ctm, m, margin + m.x, base)
@@ -3742,7 +3742,7 @@ public class EpubPage internal constructor(
             val top = page.margin + img.x
             return KiteRectangle(x, top, x + img.width, top + img.height)
         }
-        val baseline = displayY(page, line.yTop + line.ascent)
+        val baseline = displayY(page, line.yTop + line.ascent) - img.rise
         val left = page.margin + img.x
         return KiteRectangle(left, baseline - img.height, left + img.width, baseline)
     }

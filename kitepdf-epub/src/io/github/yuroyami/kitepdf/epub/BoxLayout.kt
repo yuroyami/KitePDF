@@ -1937,7 +1937,10 @@ internal class BoxLayout(
         val out = ArrayList<PositionedLine>(cellLines.size)
         var y = topY
         visualLines.forEachIndexed { i, cells ->
-            val maxFs = cells.maxOfOrNull { it.fontSize }?.takeIf { it > 0.0 } ?: style.fontSizePt
+            // An inline-block's content sits in a line of its own inside the box, and only the box's
+            // margin box stands in this line (CSS 2.1, 10.8; #840).
+            val own = if (vertical || cells.none { it.box != null }) cells else cells.filter { it.box == null }
+            val maxFs = own.maxOfOrNull { it.fontSize }?.takeIf { it > 0.0 } ?: style.fontSizePt
             // A line carrying ruby grows by the reading's ascent: the base text
             // drops within the line so the overlay fits inside the line box.
             val rubyBaseFs = cells.filter { it.rubyGroup >= 0 }.maxOfOrNull { it.fontSize } ?: 0.0
@@ -1950,7 +1953,7 @@ internal class BoxLayout(
             // CSS 2.1, 10.8.1: the text's ascent A and descent D, from its face or 0.8 and 0.2 em,
             // and the leading L = line-height - (A + D) split in two around them, so the baseline
             // sits at L/2 + A below the top of the line box (#852).
-            val textCells = cells.filter { it.fontSize > 0.0 && it.imageWidth == 0.0 && it.imageHeight == 0.0 && it.math == null }
+            val textCells = own.filter { it.fontSize > 0.0 && it.imageWidth == 0.0 && it.imageHeight == 0.0 && it.math == null }
             val a = textCells.maxOfOrNull { (it.face?.ascentEm ?: DEFAULT_ASCENT) * it.fontSize } ?: (maxFs * DEFAULT_ASCENT)
             val d = textCells.maxOfOrNull { (it.face?.descentEm ?: DEFAULT_DESCENT) * it.fontSize } ?: (maxFs * DEFAULT_DESCENT)
             var lineHeight = textHeight + rubyExtra + marksUnder
@@ -1958,19 +1961,51 @@ internal class BoxLayout(
             var ascent = (if (vertical) maxFs * DEFAULT_ASCENT else (textHeight - (a + d)) / 2 + a) + rubyExtra
             // An inline image grows the line: its bottom sits on the baseline,
             // so the ascent must cover the image height (descent unchanged).
-            val imgH = cells.maxOfOrNull { if (vertical) it.imageWidth else it.imageHeight } ?: 0.0
+            val imgH = own.maxOfOrNull { if (vertical) it.imageWidth else it.imageHeight } ?: 0.0
             if (imgH > ascent) {
                 lineHeight += imgH - ascent
                 ascent = imgH
             }
             // A formula grows the line by its height above the baseline and its depth below it (#32).
-            val mathAscent = cells.maxOfOrNull { it.math?.ascent ?: 0.0 } ?: 0.0
-            val mathDescent = cells.maxOfOrNull { it.math?.descent ?: 0.0 } ?: 0.0
+            val mathAscent = own.maxOfOrNull { it.math?.ascent ?: 0.0 } ?: 0.0
+            val mathDescent = own.maxOfOrNull { it.math?.descent ?: 0.0 } ?: 0.0
             if (mathAscent > ascent) {
                 lineHeight += mathAscent - ascent
                 ascent = mathAscent
             }
             if (mathDescent > lineHeight - ascent) lineHeight = ascent + mathDescent
+            // Each inline-block's margin box, placed by its vertical-align (CSS 2.1, 10.8 and 10.8.1; #840).
+            val boxes = if (own === cells) emptyMap() else boxMetrics(cells, contentW)
+            if (boxes.isNotEmpty()) {
+                var below = lineHeight - ascent
+                for ((b, m) in boxes) {
+                    m.raise = when (b.style.verticalAlign) {
+                        CssVAlign.SUPER -> b.style.fontSizePt * 0.33
+                        CssVAlign.SUB -> -b.style.fontSizePt * 0.16
+                        // The box's midpoint on the parent's baseline plus half its x-height, taken as half an em.
+                        CssVAlign.MIDDLE -> style.fontSizePt * X_HEIGHT / 2 - (m.up - m.down) / 2
+                        CssVAlign.TOP, CssVAlign.BOTTOM -> continue
+                        CssVAlign.BASELINE -> 0.0
+                    }
+                    ascent = maxOf(ascent, m.up + m.raise)
+                    below = maxOf(below, m.down - m.raise)
+                }
+                lineHeight = ascent + below
+                // A box aligned to the line's top or bottom grows the line away from that edge, once
+                // the boxes on the baseline have set its height.
+                for ((b, m) in boxes) when (b.style.verticalAlign) {
+                    CssVAlign.TOP -> lineHeight = maxOf(lineHeight, m.up + m.down)
+                    CssVAlign.BOTTOM -> if (m.up + m.down > lineHeight) { ascent += m.up + m.down - lineHeight; lineHeight = m.up + m.down }
+                    else -> {}
+                }
+                for ((b, m) in boxes) when (b.style.verticalAlign) {
+                    CssVAlign.TOP -> m.raise = ascent - m.up
+                    CssVAlign.BOTTOM -> m.raise = ascent - (lineHeight - m.down)
+                    else -> {}
+                }
+                // The box's content moves with it: its text, images and decorations.
+                for (c in cells) c.box?.let { b -> boxes[b]?.let { c.shift += it.raise } }
+            }
 
             val (leftInset, rightInset) = insetsFor(i)
             val lineAvail = (contentW - leftInset - rightInset).coerceAtLeast(1.0)
@@ -2006,7 +2041,7 @@ internal class BoxLayout(
             if (i == 0 && marker != null) {
                 markerRun(marker, style.fontSizePt, contentLeft, contentLeft + contentW, rtl, markerColor)?.let(placed::add)
             }
-            placed.addAll(placeRuns(cells, xStart, extraPerSpace, contentW, images, maths))
+            placed.addAll(placeRuns(cells, xStart, extraPerSpace, contentW, boxes, images, maths))
             out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i], ends[i], maths, starts[i]))
             y += lineHeight
         }
@@ -2212,7 +2247,7 @@ internal class BoxLayout(
     private class Cell(
         // The character of the cell, as a code point: a character outside the BMP is one cell (#319).
         val cp: Int, var width: Double, val fontSize: Double,
-        val spec: FontSpec, val color: RgbColor, val shift: Double, val underline: DecorationLine?,
+        val spec: FontSpec, val color: RgbColor, var shift: Double, val underline: DecorationLine?,
         val face: EmbeddedFace? = null, var gid: Int = -1,
         // Kerning to the next glyph (1/1000 em), folded into this glyph's advance.
         var kernAfter1000: Int = 0,
@@ -2462,7 +2497,7 @@ internal class BoxLayout(
                     run.color, 0.0, null,
                     href = run.href, element = run.element, imageWidth = w, imageHeight = h, image = img, svgImage = svg,
                     imageAlt = run.imageAlt, imageObjectFit = run.imageObjectFit, imageSmooth = run.imageSmooth, imageZipPath = run.imageSrc,
-                    level = levelsOfRun?.get(0) ?: 0, src = src,
+                    box = run.box, level = levelsOfRun?.get(0) ?: 0, src = src,
                 )
                 tokens.add(Token.Word(listOf(cell), inlineSize))
                 continue
@@ -3133,10 +3168,58 @@ internal class BoxLayout(
     private fun boxContainingWidth(contentW: Double): Double = if (contentW.isFinite() && contentW < FLEX_UNBOUNDED) contentW else 0.0
 
     /**
+     * An inline-block on a line, measured from the baseline of its own line (#840): its border box
+     * reaches [above] over that baseline and [below] under it, and its margins lie beyond. [raise]
+     * is how far the layout lifts that baseline over the line's to honour `vertical-align`.
+     */
+    private class BoxMetrics(val above: Double, val below: Double, val marginTop: Double, val marginBottom: Double) {
+        /** The margin box over the box's baseline, and under it. */
+        val up: Double get() = above + marginTop
+        val down: Double get() = below + marginBottom
+        var raise: Double = 0.0
+    }
+
+    /**
+     * The metrics of each inline-block among [cells] (CSS 2.1, 10.6.6, 10.8 and 10.8.1; #840). Its
+     * content is one line box, as its text does not wrap: the line-height of its text with the
+     * half-leading around its ascent and descent, as [layoutInline] sets a line, grown by an image
+     * that stands on its baseline. A `height` sets the content box below the line's top instead, and
+     * a `min-height` keeps it from being shorter. The box's baseline is that line's, and its padding
+     * and border go around the content box.
+     */
+    private fun boxMetrics(cells: List<Cell>, contentW: Double): Map<InlineBox, BoxMetrics> {
+        val byBox = LinkedHashMap<InlineBox, ArrayList<Cell>>()
+        for (c in cells) c.box?.let { byBox.getOrPut(it) { ArrayList() }.add(c) }
+        val out = LinkedHashMap<InlineBox, BoxMetrics>()
+        for ((b, own) in byBox) {
+            val s = b.within(boxContainingWidth(contentW))
+            val text = own.filter { it.fontSize > 0.0 && it.imageWidth == 0.0 && it.imageHeight == 0.0 && it.math == null }
+            val fs = text.maxOfOrNull { it.fontSize }?.takeIf { it > 0.0 } ?: s.fontSizePt
+            val lineHeight = (s.lineHeightPt ?: fs * 1.4) * lineHeightScale
+            val a = text.maxOfOrNull { (it.face?.ascentEm ?: DEFAULT_ASCENT) * it.fontSize } ?: (fs * DEFAULT_ASCENT)
+            val d = text.maxOfOrNull { (it.face?.descentEm ?: DEFAULT_DESCENT) * it.fontSize } ?: (fs * DEFAULT_DESCENT)
+            var above = (lineHeight - (a + d)) / 2 + a
+            var below = lineHeight - above
+            val image = own.maxOfOrNull { it.imageHeight } ?: 0.0
+            if (image > above) above = image
+            s.heightPt?.let { below = it - above }
+            s.minHeightPt?.let { if (above + below < it) below = it - above }
+            out[b] = BoxMetrics(
+                above + s.paddingTopPt + s.borderTop.effective,
+                below + s.paddingBottomPt + s.borderBottom.effective,
+                s.marginTopPt, s.marginBottomPt,
+            )
+        }
+        return out
+    }
+
+    /**
      * The box of each inline-block on the line (#840), first in [out] so it paints behind its text:
      * from its first cell to its last, without its margins, each cell placed as [placeRuns] places it.
      */
-    private fun boxRuns(cells: List<Cell>, xStart: Double, extraPerSpace: Double, containingWidth: Double, out: MutableList<PlacedRun>) {
+    private fun boxRuns(
+        cells: List<Cell>, xStart: Double, extraPerSpace: Double, containingWidth: Double, boxes: Map<InlineBox, BoxMetrics>, out: MutableList<PlacedRun>,
+    ) {
         if (cells.none { it.box != null }) return
         fun advance(c: Cell): Double =
             if (isGap(c.cp)) c.width + if (isWordSeparator(c.cp)) extraPerSpace else 0.0 else c.padBefore + c.width + c.padAfter
@@ -3154,11 +3237,14 @@ internal class BoxLayout(
             val left = start + sides.marginLeftPt
             val right = x - sides.marginRightPt
             if (right > left) {
-                // The border box: the em of the box's text with its padding and border around it.
-                val bottom = -0.2 * c.fontSize - sides.paddingBottomPt - sides.borderBottom.effective
-                val height = c.fontSize + sides.paddingTopPt + sides.paddingBottomPt + sides.borderTop.effective + sides.borderBottom.effective
+                // The border box around the box's own line, from its metrics. A vertical line has
+                // none, and its box is the em of its text with the padding and border around it.
+                val m = boxes[b]
+                val bottom = if (m != null) -m.below else -0.2 * c.fontSize - sides.paddingBottomPt - sides.borderBottom.effective
+                val height = m?.let { it.above + it.below }
+                    ?: (c.fontSize + sides.paddingTopPt + sides.paddingBottomPt + sides.borderTop.effective + sides.borderBottom.effective)
                 out.add(PlacedRun(
-                    emptyList(), left, c.fontSize, c.spec, c.color, c.shift, null, backgroundColor = b.background, paintWidth = right - left, box = b,
+                    emptyList(), left, c.fontSize, c.spec, c.color, m?.raise ?: c.shift, null, backgroundColor = b.background, paintWidth = right - left, box = b,
                     boxBottom = bottom, boxHeight = height,
                 ))
             }
@@ -3171,11 +3257,13 @@ internal class BoxLayout(
         extraPerSpace: Double,
         /** The width of the block that holds the line, which an inline-block's percentages are of (#840). */
         containingWidth: Double,
+        /** Where each inline-block on the line sits, from [boxMetrics] (#840). */
+        boxes: Map<InlineBox, BoxMetrics>,
         imageSink: MutableList<PlacedImage>? = null,
         mathSink: MutableList<PlacedMath>? = null,
     ): List<PlacedRun> {
         val out = ArrayList<PlacedRun>()
-        boxRuns(cells, xStart, extraPerSpace, containingWidth, out)
+        boxRuns(cells, xStart, extraPerSpace, containingWidth, boxes, out)
         var x = xStart
         var i = 0
         // Ruby envelope tracking: a group's overlay is centered over
@@ -3221,7 +3309,7 @@ internal class BoxLayout(
             if (c.isImage) {
                 closeGroup(x)
                 imageSink?.add(
-                    PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt, c.imageObjectFit, c.imageZipPath, c.element, smooth = c.imageSmooth),
+                    PlacedImage(x + c.padBefore, c.imageWidth, c.imageHeight, c.image, c.svgImage, c.imageAlt, c.imageObjectFit, c.imageZipPath, c.element, smooth = c.imageSmooth, rise = c.shift),
                 )
                 x += c.padBefore + c.width + c.padAfter
                 spaces = 0; spacesWidth = 0.0
@@ -3495,6 +3583,9 @@ internal class BoxLayout(
         /** The ascent and descent of text whose face gives none, in ems (#852). */
         const val DEFAULT_ASCENT = 0.8
         const val DEFAULT_DESCENT = 0.2
+
+        /** The x-height `vertical-align: middle` centres on, in ems, which CSS gives as 0.5 em where it is not known (CSS Values 3, 5.1.1). */
+        const val X_HEIGHT = 0.5
 
         /** A width no line of text reaches, to measure text that does not wrap (#33). */
         const val FLEX_UNBOUNDED = 1.0e6

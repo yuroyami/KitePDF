@@ -232,6 +232,8 @@ internal class PlacedImage(
     val element: KiteXmlNode.Element? = null,
     /** False when the image's `image-rendering` asks for hard pixel edges (#936). */
     val smooth: Boolean = true,
+    /** How far above the line's baseline the image's bottom sits: an inline-block around it moves it (#840). */
+    val rise: Double = 0.0,
 )
 
 /** A formula placed on a line, its baseline on the line's, at document-space inline position [x] (#32). */

@@ -1055,6 +1055,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it takes its width or min-width, its horizontal padding, border and margins take room, and its background and
   border paint as one box behind its text. Its text still reads, searches and selects with the line. A percentage
   width, min-width, padding or margin is of the block that holds the line, not of the page (CSS 2.1, 10.2; #840).
+  Its margin box is its height in the line, so vertical padding, border, margins and `height` make the line
+  taller, and `vertical-align: baseline`, `super`, `sub`, `top`, `middle` and `bottom` move the box with its text
+  (CSS 2.1, 10.8; #840).
 - The differential sweep scores the mean error of the worst 24-pixel tile of each page too, so a page that loses
   or gains a small shape of any colour fails: a pale 40-pixel square that vanished from a Letter page moved the
   page scores by less than their margins and scores 0.15 in its tile (#775).

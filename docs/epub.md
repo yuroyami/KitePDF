@@ -432,7 +432,7 @@ GPOS attaches a mark to a base letter, to a part of a ligature, and to the mark 
 
 - Floats, tables (with `table-layout: fixed`), `position: absolute`, `relative` and `fixed`, inline images on the baseline, `::before` and `::after` content, `text-transform`, letter and word spacing, and small caps.
 - A page paints in the order of CSS 2.1, Appendix E: backgrounds and borders, then floats, then lines and block images in document order, then positioned boxes by `z-index`.
-- `display: inline-block` with inline content is one unit of its line: no line breaks inside it, it is at least its `width` or `min-width`, and its horizontal padding, border and margins take room. A percentage is of the width of the block that holds the line. Its background and border paint as one box behind its text, and its text reads with the line. An inline-block that holds a block lays out as inline text, and its vertical padding does not make the line taller.
+- `display: inline-block` with inline content is one unit of its line: no line breaks inside it, it is at least its `width` or `min-width`, and its horizontal padding, border and margins take room. A percentage is of the width of the block that holds the line. Its background and border paint as one box behind its text, and its text reads with the line. Its margin box is its height in the line, its baseline is the baseline of its text, and `vertical-align` takes `baseline`, `super`, `sub`, `top`, `middle` and `bottom`. An inline-block that holds a block lays out as inline text.
 
 ### Flex layout
 
