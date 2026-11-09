@@ -198,6 +198,7 @@ final class io.github.yuroyami.kitepdf.epub/EpubDocument : io.github.yuroyami.ki
         final fun <get-settings>(): io.github.yuroyami.kitepdf.epub/EpubSettings // io.github.yuroyami.kitepdf.epub/EpubDocument.settings.<get-settings>|<get-settings>(){}[0]
     final val tableOfContents // io.github.yuroyami.kitepdf.epub/EpubDocument.tableOfContents|{}tableOfContents[0]
         final fun <get-tableOfContents>(): io.github.yuroyami.kitepdf.epub/TableOfContents // io.github.yuroyami.kitepdf.epub/EpubDocument.tableOfContents.<get-tableOfContents>|<get-tableOfContents>(){}[0]
+
     final var warnings // io.github.yuroyami.kitepdf.epub/EpubDocument.warnings|{}warnings[0]
         final fun <get-warnings>(): io.github.yuroyami.kitepdf.core/KiteWarningListener? // io.github.yuroyami.kitepdf.epub/EpubDocument.warnings.<get-warnings>|<get-warnings>(){}[0]
         final fun <set-warnings>(io.github.yuroyami.kitepdf.core/KiteWarningListener?) // io.github.yuroyami.kitepdf.epub/EpubDocument.warnings.<set-warnings>|<set-warnings>(io.github.yuroyami.kitepdf.core.KiteWarningListener?){}[0]
@@ -415,6 +416,8 @@ final class io.github.yuroyami.kitepdf.epub/EpubOverlayClip { // io.github.yuroy
 }
 
 final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepdf.core/KitePage { // io.github.yuroyami.kitepdf.epub/EpubPage|null[0]
+    final val animations // io.github.yuroyami.kitepdf.epub/EpubPage.animations|{}animations[0]
+        final fun <get-animations>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteImageAnimation> // io.github.yuroyami.kitepdf.epub/EpubPage.animations.<get-animations>|<get-animations>(){}[0]
     final val chapter // io.github.yuroyami.kitepdf.epub/EpubPage.chapter|{}chapter[0]
         final fun <get-chapter>(): kotlin/Int // io.github.yuroyami.kitepdf.epub/EpubPage.chapter.<get-chapter>|<get-chapter>(){}[0]
     final val chapterVersion // io.github.yuroyami.kitepdf.epub/EpubPage.chapterVersion|{}chapterVersion[0]
@@ -431,8 +434,6 @@ final class io.github.yuroyami.kitepdf.epub/EpubPage : io.github.yuroyami.kitepd
         final fun <get-embeds>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/EpubEmbed> // io.github.yuroyami.kitepdf.epub/EpubPage.embeds.<get-embeds>|<get-embeds>(){}[0]
     final val height // io.github.yuroyami.kitepdf.epub/EpubPage.height|{}height[0]
         final fun <get-height>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/EpubPage.height.<get-height>|<get-height>(){}[0]
-    final val animations // io.github.yuroyami.kitepdf.epub/EpubPage.animations|{}animations[0]
-        final fun <get-animations>(): kotlin.collections/List<io.github.yuroyami.kitepdf.core.render/KiteImageAnimation> // io.github.yuroyami.kitepdf.epub/EpubPage.animations.<get-animations>|<get-animations>(){}[0]
     final val isContentLoaded // io.github.yuroyami.kitepdf.epub/EpubPage.isContentLoaded|{}isContentLoaded[0]
         final fun <get-isContentLoaded>(): kotlin/Boolean // io.github.yuroyami.kitepdf.epub/EpubPage.isContentLoaded.<get-isContentLoaded>|<get-isContentLoaded>(){}[0]
     final val links // io.github.yuroyami.kitepdf.epub/EpubPage.links|{}links[0]
@@ -564,6 +565,7 @@ final class io.github.yuroyami.kitepdf.epub/KiteShaper { // io.github.yuroyami.k
         final fun load(kotlin/ByteArray, kotlin/Int = ...): io.github.yuroyami.kitepdf.epub/KiteShaper // io.github.yuroyami.kitepdf.epub/KiteShaper.Companion.load|load(kotlin.ByteArray;kotlin.Int){}[0]
     }
 }
+
 final class io.github.yuroyami.kitepdf.epub/ShapedGlyph { // io.github.yuroyami.kitepdf.epub/ShapedGlyph|null[0]
     constructor <init>(kotlin/Int, kotlin/Double, kotlin/Double, kotlin/Double, kotlin/Int, kotlin/Int, kotlin/String, kotlin/Boolean) // io.github.yuroyami.kitepdf.epub/ShapedGlyph.<init>|<init>(kotlin.Int;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Int;kotlin.Int;kotlin.String;kotlin.Boolean){}[0]
 
@@ -584,6 +586,7 @@ final class io.github.yuroyami.kitepdf.epub/ShapedGlyph { // io.github.yuroyami.
     final val y // io.github.yuroyami.kitepdf.epub/ShapedGlyph.y|{}y[0]
         final fun <get-y>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/ShapedGlyph.y.<get-y>|<get-y>(){}[0]
 }
+
 final class io.github.yuroyami.kitepdf.epub/ShapedLine { // io.github.yuroyami.kitepdf.epub/ShapedLine|null[0]
     constructor <init>(kotlin/String, kotlin.collections/List<io.github.yuroyami.kitepdf.epub/ShapedGlyph>, kotlin/Double, kotlin/Boolean) // io.github.yuroyami.kitepdf.epub/ShapedLine.<init>|<init>(kotlin.String;kotlin.collections.List<io.github.yuroyami.kitepdf.epub.ShapedGlyph>;kotlin.Double;kotlin.Boolean){}[0]
 
@@ -598,6 +601,7 @@ final class io.github.yuroyami.kitepdf.epub/ShapedLine { // io.github.yuroyami.k
     final val width // io.github.yuroyami.kitepdf.epub/ShapedLine.width|{}width[0]
         final fun <get-width>(): kotlin/Double // io.github.yuroyami.kitepdf.epub/ShapedLine.width.<get-width>|<get-width>(){}[0]
 }
+
 final class io.github.yuroyami.kitepdf.epub/TableOfContents { // io.github.yuroyami.kitepdf.epub/TableOfContents|null[0]
     final val entries // io.github.yuroyami.kitepdf.epub/TableOfContents.entries|{}entries[0]
         final fun <get-entries>(): kotlin.collections/List<io.github.yuroyami.kitepdf.epub/TocEntry> // io.github.yuroyami.kitepdf.epub/TableOfContents.entries.<get-entries>|<get-entries>(){}[0]
