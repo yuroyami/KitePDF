@@ -21,7 +21,9 @@ class SvgFilterBudgetTest {
     private fun quickly(what: String, body: () -> Unit) {
         val start = TimeSource.Monotonic.markNow()
         body()
-        assertTrue(start.elapsedNow().inWholeSeconds < 30, "$what took ${start.elapsedNow()}")
+        // A debug Kotlin/Native build on CI's macOS runner takes about a minute for the 3000 by 3000
+        // raster alone; the bound catches a filter that runs at full size in floats.
+        assertTrue(start.elapsedNow().inWholeSeconds < 120, "$what took ${start.elapsedNow()}")
     }
 
     @Test

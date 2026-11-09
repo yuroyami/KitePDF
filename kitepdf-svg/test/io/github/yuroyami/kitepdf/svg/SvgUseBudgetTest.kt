@@ -24,7 +24,9 @@ class SvgUseBudgetTest {
     private fun quickly(what: String, body: () -> Unit) {
         val start = TimeSource.Monotonic.markNow()
         body()
-        assertTrue(start.elapsedNow().inWholeSeconds < 20, "$what took ${start.elapsedNow()}")
+        // The bound catches a render with no budget, which draws 10^8 shapes and runs for hours. A
+        // debug Kotlin/Native build draws the budget's 500,000 in about 20 s on CI's Linux runner.
+        assertTrue(start.elapsedNow().inWholeSeconds < 120, "$what took ${start.elapsedNow()}")
     }
 
     @Test
