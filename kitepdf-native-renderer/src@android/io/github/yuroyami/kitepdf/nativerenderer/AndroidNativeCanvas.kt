@@ -583,7 +583,8 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
             this.alpha = (alpha.coerceIn(0.0, 1.0) * 255).toInt()
             applyBlendMode(blendMode)
         }
-        canvas.saveLayer(null, paint)
+        // ISO 32000-1, 11.6.6: the group is clipped to its box, so its layer is no larger (#824).
+        canvas.saveLayer(layerBounds(bbox, ctm), paint)
         openLayers++
         layers++
     }
@@ -629,7 +630,10 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         render: () -> Unit,
         renderMask: (KiteCanvas) -> Unit,
     ) {
-        canvas.saveLayer(null, Paint())
+        // Outside the mask's box the mask is its backdrop's value, and the renderer passes the
+        // page box when that is not 0 (ISO 32000-1, 11.6.5.2, #384), so both layers stop at the box (#824).
+        val bounds = layerBounds(maskBBox, maskCtm)
+        canvas.saveLayer(bounds, Paint())
         openLayers++
         layers++
         // The content and the mask composite as usual, also inside a knockout group.
@@ -649,7 +653,7 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
                 // so the layer's luminosity becomes its alpha when it composites (#79).
                 if (luminosity || transfer != null) colorFilter = ColorMatrixColorFilter(maskToAlpha(kind, transfer))
             }
-            canvas.saveLayer(null, maskPaint)
+            canvas.saveLayer(bounds, maskPaint)
             openLayers++
             layers++
             try {
@@ -809,6 +813,18 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
     }
 
     /* ─── Helpers ─────────────────────────────────────────────────────────── */
+
+    /**
+     * The box of [bbox] under [ctm] in the canvas's local space, which a saved layer takes as its
+     * bounds and Android cuts to the clip, or null, an unbounded layer, when it is not finite (#824).
+     */
+    private fun layerBounds(bbox: KiteRectangle, ctm: KiteMatrix): android.graphics.RectF? {
+        val b = bbox.normalized()
+        val xs = doubleArrayOf(ctm.transformX(b.left, b.bottom), ctm.transformX(b.right, b.bottom), ctm.transformX(b.left, b.top), ctm.transformX(b.right, b.top))
+        val ys = doubleArrayOf(ctm.transformY(b.left, b.bottom), ctm.transformY(b.right, b.bottom), ctm.transformY(b.left, b.top), ctm.transformY(b.right, b.top))
+        if (!(xs + ys).all { it.isFinite() && kotlin.math.abs(it) < 1e9 }) return null
+        return android.graphics.RectF(xs.min().toFloat(), ys.min().toFloat(), xs.max().toFloat(), ys.max().toFloat())
+    }
 
     /**
      * One path that fills, strokes, glyphs and shadings reuse, since a draw copies the path it
