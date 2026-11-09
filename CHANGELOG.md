@@ -1053,6 +1053,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CbzDocument.open` and `XpsDocument.open`, and their `openOrNull`, take a `KiteByteSource` too, so a comic or
   an XPS package larger than the heap opens: the archive reader fetches the directory, each page image or part
   when it is drawn, and nothing else (#906).
+- `KiteDoc.open` and `openOrNull` take a `KiteByteSource`: a PDF, an EPUB, a CBZ or an XPS package opens from it
+  on demand, and SVG, FB2, MOBI and HTML are read whole up to `maxWholeBytes` (#906).
 
 ## [0.13.0] - 2026-10-09
 

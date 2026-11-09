@@ -2,6 +2,7 @@ package io.github.yuroyami.kitepdf.document
 
 import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.cbz.CbzDocument
+import io.github.yuroyami.kitepdf.core.KiteByteSource
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteFormatException
 import io.github.yuroyami.kitepdf.core.KiteWrongPasswordException
@@ -163,6 +164,83 @@ public object KiteDoc {
         KiteDocFormat.Text -> EpubDocument.openText(bytes, epubSettings)
     }
 
+    /**
+     * Reads [source] as whichever format it is, as [open] reads bytes, holding only what the
+     * format reader asks for (#906). A PDF parses each object from [source] when it is needed,
+     * and an EPUB, a CBZ or an XPS package reads each entry of its archive when a page draws it,
+     * so a document larger than the heap opens. SVG, FB2, MOBI and HTML have no reader on a
+     * source, so they are read whole, up to [maxWholeBytes]. The caller keeps [source] open while
+     * it uses the document, and closes it after.
+     *
+     * @throws KiteFormatException as [open] does, and for a document of a format read whole
+     *   that is larger than [maxWholeBytes].
+     * @throws io.github.yuroyami.kitepdf.core.KiteWrongPasswordException as [open] does.
+     */
+    @Throws(io.github.yuroyami.kitepdf.core.KiteFormatException::class, io.github.yuroyami.kitepdf.core.KiteWrongPasswordException::class)
+    public fun open(
+        source: KiteByteSource,
+        password: String = "",
+        epubSettings: EpubSettings = EpubSettings(),
+        maxWholeBytes: Int = DEFAULT_MAX_LOCAL_DOCUMENT_BYTES,
+    ): KiteDocument {
+        val head = readRange(source, 0, minOf(source.size, HEAD_BYTES.toLong()).toInt())
+        if (looksLikeZip(head)) {
+            val zip = runCatching { ZipReader(source) }.getOrNull()
+            if (zip != null) {
+                val names = zip.names
+                if (looksLikeEpubHead(head) || isEpubDirectory(zip)) return EpubDocument.open(source, epubSettings)
+                XpsDocument.openOrNull(source)?.let { return it }
+                names.firstOrNull { it.lowercase().endsWith(".fb2") }?.let { name ->
+                    zip.read(name)?.let { return EpubDocument.openFb2(it, epubSettings) }
+                }
+                if (isComicDirectory(names)) return CbzDocument.open(source)
+            }
+        } else if (findPdfHeader(head)) {
+            return PdfDocument.open(source, password)
+        }
+        if (CbzDocument.archiveKindOf(head) != null) return CbzDocument.open(source)
+        // A damaged PDF can lose its header, as in [open]; the PDF reader can rebuild it from the source.
+        if (source.size > maxWholeBytes) {
+            return try {
+                PdfDocument.open(source, password)
+            } catch (e: KiteWrongPasswordException) {
+                throw e
+            } catch (e: Exception) {
+                throw KiteFormatException(
+                    "not a readable PDF, EPUB, CBZ or XPS (${source.size} bytes, starting ${headerPreview(head)}), " +
+                        "and over $maxWholeBytes bytes, the most that a format read whole may take"
+                )
+            }
+        }
+        return open(readRange(source, 0, source.size.toInt()), password, epubSettings)
+    }
+
+    /** [open] from a [KiteByteSource], but null instead of an exception on anything unreadable. */
+    public fun openOrNull(
+        source: KiteByteSource,
+        password: String = "",
+        epubSettings: EpubSettings = EpubSettings(),
+    ): KiteDocument? = try {
+        open(source, password, epubSettings)
+    } catch (_: Exception) {
+        null
+    }
+
+    /** The bytes the sniffing of a source reads: the PDF header window and the OCF `mimetype` entry. */
+    private const val HEAD_BYTES = 4096
+
+    /** [length] bytes of [source] from [start], or fewer where it ends or fails. */
+    private fun readRange(source: KiteByteSource, start: Long, length: Int): ByteArray {
+        val out = ByteArray(length)
+        var got = 0
+        while (got < length) {
+            val n = try { source.read(start + got, out, got, length - got) } catch (_: Exception) { -1 }
+            if (n <= 0) break
+            got += n
+        }
+        return if (got == length) out else out.copyOf(got)
+    }
+
     /** [open], but null instead of an exception on anything unreadable. */
     public fun openOrNull(
         bytes: ByteArray,
@@ -231,28 +309,37 @@ public object KiteDoc {
     private const val EPUB_MIMETYPE = "application/epub+zip"
 
     private fun looksLikeEpub(bytes: ByteArray): Boolean {
-        // Conformant OCF: "mimetype" is the first entry, stored, so its content
-        // sits at a fixed offset behind the local file header. Cheapest check.
-        if (readAscii(bytes, 30, 8) == "mimetype") {
-            val nameLen = readU16(bytes, 26)
-            val extraLen = readU16(bytes, 28)
-            if (readAscii(bytes, 30 + nameLen + extraLen, EPUB_MIMETYPE.length) == EPUB_MIMETYPE) return true
-        }
+        if (looksLikeEpubHead(bytes)) return true
         // Books that ordered the archive wrong still have to carry the OCF
         // container, so fall back to the central directory.
-        return runCatching {
-            val zip = ZipReader(bytes)
-            "META-INF/container.xml" in zip.names &&
-                (zip.readText("mimetype")?.trim() == EPUB_MIMETYPE || zip.names.any { it.endsWith(".opf") })
-        }.getOrDefault(false)
+        return runCatching { isEpubDirectory(ZipReader(bytes)) }.getOrDefault(false)
     }
+
+    /**
+     * Conformant OCF: "mimetype" is the first entry, stored, so its content sits at a fixed offset
+     * behind the local file header. Cheapest check, and it reads only the start of the file.
+     */
+    private fun looksLikeEpubHead(bytes: ByteArray): Boolean {
+        if (readAscii(bytes, 30, 8) != "mimetype") return false
+        val nameLen = readU16(bytes, 26)
+        val extraLen = readU16(bytes, 28)
+        return readAscii(bytes, 30 + nameLen + extraLen, EPUB_MIMETYPE.length) == EPUB_MIMETYPE
+    }
+
+    /** An archive that carries the OCF container and a package file or the EPUB `mimetype`. */
+    private fun isEpubDirectory(zip: ZipReader): Boolean = runCatching {
+        "META-INF/container.xml" in zip.names &&
+            (zip.readText("mimetype")?.trim() == EPUB_MIMETYPE || zip.names.any { it.endsWith(".opf") })
+    }.getOrDefault(false)
 
     /** The page extensions of `CbzDocument`, which keeps the same set (#755). */
     private val cbzImageExtensions = setOf("jpg", "jpeg", "jfif", "png", "gif", "bmp", "webp", "tif", "tiff", "avif", "jxl")
 
     /** Every real entry is an image: the strict CBZ definition, so a photo backup stays unrecognized. */
-    private fun looksLikeCbz(bytes: ByteArray): Boolean = runCatching {
-        val names = ZipReader(bytes).names.filterNot { name ->
+    private fun looksLikeCbz(bytes: ByteArray): Boolean = runCatching { isComicDirectory(ZipReader(bytes).names) }.getOrDefault(false)
+
+    private fun isComicDirectory(entries: Collection<String>): Boolean = runCatching {
+        val names = entries.filterNot { name ->
             val base = name.substringAfterLast('/')
             name.endsWith("/") || base.startsWith(".") ||
                 base.equals("Thumbs.db", ignoreCase = true) ||

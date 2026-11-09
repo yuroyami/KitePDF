@@ -6,15 +6,19 @@ public final class io/github/yuroyami/kitepdf/bundle/KitePDFBundle {
 public final class io/github/yuroyami/kitepdf/document/KiteDoc {
 	public static final field INSTANCE Lio/github/yuroyami/kitepdf/document/KiteDoc;
 	public final fun formatOf ([B)Lio/github/yuroyami/kitepdf/document/KiteDocFormat;
+	public final fun open (Lio/github/yuroyami/kitepdf/core/KiteByteSource;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;I)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public final fun open ([BLio/github/yuroyami/kitepdf/document/KiteDocFormat;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public final fun open ([BLjava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
+	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;Lio/github/yuroyami/kitepdf/core/KiteByteSource;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;IILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;[BLio/github/yuroyami/kitepdf/document/KiteDocFormat;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public static synthetic fun open$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;[BLjava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public final fun openBase64 (Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public static synthetic fun openBase64$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public final fun openBase64OrNull (Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public static synthetic fun openBase64OrNull$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;Ljava/lang/String;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
+	public final fun openOrNull (Lio/github/yuroyami/kitepdf/core/KiteByteSource;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public final fun openOrNull ([BLjava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
+	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;Lio/github/yuroyami/kitepdf/core/KiteByteSource;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 	public static synthetic fun openOrNull$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;[BLjava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/KiteDocument;
 }
 
