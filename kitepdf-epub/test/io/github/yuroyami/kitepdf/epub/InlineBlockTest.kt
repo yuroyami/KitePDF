@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
+import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.epub.css.CssParser
 import io.github.yuroyami.kitepdf.epub.css.Origin
 import io.github.yuroyami.kitepdf.epub.css.StyleResolver
@@ -174,9 +176,95 @@ class InlineBlockTest {
         assertEquals("a b c d e", text)
     }
 
+    private fun BlockBox.textLines(): List<PositionedLine> = children.flatMap { c ->
+        when (c) {
+            is TextBlockBox -> c.lines
+            is BlockBox -> c.textLines()
+            else -> emptyList()
+        }
+    }
+
     @Test
-    fun an_inline_block_with_a_block_inside_keeps_the_inline_layout() {
-        val all = lines("""<p>a <span style="display:inline-block"><span style="display:block">b</span></span> c</p>""")
-        assertTrue(all.all { line -> line.runs.none { it.box != null } }, "no box for an inline-block that holds a block")
+    fun an_inline_block_that_holds_blocks_is_one_cell_of_its_line() {
+        // CSS 2.1, 9.2.4 and 10.8.1: two block lines of 16.8 inside a 1pt border make a box 35.6
+        // tall, whose baseline is its last line's, 1 + 16.8 + 12 = 29.8 under its top.
+        val html = """<p>a <span style="display:inline-block;border:1pt solid red"><span style="display:block">b</span>""" +
+            """<span style="display:block">c</span></span> d</p>"""
+        val line = lines(html).single { it.blocks.isNotEmpty() }
+        val box = line.blocks.single()
+        assertEquals(35.6, box.borderBoxHeight, 1e-6)
+        assertEquals(29.8, line.ascent, 1e-6, "the box reaches 29.8 over the baseline")
+        assertEquals(35.6, line.height, 1e-6, "and 5.8 under it, more than the text's 4.8")
+        assertEquals(line.yTop, box.y, 1e-6, "so its top is the line's top")
+        val inner = box.textLines()
+        assertEquals(listOf("b", "c"), inner.map { it.text() })
+        assertEquals(line.yTop + line.ascent, inner.last().yTop + inner.last().ascent, 1e-6, "its last line sits on the line's baseline")
+        // Shrink-to-fit (10.3.9 and 10.3.5): as wide as its widest line and its border, not the line's 300.
+        val widest = inner.maxOf { l -> l.runs.sumOf { it.paintWidth } }
+        assertEquals(widest + 2.0, box.borderBoxWidth, 0.05)
+        val a = line.run("a")
+        val d = line.run("d")
+        assertTrue(box.x > a.x + a.paintWidth && d.x > box.x + box.borderBoxWidth, "a, the box and d in a row: ${a.x}, ${box.x}, ${d.x}")
+        assertEquals(1, lines(html).size, "one line of the paragraph holds them all")
+    }
+
+    @Test
+    fun an_inline_block_that_holds_blocks_takes_its_width_and_aligns() {
+        // A width of 50% of the 200pt div, and a box that clips its overflow has its bottom margin
+        // edge as its baseline (CSS 2.1, 10.8.1): 20 of height and 2 of margin over the baseline.
+        val line = lines(
+            """<div style="width:200pt"><p>a <span style="display:inline-block;width:50%;height:20pt;overflow:hidden;margin-bottom:2pt">""" +
+                """<span style="display:block">b</span></span> c</p></div>""",
+        ).single { it.blocks.isNotEmpty() }
+        val box = line.blocks.single()
+        assertEquals(100.0, box.borderBoxWidth, 1e-6)
+        assertEquals(22.0, line.ascent, 1e-6)
+        assertEquals(line.yTop + line.ascent - 2.0, box.y + box.borderBoxHeight, 1e-6, "its margin box ends on the baseline")
+        // vertical-align: top puts its top at the line's top, and the line's text keeps its baseline.
+        val top = lines(
+            """<p>a <span style="display:inline-block;vertical-align:top"><span style="display:block">b</span><span style="display:block">c</span></span></p>""",
+        ).single { it.blocks.isNotEmpty() }
+        assertEquals(12.0, top.ascent, 1e-6)
+        assertEquals(33.6, top.height, 1e-6)
+        assertEquals(top.yTop, top.blocks.single().y, 1e-6)
+    }
+
+    @Test
+    fun an_inline_block_taller_than_a_page_breaks_between_its_lines() {
+        // 60 lines of 16.8 do not fit a page 640 tall with margins of 36, so the box's lines go
+        // on as many pages as they need, and none of them lands outside its page.
+        val words = (0 until 60).map { "w$it" }
+        val doc = EpubDocument.open(EpubFixtures.epub(
+            """<body><p>a <span style="display:inline-block">""" + words.joinToString("") { """<span style="display:block">$it</span>""" } +
+                """</span> z</p></body>""",
+        ))
+        assertTrue(doc.pages.size > 1, "the box takes more than a page")
+        val read = doc.pages.flatMap { page ->
+            val text = page.textContent()
+            for (block in text.blocks) for (line in block.lines) if (line.text.startsWith("w")) {
+                assertTrue(line.bounds.bottom >= -1e-6 && line.bounds.top <= 640.0 + 1e-6, "'${line.text}' is outside its page: ${line.bounds}")
+            }
+            text.plainText.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        }
+        // "a" and "z" sit on the box's baseline, its last line, so they read on the last page,
+        // around the box's lines there.
+        assertEquals(words, read.filter { it.startsWith("w") }, "the box's lines read in order, each once")
+        assertEquals(62, read.size)
+        assertEquals("z", read.last())
+        assertTrue(read[read.indexOf("a") + 1].startsWith("w"), "a reads before the box's lines on its page: $read")
+    }
+
+    @Test
+    fun the_text_of_an_inline_block_that_holds_blocks_reads_where_it_stands() {
+        val doc = EpubDocument.open(EpubFixtures.epub(
+            """<body><p>a <span style="display:inline-block;border:1pt solid red"><span style="display:block">b</span>""" +
+                """<span style="display:block">c</span></span> d</p><p>e</p></body>""",
+        ))
+        val page = doc.pages[0]
+        assertEquals("a b c d e", page.textContent().plainText.replace(Regex("\\s+"), " ").trim())
+        val calls = RecordingCanvas().also { page.renderTo(it) }.calls
+        val drawn = calls.filterIsInstance<RecordingCanvas.Call.Glyphs>().map { it.text }
+        for (word in listOf("a", "b", "c", "d")) assertEquals(1, drawn.count { it.trim() == word }, "$word draws once: $drawn")
+        assertTrue(calls.filterIsInstance<RecordingCanvas.Call.Fill>().any { it.color == RgbColor(1.0, 0.0, 0.0) }, "the box's border paints")
     }
 }

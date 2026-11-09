@@ -1058,6 +1058,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Its margin box is its height in the line, so vertical padding, border, margins and `height` make the line
   taller, and `vertical-align: baseline`, `super`, `sub`, `top`, `middle` and `bottom` move the box with its text
   (CSS 2.1, 10.8; #840).
+- An inline-block that holds a block or a line break is a block formatting context of its own, placed as one cell
+  of its line: shrink-to-fit or its width, as tall as its content, its baseline on its last line, its background and
+  border painted around its content. Its text reads where it stands in the line. One taller than a page breaks
+  between its lines. Before, its blocks were lifted out of the line and it laid out as inline text (#840).
 - The differential sweep scores the mean error of the worst 24-pixel tile of each page too, so a page that loses
   or gains a small shape of any colour fails: a pale 40-pixel square that vanished from a Letter page moved the
   page scores by less than their margins and scores 0.15 in its tile (#775).

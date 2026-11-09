@@ -126,7 +126,7 @@ internal object Paginator {
         // In tree order, each unit with the blocks around it, so a break on any of them applies:
         // before the first unit of a block and after its last one.
         val ordered = ArrayList<Unit_>()
-        gatherUnits(root, emptyList(), ordered)
+        gatherUnits(root, emptyList(), ordered, pageContentHeight)
         val firstOf = HashMap<LayoutBox, Unit_>()
         val lastOf = HashMap<LayoutBox, Unit_>()
         for (u in ordered) for (b in u.chain) {
@@ -187,10 +187,16 @@ internal object Paginator {
         return starts.indices.map { p ->
             val start = starts[p]; val end = start + pageContentHeight
             val us = buckets[p]
+            val pageLines = ArrayList<PositionedLine>()
+            val pageImages = ArrayList<ImageBox>()
+            for (u in us) {
+                u.line?.let { if (u.holdsInner) withInner(it, pageLines, pageImages) else pageLines.add(it) }
+                u.image?.let(pageImages::add)
+            }
             PageRender(
                 startY = start,
-                lines = us.mapNotNull { it.line },
-                images = us.mapNotNull { it.image },
+                lines = pageLines,
+                images = pageImages,
                 decoBoxes = deco.filter { it.y < end && it.bottom > start },
                 pageWidth = pageWidth, pageHeight = pageHeight, margin = margin,
                 vertical = vertical,
@@ -204,6 +210,24 @@ internal object Paginator {
                 hitBoxes = hitBoxes?.filter { it.y < end && it.bottom > start }.orEmpty(),
             )
         }
+    }
+
+    /**
+     * [line], then the lines and block images of the inline-blocks on it that hold blocks, which
+     * are part of the line's unit and land on its page (#840).
+     */
+    private fun withInner(line: PositionedLine, lines: MutableList<PositionedLine>, images: MutableList<ImageBox>) {
+        lines.add(line)
+        fun inner(box: LayoutBox) {
+            when (box) {
+                is BlockBox -> for (c in box.children) inner(c)
+                is TableBox -> for (r in box.rows) for (cell in r.cells) inner(cell)
+                is TableRowBox -> {}
+                is TextBlockBox -> for (l in box.lines) withInner(l, lines, images)
+                is ImageBox -> images.add(box)
+            }
+        }
+        for (b in line.blocks) inner(b)
     }
 
     /** How many trailing units of [u]'s block to push to the next page (widows/orphans/avoid). */
@@ -253,22 +277,37 @@ internal object Paginator {
 
         /** This unit starts page-tall columns, so its page starts at its top (#34). */
         var columnStart = false
+
+        /** The unit's line takes the inline-blocks on it to its page; false when they are units of their own (#840). */
+        var holdsInner = true
     }
 
-    /** The lines and images under [box], in tree order, each with the boxes around it. */
-    private fun gatherUnits(box: LayoutBox, around: List<LayoutBox>, out: MutableList<Unit_>) {
+    /**
+     * The lines and images under [box], in tree order, each with the boxes around it. A line and
+     * the inline-blocks on it that hold blocks are one unit (#840). A line taller than
+     * [pageHeight] would lose what does not fit its page, so then the lines of its inline-blocks
+     * are units of their own, and its own unit is the band of its own text around its baseline.
+     */
+    private fun gatherUnits(box: LayoutBox, around: List<LayoutBox>, out: MutableList<Unit_>, pageHeight: Double = Double.MAX_VALUE) {
         val chain = around + box
         when (box) {
             is BlockBox -> {
                 // An HTML object's document shows over its whole box, so the box is one unit, as
                 // an image is, and its fallback stays on the page it starts (#41).
                 if (box.embed != null) out.add(Unit_(box.y, box.bottom, null, null, box, 0, 1, chain))
-                for (c in box.children) gatherUnits(c, chain, out)
+                for (c in box.children) gatherUnits(c, chain, out, pageHeight)
             }
-            is TableBox -> for (r in box.rows) for (cell in r.cells) gatherUnits(cell, chain + r, out)
+            is TableBox -> for (r in box.rows) for (cell in r.cells) gatherUnits(cell, chain + r, out, pageHeight)
             is TableRowBox -> {}
             is TextBlockBox -> for (l in box.lines) l.owner?.let { o ->
-                out.add(Unit_(l.yTop, l.yTop + l.height, l, null, o, l.ownerIndex, o.lines.size, chain))
+                if (l.blocks.isEmpty() || l.height <= pageHeight) {
+                    out.add(Unit_(l.yTop, l.yTop + l.height, l, null, o, l.ownerIndex, o.lines.size, chain))
+                    return@let
+                }
+                val baseline = l.yTop + l.ascent
+                val size = l.runs.filter { it.glyphs.isNotEmpty() }.maxOfOrNull { it.fontSize } ?: 0.0
+                out.add(Unit_(baseline - size, baseline + size * 0.25, l, null, o, l.ownerIndex, o.lines.size, chain).also { it.holdsInner = false })
+                for (b in l.blocks) gatherUnits(b, chain, out, pageHeight)
             }
             is ImageBox -> out.add(Unit_(box.y, box.bottom, null, box, box, 0, 1, chain))
         }
@@ -295,7 +334,11 @@ internal object Paginator {
                 for (r in box.rows) { if (decorated(r.style)) deco.add(r); for (cell in r.cells) collect(cell, lines, images, deco, links, embeds, effects, hits) }
             }
             is TableRowBox -> {}
-            is TextBlockBox -> lines.addAll(box.lines)
+            is TextBlockBox -> for (line in box.lines) {
+                lines.add(line)
+                // An inline-block that holds blocks paints and reads right after its line (#840).
+                for (b in line.blocks) collect(b, lines, images, deco, links, embeds, effects, hits)
+            }
             // An image paints its own background and border (CSS 2.1, 14.2, #101).
             is ImageBox -> { if (decorated(box.style)) deco.add(box); images.add(box) }
         }
@@ -347,7 +390,11 @@ internal object Paginator {
             for (c in negative.sortedBy { it.style.zIndex }) group(c)
             for (b in blocks) b.decoRank = rank++
             for (f in floats) group(f)
-            for (item in flow) if (item is PositionedLine) item.paintRank = rank++ else (item as ImageBox).contentRank = rank++
+            for (item in flow) if (item is PositionedLine) {
+                item.paintRank = rank++
+                // An inline-block paints as a whole where its line does, as if it were a stacking context (Appendix E; #840).
+                for (b in item.blocks) group(b)
+            } else (item as ImageBox).contentRank = rank++
             for (c in zero) group(c)
             for (c in positive.sortedBy { it.style.zIndex }) group(c)
             box.lastRank = rank - 1

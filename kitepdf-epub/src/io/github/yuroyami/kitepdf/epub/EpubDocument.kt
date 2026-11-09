@@ -34,6 +34,7 @@ import io.github.yuroyami.kitepdf.epub.css.transformMatrix
 import io.github.yuroyami.kitepdf.core.KiteBookmark
 import io.github.yuroyami.kitepdf.core.KiteDocument
 import io.github.yuroyami.kitepdf.core.KiteLocation
+import io.github.yuroyami.kitepdf.core.KiteLineEnd
 import io.github.yuroyami.kitepdf.core.KiteRole
 import io.github.yuroyami.kitepdf.core.KiteReadingItem
 import io.github.yuroyami.kitepdf.core.KiteLock
@@ -1775,6 +1776,8 @@ public class EpubDocument internal constructor(
             }
             is TableBox -> for (r in box.rows) for (cell in r.cells) collectAnchors(cell, sink)
             is ImageBox -> for (id in box.anchors) sink(id, box.y)
+            // An inline-block that holds blocks keeps its ids in its own boxes (#840).
+            is TextBlockBox -> for (line in box.lines) for (b in line.blocks) collectAnchors(b, sink)
             else -> {}
         }
     }
@@ -3795,12 +3798,42 @@ public class EpubPage internal constructor(
         }
         // Where each line starts in the chapter's text, for the offsets of its chars (#944). A frame's page has none.
         var at = if (frame == null) doc.pageSourceStart(chapter, index) else -1
+        val starts = HashMap<PositionedLine, Int>()
         for (line in page.lines) {
-            if (line.owner !== curOwner) { flush(); curOwner = line.owner }
-            val lineAt = at
+            starts[line] = at
             if (at >= 0) at += line.sourceLength
-            extractLine(page, line, sourceAt = lineAt)?.let { curLines += movedLine(it, displayTransformAt(page, line.paintRank)) }
         }
+        fun add(owner: TextBlockBox?, text: KiteTextLine?, line: PositionedLine) {
+            if (text == null) return
+            if (owner !== curOwner) { flush(); curOwner = owner }
+            curLines += movedLine(text, displayTransformAt(page, line.paintRank))
+        }
+        // The lines of an inline-block that holds blocks read where it stands in its line, between
+        // the text before it and the text after it (#840).
+        val inner = HashSet<PositionedLine>()
+        fun linesOf(box: LayoutBox, out: MutableList<PositionedLine>) {
+            when (box) {
+                is BlockBox -> for (c in box.children) linesOf(c, out)
+                is TableBox -> for (r in box.rows) for (cell in r.cells) linesOf(cell, out)
+                is TextBlockBox -> out.addAll(box.lines)
+                else -> {}
+            }
+        }
+        for (line in page.lines) for (b in line.blocks) { val out = ArrayList<PositionedLine>(); linesOf(b, out); inner.addAll(out) }
+        fun read(line: PositionedLine) {
+            val lineAt = starts[line] ?: -1
+            if (line.blocks.isEmpty()) { add(line.owner, extractLine(page, line, sourceAt = lineAt), line); return }
+            var from = Double.NEGATIVE_INFINITY
+            for (b in line.blocks) {
+                add(line.owner, extractLine(page, line, sourceAt = lineAt, from = from, to = b.x, end = KiteLineEnd.SPACE), line)
+                val own = ArrayList<PositionedLine>()
+                linesOf(b, own)
+                for (l in own) if (l in starts) read(l)
+                from = b.x + b.borderBoxWidth
+            }
+            add(line.owner, extractLine(page, line, sourceAt = lineAt, from = from), line)
+        }
+        for (line in page.lines) if (line !in inner) read(line)
         flush()
         // The text an SVG draws reads where the SVG stands, before the first block below its own (#523).
         for (svg in svgTexts(page)) for (block in svg.text.blocks) {
@@ -3842,14 +3875,19 @@ public class EpubPage internal constructor(
     /**
      * The text of [line] in reading order with the edges of its chars. With [sourceAt], the
      * chapter offset where the line's text starts, each char also gets its offset in the chapter's
-     * text, or -1 for one the layout added (#944).
+     * text, or -1 for one the layout added (#944). [from] and [to] keep the part of the line
+     * between them, which then ends as [end] says, for the text on either side of an inline-block
+     * that holds blocks (#840).
      */
-    private fun extractLine(page: PageRender, line: PositionedLine, only: List<PlacedRun> = line.runs, sourceAt: Int = -1): KiteTextLine? {
+    private fun extractLine(
+        page: PageRender, line: PositionedLine, only: List<PlacedRun> = line.runs, sourceAt: Int = -1,
+        from: Double = Double.NEGATIVE_INFINITY, to: Double = Double.POSITIVE_INFINITY, end: KiteLineEnd = line.end,
+    ): KiteTextLine? {
         val runs = only
-            .filter { !it.isAnnotation && it.glyphs.isNotEmpty() }
+            .filter { !it.isAnnotation && it.glyphs.isNotEmpty() && it.x >= from && it.x < to }
             .sortedBy { it.x }
         // A formula reads as its linear text, spread over its width, where it stands in the line (#32).
-        val maths = if (only === line.runs) line.maths.sortedBy { it.x } else emptyList()
+        val maths = if (only === line.runs) line.maths.filter { it.x >= from && it.x < to }.sortedBy { it.x } else emptyList()
         if (runs.isEmpty() && maths.isEmpty()) return null
         val sb = StringBuilder()
         val edges = ArrayList<Double>()
@@ -3917,7 +3955,7 @@ public class EpubPage internal constructor(
                 ),
                 charEdges = edges.toDoubleArray(),
                 vertical = true,
-                end = line.end,
+                end = end,
                 sourceOffsets = if (sourceAt >= 0) srcs.toIntArray() else null,
             )
         }
@@ -3935,7 +3973,7 @@ public class EpubPage internal constructor(
             // Display-space rect: y-min lives in [KiteRectangle.bottom] (see KiteStructuredText).
             bounds = io.github.yuroyami.kitepdf.core.KiteRectangle(visualEdges.first(), top, visualEdges.last(), top + line.height),
             charEdges = charEdges,
-            end = line.end,
+            end = end,
             sourceOffsets = if (sourceAt < 0) null else if (logical == null) srcs.toIntArray() else IntArray(srcs.size) { srcs[logical.first[it]] },
         )
     }

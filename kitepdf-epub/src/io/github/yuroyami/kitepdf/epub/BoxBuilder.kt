@@ -790,8 +790,8 @@ internal class BoxBuilder(
 
     /**
      * Whether [el] holds anything that is not inline: a block, a table, a list item, a break, or an
-     * inline-block that holds one in turn. Such an inline-block keeps laying out as inline text,
-     * since this builder hoists blocks out of the line (#840).
+     * inline-block that holds one in turn. Since this builder hoists such content out of the line,
+     * such an inline-block lays out as a block of its own on the line instead of as runs (#840).
      */
     private fun hasBlockContent(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>, style: ComputedStyle, depth: Int = 0): Boolean {
         if (depth > 32) return true
@@ -832,13 +832,23 @@ internal class BoxBuilder(
         if (tracksElements) inl.beginElement(el)
         val bidiScope = inl.beginBidi(style)
         inl.beginCombine(style.textCombineUpright)
-        // An inline-block with inline content is one unit of its line, with its own box (#840).
-        val atom = if (style.display == Display.INLINE_BLOCK && style.cssFloat == CssFloat.NONE && !inl.inBox &&
-            !hasBlockContent(el, ancestors, style)
-        ) InlineBox(style) else null
-        val background = inl.beginBackground(if (atom == null) style.backgroundColor else null)
+        // An inline-block is one unit of its line (#840). With inline content it gets a box of its
+        // own around its runs. With a block or a break inside, which this builder would hoist out
+        // of the line, it is a block formatting context of its own that sits on the line as one
+        // cell (CSS 2.1, 9.2.4 and 10.3.9). Vertical text keeps the inline layout for both.
+        val inlineBlock = style.display == Display.INLINE_BLOCK && style.cssFloat == CssFloat.NONE && !inl.inBox
+        val hasBlocks = inlineBlock && hasBlockContent(el, ancestors, style)
+        val blockContent = hasBlocks && el.tag != "ruby" && style.writingMode == WritingMode.HORIZONTAL
+        val atom = if (inlineBlock && !hasBlocks) InlineBox(style) else null
+        val background = inl.beginBackground(if (atom == null && !blockContent) style.backgroundColor else null)
         val outerBox = atom?.let { inl.beginBox(it) }
         try {
+            if (blockContent) {
+                val box = buildBlock(el, style, ancestors, null, BLACK, parentSem = parentSem)
+                if (box.linkHref == null) inl.activeLink?.let { box.linkHref = it }
+                inl.addBlock(box, style)
+                return
+            }
             if (el.tag == "ruby") { processRuby(el, style, ancestors, inl, anchorSink, hoist, parentSem); return }
             // Inline generated content flows with the element's own runs (a
             // block-display pseudo inside an inline element is treated inline).
@@ -1136,6 +1146,15 @@ internal class BoxBuilder(
             }
             pendingSpace = false; lastWasBreak = false; blockHasContent = true; lastCp = 0
             runs.add(makeRun("\uFFFC", style).copy(math = math))
+        }
+
+        /** An inline-block that holds blocks: one U+FFFC run carrying its block formatting context, which the layout places as one cell (#840). */
+        fun addBlock(box: BlockBox, style: ComputedStyle) {
+            if (pendingSpace && blockHasContent && !lastWasBreak) {
+                runs.add(pendingSpaceRun ?: makeRun(" ", style))
+            }
+            pendingSpace = false; lastWasBreak = false; blockHasContent = true; lastCp = 0
+            runs.add(makeRun("￼", style).copy(block = box))
         }
 
         /** An inline `<img>`: one U+FFFC run carrying the source + size hints. */

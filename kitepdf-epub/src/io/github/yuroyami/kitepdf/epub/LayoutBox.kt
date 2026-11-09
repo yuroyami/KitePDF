@@ -263,6 +263,12 @@ internal class PositionedLine(
     val maths: List<PlacedMath> = emptyList(),
     /** Where the line's [sourceLength] characters start in its block's text, in code points (#944). */
     val sourceStart: Int = 0,
+    /**
+     * The inline-blocks on this line that hold blocks, in the line's visual order: each a block
+     * formatting context of its own that the line placed as one cell, whose boxes and lines paint
+     * and read with this line (CSS 2.1, 9.2.4; #840).
+     */
+    val blocks: List<BlockBox> = emptyList(),
 ) {
     /** Owning box + line index, filled after layout, for the paginator's widows/orphans. */
     var owner: TextBlockBox? = null

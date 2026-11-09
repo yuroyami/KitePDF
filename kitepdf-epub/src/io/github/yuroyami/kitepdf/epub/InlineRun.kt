@@ -24,8 +24,8 @@ import io.github.yuroyami.kitepdf.epub.css.within
  * border as one box behind its text. Its margin box is its height in the line, and its
  * `vertical-align` places that box (CSS 2.1, 10.8 and 10.8.1).
  *
- * One object for each element, compared by identity. An inline-block with a block inside it keeps
- * the old layout, as inline text.
+ * One object for each element, compared by identity. An inline-block with a block inside it is an
+ * [InlineRun.block] instead, a block formatting context of its own.
  */
 internal class InlineBox(
     /** The element's computed style, whose width percentages [within] resolves. */
@@ -150,6 +150,8 @@ internal data class InlineRun(
     val ids: List<String> = emptyList(),
     /** A `<math>` element: one U+FFFC run that the layout sets as a formula (#32). */
     val math: MathRoot? = null,
+    /** An inline-block that holds blocks: one U+FFFC run whose block formatting context the layout places as one cell of its line (#840). */
+    val block: BlockBox? = null,
     /**
      * The innermost element this run's text belongs to, in a chapter that scripts run in, so a
      * tap finds the element under it (#41). Null in every other chapter, so runs there split
