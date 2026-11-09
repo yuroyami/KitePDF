@@ -998,6 +998,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On Skia a soft-masked paint outside a layer keeps its blend mode: it paints over a copy of the backdrop, and
   the mask mixes it into the page. A red Multiply paint on blue under an opaque mask is black, and no longer red
   (#764).
+- On the Compose canvas of the page rasterizer a soft-masked paint outside a layer keeps its blend mode, as on
+  Skia and Canvas2D (#764).
 
 ## [0.13.0] - 2026-10-09
 

@@ -774,6 +774,28 @@ public class ComposeCanvas internal constructor(
         // Outside its box the mask is zero, since the renderer passes the page box when the backdrop
         // lets content through. So both layers cover the box, not the whole canvas (#384).
         val bounds = maskBounds(maskBBox, maskCtm)
+        val byPixels = transfer != null && !maskTables && !transfer.isNearlyLinear
+        // ISO 32000-1, 11.6.4.3 and 11.3.5: the mask scales each paint's shape, which still blends
+        // with the real backdrop in its own mode. A rasterizer's canvas outside every layer reads
+        // the pixels under the box, the content paints over that copy, and the mask mixes it in:
+        // backdrop x (1 - m) + content x m, a DstOut of the page by the mask and the masked
+        // content added with Plus (#764). Elsewhere the content layer starts transparent.
+        val backdrop = if (!byPixels && !knockingOut && stepBounds == null && Save.Layer !in saves) readBackdrop(bounds) else null
+        if (backdrop != null) {
+            maskLayer(kind, transfer, bounds, ComposeBlendMode.DstOut, renderMask)
+            composeCanvas.saveLayer(bounds, Paint().apply { blendMode = ComposeBlendMode.Plus })
+            saves.addLast(Save.Layer)
+            groups.addLast(Group(layered = false, knockout = false))
+            try {
+                drawScope.drawImage(backdrop.first, dstOffset = backdrop.second, blendMode = ComposeBlendMode.Src)
+                render()
+                maskLayer(kind, transfer, bounds, ComposeBlendMode.DstIn, renderMask)
+            } finally {
+                groups.removeLastOrNull()
+                restoreThroughLayer()
+            }
+            return
+        }
         // Outer layer: holds the masked content.
         val outerPaint = Paint()
         composeCanvas.saveLayer(bounds, outerPaint)
@@ -782,36 +804,57 @@ public class ComposeCanvas internal constructor(
         groups.addLast(Group(layered = false, knockout = false))
         try {
             render()
-            if (transfer != null && !maskTables && !transfer.isNearlyLinear) {
+            if (byPixels) {
                 // No filter here takes the whole table (Android), and the closest line would
                 // bend the mask, so gate by the mask group's pixels (#445).
-                gateByMaskPixels(kind, transfer, renderMask)
+                gateByMaskPixels(kind, transfer!!, renderMask)
                 return
             }
-            // Inner layer with DstIn: subsequent draws will multiply by the
-            // existing layer's alpha, so the mask keeps only what it covers.
-            // For a Luminosity mask (§11.6.5.2) the mask group composites over
-            // an opaque BLACK backdrop and its LUMINANCE becomes the alpha at the
-            // layer restore, mirroring the Skia backend's LUMA filter. The /TR
-            // function then maps the alpha.
-            val maskPaint = Paint().apply {
-                blendMode = ComposeBlendMode.DstIn
-                (if (maskTables) softMaskFilter(kind, transfer) else softMaskMatrix(kind, transfer))?.let { colorFilter = it }
-            }
-            composeCanvas.saveLayer(bounds, maskPaint)
-            saves.addLast(Save.Layer)
-            try {
-                if (kind.readsColor) {
-                    // Unpainted mask pixels stay black -> luminance 0 -> fully
-                    // masked out, per the spec's black-backdrop rule.
-                    drawScope.drawRect(Color.Black, topLeft = bounds.topLeft, size = bounds.size)
-                }
-                renderMask(this)
-            } finally {
-                restoreThroughLayer()
-            }
+            maskLayer(kind, transfer, bounds, ComposeBlendMode.DstIn, renderMask)
         } finally {
             groups.removeLastOrNull()
+            restoreThroughLayer()
+        }
+    }
+
+    /** The pixels of the rasterizer's bitmap under [box], as a bitmap and where it goes, or null where there is none. */
+    private fun readBackdrop(box: Rect): Pair<ImageBitmap, androidx.compose.ui.unit.IntOffset>? {
+        val bitmap = target ?: return null
+        val left = kotlin.math.floor(maxOf(box.left, 0f)).toInt()
+        val top = kotlin.math.floor(maxOf(box.top, 0f)).toInt()
+        val right = kotlin.math.ceil(minOf(box.right, bitmap.width.toFloat())).toInt()
+        val bottom = kotlin.math.ceil(minOf(box.bottom, bitmap.height.toFloat())).toInt()
+        if (right <= left || bottom <= top) return null
+        val w = right - left
+        val h = bottom - top
+        if (w.toLong() * h * STEP_BYTES_PER_PIXEL > stepMaxBytes()) return null
+        val argb = IntArray(w * h)
+        bitmap.readPixels(argb, left, top, w, h)
+        val copy = ImageDecoder.decodeRaw(rgbaOf(argb), w, h) ?: return null
+        return copy to androidx.compose.ui.unit.IntOffset(left, top)
+    }
+
+    /**
+     * Paints the mask group in a layer that composites in [blend]: DstIn keeps the content only
+     * where the mask covers it, and DstOut takes the mask's share out of the page. For a
+     * Luminosity mask (11.6.5.2) the group composites over an opaque black backdrop, and its
+     * luminance becomes the alpha at the layer's restore, as the Skia backend does. The /TR
+     * function then maps the alpha.
+     */
+    private fun maskLayer(kind: SoftMask.Kind, transfer: KiteMaskTransfer?, bounds: Rect, blend: ComposeBlendMode, renderMask: (KiteCanvas) -> Unit) {
+        val maskPaint = Paint().apply {
+            blendMode = blend
+            (if (maskTables) softMaskFilter(kind, transfer) else softMaskMatrix(kind, transfer))?.let { colorFilter = it }
+        }
+        drawScope.drawContext.canvas.saveLayer(bounds, maskPaint)
+        saves.addLast(Save.Layer)
+        try {
+            if (kind.readsColor) {
+                // Unpainted mask pixels stay black, luminance 0, fully masked out.
+                drawScope.drawRect(Color.Black, topLeft = bounds.topLeft, size = bounds.size)
+            }
+            renderMask(this)
+        } finally {
             restoreThroughLayer()
         }
     }
