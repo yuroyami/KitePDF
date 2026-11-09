@@ -123,6 +123,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         }
         withComposite(blendMode, alpha) {
             g.color = color.toAwt()
+            notePaint(awt)
             g.fill(awt)
         }
     }
@@ -152,12 +153,16 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
             }
             val m = pen.strokeMatrix
             if (m == null) {
+                if (paintBoxOpen) notePaint(g.stroke.createStrokedShape(awt))
                 g.draw(awt)
             } else {
                 // Java2D strokes in user space under the transform, which draws the elliptical pen.
                 val saved = g.transform
                 g.transform(AffineTransform(m.a, m.b, m.c, m.d, m.e, m.f))
-                try { g.draw(awt) } finally { g.transform = saved }
+                try {
+                    if (paintBoxOpen) notePaint(g.stroke.createStrokedShape(awt))
+                    g.draw(awt)
+                } finally { g.transform = saved }
             }
         }
     }
@@ -202,7 +207,9 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
                     val glyphMatrix = if (onPixels) snapGlyph(exact, unitsPerEm) else exact
                     if (!cache || !drawCachedGlyph(outline, glyphMatrix, unitsPerEm, awtColor)) {
-                        g.fill(toAwtPath(outline, glyphMatrix, scratchPath).apply { windingRule = Path2D.WIND_NON_ZERO })
+                        val glyphPath = toAwtPath(outline, glyphMatrix, scratchPath).apply { windingRule = Path2D.WIND_NON_ZERO }
+                        notePaint(glyphPath)
+                        g.fill(glyphPath)
                     }
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
@@ -248,7 +255,10 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         val iy = floor(m.f)
         val key = GlyphKey(outline, m.a, m.d, m.e - ix, m.f - iy, color.rgb)
         val raster = glyphRasters.getOrPut(key) { rasterizeGlyph(outline, KiteMatrix(m.a, 0.0, 0.0, m.d, m.e - ix, m.f - iy), color) }
-        raster.image?.let { g.drawImage(it, ix.toInt() + raster.left, iy.toInt() + raster.top, null) }
+        raster.image?.let {
+            if (paintBoxOpen) notePaint(java.awt.Rectangle(ix.toInt() + raster.left, iy.toInt() + raster.top, it.width, it.height))
+            g.drawImage(it, ix.toInt() + raster.left, iy.toInt() + raster.top, null)
+        }
         return true
     }
 
@@ -360,6 +370,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
                         val t = glyph.text
                         if (t.isNotEmpty() && t != " ") {
                             g.font = displayFont(font, logical, t)
+                            paintBoxUnknown = true
                             g.drawString(t, x.toFloat(), 0f)
                         }
                         x += glyph.advanceWidth * advScale
@@ -382,6 +393,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         try {
             g.translate(part.x, 0.0)
             if (natural > 0f && part.width > 0.0) g.scale(part.width / natural, 1.0)
+            paintBoxUnknown = true
             g.drawString(part.text, 0f, 0f)
         } finally {
             g.transform = saved
@@ -502,8 +514,10 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
                 // Honour Extend=false: paint only inside the gradient's extent.
                 val area = java.awt.geom.Area(region)
                 area.intersect(extent)
+                notePaint(area)
                 g.fill(area)
             } else {
+                notePaint(region)
                 g.fill(region)
             }
         }
@@ -586,6 +600,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
                 scale(1.0 / bitmap.width, -1.0 / bitmap.height)
             }
             withComposite(blendMode, alpha) {
+                if (paintBoxOpen) notePaint(java.awt.geom.Rectangle2D.Double(0.0, 0.0, 1.0, 1.0))
                 g.drawImage(bitmap, drawOp, null)
             }
         } finally {
@@ -647,6 +662,8 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         val savedStroke = g.stroke
         try {
             g.color = Color(0xE0, 0xE0, 0xE0)
+            notePaint(BasicStroke(2f).createStrokedShape(box))
+            notePaint(box)
             g.fill(box)
             g.color = Color(0x88, 0x88, 0x88)
             g.stroke = BasicStroke(1f)
@@ -804,6 +821,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
      * of its paints.
      */
     private fun compositeSoftClip(soft: SoftClip) {
+        paintBoxUnknown = true
         val bounds = soft.bounds
         val width = bounds.width
         val pixels = (soft.layer.raster.dataBuffer as DataBufferInt).data
@@ -890,6 +908,8 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
+        // A layer of its own, which the box of a mask's content cannot bound (#912).
+        if (paintBoxOpen) paintBoxUnknown = true
         val parent = g
         val a = alpha.toFloat().coerceIn(0f, 1f)
         val nested = knockingOut
@@ -1058,14 +1078,26 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         val savedGroups = groupStack.toList()
         val savedBlends = layerBlends
         val blends = LayerBlends()
+        // An outer mask's content now holds a layer this canvas does not bound.
+        val outerBox = paintBox
+        val outerOpen = paintBoxOpen
+        val outerUnknown = paintBoxOpen || paintBoxUnknown
+        val contentBox: java.awt.Rectangle?
         try {
             prepare(layerGraphics)
             g = layerGraphics
             clipStack.clear()
             groupStack.clear()
             layerBlends = blends
+            paintBox = null
+            paintBoxOpen = true
+            paintBoxUnknown = false
             render()
         } finally {
+            contentBox = if (paintBoxUnknown || !boundsMaskContent) null else (paintBox ?: java.awt.Rectangle(0, 0, 0, 0))
+            paintBox = outerBox
+            paintBoxOpen = outerOpen
+            paintBoxUnknown = outerUnknown
             // A clip left open by the content ends onto this layer.
             runCatching { while (clipStack.isNotEmpty()) popClip() }
             g = parent
@@ -1080,7 +1112,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         savedBlends?.merge(blends)
         val layerPixels = (layer.raster.dataBuffer as DataBufferInt).data
         // Only the pixels the content touched need the mask, the blit and the cleanup.
-        val painted = paintedBounds(layerPixels, width, height)
+        val painted = paintedBounds(layerPixels, width, height, contentBox)
         if (painted == null) {
             giveBackMaskBuffer(layer, IntRange.EMPTY)
             return
@@ -1153,6 +1185,8 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
      * resolution, as a soft mask does (#264), and then reads no backdrop.
      */
     override fun rasterStep(region: KiteRectangle, ctm: KiteMatrix, step: KiteRasterStep): Boolean {
+        // A layer of its own, which the box of a mask's content cannot bound (#912).
+        if (paintBoxOpen) paintBoxUnknown = true
         val target = g
         val box = region.normalized()
         val toDevice = AffineTransform(target.transform).apply {
@@ -1281,6 +1315,55 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
     }
 
     /** The bounds of the pixels with any alpha, or null when the content painted nothing. */
+    /**
+     * While a soft mask's content renders, the box in the layer's pixels that its paints can have
+     * touched: each fill, stroke, image and glyph adds the bounds of its device shape, two pixels
+     * wider for anti-aliasing. A paint this canvas cannot bound, a group, a nested mask, a raster
+     * step, a soft clip or system-font text, sets [paintBoxUnknown], and the layer is then read
+     * whole. The scan after the content, the masking loop and the cleanup cover only the box, so a
+     * small paint under a page-sized mask costs a small scan (#912).
+     */
+    private var paintBox: java.awt.Rectangle? = null
+    private var paintBoxOpen = false
+
+    /** False to read every mask layer whole, for a test that compares the two. */
+    internal var boundsMaskContent: Boolean = true
+    private var paintBoxUnknown = false
+
+    /** Adds [shape], in the user space of [g], to [paintBox]. */
+    private fun notePaint(shape: java.awt.Shape) {
+        if (!paintBoxOpen) return
+        val b = g.transform.createTransformedShape(shape).bounds2D
+        if (!(b.minX.isFinite() && b.minY.isFinite() && b.maxX.isFinite() && b.maxY.isFinite())) { paintBoxUnknown = true; return }
+        val r = java.awt.Rectangle(
+            kotlin.math.floor(b.minX).toInt() - 2, kotlin.math.floor(b.minY).toInt() - 2,
+            kotlin.math.ceil(b.width).toInt() + 5, kotlin.math.ceil(b.height).toInt() + 5,
+        )
+        paintBox = paintBox?.union(r) ?: r
+    }
+
+    /** [paintedBounds] over the rows and columns of [box] only, or over all of the layer without one. */
+    private fun paintedBounds(pixels: IntArray, width: Int, height: Int, box: java.awt.Rectangle?): java.awt.Rectangle? {
+        if (box == null) return paintedBounds(pixels, width, height)
+        val x0 = box.x.coerceIn(0, width)
+        val y0 = box.y.coerceIn(0, height)
+        val x1 = (box.x + box.width).coerceIn(0, width)
+        val y1 = (box.y + box.height).coerceIn(0, height)
+        var minY = -1; var maxY = -1; var minX = width; var maxX = -1
+        for (y in y0 until y1) {
+            val row = y * width
+            var first = -1
+            var last = -1
+            for (x in x0 until x1) if (pixels[row + x] ushr 24 != 0) { if (first < 0) first = x; last = x }
+            if (first < 0) continue
+            if (minY < 0) minY = y
+            maxY = y
+            if (first < minX) minX = first
+            if (last > maxX) maxX = last
+        }
+        return if (minY < 0) null else java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1)
+    }
+
     private fun paintedBounds(pixels: IntArray, width: Int, height: Int): java.awt.Rectangle? {
         var minY = -1; var maxY = -1; var minX = width; var maxX = -1
         for (y in 0 until height) {

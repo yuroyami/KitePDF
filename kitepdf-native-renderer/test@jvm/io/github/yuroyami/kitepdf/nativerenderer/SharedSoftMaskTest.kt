@@ -97,4 +97,29 @@ class SharedSoftMaskTest {
         println("raster, 100 squares: one mask $rasterShared ms, a mask each $rasterFresh ms")
         assertTrue(rasterShared * 3 < rasterFresh, "raster: 100 squares under one mask take $rasterShared ms, under a mask each $rasterFresh ms")
     }
+
+    private fun awt(pdf: ByteArray, bounded: Boolean): IntArray {
+        val page = KitePDF.open(pdf).pages[0]
+        val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
+        val g = image.createGraphics()
+        try {
+            g.color = Color.WHITE; g.fillRect(0, 0, size, size)
+            page.renderTo(AwtCanvas(g).apply { boundsMaskContent = bounded }, flip)
+        } finally { g.dispose() }
+        return image.getRGB(0, 0, size, size, null, 0, size)
+    }
+
+    @Test
+    fun awt_reads_only_the_box_a_masked_paint_can_touch() {
+        // AWT scanned its whole content layer, 600 by 600 here, after each small square (#912).
+        val masked = pdf(1600)
+        val whole = awt(masked, bounded = false)
+        val bounded = awt(masked, bounded = true)
+        assertTrue(whole.contentEquals(bounded), "reading the paint's box changed the pixels")
+        val boundedMs = millis(masked) { awt(it, bounded = true) }
+        val wholeMs = millis(masked) { awt(it, bounded = false) }
+        val controlMs = millis(pdf(1600, control = true)) { awt(it, bounded = true) }
+        println("[shared-mask] AWT, 1,600 squares: whole layer $wholeMs ms, the paint's box $boundedMs ms, /ca 0.6 $controlMs ms")
+        assertTrue(boundedMs < wholeMs, "the paint's box took $boundedMs ms, the whole layer $wholeMs ms")
+    }
 }

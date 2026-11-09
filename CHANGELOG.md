@@ -1000,6 +1000,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#764).
 - On the Compose canvas of the page rasterizer a soft-masked paint outside a layer keeps its blend mode, as on
   Skia and Canvas2D (#764).
+- AWT reads only the box that a paint under a soft mask can have touched, not its whole content layer, to find
+  what to mask. 1,600 small squares under one luminosity mask rendered in 187 ms and now in 42 ms, with the same
+  pixels (#912).
 
 ## [0.13.0] - 2026-10-09
 
