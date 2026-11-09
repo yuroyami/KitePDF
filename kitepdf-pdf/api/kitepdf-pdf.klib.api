@@ -387,8 +387,8 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
 
     final fun addAnnotation(io.github.yuroyami.kitepdf/PdfPage, io.github.yuroyami.kitepdf.writer/PdfNewAnnotation): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.addAnnotation|addAnnotation(io.github.yuroyami.kitepdf.PdfPage;io.github.yuroyami.kitepdf.writer.PdfNewAnnotation){}[0]
     final fun addFlateStream(kotlin/ByteArray, kotlin.collections/Map<kotlin/String, io.github.yuroyami.kitepdf.core.parser/PdfObject> = ...): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.addFlateStream|addFlateStream(kotlin.ByteArray;kotlin.collections.Map<kotlin.String,io.github.yuroyami.kitepdf.core.parser.PdfObject>){}[0]
-    final fun addSecurityStore(kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<io.github.yuroyami.kitepdf/PdfSignature> = ...) // io.github.yuroyami.kitepdf.writer/PdfEditor.addSecurityStore|addSecurityStore(kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<io.github.yuroyami.kitepdf.PdfSignature>){}[0]
     final fun addObject(io.github.yuroyami.kitepdf.core.parser/PdfObject): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.addObject|addObject(io.github.yuroyami.kitepdf.core.parser.PdfObject){}[0]
+    final fun addSecurityStore(kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<kotlin/ByteArray> = ..., kotlin.collections/List<io.github.yuroyami.kitepdf/PdfSignature> = ...) // io.github.yuroyami.kitepdf.writer/PdfEditor.addSecurityStore|addSecurityStore(kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<kotlin.ByteArray>;kotlin.collections.List<io.github.yuroyami.kitepdf.PdfSignature>){}[0]
     final fun allocateReference(): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.allocateReference|allocateReference(){}[0]
     final fun appendPage(io.github.yuroyami.kitepdf/PdfDocument, kotlin/Int): io.github.yuroyami.kitepdf.core.parser/PdfReference // io.github.yuroyami.kitepdf.writer/PdfEditor.appendPage|appendPage(io.github.yuroyami.kitepdf.PdfDocument;kotlin.Int){}[0]
     final fun editPageContent(io.github.yuroyami.kitepdf/PdfPage, kotlin/Function1<kotlin.collections/List<io.github.yuroyami.kitepdf.content/Operation>, kotlin.collections/List<io.github.yuroyami.kitepdf.content/Operation>>) // io.github.yuroyami.kitepdf.writer/PdfEditor.editPageContent|editPageContent(io.github.yuroyami.kitepdf.PdfPage;kotlin.Function1<kotlin.collections.List<io.github.yuroyami.kitepdf.content.Operation>,kotlin.collections.List<io.github.yuroyami.kitepdf.content.Operation>>){}[0]
@@ -439,6 +439,7 @@ final class io.github.yuroyami.kitepdf.writer/PdfGlyph { // io.github.yuroyami.k
     final val y // io.github.yuroyami.kitepdf.writer/PdfGlyph.y|{}y[0]
         final fun <get-y>(): kotlin/Double // io.github.yuroyami.kitepdf.writer/PdfGlyph.y.<get-y>|<get-y>(){}[0]
 }
+
 final class io.github.yuroyami.kitepdf.writer/PdfImage { // io.github.yuroyami.kitepdf.writer/PdfImage|null[0]
     final object Companion { // io.github.yuroyami.kitepdf.writer/PdfImage.Companion|null[0]
         final fun gray(kotlin/ByteArray, kotlin/Int, kotlin/Int): io.github.yuroyami.kitepdf.writer/PdfImage // io.github.yuroyami.kitepdf.writer/PdfImage.Companion.gray|gray(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
@@ -1087,8 +1088,8 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
             final fun <get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>(): kotlin/Long // io.github.yuroyami.kitepdf/PdfDocument.Companion.DEFAULT_OPERATION_CACHE_BUDGET_BYTES.<get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>|<get-DEFAULT_OPERATION_CACHE_BUDGET_BYTES>(){}[0]
 
         final fun open(kotlin/ByteArray, kotlin/ByteArray = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.ByteArray;kotlin.Boolean){}[0]
-        final fun open(kotlin/ByteArray, kotlin/String, kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.String;kotlin.Boolean){}[0]
         final fun open(kotlin/ByteArray, kotlin/String, io.github.yuroyami.kitepdf.core/KiteWarningListener?): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.String;io.github.yuroyami.kitepdf.core.KiteWarningListener?){}[0]
+        final fun open(kotlin/ByteArray, kotlin/String, kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument // io.github.yuroyami.kitepdf/PdfDocument.Companion.open|open(kotlin.ByteArray;kotlin.String;kotlin.Boolean){}[0]
         final fun openOrNull(kotlin/ByteArray, kotlin/ByteArray = ..., kotlin/Boolean = ...): io.github.yuroyami.kitepdf/PdfDocument? // io.github.yuroyami.kitepdf/PdfDocument.Companion.openOrNull|openOrNull(kotlin.ByteArray;kotlin.ByteArray;kotlin.Boolean){}[0]
     }
 }
