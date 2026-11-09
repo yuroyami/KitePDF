@@ -159,6 +159,16 @@ image.close()
 val png = EpubPageRasterizer.encodeToPng(bookPage, scale = 2.0, theme = ReaderTheme.Dark)
 ```
 
+### Skia on Linux native
+
+On `linuxX64` and `linuxArm64`, Skia's library draws text with the system's fontconfig and FreeType and needs libGL, and a program must link them itself. Without them, the link of the program fails with undefined symbols such as `FcPatternGetString`. Install their development packages (`libfontconfig-dev`, `libfreetype-dev` and `libgl1` on Debian and Ubuntu) and pass the libraries to the linker, as kitepdf-skia-renderer's own tests do:
+
+```yaml
+settings@linuxX64:
+  kotlin:
+    freeCompilerArgs: [ -linker-option, -L/usr/lib/x86_64-linux-gnu, -linker-option, -lfontconfig, -linker-option, -lfreetype, -linker-option, -l:libGL.so.1 ]
+```
+
 ### Skia on the web
 
 On JS and Wasm, the API is the same. Skia adds its WebAssembly module, `skiko.wasm`, to your app: about 9 MB before compression. When a small download matters more than the same output on every platform, use [Canvas2D](#web-canvas2d).
