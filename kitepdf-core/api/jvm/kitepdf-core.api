@@ -899,6 +899,7 @@ public final class io/github/yuroyami/kitepdf/core/font/OpenTypeLanguage {
 
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeMarks {
 	public static final field Companion Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Companion;
+	public final fun isMark (I)Z
 	public final fun ligatureOffset (IIILio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;)Lkotlin/Pair;
 	public static synthetic fun ligatureOffset$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypeMarks;IIILio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;ILjava/lang/Object;)Lkotlin/Pair;
 	public final fun offset (IILio/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan;)Lkotlin/Pair;
@@ -914,6 +915,29 @@ public final class io/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Companion 
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/OpenTypeMarks$Plan {
+}
+
+public final class io/github/yuroyami/kitepdf/core/font/OpenTypePositioning {
+	public static final field Companion Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Companion;
+	public final fun moves (Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Plan;)Z
+	public final fun plan (Ljava/lang/String;Ljava/lang/String;)Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Plan;
+	public final fun position ([I[IZLio/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Plan;)Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Placement;
+	public static synthetic fun position$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning;[I[IZLio/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Plan;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Placement;
+}
+
+public final class io/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Companion {
+	public final fun from ([B[B)Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning;
+	public static synthetic fun from$default (Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Companion;[B[BILjava/lang/Object;)Lio/github/yuroyami/kitepdf/core/font/OpenTypePositioning;
+}
+
+public final class io/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Placement {
+	public fun <init> ([I[I[I)V
+	public final fun getXAdvance ()[I
+	public final fun getXOffset ()[I
+	public final fun getYOffset ()[I
+}
+
+public final class io/github/yuroyami/kitepdf/core/font/OpenTypePositioning$Plan {
 }
 
 public final class io/github/yuroyami/kitepdf/core/font/PdfFont {

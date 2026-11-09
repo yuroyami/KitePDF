@@ -1006,6 +1006,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PdfEditor.saveLinearized() writes a linearized file (ISO 32000-1, Annex F), with the first page section, its
   own cross-reference table and the page offset, shared object and outline hint tables, that qpdf --check-
   linearization passes (#907).
+- The EPUB layout applies GPOS single adjustment, contextual and chained contextual positioning and cursive
+  attachment (lookup types 1, 3, 7 and 8), so an Urdu Nastaliq word rises on its slope where HarfBuzz puts it. A
+  mark that nothing attaches no longer becomes the base of the marks after it, and a mark on a ligature goes on
+  the component it was typed after (#877).
 
 ## [0.13.0] - 2026-10-09
 

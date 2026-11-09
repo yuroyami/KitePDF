@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.core.font.CffFont
 import io.github.yuroyami.kitepdf.core.font.OpenTypeGsub
 import io.github.yuroyami.kitepdf.core.font.OpenTypeKern
 import io.github.yuroyami.kitepdf.core.font.OpenTypeMarks
+import io.github.yuroyami.kitepdf.core.font.OpenTypePositioning
 import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
 import io.github.yuroyami.kitepdf.core.render.KitePath
 
@@ -28,6 +29,8 @@ internal class FontProgram(
     val kern: OpenTypeKern? = null,
     val gsub: OpenTypeGsub? = null,
     val marks: OpenTypeMarks? = null,
+    /** Single, cursive and contextual positioning, which joins a Nastaliq word on its slope (#877). */
+    val positioning: OpenTypePositioning? = null,
 ) {
     companion object {
         /**
@@ -53,6 +56,7 @@ internal class FontProgram(
                 kern = OpenTypeKern.from(ttf.rawTable("kern"), gpos),
                 gsub = OpenTypeGsub.from(ttf.rawTable("GSUB"), ttf.rawTable("GDEF")),
                 marks = OpenTypeMarks.from(gpos, ttf.rawTable("GDEF")),
+                positioning = OpenTypePositioning.from(gpos, ttf.rawTable("GDEF")),
             )
         }
     }
@@ -104,6 +108,9 @@ internal class EmbeddedFace(
     /** Raw advance of [gid] in font design units (unitsPerEm), for mark math. */
     fun advanceRaw(gid: Int): Int = ttf.advanceWidth(gid)
 
+    /** Whether GDEF classes [gid] as a mark, which a later mark looks back past for its base (#877). */
+    fun isMark(gid: Int): Boolean = marks?.isMark(gid) == true
+
     /** GPOS mark-to-base attachment offset (font units) placing [mark] on [base], or null. */
     fun markOffset(base: Int, mark: Int, plan: OpenTypeMarks.Plan? = null): Pair<Double, Double>? = marks?.offset(base, mark, plan)
 
@@ -119,6 +126,14 @@ internal class EmbeddedFace(
     /** GPOS mark-to-ligature offset placing [mark] on [component] of [lig], or null. */
     fun markLigatureOffset(lig: Int, mark: Int, component: Int, plan: OpenTypeMarks.Plan? = null): Pair<Double, Double>? =
         marks?.ligatureOffset(lig, mark, component, plan)
+
+    /** The single, cursive and contextual positioning lookups that a text of [script] and [language] takes, or null for a face with none (#877). */
+    fun positioningPlan(script: String?, language: String?): OpenTypePositioning.Plan? =
+        program.positioning?.plan(script, language)?.takeIf { program.positioning?.moves(it) == true }
+
+    /** Where those lookups put the glyphs [gids] of one run in logical order, in font units, or null for a face without them. */
+    fun place(gids: IntArray, rightToLeft: Boolean, plan: OpenTypePositioning.Plan): OpenTypePositioning.Placement? =
+        program.positioning?.position(gids, IntArray(gids.size) { advanceRaw(gids[it]) }, rightToLeft, plan)
 
     /** True when the font has Arabic contextual-joining GSUB features. */
     val hasArabicJoining: Boolean get() = gsub?.hasArabicJoining == true

@@ -29,7 +29,15 @@ public class OpenTypeMarks private constructor(
     private val features: List<Pair<String, IntArray>>,
     private val markAttach: Map<Int, Int>?,
     private val markSets: List<Set<Int>>,
+    private val glyphClass: Map<Int, Int> = emptyMap(),
 ) {
+    /**
+     * Whether GDEF classes [gid] as a mark (class 3). A mark-to-base lookup looks back past every
+     * mark for its base, as HarfBuzz's `MarkBasePos` does, so a mark that nothing attaches is
+     * not the base of the marks after it (#877).
+     */
+    public fun isMark(gid: Int): Boolean = glyphClass[gid] == 3
+
     /** The lookups that a text of one script and language takes, in lookup list order. */
     public class Plan internal constructor(internal val lookups: List<Int>)
 
@@ -117,7 +125,8 @@ public class OpenTypeMarks private constructor(
             if (lookups.none { it.toBase.isNotEmpty() || it.toLigature.isNotEmpty() }) return null
             val (scripts, features) = runCatching { layout(gpos) }.getOrDefault(emptyMap<String, ScriptRecord>() to emptyList())
             val (attach, sets) = gdef?.let { runCatching { parseGdef(it) }.getOrNull() } ?: (null to emptyList())
-            return OpenTypeMarks(lookups, scripts, features, attach, sets)
+            val classes = gdef?.let { runCatching { parseGlyphClasses(it) }.getOrNull() }.orEmpty()
+            return OpenTypeMarks(lookups, scripts, features, attach, sets, classes)
         }
 
         /** The ScriptList and the FeatureList of [b], a GPOS table. */
@@ -156,6 +165,14 @@ public class OpenTypeMarks private constructor(
                 }
             }
             return scripts to features
+        }
+
+        /** The glyph classes of a GDEF table: 1 base, 2 ligature, 3 mark, 4 component. */
+        private fun parseGlyphClasses(b: ByteArray): Map<Int, Int> {
+            val r = R(b)
+            r.seek(4)
+            val off = r.u16()
+            return if (off != 0) readClassDef(b, off) else emptyMap()
         }
 
         /** The mark attachment classes and the mark glyph sets of a GDEF table. */

@@ -2245,6 +2245,8 @@ internal class BoxLayout(
         val mathText: String = "",
         // How many glyphs a ligature cell replaced; 1 for everything else.
         var ligComponents: Int = 1,
+        // For a mark that a ligature passed over, the component it goes on, from 1, as HarfBuzz's lig_comp counts (#877).
+        var ligComponent: Int = 0,
         // The text of a cell that stands for several characters, such as a ligature; null means [cp].
         var text: String? = null,
         // A hidden default ignorable, such as a ZWJ: it draws nothing and takes no advance.
@@ -2367,8 +2369,9 @@ internal class BoxLayout(
                 // Letters stood upright one per em neither join nor kern (#508).
                 val stacked = word.any { uprightOnlyByStyle(it.cp, it.orientation) }
                 val ligated = !stacked && shapeWord(word) // GSUB: joining forms, ligatures, contextual substitutions
-                positionMarks(word, wordLang)   // GPOS mark-to-base attachment
+                val attachments = positionMarks(word, wordLang)   // GPOS mark-to-base attachment
                 if (!stacked) kernWord(word)
+                if (!stacked) placeWord(word, wordLang, attachments) // GPOS single, cursive and contextual positioning (#877)
                 // Skip hyphenation when a ligature collapsed cells (soft-hyphen indices
                 // + the reconstructed word text would no longer line up), and for ruby
                 // bases (a hyphen inside a ruby-annotated base is never wanted).
@@ -2772,7 +2775,7 @@ internal class BoxLayout(
                     lineThrough = base.lineThrough, overline = base.overline, emphasis = base.emphasis, backgroundColor = base.backgroundColor, level = base.level,
                     src = base.src, orientation = base.orientation,
                 ).also {
-                    it.ligComponents = g.components; it.text = text
+                    it.ligComponents = g.components; it.ligComponent = g.component; it.text = text
                     if (g.shaperData and TextShaper.INVISIBLE != 0) { it.invisible = true; it.width = 0.0 }
                 },
             )
@@ -2798,7 +2801,9 @@ internal class BoxLayout(
      * base and the pen there has not passed the base. Its offset then counts back
      * from the base origin over the marks between them, not over the base (#622).
      */
-    private fun positionMarks(cells: List<Cell>, language: String? = null) {
+    private fun positionMarks(cells: List<Cell>, language: String? = null): List<Pair<Cell, Cell>> {
+        // Each mark placed, with the base it went on.
+        val out = ArrayList<Pair<Cell, Cell>>()
         var base: Cell? = null
         var baseAdvance = 0.0 // font units of the base's own advance
         var advSinceBase = 0.0 // font units from the base origin to the current pen
@@ -2818,7 +2823,11 @@ internal class BoxLayout(
                 val stack = if (attached.isEmpty()) null else
                     face.markStack(IntArray(attached.size) { attached[attached.size - 1 - it].first.gid }, c.gid, plan)
                 val off = stack?.let { (o, at) -> attached[attached.size - 1 - at].let { (it.second + o.first) to (it.third + o.second) } }
-                    ?: (if (b.ligComponents > 1) face.markLigatureOffset(b.gid, c.gid, b.ligComponents - 1, plan) else null)
+                    // The component the mark was typed after, or else the last, as HarfBuzz's MarkLigPos picks it (#877).
+                    ?: (if (b.ligComponents > 1) {
+                        val component = if (c.ligComponent > 0) minOf(c.ligComponent, b.ligComponents) - 1 else b.ligComponents - 1
+                        face.markLigatureOffset(b.gid, c.gid, component, plan)
+                    } else null)
                     ?: face.markOffset(b.gid, c.gid, plan)
                 if (off != null) {
                     val advance = face.advanceRaw(c.gid) // usually 0 for a mark
@@ -2827,13 +2836,71 @@ internal class BoxLayout(
                     c.glyphYOffset = off.second
                     advSinceBase += advance
                     attached += Triple(c, off.first, off.second)
+                    out += c to b
                     continue // still attached to the same base
+                }
+                // A mark that nothing attaches stays between the base and the marks after it,
+                // which look back past it to the base, as HarfBuzz's mark-to-base lookup does (#877).
+                if (face.isMark(c.gid)) {
+                    advSinceBase += face.advanceRaw(c.gid)
+                    continue
                 }
             }
             base = c
             attached.clear()
             advSinceBase = if (face != null && c.gid >= 0) face.advanceRaw(c.gid).toDouble() else 0.0
             baseAdvance = advSinceBase
+        }
+        return out
+    }
+
+    /**
+     * Applies the GPOS single, cursive and contextual positioning of each run of one face in a word
+     * (#877), as [io.github.yuroyami.kitepdf.core.font.OpenTypePositioning] computes it: offsets go
+     * into the glyph offsets and advance changes into the drawn and the wrap width, as a kerning
+     * pair's do. A mark that [positionMarks] placed moves with its base, as HarfBuzz adds a base's
+     * offset to the marks on it; left to right, it also moves back by what the base and the glyphs
+     * between them gained in advance, since its offset counts back over them.
+     */
+    private fun placeWord(cells: List<Cell>, language: String?, attachments: List<Pair<Cell, Cell>>) {
+        val moved = HashMap<Cell, IntArray>() // dx, dy, advance change, in font units
+        var start = 0
+        while (start < cells.size) {
+            val face = cells[start].face
+            var end = start + 1
+            while (end < cells.size && cells[end].face === face && cells[end].gid >= 0) end++
+            if (face == null || cells[start].gid < 0) { start = end; continue }
+            val run = cells.subList(start, end)
+            start = end
+            val script = TextShaper.script(IntArray(run.size) { run[it].cp }, face.gsub ?: io.github.yuroyami.kitepdf.core.font.OpenTypeGsub.EMPTY)
+            val plan = face.positioningPlan(script, language) ?: continue
+            val gids = IntArray(run.size) { run[it].gid }
+            val placement = face.place(gids, run.first().level % 2 == 1, plan) ?: continue
+            val upem = face.unitsPerEm.takeIf { it > 0 } ?: continue
+            for ((k, c) in run.withIndex()) {
+                val dx = placement.xOffset[k]
+                val dy = placement.yOffset[k]
+                val dAdvance = placement.xAdvance[k] - face.advanceRaw(gids[k])
+                if (dx == 0 && dy == 0 && dAdvance == 0) continue
+                moved[c] = intArrayOf(dx, dy, dAdvance)
+                c.glyphXOffset += dx
+                c.glyphYOffset += dy
+                if (dAdvance != 0) {
+                    c.kernAfter1000 += kotlin.math.round(dAdvance * 1000.0 / upem).toInt()
+                    c.width += dAdvance * c.fontSize / upem
+                }
+            }
+        }
+        if (moved.isEmpty()) return
+        val index = HashMap<Cell, Int>().also { m -> cells.forEachIndexed { i, c -> m[c] = i } }
+        for ((mark, base) in attachments) {
+            val b = moved[base]
+            if (b != null) { mark.glyphXOffset += b[0]; mark.glyphYOffset += b[1] }
+            if (mark.level % 2 == 0) {
+                val from = index[base] ?: continue
+                val to = index[mark] ?: continue
+                for (k in from until to) moved[cells[k]]?.let { mark.glyphXOffset -= it[2] }
+            }
         }
     }
 

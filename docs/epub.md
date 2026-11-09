@@ -424,7 +424,7 @@ KitePDF shapes text to the glyphs that HarfBuzz gives:
 
 This covers words in all these scripts, in Latin, Greek, Cyrillic, Arabic, Urdu Nastaliq, Syriac and Hebrew, and in the scripts outside the Basic Multilingual Plane that HarfBuzz shapes with its default shaper. A character outside the Basic Multilingual Plane (such as a mathematical letter or a CJK Extension B ideograph) draws from the font of the book.
 
-GPOS attaches a mark to a base letter, to a part of a ligature, and to the mark below it, so two diacritics above one letter sit one above the other.
+GPOS attaches a mark to a base letter, to a part of a ligature, and to the mark below it, so two diacritics above one letter sit one above the other. It also applies single adjustments, contextual positioning and cursive attachment, which joins the letters of an Urdu Nastaliq word on their slope. `NastaliqOracleTest` checks each glyph of Urdu words in Noto Nastaliq Urdu against HarfBuzz.
 
 ### Bidirectional text
 

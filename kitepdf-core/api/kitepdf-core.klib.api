@@ -659,6 +659,7 @@ final class io.github.yuroyami.kitepdf.core.font/OpenTypeKern { // io.github.yur
 }
 
 final class io.github.yuroyami.kitepdf.core.font/OpenTypeMarks { // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks|null[0]
+    final fun isMark(kotlin/Int): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.isMark|isMark(kotlin.Int){}[0]
     final fun ligatureOffset(kotlin/Int, kotlin/Int, kotlin/Int, io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan? = ...): kotlin/Pair<kotlin/Double, kotlin/Double>? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.ligatureOffset|ligatureOffset(kotlin.Int;kotlin.Int;kotlin.Int;io.github.yuroyami.kitepdf.core.font.OpenTypeMarks.Plan?){}[0]
     final fun offset(kotlin/Int, kotlin/Int, io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan? = ...): kotlin/Pair<kotlin/Double, kotlin/Double>? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.offset|offset(kotlin.Int;kotlin.Int;io.github.yuroyami.kitepdf.core.font.OpenTypeMarks.Plan?){}[0]
     final fun plan(kotlin/String?, kotlin/String?): io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Plan // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.plan|plan(kotlin.String?;kotlin.String?){}[0]
@@ -669,6 +670,29 @@ final class io.github.yuroyami.kitepdf.core.font/OpenTypeMarks { // io.github.yu
 
     final object Companion { // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Companion|null[0]
         final fun from(kotlin/ByteArray?, kotlin/ByteArray? = ...): io.github.yuroyami.kitepdf.core.font/OpenTypeMarks? // io.github.yuroyami.kitepdf.core.font/OpenTypeMarks.Companion.from|from(kotlin.ByteArray?;kotlin.ByteArray?){}[0]
+    }
+}
+
+final class io.github.yuroyami.kitepdf.core.font/OpenTypePositioning { // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning|null[0]
+    final fun moves(io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Plan?): kotlin/Boolean // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.moves|moves(io.github.yuroyami.kitepdf.core.font.OpenTypePositioning.Plan?){}[0]
+    final fun plan(kotlin/String?, kotlin/String?): io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Plan // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.plan|plan(kotlin.String?;kotlin.String?){}[0]
+    final fun position(kotlin/IntArray, kotlin/IntArray, kotlin/Boolean, io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Plan? = ...): io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.position|position(kotlin.IntArray;kotlin.IntArray;kotlin.Boolean;io.github.yuroyami.kitepdf.core.font.OpenTypePositioning.Plan?){}[0]
+
+    final class Placement { // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement|null[0]
+        constructor <init>(kotlin/IntArray, kotlin/IntArray, kotlin/IntArray) // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement.<init>|<init>(kotlin.IntArray;kotlin.IntArray;kotlin.IntArray){}[0]
+
+        final val xAdvance // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement.xAdvance|{}xAdvance[0]
+            final fun <get-xAdvance>(): kotlin/IntArray // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement.xAdvance.<get-xAdvance>|<get-xAdvance>(){}[0]
+        final val xOffset // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement.xOffset|{}xOffset[0]
+            final fun <get-xOffset>(): kotlin/IntArray // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement.xOffset.<get-xOffset>|<get-xOffset>(){}[0]
+        final val yOffset // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement.yOffset|{}yOffset[0]
+            final fun <get-yOffset>(): kotlin/IntArray // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Placement.yOffset.<get-yOffset>|<get-yOffset>(){}[0]
+    }
+
+    final class Plan // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Plan|null[0]
+
+    final object Companion { // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Companion|null[0]
+        final fun from(kotlin/ByteArray?, kotlin/ByteArray? = ...): io.github.yuroyami.kitepdf.core.font/OpenTypePositioning? // io.github.yuroyami.kitepdf.core.font/OpenTypePositioning.Companion.from|from(kotlin.ByteArray?;kotlin.ByteArray?){}[0]
     }
 }
 
