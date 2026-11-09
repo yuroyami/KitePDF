@@ -58,7 +58,7 @@ The size of each JVM jar of KitePDF's own code, as the build writes it. A depend
 | `kitepdf-javascript` | 0.3 MB | the script runners, without KiteJS |
 | `kitepdf-media` | 0.2 MB | the media players, without KitePlayer |
 
-An app that opens only PDFs depends on `kitepdf-pdf` and carries no hyphenation patterns. Only the EPUB layout and the text writer of `kitepdf` read them (#687).
+An app that opens only PDFs depends on `kitepdf-pdf` and carries no hyphenation patterns. Only the EPUB layout and the text writer of `kitepdf` read them (#687). `kitepdf-compose-viewer` depends on `kitepdf-epub` and `kitepdf-svg` as well, so an app that shows its PDFs in the viewer carries them (#693).
 
 ## 2. Open a document
 

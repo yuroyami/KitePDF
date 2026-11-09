@@ -122,6 +122,8 @@ commonMain.dependencies {
 
 > [!NOTE]
 > `kitepdf-compose-viewer` and `kitepdf-media` are built on Compose Multiplatform 1.13.0-alpha02, a pre-release, and depend on it. An app on an older Compose release that adds them gets 1.13.0-alpha02 in its build.
+>
+> `kitepdf-compose-viewer` also depends on `kitepdf-pdf` and `kitepdf-epub`, and `kitepdf-epub` on `kitepdf-svg`. So an app that shows only PDFs in the viewer still ships the EPUB engine and its hyphenation patterns.
 
 > [!TIP]
 > On iOS, `kitepdf-media` needs a few linker flags plus two privacy manifest entries ([KitePlayer's install guide](https://github.com/yuroyami/KitePlayer#install) lists them). A missing manifest entry doesn't break the build (Apple only flags it during app review).

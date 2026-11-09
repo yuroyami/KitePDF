@@ -7,6 +7,9 @@
 !!! note
     The viewer is built on Compose Multiplatform 1.13.0-alpha02, a pre-release, and depends on it, as `kitepdf-media` does. An app on an older Compose release that adds it gets 1.13.0-alpha02 in its build.
 
+!!! note
+    The viewer depends on `kitepdf-pdf` and `kitepdf-epub`, and `kitepdf-epub` on `kitepdf-svg`. An app that shows only PDFs therefore still ships the EPUB engine and its hyphenation patterns, about 4 MB of JVM jars ([what each artifact adds](getting-started.md#what-each-artifact-adds-to-an-app)).
+
 === "Kotlin Multiplatform"
 
     ```kotlin
