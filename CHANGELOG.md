@@ -1055,6 +1055,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when it is drawn, and nothing else (#906).
 - `KiteDoc.open` and `openOrNull` take a `KiteByteSource`: a PDF, an EPUB, a CBZ or an XPS package opens from it
   on demand, and SVG, FB2, MOBI and HTML are read whole up to `maxWholeBytes` (#906).
+- `KiteDoc.openUrlRanged` in `kitepdf-net` opens a remote document by HTTP range requests, fetching only the
+  parts a page or a chapter reads; a server that ignores ranges gets a whole download. Not on JS and Wasm (#906).
 
 ## [0.13.0] - 2026-10-09
 

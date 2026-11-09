@@ -1,3 +1,8 @@
+public final class io/github/yuroyami/kitepdf/net/RangedSourcesKt {
+	public static final fun openUrlRanged (Lio/github/yuroyami/kitepdf/document/KiteDoc;Ljava/lang/String;Lio/ktor/client/HttpClient;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun openUrlRanged$default (Lio/github/yuroyami/kitepdf/document/KiteDoc;Ljava/lang/String;Lio/ktor/client/HttpClient;Ljava/lang/String;Lio/github/yuroyami/kitepdf/epub/EpubSettings;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
 public final class io/github/yuroyami/kitepdf/net/RemoteSourcesKt {
 	public static final field DEFAULT_MAX_REMOTE_DOCUMENT_BYTES I
 	public static final field DEFAULT_MAX_REMOTE_RESOURCE_BYTES I

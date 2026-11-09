@@ -26,6 +26,11 @@ description: >-
   Optional remote loading for KitePDF - open a PDF or EPUB straight from a URL with Ktor. The engine artifacts do
   not depend on Ktor; only add this if you need it.
 
+# The targets on which a thread can wait for a request, which a KiteByteSource over HTTP needs:
+# the parser reads it synchronously. JS and Wasm cannot block, so they only download whole (#906).
+aliases:
+  - blocking: [ jvm, android, iosArm64, iosSimulatorArm64, iosX64, macosArm64, tvosArm64, tvosSimulatorArm64, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64, linuxX64, linuxArm64, mingwX64 ]
+
 apply:
   - //common.module-template.yaml
   - //library.module-template.yaml

@@ -237,7 +237,7 @@ private suspend fun fetch(
 }
 
 /** Drop URL user-info, query and fragment before a failure reaches logs/UI. */
-private fun urlForDiagnostics(url: String): String {
+internal fun urlForDiagnostics(url: String): String {
     val query = url.indexOf('?').let { if (it < 0) url.length else it }
     val fragment = url.indexOf('#').let { if (it < 0) url.length else it }
     var safe = url.substring(0, minOf(query, fragment))

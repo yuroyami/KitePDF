@@ -1,6 +1,6 @@
 # Loading a document
 
-Every source ends as a `ByteArray` that a format reader parses, so a file, a stream and a download all sit in memory as one array before parsing starts. Opening a big book is still quick, because KitePDF reads only the container, the package file and the table of contents at first, and lays out each chapter when the reader gets to it (see [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position)). `PdfDocument.open`, `EpubDocument.open`, `CbzDocument.open` and `XpsDocument.open` also take a `KiteByteSource`, which reads the file at an offset when the reader needs it: each object and stream of a PDF, and each entry of an archive when a chapter, a page or a part needs it (see [Reading PDFs](reading.md#opening-a-file-larger-than-the-heap) and [EPUB](epub.md) for an example source over a file). `KiteDoc.open` takes a `KiteByteSource` too and picks the format from its first bytes. SVG, FB2, MOBI and HTML have no reader on a source, so `KiteDoc` reads those whole, up to `maxWholeBytes`. The openers of `kitepdf-net` still read one `ByteArray`.
+Every source ends as a `ByteArray` that a format reader parses, so a file, a stream and a download all sit in memory as one array before parsing starts. Opening a big book is still quick, because KitePDF reads only the container, the package file and the table of contents at first, and lays out each chapter when the reader gets to it (see [Opening at a saved position](compose-viewer.md#opening-at-a-saved-position)). `PdfDocument.open`, `EpubDocument.open`, `CbzDocument.open` and `XpsDocument.open` also take a `KiteByteSource`, which reads the file at an offset when the reader needs it: each object and stream of a PDF, and each entry of an archive when a chapter, a page or a part needs it (see [Reading PDFs](reading.md#opening-a-file-larger-than-the-heap) and [EPUB](epub.md) for an example source over a file). `KiteDoc.open` takes a `KiteByteSource` too and picks the format from its first bytes. SVG, FB2, MOBI and HTML have no reader on a source, so `KiteDoc` reads those whole, up to `maxWholeBytes`. `KiteDoc.openUrlRanged` in `kitepdf-net` opens a URL the same way, by HTTP range requests (see [Remote URL](#remote-url)).
 
 ## When you know the format
 
@@ -136,6 +136,16 @@ The client stays yours (KitePDF neither creates nor closes it), which keeps time
 ```kotlin
 KiteDoc.openUrl(url, client) { header("Authorization", "Bearer $token") }
 ```
+
+For a large file, `openUrlRanged` fetches only the parts that KitePDF reads, by HTTP range requests, so page 1 of a large PDF shows before the rest of the file arrives, and a file larger than the heap opens:
+
+```kotlin
+import io.github.yuroyami.kitepdf.net.openUrlRanged
+
+val doc = KiteDoc.openUrlRanged("https://example.com/manual.pdf", client)
+```
+
+It asks for the first 64 KiB with a `Range` header. When the server answers with that part and the file's size, KitePDF reads the document through requests of 64 KiB, each made when a page, an image or a chapter needs its bytes, on the thread that reads it. When the server ignores the header, `openUrlRanged` downloads the whole file as `openUrl` does. The file must not change while you read it. `openUrlRanged` is not on JS and Wasm, where a read cannot wait for a request.
 
 When you want the raw bytes (to cache or hash them first), `KiteDoc.downloadBytes(url, client)` gives you the body with the same limit. An error message never shows the user name, password, query or fragment of the URL, and cancelling the coroutine also stops the download.
 
