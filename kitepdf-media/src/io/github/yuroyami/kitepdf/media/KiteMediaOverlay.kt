@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -113,6 +114,13 @@ public fun KitePageOverlayScope.KiteMediaOverlay(
     session: KiteMediaSession = KiteMediaSession.Default,
 ) {
     val epubPage = page as? EpubPage ?: return
+    // A page whose chapter the layout budget dropped would lay the chapter out again here, on the UI
+    // thread, to find its media (#681). The overlay waits for the page's raster to bring it back.
+    val loaded by produceState(epubPage.isContentLoaded, epubPage) {
+        while (!epubPage.isContentLoaded) delay(CONTENT_POLL)
+        value = true
+    }
+    if (!loaded) return
     val media = remember(epubPage) { epubPage.media }
     // One opened book: its metadata is one object for every document over the same parse, so a new
     // font size keeps the places, and opening the book again starts with none.
@@ -751,3 +759,6 @@ private val TRANSPORT_HEIGHT = 40.dp
 
 /** How long the bar that a tap showed on a video without controls stays once the video plays. */
 private val REVEAL_TIME = 3.seconds
+
+/** How often the overlay of a page whose chapter is out of memory looks for it back (#681), as the viewer's animated images do. */
+private const val CONTENT_POLL = 250L

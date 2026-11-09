@@ -880,6 +880,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteThumbnailStrip` lets the previous document go when it gets a new `KiteDocViewState`: a new state gives it
   a new bitmap cache and rasterizer, where the old cache held the old pages and, through them, the old document
   (#684).
+- `KiteMediaOverlay` no longer lays out a chapter that the layout budget dropped on the UI thread: it waits until
+  the page has its content back, then shows the page's media (#681).
 
 ## [0.13.0] - 2026-10-09
 
