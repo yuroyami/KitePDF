@@ -485,11 +485,13 @@ public fun KiteDocView(
             // A new state gets a new layout, containers and all, so nothing of the old document's
             // strip reaches the new one's pages (#346).
             key(state) {
+                val layoutRasterizer = rememberLayoutRasterizer(state, renderSpec)
                 CompositionLocalProvider(
                     LocalKitePageOverlay provides pageOverlay,
                     LocalViewerTap provides linkAwareTap,
                     LocalOverlayLinks provides overlayLinks,
                     LocalOverlayOnScreen provides overlayOnScreen,
+                    LocalLayoutRasterizer provides layoutRasterizer,
                 ) {
                     when (layout) {
                         is KiteDocLayout.Continuous -> ContinuousLayout(
@@ -812,12 +814,9 @@ private fun ContinuousLayout(
     }
     // One rasterizer for every slot of the strip and for the pages drawn ahead: the bitmap cache
     // key holds the rasterizer's text measurer, so a slot finds what another slot or the strip
-    // drew, as the thumbnail strip does (#437, #391).
+    // drew, as the thumbnail strip does (#437, #391). The viewer makes it for every layout (#660).
     val rasterSpec = renderSpec as? KiteRenderSpec.Rasterized
-    val rasterizer = rasterSpec?.let {
-        rememberKitePageRasterizer(maxOf(KITE_DEFAULT_MAX_RASTER_PIXELS, it.maxBitmapLongSide.toLong() * it.maxBitmapLongSide))
-    }?.also { it.textOffMain = state.hostTextOffMain }
-    rasterizer?.let { state.RegisterRasterizer(it) }
+    val rasterizer = LocalLayoutRasterizer.current
     DisposableEffect(state, listState) {
         // A strip on the other axis starts unpanned: the old pan lies on the axis this one scrolls.
         if (state.stripOrientation.let { it != null && it != orientation }) state.panOffset = Offset.Zero
@@ -1400,6 +1399,7 @@ private fun PageBox(
             PageSlotContent(
                 state, page, pageIndex, fit, settledZoom, renderSpec, colors,
                 onPageRendered, pagePlaceholder, placed.size(dpSize),
+                sharedRasterizer = LocalLayoutRasterizer.current,
             )
         }
     }
@@ -2410,6 +2410,7 @@ private fun SpreadBox(
                 PageSlotContent(
                     state, page, pageIndex, fit, settledZoom, renderSpec, colors,
                     onPageRendered, pagePlaceholder, Modifier.fillMaxSize(),
+                    sharedRasterizer = LocalLayoutRasterizer.current,
                 )
             }
         }
@@ -2445,3 +2446,19 @@ private const val ZOOM_STEPS_PER_OCTAVE = 4.0
 /** Whether [this] is an EPUB roll, whose pages show as one strip with no gap (EPUB 3.4, #506). */
 internal fun io.github.yuroyami.kitepdf.core.KiteDocument.isRoll(): Boolean =
     (this as? EpubDocument)?.epubMetadata?.rendition?.isRoll == true
+
+/**
+ * The rasterizer that every slot of a layout shares, for a [KiteRenderSpec.Rasterized] view. The
+ * bitmap cache key holds its text measurer, so a pager page that comes back finds the bitmap that
+ * an earlier slot drew, where a rasterizer of the slot's own missed it and rendered again (#660).
+ */
+internal val LocalLayoutRasterizer = androidx.compose.runtime.staticCompositionLocalOf<KitePageRasterizer?> { null }
+
+@Composable
+private fun rememberLayoutRasterizer(state: KiteDocViewState, renderSpec: KiteRenderSpec): KitePageRasterizer? {
+    val spec = renderSpec as? KiteRenderSpec.Rasterized ?: return null
+    val rasterizer = rememberKitePageRasterizer(maxOf(KITE_DEFAULT_MAX_RASTER_PIXELS, spec.maxBitmapLongSide.toLong() * spec.maxBitmapLongSide))
+    rasterizer.textOffMain = state.hostTextOffMain
+    state.RegisterRasterizer(rasterizer)
+    return rasterizer
+}
