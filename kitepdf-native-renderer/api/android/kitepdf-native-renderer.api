@@ -28,3 +28,16 @@ public final class io/github/yuroyami/kitepdf/nativerenderer/AndroidPdfBitmapRen
 	public static synthetic fun renderToBitmap$default (Lio/github/yuroyami/kitepdf/nativerenderer/AndroidPdfBitmapRenderer;Lio/github/yuroyami/kitepdf/PdfPage;DIJILjava/lang/Object;)Landroid/graphics/Bitmap;
 }
 
+public final class io/github/yuroyami/kitepdf/nativerenderer/KitePrintAdapter : android/print/PrintDocumentAdapter {
+	public static final field Companion Lio/github/yuroyami/kitepdf/nativerenderer/KitePrintAdapter$Companion;
+	public fun <init> (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/PdfFormState;ZLjava/lang/String;)V
+	public synthetic fun <init> (Lio/github/yuroyami/kitepdf/core/KiteDocument;Lio/github/yuroyami/kitepdf/PdfFormState;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun onLayout (Landroid/print/PrintAttributes;Landroid/print/PrintAttributes;Landroid/os/CancellationSignal;Landroid/print/PrintDocumentAdapter$LayoutResultCallback;Landroid/os/Bundle;)V
+	public fun onWrite ([Landroid/print/PageRange;Landroid/os/ParcelFileDescriptor;Landroid/os/CancellationSignal;Landroid/print/PrintDocumentAdapter$WriteResultCallback;)V
+}
+
+public final class io/github/yuroyami/kitepdf/nativerenderer/KitePrintAdapter$Companion {
+	public final fun print (Landroid/content/Context;Lio/github/yuroyami/kitepdf/core/KiteDocument;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfFormState;)V
+	public static synthetic fun print$default (Lio/github/yuroyami/kitepdf/nativerenderer/KitePrintAdapter$Companion;Landroid/content/Context;Lio/github/yuroyami/kitepdf/core/KiteDocument;Ljava/lang/String;Lio/github/yuroyami/kitepdf/PdfFormState;ILjava/lang/Object;)V
+}
+

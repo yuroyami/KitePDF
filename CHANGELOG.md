@@ -1074,6 +1074,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parts a page or a chapter reads; a server that ignores ranges gets a whole download. Not on JS and Wasm (#906).
 - `KiteFileSource` in `kitepdf-core` on the JVM and Android: a file on disk as a `KiteByteSource`, read at an
   offset with positional reads, for the source openers of every format (#906).
+- `KitePrintAdapter` in `kitepdf-native-renderer` prints a document on Android through `PrintManager`: each page
+  fitted and centred on the picked paper, as it prints (#951).
 
 ## [0.13.0] - 2026-10-09
 

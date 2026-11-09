@@ -292,7 +292,13 @@ In a web page, `KiteBrowserPrint` of `kitepdf-native-renderer` draws each page o
 KiteBrowserPrint.print(document)
 ```
 
-A document script that asks to print sends a `PdfScriptRequest.Print` to its runner's `onRequest`, which can call either of these (see [Requests to the host](javascript.md#requests-to-the-host)). Android and Apple have no print path in the library yet (#951).
+A document script that asks to print sends a `PdfScriptRequest.Print` to its runner's `onRequest`, which can call either of these (see [Requests to the host](javascript.md#requests-to-the-host)). On Android, `KitePrintAdapter` of `kitepdf-native-renderer` is a `PrintDocumentAdapter`. It draws each page through `AndroidNativeCanvas` onto a sheet of the paper the reader picks, centred inside its margins and scaled to fit it unless the PDF asks for `/PrintScaling /None`, and hands the print service the result as a PDF:
+
+```kotlin
+KitePrintAdapter.print(context, document, jobName = "Statement")   // Android's print dialog
+```
+
+Apple has no print path in the library yet (#951).
 
 ## Memory
 

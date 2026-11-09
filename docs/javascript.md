@@ -103,6 +103,7 @@ PdfScriptRunner(doc, onRequest = { request ->
     if (request == PdfScriptRequest.Print) {
         KitePrintable.print(doc)          // JVM: the print dialog, then the printer
         // KiteBrowserPrint.print(doc)    // in a web page
+        // KitePrintAdapter.print(context, doc)  // on Android
     }
 })
 ```
