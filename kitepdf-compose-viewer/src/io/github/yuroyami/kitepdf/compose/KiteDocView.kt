@@ -147,7 +147,8 @@ import kotlinx.coroutines.launch
  * drawing. See [KiteRenderSpec] for the per-mode knobs and [KiteZoomSpec] for
  * gestures.
  *
- * @param state the hoisted control surface. See [rememberKiteDocViewState].
+ * @param state the hoisted control surface. See [rememberKiteDocViewState]. One view shows a
+ *   state at a time; a second view of the same state logs a warning (#656).
  * @param layout continuous strip (any orientation), snap pager (any
  *   orientation), a pager of two-page spreads or a single fixed page. See [KiteDocLayout].
  * @param zoomSpec pinch/double-tap/pan behaviour and zoom bounds. Programmatic
@@ -382,6 +383,14 @@ public fun KiteDocView(
     // A field that has the caret when the view leaves commits what the reader typed and lets go
     // of the caret, even when its input never took the focus (#365).
     DisposableEffect(state) { onDispose { state.blurFocusedField() } }
+    // A second view of one state overwrites the first one's adapter, zoom range and geometry (#656).
+    DisposableEffect(state) {
+        state.attachedViews++
+        if (state.attachedViews > 1) {
+            io.github.yuroyami.kitepdf.core.kiteWarn { "viewer: a KiteDocViewState is shown by ${state.attachedViews} views; give each view a state of its own" }
+        }
+        onDispose { state.attachedViews-- }
+    }
     KiteScriptTimers(state, scripts, scriptLane)
     KiteEpubScriptTimers(state, epubScripts, scriptLane)
     KiteFormRevision(state, scripts)

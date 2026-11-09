@@ -922,6 +922,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   set for each viewer, an EPUB keeps them all, and a view that leaves lets go of its own only (#658).
 - `onPageRendered` reports a page that a `Continuous` strip draws ahead, once, when it is drawn; such a page was
   never reported, since its slot then finds it in the cache (#654).
+- The docs and the KDoc say that a `KiteDocViewState` is shown by one `KiteDocView` at a time, and a second view
+  of the same state logs a warning, since the two views overwrite each other's scroll container, zoom range and
+  page geometry (#656).
 
 ## [0.13.0] - 2026-10-09
 

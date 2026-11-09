@@ -80,7 +80,7 @@ import kotlin.time.TimeSource
  * The state is saved with [KiteDocViewState.saver], so the reading position
  * survives a configuration change and the end of the process. The state is
  * the only thing that saves the position: the viewer's scroll containers save
- * nothing of their own.
+ * nothing of their own. Show it in one [KiteDocView] at a time; see [KiteDocViewState].
  */
 @Composable
 public fun rememberKiteDocViewState(document: KiteDocument, initialPage: Int = 0): KiteDocViewState =
@@ -124,6 +124,11 @@ public fun rememberKiteDocViewState(document: KiteDocument, position: KiteScroll
  * on the thread of the [KiteDocView] that shows the state, so do not block that thread to wait
  * for one. The calls that do not suspend, such as [setZoom] and [clearSelection], belong on the
  * main thread.
+ *
+ * A state is shown by one [KiteDocView] at a time: the view writes its scroll container, zoom
+ * range, viewport size and page geometry into the state, and a second view would overwrite them.
+ * Widgets such as [KiteThumbnailStrip] and [KiteNavigationControls] may share it with the view.
+ * To show one document in two views, give each view a state of its own (#656).
  */
 @Stable
 public class KiteDocViewState(
@@ -2337,6 +2342,9 @@ public class KiteDocViewState(
         kiteWarn { "navigation: $bookmark could not be resolved: ${failure.message ?: failure::class.simpleName}" }
         null
     }
+
+    /** How many [KiteDocView]s show this state now, which should be one (#656). */
+    internal var attachedViews: Int = 0
 
     /** How many times the pages built their text and link nodes, and their field nodes, for a test (#666). */
     internal var accessNodeBuilds: Int = 0
