@@ -7,6 +7,7 @@ import io.github.yuroyami.kitepdf.core.render.KiteRasterCanvas
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -80,7 +81,19 @@ class SharedSoftMaskTest {
     fun a_shared_mask_draws_what_a_mask_for_each_paint_draws() {
         for (n in listOf(1, 2, 49)) {
             assertTrue(raster(pdf(n)).contentEquals(raster(pdf(n, fresh = true))), "raster, $n squares")
-            assertTrue(awt(pdf(n)).contentEquals(awt(pdf(n, fresh = true))), "AWT, $n squares")
+            // AWT keeps a mask that two paints in a row use and renders it once over its whole box,
+            // which can move an antialiased edge by one level from the mask rendered for each paint's box.
+            val shared = awt(pdf(n))
+            val each = awt(pdf(n, fresh = true))
+            var worst = 0
+            var differing = 0
+            for (i in shared.indices) {
+                var d = 0
+                for (shift in intArrayOf(0, 8, 16, 24)) d = maxOf(d, abs((shared[i] ushr shift and 0xFF) - (each[i] ushr shift and 0xFF)))
+                if (d > 0) differing++
+                worst = maxOf(worst, d)
+            }
+            assertTrue(worst <= 1 && differing <= shared.size / 10_000, "AWT, $n squares: $differing pixels differ, by up to $worst levels")
         }
         // The squares are masked: a band of 0.3 lets less of the blue through than one of 0.8.
         val pixels = awt(pdf(49))
@@ -98,15 +111,41 @@ class SharedSoftMaskTest {
         assertTrue(rasterShared * 3 < rasterFresh, "raster: 100 squares under one mask take $rasterShared ms, under a mask each $rasterFresh ms")
     }
 
-    private fun awt(pdf: ByteArray, bounded: Boolean): IntArray {
+    private fun awt(pdf: ByteArray, bounded: Boolean, keep: Boolean = true): IntArray {
         val page = KitePDF.open(pdf).pages[0]
         val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
         val g = image.createGraphics()
         try {
             g.color = Color.WHITE; g.fillRect(0, 0, size, size)
-            page.renderTo(AwtCanvas(g).apply { boundsMaskContent = bounded }, flip)
+            page.renderTo(AwtCanvas(g).apply { boundsMaskContent = bounded; keepMasks = keep }, flip)
         } finally { g.dispose() }
         return image.getRGB(0, 0, size, size, null, 0, size)
+    }
+
+    private fun maskRenders(pdf: ByteArray): Int {
+        val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
+        val g = image.createGraphics()
+        val canvas = AwtCanvas(g)
+        try { KitePDF.open(pdf).pages[0].renderTo(canvas, flip) } finally { g.dispose() }
+        return canvas.maskRenders
+    }
+
+    @Test
+    fun awt_counts_one_mask_render_for_a_shared_mask_and_one_for_each_fresh_mask() {
+        // The first paint renders it for its own box, the second for the whole box, and it is kept.
+        assertEquals(2, maskRenders(pdf(1600)))
+        assertEquals(49, maskRenders(pdf(49, fresh = true)))
+    }
+
+    @Test
+    fun awt_renders_a_shared_mask_once() {
+        // Each of 1,600 squares rendered the 600 by 600 mask group again (#912).
+        val masked = pdf(1600)
+        val keptMs = millis(masked) { awt(it, bounded = true, keep = true) }
+        val againMs = millis(masked) { awt(it, bounded = true, keep = false) }
+        val controlMs = millis(pdf(1600, control = true)) { awt(it, bounded = true) }
+        println("[shared-mask] AWT, 1,600 squares: the mask kept $keptMs ms, rendered for each $againMs ms, /ca 0.6 $controlMs ms")
+        assertTrue(keptMs * 1.5 < againMs, "the kept mask took $keptMs ms, a mask for each paint $againMs ms")
     }
 
     @Test

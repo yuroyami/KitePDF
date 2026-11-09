@@ -98,6 +98,8 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
     private var openLayers = 0
 
     override fun beginPage(widthPt: Double, heightPt: Double, deviceCtm: KiteMatrix) {
+        maskCoverage = null
+        lastMaskKey = null
         // The host owns the Graphics; we don't clear.
         while (groupStack.isNotEmpty()) endTransparencyGroup()
         while (clipStack.isNotEmpty()) popClip()
@@ -109,6 +111,8 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
     }
 
     override fun endPage() {
+        maskCoverage = null
+        lastMaskKey = null
         // Close any group left open, then roll back leftover clips (defensive).
         while (groupStack.isNotEmpty()) endTransparencyGroup()
         while (clipStack.isNotEmpty()) popClip()
@@ -680,6 +684,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
      * onto the page through the anti-aliased coverage of the shape when the clip pops.
      */
     override fun pushClip(path: KitePath, ctm: KiteMatrix, evenOdd: Boolean) {
+        clipVersion++
         val awt = toAwtPath(path, ctm).apply {
             windingRule = if (evenOdd) Path2D.WIND_EVEN_ODD else Path2D.WIND_NON_ZERO
         }
@@ -706,6 +711,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
     }
 
     override fun popClip() {
+        clipVersion++
         clipStack.removeLastOrNull()?.let { entry ->
             val soft = entry.soft
             if (soft == null) g.clip = entry.saved else endSoftClip(soft)
@@ -1117,14 +1123,36 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
             giveBackMaskBuffer(layer, IntRange.EMPTY)
             return
         }
-        val mask = takeMaskBuffer(width, height)
         if (blends.mixed && scale == 1.0) {
             // Paints with different blend modes each need the real backdrop, which
             // one layer composite cannot give them (#80). This rare case renders again.
             java.util.Arrays.fill(layerPixels, 0)
-            maskOverBackdrop(parent, bounds, kind, transfer, layer, mask, ::prepare, render, renderMask)
+            maskOverBackdrop(parent, bounds, kind, transfer, layer, takeMaskBuffer(width, height), ::prepare, render, renderMask)
             return
         }
+        // The renderer hands the same callback for every paint under one mask (#912). A second
+        // paint with the same mask, matrix, clip and box renders the mask once over the whole box
+        // and keeps its coverage, so the paints after it read that instead of rendering it again.
+        val key = MaskKey(renderMask, kind, transfer, box, maskCtm, parent, clipVersion, AffineTransform(parent.transform), bounds, scale)
+        val kept = if (!keepMasks) null else maskCoverage?.takeIf { it.key == key }?.coverage
+            ?: if (scale == 1.0 && lastMaskKey == key) maskCoverageOf(kind, transfer, width, height, ::prepare, renderMask).also { maskCoverage = MaskCoverage(key, it) } else null
+        lastMaskKey = key
+        if (kept != null) {
+            for (y in painted.y until painted.y + painted.height) {
+                for (i in y * width + painted.x until y * width + painted.x + painted.width) {
+                    val p = layerPixels[i]
+                    val alpha = p ushr 24
+                    if (alpha == 0) continue
+                    val c = kept[i].toInt() and 0xFF
+                    if (c == 255) continue
+                    layerPixels[i] = (((alpha * c + 127) / 255) shl 24) or (p and 0xFFFFFF)
+                }
+            }
+            compositeLayer(parent, layer, bounds, painted, scale, blends.single)
+            giveBackMaskBuffer(layer, painted.y until painted.y + painted.height)
+            return
+        }
+        val mask = takeMaskBuffer(width, height)
 
         val maskGraphics = mask.createGraphics()
         try {
@@ -1135,6 +1163,7 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
                 maskGraphics.fillRect(painted.x, painted.y, painted.width, painted.height)
             }
             prepare(maskGraphics)
+            maskRenders++
             renderMask(AwtCanvas(maskGraphics))
         } finally {
             maskGraphics.dispose()
@@ -1156,10 +1185,17 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
             }
         }
 
+        compositeLayer(parent, layer, bounds, painted, scale, blends.single)
+        val dirtyRows = painted.y until painted.y + painted.height
+        giveBackMaskBuffer(layer, dirtyRows)
+        giveBackMaskBuffer(mask, dirtyRows)
+    }
+
+    /** Draws the masked [layer] of a soft mask onto [parent], with the one blend mode its paints used, if they used one. */
+    private fun compositeLayer(parent: Graphics2D, layer: BufferedImage, bounds: java.awt.Rectangle, painted: java.awt.Rectangle, scale: Double, mode: KiteBlendMode?) {
         val target = parent.create() as Graphics2D
         try {
             target.transform = AffineTransform()
-            val mode = blends.single
             target.composite = if (mode == null || mode == KiteBlendMode.Normal) AlphaComposite.SrcOver
                 else PdfBlendComposite(mode, 1f)
             if (scale == 1.0) {
@@ -1174,9 +1210,75 @@ public class AwtCanvas(g: Graphics2D) : KiteCanvas {
         } finally {
             target.dispose()
         }
-        val dirtyRows = painted.y until painted.y + painted.height
-        giveBackMaskBuffer(layer, dirtyRows)
-        giveBackMaskBuffer(mask, dirtyRows)
+    }
+
+    /** What a soft mask's rendered coverage is kept by: everything that decides its pixels (#912). */
+    private data class MaskKey(
+        val renderMask: (KiteCanvas) -> Unit,
+        val kind: SoftMask.Kind,
+        val transfer: KiteMaskTransfer?,
+        val box: KiteRectangle,
+        val maskCtm: KiteMatrix,
+        val target: Graphics2D,
+        val clipVersion: Int,
+        val transform: AffineTransform,
+        val bounds: java.awt.Rectangle,
+        val scale: Double,
+    )
+
+    private class MaskCoverage(val key: MaskKey, val coverage: ByteArray)
+
+    /** The coverage of the last mask that two paints in a row used, kept until the key or the page changes. */
+    private var maskCoverage: MaskCoverage? = null
+
+    /** The key of the last masked paint, so the second paint under one mask knows to keep it. */
+    private var lastMaskKey: MaskKey? = null
+
+    /**
+     * False renders the mask again for every paint, as before #912, so a test can time the kept
+     * mask against it. A mask rendered once over its whole box can differ by one level at an
+     * antialiased edge from one rendered for a paint's box, since Marlin clips a path before it
+     * fills it.
+     */
+    internal var keepMasks: Boolean = true
+
+    /** How many times this canvas rendered a mask group, which a test counts (#912). */
+    internal var maskRenders: Int = 0
+
+    /** Counts clip pushes and pops, so a mask rendered under another clip is not taken for this one. */
+    private var clipVersion = 0
+
+    /**
+     * Renders the mask group over the whole of a [width] by [height] box, and gives the value
+     * that gates each pixel: its alpha or luminosity, through [transfer] when there is one.
+     */
+    private fun maskCoverageOf(
+        kind: SoftMask.Kind, transfer: KiteMaskTransfer?, width: Int, height: Int,
+        prepare: (Graphics2D) -> Unit, renderMask: (KiteCanvas) -> Unit,
+    ): ByteArray {
+        val mask = takeMaskBuffer(width, height)
+        val maskGraphics = mask.createGraphics()
+        try {
+            if (kind.readsColor) {
+                maskGraphics.color = Color.BLACK
+                maskGraphics.fillRect(0, 0, width, height)
+            }
+            prepare(maskGraphics)
+            maskRenders++
+            renderMask(AwtCanvas(maskGraphics))
+        } finally {
+            maskGraphics.dispose()
+        }
+        val pixels = (mask.raster.dataBuffer as DataBufferInt).data
+        val luminosity = kind.readsColor
+        val out = ByteArray(width * height)
+        for (i in out.indices) {
+            val m = pixels[i]
+            val level = if (luminosity) kind.levelOf((m ushr 16) and 255, (m ushr 8) and 255, m and 255) else m ushr 24
+            out[i] = (transfer?.get(level) ?: level).toByte()
+        }
+        giveBackMaskBuffer(mask, 0 until height)
+        return out
     }
 
     /**
