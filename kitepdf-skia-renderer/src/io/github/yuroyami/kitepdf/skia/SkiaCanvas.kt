@@ -286,16 +286,28 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
                 isAntiAlias = true
                 this.blendMode = paintBlend(blendMode)
             }
+            // On a canvas that draws in whole device pixels, glyphs land on MuPDF's subpixel grid,
+            // as on AWT, and their pixels come from the mask cache (#911). The host may have shifted
+            // the canvas by whole pixels, which the masks are drawn at.
+            val host = canvas.localToDeviceAsMatrix33.mat
+            val onPixels = host[0] == 1f && host[1] == 0f && host[3] == 0f && host[4] == 1f && host[6] == 0f && host[7] == 0f &&
+                host[2] == kotlin.math.floor(host[2]) && host[5] == kotlin.math.floor(host[5])
+            val cache = glyphMasksEnabled && onPixels && blendMode == KiteBlendMode.Normal && !knockingOut
             var penX = 0.0
             for (glyph in glyphs) {
                 val outline = glyph.outline
                 if (outline != null && !outline.isEmpty()) {
-                    val glyphMatrix = textToDevice
+                    val exact = textToDevice
                         .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                    val sk = toSkPath(outline, glyphMatrix).apply { fillMode = PathFillMode.WINDING }
-                    canvas.drawPath(sk, paint)
-                    sk.close()
+                    val glyphMatrix = if (onPixels) snapGlyph(exact, unitsPerEm, host[2].toDouble(), host[5].toDouble()) else exact
+                    if (!cache || !drawCachedGlyph(outline, glyphMatrix, unitsPerEm, host[2].toDouble(), host[5].toDouble(), paint)) {
+                        // The outline's native path, in font units, made once and drawn under the glyph's matrix.
+                        canvas.save()
+                        canvas.concat(pdfMatrixToSkia(glyphMatrix))
+                        canvas.drawPath(glyphPath(outline), paint)
+                        canvas.restore()
+                    }
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
             }
@@ -1189,6 +1201,155 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
      */
     private val builder = PathBuilder()
 
+    /**
+     * Native paths of glyph outlines in font units, the ones used last kept, up to
+     * [GLYPH_PATHS]: a page of 3,000 glyphs converted each outline on every draw (#911). A font
+     * gives each glyph one outline object, so a repeat finds it by identity before equality.
+     */
+    private val glyphPaths = LinkedHashMap<KitePath, SkPath>()
+
+    /** The coverage of one glyph at one size and subpixel position, and where its corner goes; null for a glyph that covers nothing. */
+    private class GlyphMask(val image: org.jetbrains.skia.Image?, val left: Int, val top: Int)
+
+    /** Identifies a [GlyphMask]. Fonts keep one outline object for each glyph, so the outline compares by identity first. */
+    private class GlyphKey(val outline: KitePath, val a: Double, val d: Double, val fx: Double, val fy: Double) {
+        override fun equals(other: Any?): Boolean = other is GlyphKey && (other.outline === outline || other.outline == outline) &&
+            other.a == a && other.d == d && other.fx == fx && other.fy == fy
+
+        override fun hashCode(): Int {
+            var h = outline.hashCode()
+            h = 31 * h + a.hashCode()
+            h = 31 * h + d.hashCode()
+            h = 31 * h + fx.hashCode()
+            return 31 * h + fy.hashCode()
+        }
+    }
+
+    /**
+     * Glyph coverage masks, as AWT, MuPDF and PDFium keep glyph rasters: a glyph is filled once
+     * at a size and subpixel position and drawn as an alpha image in the paint's colour after
+     * that, which takes about a third of a path fill (#911). The ones used last are kept, up to
+     * [GLYPH_PATHS].
+     */
+    private val glyphMasks = LinkedHashMap<GlyphKey, GlyphMask>()
+
+    /** False to fill every glyph's path, for a test that compares the two. */
+    internal var glyphMasksEnabled: Boolean = true
+
+    /** How many glyph masks this canvas has filled, for a test. */
+    internal var glyphMaskFills: Int = 0
+        private set
+
+    /**
+     * Draws [outline] under [m], which maps it to the local space, from the mask cache, on a
+     * canvas shifted by ([hostX], [hostY]) whole device pixels. Returns false for a glyph the
+     * cache does not hold: a turned or skewed one, or one whose em is larger than
+     * [GLYPH_MASK_MAX_EM] pixels.
+     */
+    private fun drawCachedGlyph(outline: KitePath, m: KiteMatrix, unitsPerEm: Int, hostX: Double, hostY: Double, paint: Paint): Boolean {
+        if (m.b != 0.0 || m.c != 0.0) return false
+        if (kotlin.math.sqrt(kotlin.math.abs(m.a * m.d)) * unitsPerEm > GLYPH_MASK_MAX_EM) return false
+        val e = m.e + hostX
+        val f = m.f + hostY
+        val ix = kotlin.math.floor(e)
+        val iy = kotlin.math.floor(f)
+        val key = GlyphKey(outline, m.a, m.d, e - ix, f - iy)
+        val mask = glyphMasks.remove(key)?.also { glyphMasks[key] = it } ?: fillGlyphMask(outline, KiteMatrix(m.a, 0.0, 0.0, m.d, e - ix, f - iy)).also {
+            glyphMasks[key] = it
+            if (glyphMasks.size > GLYPH_PATHS) {
+                val eldest = glyphMasks.entries.iterator()
+                eldest.next().value.image?.close()
+                eldest.remove()
+            }
+        }
+        val image = mask.image ?: return true
+        canvas.save()
+        canvas.resetMatrix()
+        canvas.drawImage(image, (ix + mask.left).toFloat(), (iy + mask.top).toFloat(), paint)
+        canvas.restore()
+        return true
+    }
+
+    /** The coverage of [outline] under [m], in an alpha image, and where its corner goes. */
+    private fun fillGlyphMask(outline: KitePath, m: KiteMatrix): GlyphMask {
+        glyphMaskFills++
+        val path = glyphPath(outline)
+        val bounds = path.bounds
+        val xs = doubleArrayOf(m.a * bounds.left + m.e, m.a * bounds.right + m.e)
+        val ys = doubleArrayOf(m.d * bounds.top + m.f, m.d * bounds.bottom + m.f)
+        if (!(xs + ys).all { it.isFinite() }) return GlyphMask(null, 0, 0)
+        val left = kotlin.math.floor(xs.min()).toInt() - 1
+        val top = kotlin.math.floor(ys.min()).toInt() - 1
+        val width = kotlin.math.ceil(xs.max()).toInt() - left + 1
+        val height = kotlin.math.ceil(ys.max()).toInt() - top + 1
+        if (width <= 0 || height <= 0 || bounds.right <= bounds.left || bounds.bottom <= bounds.top) return GlyphMask(null, 0, 0)
+        val surface = org.jetbrains.skia.Surface.makeRaster(ImageInfo(width, height, ColorType.ALPHA_8, ColorAlphaType.PREMUL))
+        return try {
+            Paint().closing { fill ->
+                fill.isAntiAlias = true
+                fill.color = Color.BLACK
+                surface.canvas.translate(-left.toFloat(), -top.toFloat())
+                surface.canvas.concat(pdfMatrixToSkia(m))
+                surface.canvas.drawPath(path, fill)
+            }
+            GlyphMask(surface.makeImageSnapshot(), left, top)
+        } finally {
+            surface.close()
+        }
+    }
+
+    /**
+     * [m], which maps a glyph to the local space of a canvas shifted by ([hostX], [hostY])
+     * whole pixels, with its device origin on MuPDF's subpixel grid (`fz_subpixel_adjust`), as
+     * AWT places it. Along the text, an em under 24 pixels lands on a quarter pixel, one under
+     * 48 on half a pixel, and a larger one on a whole pixel. Across horizontal or vertical text,
+     * an em of 8 pixels or more lands on a whole pixel.
+     */
+    private fun snapGlyph(m: KiteMatrix, unitsPerEm: Int, hostX: Double, hostY: Double): KiteMatrix {
+        val size = kotlin.math.sqrt(kotlin.math.abs(m.a * m.d - m.b * m.c)) * unitsPerEm
+        val (q, r) = when {
+            size >= 48 -> 0 to 0.5
+            size >= 24 -> 128 to 0.25
+            else -> 192 to 0.125
+        }
+        val (qMin, rMin) = when {
+            size >= 8 -> 0 to 0.5
+            size >= 4 -> 128 to 0.25
+            else -> 192 to 0.125
+        }
+        var hq = q
+        var hr = r
+        var vq = q
+        var vr = r
+        if (m.a == 0.0 && m.d == 0.0) { hq = qMin; hr = rMin }
+        if (m.b == 0.0 && m.c == 0.0) { vq = qMin; vr = rMin }
+        val e = m.e + hostX + hr
+        val f = m.f + hostY + vr
+        val pixE = kotlin.math.floor(e)
+        val pixF = kotlin.math.floor(f)
+        val subE = (((e - pixE) * 256).toInt() and hq) / 256.0
+        val subF = (((f - pixF) * 256).toInt() and vq) / 256.0
+        return KiteMatrix(m.a, m.b, m.c, m.d, pixE + subE - hostX, pixF + subF - hostY)
+    }
+
+    /** How many glyph outlines this canvas has converted to native paths, for a test. */
+    internal var glyphPathConversions: Int = 0
+        private set
+
+    private fun glyphPath(outline: KitePath): SkPath {
+        // Taken out and put back, so the map's order is the order of last use.
+        glyphPaths.remove(outline)?.let { glyphPaths[outline] = it; return it }
+        glyphPathConversions++
+        val path = toSkPath(outline, KiteMatrix.IDENTITY).apply { fillMode = PathFillMode.WINDING }
+        glyphPaths[outline] = path
+        if (glyphPaths.size > GLYPH_PATHS) {
+            val eldest = glyphPaths.entries.iterator()
+            eldest.next().value.close()
+            eldest.remove()
+        }
+        return path
+    }
+
     private fun toSkPath(src: KitePath, ctm: KiteMatrix): SkPath {
         // skiko 0.148: Path is immutable; build via PathBuilder then detach().
         val b = builder.reset()
@@ -1271,3 +1432,9 @@ public class SkiaCanvas(canvas: SkCanvas) : KiteCanvas {
 
 /** The largest surface a group nested in a knockout group paints to; a larger one takes a plain layer (#756). */
 private const val KNOCKOUT_ELEMENT_PIXELS = 16_000_000L
+
+/** The glyph outlines a [SkiaCanvas] keeps as native paths and as masks, the count AWT keeps glyph rasters for (#911). */
+private const val GLYPH_PATHS = 4096
+
+/** The largest em, in device pixels, whose glyphs draw from masks, as on AWT; a larger glyph fills its path. */
+private const val GLYPH_MASK_MAX_EM = 256.0

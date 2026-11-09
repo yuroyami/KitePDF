@@ -973,6 +973,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KiteRasterCanvas`, the Skia canvas and the Compose canvas of a rasterizer answer it, and a mesh shading
   rasterizes only that box. A tile of a page zoomed 40 times rasterized the whole page at a third of a pixel to a
   pixel, with an edge 5.5 pixels wide, and now rasterizes the tile at full resolution (#795).
+- The Skia canvas draws a glyph of an embedded font from a coverage mask that it fills once for each outline,
+  size and subpixel position, as AWT does, and places glyphs on the same subpixel grid as AWT and MuPDF. A page
+  of 600 glyphs drew in 20 ms on every draw, and now in 9 ms once its masks are filled (#911).
 
 ## [0.13.0] - 2026-10-09
 
