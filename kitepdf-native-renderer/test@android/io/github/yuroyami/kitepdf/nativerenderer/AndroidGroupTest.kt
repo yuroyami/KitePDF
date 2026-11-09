@@ -101,6 +101,51 @@ class AndroidGroupTest {
         bitmap.assertPixel(50, 50, listOf(255, 0, 0))
     }
 
+    /** A knockout group of a red square and, at half alpha, a blue element: a nested group when [nested], else a fill. */
+    private fun knockoutPage(nested: Boolean): ByteArray {
+        val inner = "0 0 1 rg 0 0 $SIDE $SIDE re f"
+        val outer = "1 0 0 rg 0 0 $SIDE $SIDE re f /GA gs " + if (nested) "/In Do" else inner
+        return testPage(
+            "1 1 1 rg 0 0 $SIDE $SIDE re f /Out Do",
+            "/XObject << /Out 5 0 R >>",
+            listOf(
+                "<< /Type /XObject /Subtype /Form /BBox [0 0 $SIDE $SIDE] /Group << /S /Transparency /I true /K true >> " +
+                    "/Resources << /ExtGState << /GA << /ca 0.5 >> >> /XObject << /In 6 0 R >> >> /Length ${outer.length} >>\nstream\n$outer\nendstream",
+                "<< /Type /XObject /Subtype /Form /BBox [0 0 $SIDE $SIDE] /Group << /S /Transparency /I true >> /Length ${inner.length} >>\nstream\n$inner\nendstream",
+            ),
+        )
+    }
+
+    @Test
+    fun a_group_nested_in_a_knockout_group_knocks_out_the_paints_before_it() {
+        // ISO 32000-1, 11.4.4 and 11.4.6: the half-transparent blue group replaces the red square
+        // of its knockout parent, so the page shows pale blue, as a plain fill does, not purple (#756).
+        val control = renderOnBitmap(knockoutPage(nested = false)).rgbAt(100, 100)
+        val bitmap = renderOnBitmap(knockoutPage(nested = true))
+        bitmap.assertPixel(100, 100, listOf(128, 128, 255), tolerance = 4)
+        bitmap.assertPixel(100, 100, control)
+    }
+
+    @Test
+    fun a_group_nested_in_a_knockout_group_keeps_the_paints_outside_its_shape() {
+        // Where the nested group paints nothing, its shape is 0 and the parent's red stays (#756).
+        val inner = "0 0 1 rg 100 0 100 $SIDE re f"
+        val outer = "1 0 0 rg 0 0 $SIDE $SIDE re f /GA gs /In Do"
+        val bitmap = renderOnBitmap(
+            testPage(
+                "1 1 1 rg 0 0 $SIDE $SIDE re f /Out Do",
+                "/XObject << /Out 5 0 R >>",
+                listOf(
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 $SIDE $SIDE] /Group << /S /Transparency /I true /K true >> " +
+                        "/Resources << /ExtGState << /GA << /ca 0.5 >> >> /XObject << /In 6 0 R >> >> /Length ${outer.length} >>\nstream\n$outer\nendstream",
+                    "<< /Type /XObject /Subtype /Form /BBox [0 0 $SIDE $SIDE] /Group << /S /Transparency /I true >> /Length ${inner.length} >>\nstream\n$inner\nendstream",
+                ),
+            ),
+        )
+        bitmap.assertPixel(50, 100, listOf(255, 0, 0))
+        bitmap.assertPixel(150, 100, listOf(128, 128, 255), tolerance = 4)
+    }
+
     /** A form over the whole page that is a non-isolated transparency group, [knockout] or not. */
     private fun nonIsolatedForm(content: String, resources: String, knockout: Boolean = false): String =
         "<< /Type /XObject /Subtype /Form /BBox [0 0 $SIDE $SIDE] /Group << /S /Transparency /I false /K $knockout >> " +

@@ -1086,6 +1086,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the Android canvas of `AndroidPdfBitmapRenderer`, a paint under a soft mask keeps its blend mode outside
   every layer, as on AWT, Skia, Compose and Canvas2D: an opaque mask over a red Multiply paint on blue gives black,
   where it gave red (#764).
+- On the Android canvas, a group nested in a knockout group takes the earlier paints of its parent away where it
+  draws, as on AWT, Skia, Compose and Canvas2D. A half-transparent nested blue group over a red square showed
+  purple, (127, 0, 127), and now shows the half-transparent blue of a plain fill (#756).
 
 ## [0.13.0] - 2026-10-09
 

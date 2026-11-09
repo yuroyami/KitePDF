@@ -77,7 +77,9 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
     }
 
     override fun endPage() {
-        // Defensive: well-formed PDFs always pair pushes with pops.
+        // Defensive: well-formed PDFs always pair pushes with pops. A knockout element left open
+        // ends first, which puts back the canvas it painted over.
+        groups.firstOrNull { it.element != null }?.element?.let { endKnockoutElement(it) }
         while (openLayers > 0) {
             canvas.restore()
             openLayers--
@@ -575,8 +577,11 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         isolated: Boolean, knockout: Boolean,
         alpha: Double, blendMode: KiteBlendMode,
     ) {
-        // A group nested in a knockout group gets a layer, so its own paints do not knock each other out.
-        val layered = isolated || knockout || knockingOut || alpha < 1.0 || blendMode != KiteBlendMode.Normal
+        // A group nested in a knockout group gets a bitmap, or else a layer, so its own paints do
+        // not knock each other out.
+        val nested = knockingOut
+        if (nested && beginKnockoutElement(bbox, ctm, knockout, alpha, blendMode)) return
+        val layered = isolated || knockout || nested || alpha < 1.0 || blendMode != KiteBlendMode.Normal
         groups.addLast(Group(layered, knockout))
         if (!layered) return
         val paint = Paint().apply {
@@ -589,10 +594,85 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
         layers++
     }
 
-    /** An open group: whether it opened a layer, and whether its paints knock out. */
-    private class Group(val layered: Boolean, val knockout: Boolean)
+    /** An open group: whether it opened a layer, whether its paints knock out, and the bitmap of a knockout element. */
+    private class Group(val layered: Boolean, val knockout: Boolean, val element: KnockoutElement? = null)
 
     private val groups = ArrayDeque<Group>()
+
+    /**
+     * A group nested in a knockout group, which paints to its own [bitmap] at pixel ([x], [y]),
+     * pixels that [fromPixels] maps back to the canvas, and the state of the canvas it paints
+     * over, which [endKnockoutElement] restores.
+     */
+    private class KnockoutElement(
+        val bitmap: android.graphics.Bitmap, val x: Int, val y: Int, val fromPixels: Matrix,
+        val alpha: Double, val blendMode: KiteBlendMode,
+        val savedCanvas: AndroidCanvas, val savedOpen: Int, val savedLayers: Int, val savedGroups: List<Group>,
+    )
+
+    /**
+     * ISO 32000-1, 11.4.4 and 11.4.6: a group nested in a knockout group is one element of it,
+     * and composites with the parent's initial backdrop, not with its earlier paints. A saved
+     * layer composites once, so the group paints to a bitmap of its own, as on Skia, and its end
+     * draws that bitmap twice: to take the earlier paints away where the group's shape is, then
+     * with the group's alpha and blend mode. Where the shape is 0 the earlier paints stay (#756).
+     * Returns false when the group covers no pixel or too many, so it takes the plain layer.
+     */
+    private fun beginKnockoutElement(bbox: KiteRectangle, ctm: KiteMatrix, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode): Boolean {
+        val local = layerBounds(bbox, ctm) ?: return false
+        // The canvas's own matrix maps the group's box to the pixels it paints. On a hardware
+        // canvas that matrix may be relative to a layer of the host's, so the end draws back
+        // through its inverse rather than in absolute pixels.
+        val toPixels = Matrix()
+        @Suppress("DEPRECATION")
+        canvas.getMatrix(toPixels)
+        val back = Matrix()
+        if (!toPixels.invert(back)) return false
+        val box = android.graphics.RectF(local)
+        toPixels.mapRect(box)
+        val left = kotlin.math.floor(box.left).toInt()
+        val top = kotlin.math.floor(box.top).toInt()
+        val width = kotlin.math.ceil(box.right).toInt() - left
+        val height = kotlin.math.ceil(box.bottom).toInt() - top
+        if (width <= 0 || height <= 0 || width.toDouble() * height > STEP_MAX_PIXELS) return false
+        val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val offscreen = AndroidCanvas(bitmap)
+        offscreen.translate(-left.toFloat(), -top.toFloat())
+        offscreen.concat(toPixels)
+        val element = KnockoutElement(bitmap, left, top, back, alpha.coerceIn(0.0, 1.0), blendMode, canvas, openLayers, layers, groups.toList())
+        canvas = offscreen
+        openLayers = 0
+        layers = 0
+        groups.addLast(Group(layered = false, knockout = knockout, element = element))
+        return true
+    }
+
+    private fun endKnockoutElement(element: KnockoutElement) {
+        // The clips and layers the group left open end on its bitmap.
+        canvas.restoreToCount(1)
+        canvas = element.savedCanvas
+        openLayers = element.savedOpen
+        layers = element.savedLayers
+        groups.clear()
+        groups.addAll(element.savedGroups)
+        try {
+            canvas.save()
+            canvas.concat(element.fromPixels)
+            val x = element.x.toFloat()
+            val y = element.y.toFloat()
+            canvas.drawBitmap(element.bitmap, x, y, Paint().apply { blendMode = AndroidBlendMode.DST_OUT })
+            canvas.drawBitmap(
+                element.bitmap, x, y,
+                Paint().apply {
+                    this.alpha = (element.alpha * 255).toInt()
+                    applyBlendMode(element.blendMode)
+                },
+            )
+            canvas.restore()
+        } finally {
+            element.bitmap.recycle()
+        }
+    }
 
     /**
      * True while the paints go straight to the layer of a knockout group. Against the
@@ -606,7 +686,9 @@ public class AndroidNativeCanvas(canvas: AndroidCanvas) : KiteCanvas {
     }
 
     override fun endTransparencyGroup() {
-        if (groups.removeLastOrNull()?.layered != true) return
+        val ended = groups.removeLastOrNull()
+        ended?.element?.let { endKnockoutElement(it); return }
+        if (ended?.layered != true) return
         if (openLayers > 0) {
             canvas.restore()
             openLayers--
