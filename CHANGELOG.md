@@ -938,6 +938,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The editor creates annotations: `PdfEditor.addAnnotation(page, PdfNewAnnotation...)` adds a highlight,
   underline, strike-out, squiggly, note, free text, ink, square, circle, line or link, each with its own
   appearance stream, and `removeAnnotation` takes one off the page (#638).
+- The tag tree of a tagged PDF is public: `PdfDocument.structureTree` gives its root `PdfStructElement`s in
+  logical order, each with its type, `/Alt`, `/ActualText`, `/Lang`, bounds and kids, and a marked-content kid
+  names its page and MCID (#640).
 
 ## [0.13.0] - 2026-10-09
 

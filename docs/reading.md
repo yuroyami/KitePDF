@@ -398,6 +398,16 @@ A tagged page follows its structure tree, not the order in which its content dra
 
 A page without tags gives its text blocks in layout order.
 
+`readingOrder()` flattens the tree. `doc.structureTree` gives the tree itself, for an accessibility checker or a converter that needs the nesting, such as which row and table a cell belongs to. Each `PdfStructElement` has its standard `type`, the `ownType` that the file names, `alt`, `actualText`, `language`, `bbox` and its `kids`. A kid is another element, or `PdfStructKid.Content` with the `pageIndex` and the marked-content id `mcid` of a sequence on a page:
+
+```kotlin
+fun walk(element: PdfStructElement, depth: Int = 0) {
+    println("  ".repeat(depth) + element.type + (element.alt?.let { " ($it)" } ?: ""))
+    element.children.forEach { walk(it, depth + 1) }
+}
+doc.structureTree?.forEach { walk(it) }
+```
+
 `bounds` gives the place of each item on the page, in display space. A text item has the box of its words. A figure has the `/BBox` of its layout attributes, or else the box of what it paints inside its clip. `bounds` is null when neither exists.
 
 ## Next

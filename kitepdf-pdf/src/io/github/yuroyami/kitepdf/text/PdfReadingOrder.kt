@@ -19,7 +19,7 @@ import kotlin.math.max
 internal object PdfReadingOrder {
 
     fun of(page: PdfPage, document: PdfDocument): List<KiteReadingItem> {
-        val roots = document.structureTree
+        val roots = document.structureElements
         val pageNumber = page.reference?.objectNumber
         if (roots != null && pageNumber != null) {
             val contents = markedContent(page, document)

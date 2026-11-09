@@ -218,4 +218,29 @@ class ReadingOrderTest {
         // Each block's box comes from its lines, the top one nearer the top of the page.
         assertTrue(assertNotNullBox(items[0].bounds).bottom < assertNotNullBox(items[1].bounds).bottom)
     }
+
+    /** The public tag tree keeps the nesting of a table and the /Alt of a figure, and names the page and id of each cell (#640). */
+    @Test
+    fun the_public_tag_tree_keeps_a_table_and_a_figure() {
+        val doc = taggedPage(
+            "/TD <</MCID 0>> BDC BT /F1 12 Tf 50 300 Td (Cell one) Tj ET EMC\n" +
+                "/TD <</MCID 1>> BDC BT /F1 12 Tf 150 300 Td (Cell two) Tj ET EMC\n" +
+                "/Figure <</MCID 2>> BDC 1 0 0 rg 50 200 40 40 re f EMC",
+            "<< /Type /StructTreeRoot /K [6 0 R 10 0 R] >>",
+            /* 6 */ "<< /Type /StructElem /S /Table /Pg 3 0 R /K 7 0 R >>",
+            /* 7 */ "<< /Type /StructElem /S /TR /Pg 3 0 R /K [8 0 R 9 0 R] >>",
+            /* 8 */ "<< /Type /StructElem /S /TD /Pg 3 0 R /K 0 >>",
+            /* 9 */ "<< /Type /StructElem /S /TD /Pg 3 0 R /K 1 >>",
+            /* 10 */ "<< /Type /StructElem /S /Figure /Pg 3 0 R /Alt (A red square) /K 2 >>",
+        )
+        val roots = assertNotNull(doc.structureTree, "the document has no tag tree")
+        assertEquals(listOf("Table", "Figure"), roots.map { it.type })
+        val row = roots[0].children.single()
+        assertEquals("TR", row.type)
+        assertEquals(listOf("TD", "TD"), row.children.map { it.type })
+        val cells = row.children.map { (it.kids.single() as PdfStructKid.Content) }
+        assertEquals(listOf(0 to 0, 0 to 1), cells.map { it.pageIndex to it.mcid })
+        assertEquals("A red square", roots[1].alt)
+        assertEquals(2, (roots[1].kids.single() as PdfStructKid.Content).mcid)
+    }
 }

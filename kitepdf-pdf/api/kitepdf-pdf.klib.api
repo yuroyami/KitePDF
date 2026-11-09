@@ -1030,6 +1030,8 @@ final class io.github.yuroyami.kitepdf/PdfDocument : io.github.yuroyami.kitepdf.
         final fun <get-rawBytes>(): kotlin/ByteArray // io.github.yuroyami.kitepdf/PdfDocument.rawBytes.<get-rawBytes>|<get-rawBytes>(){}[0]
     final val signatures // io.github.yuroyami.kitepdf/PdfDocument.signatures|{}signatures[0]
         final fun <get-signatures>(): kotlin.collections/List<io.github.yuroyami.kitepdf/PdfSignature> // io.github.yuroyami.kitepdf/PdfDocument.signatures.<get-signatures>|<get-signatures>(){}[0]
+    final val structureTree // io.github.yuroyami.kitepdf/PdfDocument.structureTree|{}structureTree[0]
+        final fun <get-structureTree>(): kotlin.collections/List<io.github.yuroyami.kitepdf/PdfStructElement>? // io.github.yuroyami.kitepdf/PdfDocument.structureTree.<get-structureTree>|<get-structureTree>(){}[0]
     final val trailer // io.github.yuroyami.kitepdf/PdfDocument.trailer|{}trailer[0]
         final fun <get-trailer>(): io.github.yuroyami.kitepdf.core.parser/PdfDictionary // io.github.yuroyami.kitepdf/PdfDocument.trailer.<get-trailer>|<get-trailer>(){}[0]
     final val version // io.github.yuroyami.kitepdf/PdfDocument.version|{}version[0]
@@ -1698,6 +1700,27 @@ final class io.github.yuroyami.kitepdf/PdfSignatureValidation { // io.github.yur
         final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf/PdfSignatureValidation.Status // io.github.yuroyami.kitepdf/PdfSignatureValidation.Status.valueOf|valueOf#static(kotlin.String){}[0]
         final fun values(): kotlin/Array<io.github.yuroyami.kitepdf/PdfSignatureValidation.Status> // io.github.yuroyami.kitepdf/PdfSignatureValidation.Status.values|values#static(){}[0]
     }
+}
+
+final class io.github.yuroyami.kitepdf/PdfStructElement { // io.github.yuroyami.kitepdf/PdfStructElement|null[0]
+    final val actualText // io.github.yuroyami.kitepdf/PdfStructElement.actualText|{}actualText[0]
+        final fun <get-actualText>(): kotlin/String? // io.github.yuroyami.kitepdf/PdfStructElement.actualText.<get-actualText>|<get-actualText>(){}[0]
+    final val alt // io.github.yuroyami.kitepdf/PdfStructElement.alt|{}alt[0]
+        final fun <get-alt>(): kotlin/String? // io.github.yuroyami.kitepdf/PdfStructElement.alt.<get-alt>|<get-alt>(){}[0]
+    final val bbox // io.github.yuroyami.kitepdf/PdfStructElement.bbox|{}bbox[0]
+        final fun <get-bbox>(): io.github.yuroyami.kitepdf.core/KiteRectangle? // io.github.yuroyami.kitepdf/PdfStructElement.bbox.<get-bbox>|<get-bbox>(){}[0]
+    final val children // io.github.yuroyami.kitepdf/PdfStructElement.children|{}children[0]
+        final fun <get-children>(): kotlin.collections/List<io.github.yuroyami.kitepdf/PdfStructElement> // io.github.yuroyami.kitepdf/PdfStructElement.children.<get-children>|<get-children>(){}[0]
+    final val kids // io.github.yuroyami.kitepdf/PdfStructElement.kids|{}kids[0]
+        final fun <get-kids>(): kotlin.collections/List<io.github.yuroyami.kitepdf/PdfStructKid> // io.github.yuroyami.kitepdf/PdfStructElement.kids.<get-kids>|<get-kids>(){}[0]
+    final val language // io.github.yuroyami.kitepdf/PdfStructElement.language|{}language[0]
+        final fun <get-language>(): kotlin/String? // io.github.yuroyami.kitepdf/PdfStructElement.language.<get-language>|<get-language>(){}[0]
+    final val ownType // io.github.yuroyami.kitepdf/PdfStructElement.ownType|{}ownType[0]
+        final fun <get-ownType>(): kotlin/String // io.github.yuroyami.kitepdf/PdfStructElement.ownType.<get-ownType>|<get-ownType>(){}[0]
+    final val type // io.github.yuroyami.kitepdf/PdfStructElement.type|{}type[0]
+        final fun <get-type>(): kotlin/String // io.github.yuroyami.kitepdf/PdfStructElement.type.<get-type>|<get-type>(){}[0]
+
+    final fun toString(): kotlin/String // io.github.yuroyami.kitepdf/PdfStructElement.toString|toString(){}[0]
 }
 
 final class io.github.yuroyami.kitepdf/PdfViewerPreferences { // io.github.yuroyami.kitepdf/PdfViewerPreferences|null[0]
@@ -2440,6 +2463,24 @@ sealed class io.github.yuroyami.kitepdf/PdfAction { // io.github.yuroyami.kitepd
 
     final object Companion { // io.github.yuroyami.kitepdf/PdfAction.Companion|null[0]
         final fun parse(io.github.yuroyami.kitepdf.core.parser/PdfDictionary?, io.github.yuroyami.kitepdf.core.parser/IndirectResolver): io.github.yuroyami.kitepdf/PdfAction? // io.github.yuroyami.kitepdf/PdfAction.Companion.parse|parse(io.github.yuroyami.kitepdf.core.parser.PdfDictionary?;io.github.yuroyami.kitepdf.core.parser.IndirectResolver){}[0]
+    }
+}
+
+sealed class io.github.yuroyami.kitepdf/PdfStructKid { // io.github.yuroyami.kitepdf/PdfStructKid|null[0]
+    final class Content : io.github.yuroyami.kitepdf/PdfStructKid { // io.github.yuroyami.kitepdf/PdfStructKid.Content|null[0]
+        final val mcid // io.github.yuroyami.kitepdf/PdfStructKid.Content.mcid|{}mcid[0]
+            final fun <get-mcid>(): kotlin/Int // io.github.yuroyami.kitepdf/PdfStructKid.Content.mcid.<get-mcid>|<get-mcid>(){}[0]
+        final val pageIndex // io.github.yuroyami.kitepdf/PdfStructKid.Content.pageIndex|{}pageIndex[0]
+            final fun <get-pageIndex>(): kotlin/Int? // io.github.yuroyami.kitepdf/PdfStructKid.Content.pageIndex.<get-pageIndex>|<get-pageIndex>(){}[0]
+
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf/PdfStructKid.Content.toString|toString(){}[0]
+    }
+
+    final class Element : io.github.yuroyami.kitepdf/PdfStructKid { // io.github.yuroyami.kitepdf/PdfStructKid.Element|null[0]
+        final val element // io.github.yuroyami.kitepdf/PdfStructKid.Element.element|{}element[0]
+            final fun <get-element>(): io.github.yuroyami.kitepdf/PdfStructElement // io.github.yuroyami.kitepdf/PdfStructKid.Element.element.<get-element>|<get-element>(){}[0]
+
+        final fun toString(): kotlin/String // io.github.yuroyami.kitepdf/PdfStructKid.Element.toString|toString(){}[0]
     }
 }
 

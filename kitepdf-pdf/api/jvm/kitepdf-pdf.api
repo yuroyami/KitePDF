@@ -632,6 +632,7 @@ public final class io/github/yuroyami/kitepdf/PdfDocument : io/github/yuroyami/k
 	public final fun getPermissions ()Lio/github/yuroyami/kitepdf/PdfPermissions;
 	public final fun getRawBytes ()[B
 	public final fun getSignatures ()Ljava/util/List;
+	public final fun getStructureTree ()Ljava/util/List;
 	public final fun getTrailer ()Lio/github/yuroyami/kitepdf/core/parser/PdfDictionary;
 	public final fun getVersion ()Ljava/lang/String;
 	public final fun getViewerPreferences ()Lio/github/yuroyami/kitepdf/PdfViewerPreferences;
@@ -1194,6 +1195,32 @@ public final class io/github/yuroyami/kitepdf/PdfSignatureValidation$Status : ja
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
 	public static fun values ()[Lio/github/yuroyami/kitepdf/PdfSignatureValidation$Status;
+}
+
+public final class io/github/yuroyami/kitepdf/PdfStructElement {
+	public final fun getActualText ()Ljava/lang/String;
+	public final fun getAlt ()Ljava/lang/String;
+	public final fun getBbox ()Lio/github/yuroyami/kitepdf/core/KiteRectangle;
+	public final fun getChildren ()Ljava/util/List;
+	public final fun getKids ()Ljava/util/List;
+	public final fun getLanguage ()Ljava/lang/String;
+	public final fun getOwnType ()Ljava/lang/String;
+	public final fun getType ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract class io/github/yuroyami/kitepdf/PdfStructKid {
+}
+
+public final class io/github/yuroyami/kitepdf/PdfStructKid$Content : io/github/yuroyami/kitepdf/PdfStructKid {
+	public final fun getMcid ()I
+	public final fun getPageIndex ()Ljava/lang/Integer;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/yuroyami/kitepdf/PdfStructKid$Element : io/github/yuroyami/kitepdf/PdfStructKid {
+	public final fun getElement ()Lio/github/yuroyami/kitepdf/PdfStructElement;
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/yuroyami/kitepdf/PdfViewerPreferences {

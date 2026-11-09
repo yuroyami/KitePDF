@@ -678,8 +678,19 @@ public class PdfDocument private constructor(
     public val language: String? get() = (catalog["Lang"] as? PdfString)?.asText()
 
     /** The logical structure of a tagged PDF, its root elements in logical order, or null without one (#208). */
-    internal val structureTree: List<io.github.yuroyami.kitepdf.text.StructElement>? by lazy {
+    internal val structureElements: List<io.github.yuroyami.kitepdf.text.StructElement>? by lazy {
         io.github.yuroyami.kitepdf.text.StructureTree.parse(this)
+    }
+
+    /**
+     * The tag tree of a tagged PDF (ISO 32000-1, 14.7.2): its root structure elements in logical
+     * order, each with its type, its replacement and alternate text, its language and its kids,
+     * or null when the document has no structure tree (#640). A kid that is marked content names
+     * its page and its marked-content id. [PdfPage.readingOrder] flattens the same tree.
+     */
+    public val structureTree: List<PdfStructElement>? by lazy {
+        pages // fills pageRefToIndex
+        structureElements?.map { PdfStructElement.of(it, pageRefToIndex) }
     }
 
     /**
