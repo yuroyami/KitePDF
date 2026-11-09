@@ -859,6 +859,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the document (#820).
 - A PDF document keeps the parsed content and text of the 32 pages it used last, not of every page it has ever
   drawn, and the new `PdfDocument.dropPageCaches()` frees them (#819).
+- The document font cache counts what a font holds: a CFF font no longer keeps its program twice, and
+  `PdfFont.retainedBytes` counts the glyph names, the CID-to-glyph map, the widths and the CMaps, so the cache
+  keeps to its budget (#711).
 
 ## [0.13.0] - 2026-10-09
 

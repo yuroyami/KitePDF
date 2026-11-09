@@ -26,7 +26,6 @@ import io.github.yuroyami.kitepdf.core.withLock
  * Encoding /Differences override comes from the PDF layer (PdfFont).
  */
 public class CffFont private constructor(
-    private val reader: TtfReader,
     public val name: String,
     /** Per-glyph charstring bytes: index = glyph ID. */
     internal val charStrings: List<ByteArray>,
@@ -78,6 +77,12 @@ public class CffFont private constructor(
     /** The bytes of the charstrings and subroutines that this font keeps. */
     internal val programBytes: Int
         get() = charStrings.sumOf { it.size } + globalSubrs.sumOf { it.size } + localSubrsPerFd.sumOf { fd -> fd.sumOf { it.size } }
+
+    /**
+     * The bytes that this font holds besides [programBytes] before an outline is drawn: an array
+     * header per charstring and a glyph name with its entry in the name map per glyph (#711).
+     */
+    internal val glyphTableBytes: Long get() = numGlyphs * GLYPH_BYTES
 
     private val outlineCache = HashMap<Int, io.github.yuroyami.kitepdf.core.render.KitePath?>()
 
@@ -265,6 +270,12 @@ public class CffFont private constructor(
 
     public companion object {
 
+        /**
+         * The share of [glyphTableBytes] for one glyph: a charstring array header, a glyph name
+         * and its entry in the name map. Measured on the JVM with a CID-keyed font of 57,394 glyphs.
+         */
+        private const val GLYPH_BYTES = 160L
+
         public fun parse(bytes: ByteArray): CffFont = parse(bytes, unitsPerEm = 1000)
 
         /**
@@ -372,7 +383,6 @@ public class CffFont private constructor(
             }
 
             return CffFont(
-                reader = reader,
                 name = name,
                 charStrings = charStringsIndex,
                 globalSubrs = globalSubrs,
@@ -491,7 +501,6 @@ public class CffFont private constructor(
             val glyphNames = Array<String?>(numGlyphs) { null }
             if (numGlyphs > 0) glyphNames[0] = ".notdef"
             return CffFont(
-                reader = reader,
                 name = "CFF2",
                 charStrings = charStrings,
                 globalSubrs = globalSubrs,

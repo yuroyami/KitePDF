@@ -71,15 +71,18 @@ public class PdfFont private constructor(
 
     /**
      * An estimate of the memory that this font holds, in bytes: twice its embedded program, for
-     * the program and the outlines parsed from it, and a fixed share for its encoding tables. A
-     * cache of fonts stays within its budget by this number. A bundled standard 14 program is
-     * shared by every document, so it does not count.
+     * the program and the outlines parsed from it, the glyph names of a CFF program, the
+     * ToUnicode CMap, and for a composite font its CID maps, widths and CMaps (#711). A cache of
+     * fonts stays within its budget by this number. A bundled standard 14 program is shared by
+     * every document, so it does not count.
      */
     public val retainedBytes: Long
         get() {
+            val cff = embeddedCff ?: composite?.cff
             val program = embeddedTtf?.programBytes ?: embeddedCff?.programBytes ?: embeddedType1?.programBytes
                 ?: composite?.let { it.ttf?.programBytes ?: it.cff?.programBytes } ?: 0
-            return TABLE_BYTES + 2L * program
+            val tables = composite?.tableBytes ?: (toUnicode?.retainedBytes ?: 0)
+            return TABLE_BYTES + 2L * program + (cff?.glyphTableBytes ?: 0) + tables
         }
 
     public val hasEmbeddedOutlines: Boolean
@@ -366,7 +369,7 @@ public class PdfFont private constructor(
 
     public companion object {
 
-        /** The share of [retainedBytes] for the encoding, width and Unicode tables of a font. */
+        /** The share of [retainedBytes] for the fixed tables of a font: its byte encoding and simple widths. */
         private const val TABLE_BYTES = 16L * 1024
 
         /**

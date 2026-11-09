@@ -70,6 +70,16 @@ public class CMap private constructor(
      */
     internal var base: CodeUnitReader? = null
 
+    /**
+     * An estimate of the memory that this CMap holds, in bytes, for a font cache budget (#711).
+     * A `bfchar` entry is a map node, a boxed code and a string; a `cidchar` entry a node and two
+     * boxed numbers. A predefined CMap that this one extends through [base] is shared, so it does not count.
+     */
+    internal val retainedBytes: Long
+        get() = 64L + bfChars.size * BF_CHAR_BYTES + cidChars.size * CID_CHAR_BYTES +
+            bfRanges.sumOf { r -> RANGE_BYTES + (r.replacements?.size ?: 0) * STRING_BYTES } +
+            cidRanges.size * RANGE_BYTES + codespaces.size * RANGE_BYTES
+
     /** One code unit at [offset]: its CID, its code and its width, through this CMap and its [base]. */
     private fun unitAt(bytes: ByteArray, offset: Int): Triple<Int, Int, Int> {
         val b = base?.next(bytes, offset)
@@ -306,6 +316,18 @@ public class CMap private constructor(
     internal data class CidRange(val lo: Int, val hi: Int, val baseCid: Int)
 
     public companion object {
+
+        /** The share of [retainedBytes] for one `bfchar` entry: a hash node, a boxed code and a short string. */
+        private const val BF_CHAR_BYTES = 112L
+
+        /** The share of [retainedBytes] for one `cidchar` entry: a hash node and two boxed numbers. */
+        private const val CID_CHAR_BYTES = 80L
+
+        /** The share of [retainedBytes] for one range or codespace object. */
+        private const val RANGE_BYTES = 48L
+
+        /** The share of [retainedBytes] for one destination string of a `bfrange` array. */
+        private const val STRING_BYTES = 56L
 
         /** Parse a CMap stream (decoded bytes). Robust to unknown sections. */
         public fun parse(bytes: ByteArray): CMap {

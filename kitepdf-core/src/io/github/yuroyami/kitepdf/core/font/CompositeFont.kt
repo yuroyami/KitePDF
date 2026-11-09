@@ -65,6 +65,14 @@ internal class CompositeFont(
 ) {
 
     /**
+     * An estimate of the memory that the tables of this font hold, in bytes: the CID maps, the
+     * widths and the CMaps, but not the embedded program, which [PdfFont.retainedBytes] counts (#711).
+     */
+    val tableBytes: Long
+        get() = cidToGid.retainedBytes + widths.retainedBytes + verticalWidths.retainedBytes +
+            (encodingCMap?.retainedBytes ?: 0) + (toUnicode?.retainedBytes ?: 0)
+
+    /**
      * Segment [bytes] at [offset] into one (cid, byteCount) code unit, using the
      * embedded /Encoding CMap when present, else the predefined [codeReader].
      * The single point of truth for composite code-unit segmentation, so every
@@ -266,6 +274,9 @@ internal class CompositeFont(
 internal class CidToGidMap private constructor(
     private val table: IntArray?,    // null = identity
 ) {
+    /** The bytes this map holds: four for each CID of an explicit map (#711). */
+    val retainedBytes: Long get() = 4L * (table?.size ?: 0)
+
     fun map(cid: Int): Int {
         if (table == null) return cid          // /Identity
         return table.getOrNull(cid) ?: 0       // out-of-range → .notdef
@@ -314,6 +325,9 @@ internal class CidVerticalTable private constructor(
     private val defaultOriginY: Double,
     private val defaultDisplacement: Double,
 ) {
+
+    /** The bytes the metric arrays hold (#711). */
+    val retainedBytes: Long get() = 4L * (starts.size + ends.size + offsets.size) + perCid.size + 8L * triples.size
 
     /** The metrics of [cid], whose horizontal width is [width]. The first range that holds it wins. */
     fun metrics(cid: Int, width: Double): PdfVerticalMetrics {
@@ -400,6 +414,10 @@ internal class CidWidthTable private constructor(
     /** True when [starts] is ascending and ranges don't overlap → binary search. */
     private val sorted: Boolean,
 ) {
+
+    /** The bytes the width arrays hold (#711). */
+    val retainedBytes: Long
+        get() = 4L * (starts.size + ends.size + perCidIndex.size) + 8L * (flatWidths.size + singleWidth.size)
 
     fun widthOf(cid: Int): Double {
         // widthOf runs once per glyph laid out. For CJK pages that's thousands
