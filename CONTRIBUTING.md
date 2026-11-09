@@ -177,7 +177,7 @@ The PDF sweep scores up to six evenly spaced pages of each document. To score ev
 
 When you touch a feature that no real document covers, grow the corpus. Add a generated fixture at once, and ask for a real file when a synthetic one cannot prove the case.
 
-Some oracle tests read fonts from `mupdf-master/resources/fonts/`, which is also git-ignored. On a clean checkout, these tests report as skipped.
+Some oracle tests read fonts from `mupdf-master/resources/fonts/`, which is also git-ignored, and some run `hb-shape`, `pdfsig`, `opj_compress` or `woff2_compress`. On a clean checkout, these tests report as skipped. CI checks out the fonts of MuPDF at the commit of the pinned oracle, installs the tools, and sets `KITEPDF_REQUIRE_ORACLES=1`, which makes such a test fail when its font or tool is missing. To get the fonts locally, check out `resources/fonts` of MuPDF at that commit into `mupdf-master/`.
 
 ### DoomPDF
 

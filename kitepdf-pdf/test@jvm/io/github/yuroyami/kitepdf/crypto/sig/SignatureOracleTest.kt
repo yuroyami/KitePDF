@@ -4,6 +4,7 @@ import io.github.yuroyami.kitepdf.PdfDocument
 import io.github.yuroyami.kitepdf.PdfSignatureValidation.Status
 import io.github.yuroyami.kitepdf.crypto.sig.SigFixtures.CmsOptions
 import io.github.yuroyami.kitepdf.crypto.sig.SigFixtures.PdfOptions
+import io.github.yuroyami.kitepdf.font.orOracle
 import io.github.yuroyami.kitepdf.font.orSkip
 import java.io.File
 import java.nio.file.Files
@@ -69,7 +70,7 @@ class SignatureOracleTest {
 
     @Test
     fun pdfsigAgreesWithKitePdf() {
-        val pdfsig = tool("pdfsig", "-v").orSkip("poppler's pdfsig")
+        val pdfsig = tool("pdfsig", "-v").orOracle("poppler's pdfsig")
         val dir = Files.createTempDirectory("kitepdf-sig").toFile()
         try {
             val changed = SigFixtures.signedPdf { SigFixtures.cms(signer, listOf(signer, root), it) }

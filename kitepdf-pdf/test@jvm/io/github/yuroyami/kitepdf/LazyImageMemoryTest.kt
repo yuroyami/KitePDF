@@ -11,7 +11,7 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.KiteImageData
 import io.github.yuroyami.kitepdf.core.render.toRgbaBytes
 import io.github.yuroyami.kitepdf.core.render.toShrunkRgbaBytes
-import org.junit.Assume.assumeTrue
+import io.github.yuroyami.kitepdf.font.orOracle
 import java.io.File
 import java.lang.management.ManagementFactory
 import java.nio.file.Files
@@ -73,8 +73,8 @@ class LazyImageMemoryTest {
 
     @Test
     fun a_jpeg_2000_image_keeps_its_encoded_data_and_draws_from_the_reduced_decode() {
-        assumeTrue("opj_compress is not installed", listOf("/opt/homebrew/bin/opj_compress", "/usr/bin/opj_compress", "/usr/local/bin/opj_compress").any { File(it).canExecute() })
-        val compress = listOf("/opt/homebrew/bin/opj_compress", "/usr/bin/opj_compress", "/usr/local/bin/opj_compress").first { File(it).canExecute() }
+        val compress = listOf("/opt/homebrew/bin/opj_compress", "/usr/bin/opj_compress", "/usr/local/bin/opj_compress")
+            .firstOrNull { File(it).canExecute() }.orOracle("opj_compress")
         val w = 203
         val h = 157
         val dir = Files.createTempDirectory("kitepdf-jpx").toFile()

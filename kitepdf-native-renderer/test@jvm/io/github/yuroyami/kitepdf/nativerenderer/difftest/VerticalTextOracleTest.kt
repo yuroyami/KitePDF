@@ -10,7 +10,6 @@ import io.github.yuroyami.kitepdf.writer.EmbeddedFont
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import java.awt.image.BufferedImage
 import java.io.File
-import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -51,8 +50,8 @@ class VerticalTextOracleTest {
     @Test
     fun an_identity_v_run_stands_where_mutool_puts_it() {
         val ttf = fontFile()
-        assumeTrue("DroidSansFallback.ttf not found, skipping.", ttf != null)
-        assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
+        assumeOracle("DroidSansFallback.ttf not found, skipping.", ttf != null)
+        assumeOracle("mutool not found, skipping.", MuPdfOracle.binary != null)
         val font = EmbeddedFont.load(ttf!!.readBytes())
 
         val horizontal = PdfBuilder()

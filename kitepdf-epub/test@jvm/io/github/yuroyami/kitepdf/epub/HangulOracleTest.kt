@@ -22,8 +22,8 @@ class HangulOracleTest {
 
     @Test
     fun jamo_words_shape_as_harfbuzz_shapes_them() {
-        val font = font().orSkip("DroidSansFallbackFull.ttf of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val font = font().orOracle("DroidSansFallbackFull.ttf of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val words = listOf(
             "각", // 각
             "한국", // 한국

@@ -83,8 +83,8 @@ class FontFallbackTest {
 
     @Test
     fun fallback_for_prefers_a_face_that_has_the_glyph() {
-        val latin = latinFace().orSkip("NotoSans-Regular.otf")
-        val cjk = cjkFace().orSkip("DroidSansFallback.ttf")
+        val latin = latinFace().orOracle("NotoSans-Regular.otf")
+        val cjk = cjkFace().orOracle("DroidSansFallback.ttf")
         val registry = FontRegistry(listOf(latin, cjk))
         assertSame(cjk, registry.fallbackFor(han, bold = false, italic = false))
         // A codepoint neither face carries falls through to null (generic path).
@@ -97,10 +97,10 @@ class FontFallbackTest {
 
     @Test
     fun missing_glyph_falls_back_to_another_registered_face() {
-        val latin = repoFont("mupdf-master/resources/fonts/noto/NotoSans-Regular.otf").orSkip("NotoSans-Regular.otf")
-        val cjk = repoFont("mupdf-master/resources/fonts/droid/DroidSansFallback.ttf").orSkip("DroidSansFallback.ttf")
-        latinFace().orSkip("A Latin-only NotoSans face")
-        cjkFace().orSkip("A CJK DroidSans face")
+        val latin = repoFont("mupdf-master/resources/fonts/noto/NotoSans-Regular.otf").orOracle("NotoSans-Regular.otf")
+        val cjk = repoFont("mupdf-master/resources/fonts/droid/DroidSansFallback.ttf").orOracle("DroidSansFallback.ttf")
+        latinFace().orOracle("A Latin-only NotoSans face")
+        cjkFace().orOracle("A CJK DroidSans face")
         val css = "@font-face{font-family:'main';src:url(main.otf)}" +
             "@font-face{font-family:'cjk';src:url(cjk.ttf)}" +
             "p{font-family:'main'}"
@@ -121,8 +121,8 @@ class FontFallbackTest {
 
     @Test
     fun missing_glyph_without_any_fallback_face_uses_the_generic_path() {
-        val latin = repoFont("mupdf-master/resources/fonts/noto/NotoSans-Regular.otf").orSkip("NotoSans-Regular.otf")
-        latinFace().orSkip("A Latin-only NotoSans face")
+        val latin = repoFont("mupdf-master/resources/fonts/noto/NotoSans-Regular.otf").orOracle("NotoSans-Regular.otf")
+        latinFace().orOracle("A Latin-only NotoSans face")
         val css = "@font-face{font-family:'main';src:url(main.otf)}p{font-family:'main'}"
         val doc = EpubDocument.open(
             EpubFixtures.epub(

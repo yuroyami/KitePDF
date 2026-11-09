@@ -10,7 +10,6 @@ import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import io.github.yuroyami.kitepdf.writer.EmbeddedFont
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import java.io.File
-import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -35,8 +34,8 @@ class TextClipOracleTest {
     @Test
     fun mode7_clip_matches_mutool_within_budget() {
         val ttf = fontFile()
-        assumeTrue("DroidSansFallback.ttf not found, skipping.", ttf != null)
-        assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
+        assumeOracle("DroidSansFallback.ttf not found, skipping.", ttf != null)
+        assumeOracle("mutool not found, skipping.", MuPdfOracle.binary != null)
         val font = EmbeddedFont.load(ttf!!.readBytes())
 
         val bytes = PdfBuilder()

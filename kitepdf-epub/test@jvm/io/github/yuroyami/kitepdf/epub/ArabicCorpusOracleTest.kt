@@ -28,8 +28,8 @@ class ArabicCorpusOracleTest {
     }
 
     private fun naskh(): File {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        return File(dir, "NotoNaskhArabic-Regular.otf").takeIf { it.exists() }.orSkip("NotoNaskhArabic-Regular.otf")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        return File(dir, "NotoNaskhArabic-Regular.otf").takeIf { it.exists() }.orOracle("NotoNaskhArabic-Regular.otf")
     }
 
     /**
@@ -52,7 +52,7 @@ class ArabicCorpusOracleTest {
 
     @Test
     fun corpus_words_shape_to_the_glyphs_harfbuzz_gives() {
-        val tool = hbShape().orSkip("hb-shape")
+        val tool = hbShape().orOracle("hb-shape")
         val font = naskh()
         val face = loadFace(font)
         val words = corpusWords(300)
@@ -66,7 +66,7 @@ class ArabicCorpusOracleTest {
 
     @Test
     fun corpus_words_lay_out_with_the_positions_harfbuzz_gives() {
-        val tool = hbShape().orSkip("hb-shape")
+        val tool = hbShape().orOracle("hb-shape")
         val font = naskh()
         val face = loadFace(font)
         val words = corpusWords(300)

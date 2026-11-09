@@ -75,7 +75,7 @@ CI compiles every target in the table on each push and pull request. It runs the
 
 | Target | Tests that CI runs |
 | --- | --- |
-| JVM | All artifacts, plus the pixel comparisons with MuPDF and PDFium |
+| JVM | All artifacts, plus the pixel comparisons with MuPDF and PDFium, and the font, shaping and signature oracle tests against MuPDF's fonts, `hb-shape` and `pdfsig` |
 | Android | Host tests on the JVM for the format modules, `-javascript`, `-compose-viewer` and `-native-renderer`. No test runs on a device or an emulator. |
 | iOS simulator arm64 | The format modules, `kitepdf`, `-javascript`, and the common tests of `-compose-viewer` and `-native-renderer` |
 | macOS arm64 | The format modules, `kitepdf`, `-javascript`, `-native-renderer` and `-compose-viewer` |

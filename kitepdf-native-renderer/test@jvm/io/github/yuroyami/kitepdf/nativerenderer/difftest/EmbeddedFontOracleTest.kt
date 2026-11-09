@@ -10,7 +10,6 @@ import io.github.yuroyami.kitepdf.writer.EmbeddedFont
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import java.awt.image.BufferedImage
 import java.io.File
-import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -51,7 +50,7 @@ class EmbeddedFontOracleTest {
     @Test
     fun embeds_truetype_and_round_trips_unicode_through_reader() {
         val ttf = fontFile()
-        assumeTrue("DroidSansFallback.ttf not found, skipping.", ttf != null)
+        assumeOracle("DroidSansFallback.ttf not found, skipping.", ttf != null)
         val font = EmbeddedFont.load(ttf!!.readBytes())
 
         val bytes = PdfBuilder()
@@ -73,10 +72,10 @@ class EmbeddedFontOracleTest {
 
     @Test
     fun mutool_renders_embedded_truetype_cjk() {
-        assumeTrue("mutool not found, skipping oracle validation.", MuPdfOracle.binary != null)
+        assumeOracle("mutool not found, skipping oracle validation.", MuPdfOracle.binary != null)
         val tool = MuPdfOracle.binary!!
         val ttf = fontFile()
-        assumeTrue("DroidSansFallback.ttf not found, skipping.", ttf != null)
+        assumeOracle("DroidSansFallback.ttf not found, skipping.", ttf != null)
         val font = EmbeddedFont.load(ttf!!.readBytes())
 
         val bytes = PdfBuilder()
@@ -114,7 +113,7 @@ class EmbeddedFontOracleTest {
     @Test
     fun subset_embed_is_small_renders_and_round_trips() {
         val ttf = fontFile()
-        assumeTrue("DroidSansFallback.ttf not found, skipping.", ttf != null)
+        assumeOracle("DroidSansFallback.ttf not found, skipping.", ttf != null)
         val bytes = ttf!!.readBytes()
 
         // Same text, subset (default) vs full embed.
@@ -144,7 +143,7 @@ class EmbeddedFontOracleTest {
         // the full embed. Same text + same font, so any difference means the glyf/loca
         // renumber or the /CIDToGIDMap is wrong (wrong glyph drawn, or .notdef boxes),
         // which a mere "did it produce a PNG?" check would miss.
-        assumeTrue("mutool not found, skipping render half.", MuPdfOracle.binary != null)
+        assumeOracle("mutool not found, skipping render half.", MuPdfOracle.binary != null)
         val subFile = File.createTempFile("kite-subset-", ".pdf").apply { writeBytes(subsetPdf) }
         val fullFile = File.createTempFile("kite-full-", ".pdf").apply { writeBytes(fullPdf) }
         try {

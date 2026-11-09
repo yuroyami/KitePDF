@@ -84,8 +84,8 @@ class GsubOracleTest {
 
     @Test
     fun words_shape_to_the_glyphs_harfbuzz_gives() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val failures = ArrayList<String>()
         var total = 0
         for ((name, words) in cases) {
@@ -119,8 +119,8 @@ class GsubOracleTest {
      */
     @Test
     fun random_indic_words_shape_to_the_glyphs_harfbuzz_gives() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val failures = ArrayList<String>()
         var total = 0
         for ((name, block) in indic) {
@@ -151,8 +151,8 @@ class GsubOracleTest {
      */
     @Test
     fun random_arabic_and_syriac_words_shape_to_the_glyphs_harfbuzz_gives() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val joiners = listOf(0x200C, 0x200D, 0x200F, 0x2060, 0x0640)
         val arabicLetters = (0x0621..0x064A).toList() +
             listOf(0x0671, 0x0674, 0x0679, 0x067E, 0x0686, 0x0688, 0x0691, 0x06A9, 0x06AF, 0x06BE, 0x06C1, 0x06CC, 0x06D2, 0x06D5)
@@ -197,8 +197,8 @@ class GsubOracleTest {
      */
     @Test
     fun random_khmer_words_shape_to_the_glyphs_harfbuzz_gives() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val font = File(dir, "NotoSerifKhmer-Regular.otf").orSkipIfMissing()
         val consonants = (0x1780..0x17A2).toList() + listOf(0x179A, 0x179A)
         val vowels = (0x17B6..0x17C5).toList()
@@ -233,8 +233,8 @@ class GsubOracleTest {
      */
     @Test
     fun random_myanmar_words_shape_to_the_glyphs_harfbuzz_gives() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val font = File(dir, "NotoSerifMyanmar-Regular.otf").orSkipIfMissing()
         val consonants = (0x1000..0x1020).toList() + listOf(0x1004, 0x101B, 0x1004, 0x101B)
         val medials = listOf(0x103B, 0x103C, 0x103D, 0x103E)
@@ -319,8 +319,8 @@ class GsubOracleTest {
      */
     @Test
     fun random_use_words_shape_to_the_glyphs_harfbuzz_gives() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val failures = ArrayList<String>()
         var total = 0
         for ((name, block) in use) {
@@ -393,8 +393,8 @@ class GsubOracleTest {
      */
     @Test
     fun random_words_outside_the_bmp_shape_to_the_glyphs_harfbuzz_gives() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val marksTypes = setOf(Character.NON_SPACING_MARK, Character.COMBINING_SPACING_MARK, Character.ENCLOSING_MARK).map { it.toInt() }
         val failures = ArrayList<String>()
         var total = 0
@@ -434,8 +434,8 @@ class GsubOracleTest {
      */
     @Test
     fun random_words_with_marks_shape_to_the_glyphs_harfbuzz_gives() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val latinMarks = (0x0300..0x0315).toList() + listOf(0x031B, 0x0323, 0x0324, 0x0325, 0x0327, 0x0328, 0x032D, 0x0330, 0x0331)
         val sets = listOf(
             Triple(
@@ -494,8 +494,8 @@ class GsubOracleTest {
      */
     @Test
     fun right_to_left_words_mirror_their_brackets_as_harfbuzz_does() {
-        val dir = fontsDir().orSkip("The Noto fonts of mupdf-master/resources")
-        val tool = hbShape().orSkip("hb-shape")
+        val dir = fontsDir().orOracle("The Noto fonts of mupdf-master/resources")
+        val tool = hbShape().orOracle("hb-shape")
         val mirrored = listOf(
             0x28, 0x29, 0x3C, 0x3E, 0x5B, 0x5D, 0x7B, 0x7D, 0xAB, 0xBB, 0x2039, 0x203A, 0x2208, 0x220B,
             0x2211, 0x221A, 0x222B, 0x2264, 0x2265, 0x2282, 0x2283,

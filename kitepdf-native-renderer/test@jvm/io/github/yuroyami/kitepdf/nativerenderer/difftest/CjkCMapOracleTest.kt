@@ -9,7 +9,6 @@ import io.github.yuroyami.kitepdf.core.font.TrueTypeFont
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import java.io.ByteArrayOutputStream
 import java.io.File
-import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertNotNull
@@ -118,7 +117,7 @@ class CjkCMapOracleTest {
     @Test
     fun gbk_euc_h_renders_and_extracts() {
         val ttfFile = fontFile()
-        assumeTrue("DroidSansFallback.ttf not found, skipping.", ttfFile != null)
+        assumeOracle("DroidSansFallback.ttf not found, skipping.", ttfFile != null)
         val bytes = buildPdf(ttfFile!!.readBytes())
 
         val doc = KitePDF.open(bytes)
@@ -127,7 +126,7 @@ class CjkCMapOracleTest {
         val kite = AwtPdfRasterizer.renderToImage(doc.pages[0])
         assertTrue(ImageDiff.nonBackgroundPixels(kite) > 50, "the CJK glyphs painted")
 
-        assumeTrue("mutool not found, skipping oracle half.", MuPdfOracle.binary != null)
+        assumeOracle("mutool not found, skipping oracle half.", MuPdfOracle.binary != null)
         val pdf = File.createTempFile("kite-gbk", ".pdf").apply {
             deleteOnExit()
             writeBytes(bytes)

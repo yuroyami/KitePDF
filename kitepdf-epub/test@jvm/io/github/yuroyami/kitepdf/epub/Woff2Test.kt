@@ -45,8 +45,8 @@ class Woff2Test {
 
     @Test
     fun woff2_round_trips_cmap_advances_and_outlines() {
-        val ttf = droidSans().orSkip("DroidSansFallback.ttf").readBytes()
-        val woff2 = woff2Compress(droidSans()!!).orSkip("The woff2_compress tool")
+        val ttf = droidSans().orOracle("DroidSansFallback.ttf").readBytes()
+        val woff2 = woff2Compress(droidSans()!!).orOracle("The woff2_compress tool")
         assertTrue(Woff2.isWoff2(woff2), "encoder output is recognised as WOFF2")
 
         val fromTtf = FontRegistry.face("f", bold = false, italic = false, ttf)
@@ -70,8 +70,8 @@ class Woff2Test {
 
     @Test
     fun woff2_font_face_renders_outlines_end_to_end() {
-        val ttfFile = droidSans().orSkip("DroidSansFallback.ttf")
-        val woff2 = woff2Compress(ttfFile).orSkip("The woff2_compress tool")
+        val ttfFile = droidSans().orOracle("DroidSansFallback.ttf")
+        val woff2 = woff2Compress(ttfFile).orOracle("The woff2_compress tool")
 
         val css = "@font-face{font-family:'W2';src:url(font.woff2)}p{font-family:'W2'}"
         val doc = EpubDocument.open(

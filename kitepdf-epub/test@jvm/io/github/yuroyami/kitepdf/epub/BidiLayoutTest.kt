@@ -21,8 +21,8 @@ class BidiLayoutTest {
 
     /** The glyphs of [body], in visual order, with Noto Sans Syriac as `S` and Noto Serif as `L`. */
     private fun glyphs(body: String): Pair<List<TextGlyph>, EmbeddedFace> {
-        val syriac = noto("NotoSansSyriac-Regular.otf").orSkip("NotoSansSyriac-Regular.otf")
-        val latin = noto("NotoSerif-Regular.otf").orSkip("NotoSerif-Regular.otf")
+        val syriac = noto("NotoSansSyriac-Regular.otf").orOracle("NotoSansSyriac-Regular.otf")
+        val latin = noto("NotoSerif-Regular.otf").orOracle("NotoSerif-Regular.otf")
         val css = "@font-face{font-family:'S';src:url(s.otf)}@font-face{font-family:'L';src:url(l.otf)}p{font-family:'S','L'}"
         val doc = EpubDocument.open(
             EpubFixtures.epub("<body><style>$css</style>$body</body>", listOf("OEBPS/s.otf" to syriac, "OEBPS/l.otf" to latin)),

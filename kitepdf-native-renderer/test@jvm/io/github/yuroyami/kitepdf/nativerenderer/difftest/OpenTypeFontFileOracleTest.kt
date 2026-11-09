@@ -10,7 +10,6 @@ import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import io.github.yuroyami.kitepdf.nativerenderer.AwtPdfRasterizer
 import java.io.ByteArrayOutputStream
 import java.io.File
-import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -63,8 +62,8 @@ class OpenTypeFontFileOracleTest {
     @Test
     fun an_opentype_program_in_fontfile3_draws_like_mutool() {
         val otf = otfFile()
-        assumeTrue("NotoSans-Regular.otf not found, skipping.", otf != null)
-        assumeTrue("mutool not found, skipping.", MuPdfOracle.binary != null)
+        assumeOracle("NotoSans-Regular.otf not found, skipping.", otf != null)
+        assumeOracle("mutool not found, skipping.", MuPdfOracle.binary != null)
         val font = otf!!.readBytes()
         val sfnt = TrueTypeFont.parse(font)
         val bytes = pdf(font, "Hello".map { sfnt.glyphIdForCodePoint(it.code) })

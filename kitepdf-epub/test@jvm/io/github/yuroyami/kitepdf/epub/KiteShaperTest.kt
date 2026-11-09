@@ -12,10 +12,10 @@ import kotlin.test.assertTrue
 class KiteShaperTest {
 
     private fun font(name: String): File =
-        File(HarfBuzzOracle.fontsDir().orSkip("The Noto fonts of mupdf-master/resources"), name).takeIf { it.exists() }.orSkip(name)
+        File(HarfBuzzOracle.fontsDir().orOracle("The Noto fonts of mupdf-master/resources"), name).takeIf { it.exists() }.orOracle(name)
 
     private fun check(fontName: String, words: List<String>) {
-        val tool = HarfBuzzOracle.hbShape().orSkip("hb-shape")
+        val tool = HarfBuzzOracle.hbShape().orOracle("hb-shape")
         val file = font(fontName)
         val shaper = KiteShaper.load(file.readBytes())
         val expected = HarfBuzzOracle.positioned(tool, file, words)

@@ -960,6 +960,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vowel, as HarfBuzz does (#637).
 - The consumer check takes the KitePDF modules from Maven Local only before a release, so a module that the local
   publish left out fails the check instead of coming from the last release on Maven Central (#676).
+- CI gives the font, shaping and signature oracle tests what they read: the fonts of MuPDF's resources at the
+  pinned oracle's commit, `hb-shape`, `pdfsig`, `opj_compress` and `woff2_compress`. With
+  `KITEPDF_REQUIRE_ORACLES=1`, which CI sets, a missing font or tool fails such a test instead of skipping it
+  (#688).
 
 ## [0.13.0] - 2026-10-09
 

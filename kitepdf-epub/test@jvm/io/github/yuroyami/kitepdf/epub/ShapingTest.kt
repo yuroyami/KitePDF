@@ -68,7 +68,7 @@ class ShapingTest {
 
     @Test
     fun arabic_word_is_shaped_through_epub() {
-        val otf = naskh().orSkip("NotoNaskhArabic-Regular.otf")
+        val otf = naskh().orOracle("NotoNaskhArabic-Regular.otf")
         val face = assertNotNull(FontRegistry.face("ar", bold = false, italic = false, otf), "NotoNaskhArabic parses")
         assertTrue(face.hasArabicJoining, "NotoNaskhArabic exposes GSUB joining features")
 
@@ -92,7 +92,7 @@ class ShapingTest {
 
     @Test
     fun gpos_mark_to_base_offset_is_parsed() {
-        val otf = naskh().orSkip("NotoNaskhArabic-Regular.otf")
+        val otf = naskh().orOracle("NotoNaskhArabic-Regular.otf")
         val face = assertNotNull(FontRegistry.face("ar", bold = false, italic = false, otf), "NotoNaskhArabic parses")
         // Some Arabic letter + harakat pair must have a GPOS mark-to-base anchor.
         var found = false
@@ -110,7 +110,7 @@ class ShapingTest {
 
     @Test
     fun arabic_marks_are_positioned_through_epub() {
-        val otf = naskh().orSkip("NotoNaskhArabic-Regular.otf")
+        val otf = naskh().orOracle("NotoNaskhArabic-Regular.otf")
         // Letters carrying fatha (U+064E) marks; at least one mark must be GPOS-offset.
         val text = "بَحَرَ"
         val css = "@font-face{font-family:'AR';src:url(f.otf)}p{font-family:'AR'}"

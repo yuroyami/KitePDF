@@ -17,7 +17,7 @@ class SupplementaryPlaneRenderTest {
 
     @Test
     fun a_character_outside_the_bmp_is_one_glyph_of_the_font() {
-        val otf = noto("NotoSansMath-Regular.otf").orSkip("NotoSansMath-Regular.otf")
+        val otf = noto("NotoSansMath-Regular.otf").orOracle("NotoSansMath-Regular.otf")
         val css = "@font-face{font-family:'M';src:url(f.otf)}p{font-family:'M'}"
         val doc = EpubDocument.open(
             EpubFixtures.epub("<body><style>$css</style><p>&#x1D400;&#x1D401;x</p></body>", listOf("OEBPS/f.otf" to otf)),
