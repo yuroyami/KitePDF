@@ -62,11 +62,11 @@ jobs:
       # The vertical-text corpus PDF names a Japanese font without embedding it.
       # Without a CJK fallback, AWT draws boxes and fails the page baseline (#627).
       # The oracle tests shape against hb-shape, check signatures with pdfsig, write JPEG 2000
-      # with opj_compress and WOFF2 with woff2_compress (#688).
+      # with opj_compress and WOFF2 with woff2_compress (#688), and check linearized files with qpdf (#907).
       - name: Install CJK fallback fonts and the oracle tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fonts-noto-cjk libharfbuzz-bin poppler-utils libopenjp2-tools woff2
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk libharfbuzz-bin poppler-utils libopenjp2-tools woff2 qpdf
 
       # The font, shaping and embedding oracle tests read the fonts of MuPDF's resources at the
       # commit of the pinned oracle, from mupdf-master/resources/fonts (#688).

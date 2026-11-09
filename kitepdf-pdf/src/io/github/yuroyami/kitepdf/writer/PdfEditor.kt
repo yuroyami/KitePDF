@@ -1888,6 +1888,49 @@ public class PdfEditor internal constructor(
      * no password and loses its permissions.
      */
     public fun saveRewritten(useObjectStreams: Boolean, keepEncryption: Boolean): ByteArray {
+        val (ordered, encryption) = rewritePlan(keepEncryption)
+        val remap = HashMap<Long, Long>(ordered.size)
+        ordered.forEachIndexed { i, old -> remap[old] = (i + 1).toLong() }
+        return if (useObjectStreams) {
+            writeWithObjectStreams(ordered, remap, encryption)
+        } else {
+            writeWithClassicXref(ordered, remap, encryption)
+        }
+    }
+
+    /**
+     * A full rewrite, as [saveRewritten] writes it, laid out as a linearized file (ISO 32000-1,
+     * Annex F): the catalog, the hint stream and the first page with everything it uses come
+     * first, with their own cross-reference section, so a viewer that reads the file as it
+     * arrives can show page one before the rest is in, and asks for each later page by the hint
+     * tables (#907). The layout is the one `qpdf --linearize` writes, and `qpdf
+     * --check-linearization` passes it. Each page gets the attributes it inherited from the page
+     * tree. An encrypted document stays encrypted, as in [saveRewritten]; [keepEncryption] false
+     * writes it in clear.
+     *
+     * A linearized file stays linearized only until it is changed: an incremental save after this
+     * one keeps the old first page section in front, and readers then take the file as an
+     * ordinary one, as the standard says they must (F.2).
+     */
+    public fun saveLinearized(keepEncryption: Boolean = true): ByteArray {
+        val (ordered, encryption) = rewritePlan(keepEncryption)
+        val catalog = ((trailerOverrides["Root"] ?: base.trailer["Root"]) as? PdfReference)?.objectNumber
+            ?: throw IllegalStateException("Cannot write document with no /Root")
+        val info = ((trailerOverrides["Info"] ?: base.trailer["Info"]) as? PdfReference)?.objectNumber
+        val objects = LinkedHashMap<Long, PdfObject>()
+        for (old in ordered) effectiveObject(old)?.let { objects[old] = it }
+        return LinearizedWriter(
+            source = objects,
+            catalog = catalog,
+            info = info?.takeIf { it in objects },
+            encrypt = { num, obj -> encryption?.encryptor?.encryptIndirect(num, 0, obj) ?: obj },
+            encryptionDictionary = encryption?.dictionary,
+            id = { contents -> rewriteId(encryption, contents) },
+        ).write()
+    }
+
+    /** What a full rewrite writes: the objects it keeps, by their numbers now, and how it encrypts them. */
+    private fun rewritePlan(keepEncryption: Boolean): Pair<List<Long>, Encryption?> {
         val roots = buildList {
             for (key in listOf("Root", "Info")) {
                 ((trailerOverrides[key] ?: base.trailer[key]) as? PdfReference)?.let { add(it) }
@@ -1916,11 +1959,7 @@ public class PdfEditor internal constructor(
             }
         }
 
-        // Dense renumber, in ascending old-number order for determinism.
         val ordered = reachable.sorted()
-        val remap = HashMap<Long, Long>(ordered.size)
-        ordered.forEachIndexed { i, old -> remap[old] = (i + 1).toLong() }
-
         val encryption = if (securityChange != null || removesEncryption) {
             securityChange
         } else if (keepEncryption && encryptor != null) {
@@ -1930,11 +1969,7 @@ public class PdfEditor internal constructor(
         } else {
             null
         }
-        return if (useObjectStreams) {
-            writeWithObjectStreams(ordered, remap, encryption)
-        } else {
-            writeWithClassicXref(ordered, remap, encryption)
-        }
+        return ordered to encryption
     }
 
     /** What a rewrite of an encrypted document encrypts with, and the encryption dictionary it writes. */

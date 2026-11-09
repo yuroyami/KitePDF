@@ -410,6 +410,7 @@ final class io.github.yuroyami.kitepdf.writer/PdfEditor { // io.github.yuroyami.
     final fun removePage(io.github.yuroyami.kitepdf/PdfPage) // io.github.yuroyami.kitepdf.writer/PdfEditor.removePage|removePage(io.github.yuroyami.kitepdf.PdfPage){}[0]
     final fun rotatePage(io.github.yuroyami.kitepdf/PdfPage, kotlin/Int) // io.github.yuroyami.kitepdf.writer/PdfEditor.rotatePage|rotatePage(io.github.yuroyami.kitepdf.PdfPage;kotlin.Int){}[0]
     final fun saveIncremental(): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveIncremental|saveIncremental(){}[0]
+    final fun saveLinearized(kotlin/Boolean = ...): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveLinearized|saveLinearized(kotlin.Boolean){}[0]
     final fun saveRewritten(kotlin/Boolean = ...): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveRewritten|saveRewritten(kotlin.Boolean){}[0]
     final fun saveRewritten(kotlin/Boolean, kotlin/Boolean): kotlin/ByteArray // io.github.yuroyami.kitepdf.writer/PdfEditor.saveRewritten|saveRewritten(kotlin.Boolean;kotlin.Boolean){}[0]
     final fun setAttachment(kotlin/String, kotlin/ByteArray, kotlin/String? = ..., kotlin/String? = ..., io.github.yuroyami.kitepdf/PdfDate? = ..., kotlin/String? = ...) // io.github.yuroyami.kitepdf.writer/PdfEditor.setAttachment|setAttachment(kotlin.String;kotlin.ByteArray;kotlin.String?;kotlin.String?;io.github.yuroyami.kitepdf.PdfDate?;kotlin.String?){}[0]

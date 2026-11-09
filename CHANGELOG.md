@@ -1003,6 +1003,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AWT reads only the box that a paint under a soft mask can have touched, not its whole content layer, to find
   what to mask. 1,600 small squares under one luminosity mask rendered in 187 ms and now in 42 ms, with the same
   pixels (#912).
+- PdfEditor.saveLinearized() writes a linearized file (ISO 32000-1, Annex F), with the first page section, its
+  own cross-reference table and the page offset, shared object and outline hint tables, that qpdf --check-
+  linearization passes (#907).
 
 ## [0.13.0] - 2026-10-09
 
