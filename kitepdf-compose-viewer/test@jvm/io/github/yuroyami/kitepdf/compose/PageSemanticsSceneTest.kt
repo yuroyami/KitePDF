@@ -118,4 +118,32 @@ class PageSemanticsSceneTest {
             }
         }
     }
+
+    /** A form that changes at frame rate rebuilds the field nodes a few times, and the text and link nodes not at all (#666). */
+    @Test
+    fun a_form_that_keeps_changing_rebuilds_only_its_field_nodes_and_seldom() {
+        val doc = pdf()
+        val scripts = Scripts(doc)
+        val state = KiteDocViewState(doc)
+        ImageComposeScene(width = 200, height = 300, density = Density(1f)) {
+            KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged(), scripts = scripts)
+        }.use { scene ->
+            val driver = SceneTestDriver(scene)
+            driver.pumpUntilState { described(scene, "Email address") != null && texted(scene, "Opening words") != null }
+            val content = state.accessNodeBuilds
+            val fields = state.widgetNodeBuilds
+            // Twenty changes, one every 50 ms, as a script timer would make them.
+            repeat(20) { i ->
+                onTestUiThread { scripts.formState.setValue("email", "a$i@example.com") }
+                driver.pumpFrames(1)
+                Thread.sleep(50)
+            }
+            driver.pumpUntilState {
+                described(scene, "Email address")?.config?.getOrNull(SemanticsProperties.StateDescription) == "a19@example.com"
+            }
+            assertEquals(content, state.accessNodeBuilds, "the text and link nodes were built again for a form change")
+            val rebuilt = state.widgetNodeBuilds - fields
+            assertTrue(rebuilt in 1..8, "the field nodes were built $rebuilt times for 20 changes in a second")
+        }
+    }
 }

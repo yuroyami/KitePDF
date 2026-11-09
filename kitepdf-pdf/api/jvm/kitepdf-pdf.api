@@ -994,6 +994,8 @@ public final class io/github/yuroyami/kitepdf/PdfPage : io/github/yuroyami/kitep
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lio/github/yuroyami/kitepdf/core/KiteCancellation;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static synthetic fun renderTo$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/core/render/KiteCanvas;Lio/github/yuroyami/kitepdf/core/render/KiteMatrix;Lio/github/yuroyami/kitepdf/PdfFormState;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public fun textContent ()Lio/github/yuroyami/kitepdf/core/KiteStructuredText;
+	public final fun visibleWidgets (Lio/github/yuroyami/kitepdf/PdfFormState;)Ljava/util/List;
+	public static synthetic fun visibleWidgets$default (Lio/github/yuroyami/kitepdf/PdfPage;Lio/github/yuroyami/kitepdf/PdfFormState;ILjava/lang/Object;)Ljava/util/List;
 	public final fun widgetAt (DDLio/github/yuroyami/kitepdf/PdfFormState;)Lio/github/yuroyami/kitepdf/PdfWidgetHit;
 	public static synthetic fun widgetAt$default (Lio/github/yuroyami/kitepdf/PdfPage;DDLio/github/yuroyami/kitepdf/PdfFormState;ILjava/lang/Object;)Lio/github/yuroyami/kitepdf/PdfWidgetHit;
 }

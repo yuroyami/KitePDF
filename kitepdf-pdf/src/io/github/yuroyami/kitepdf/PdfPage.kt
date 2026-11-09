@@ -377,6 +377,24 @@ public class PdfPage internal constructor(
     }
 
     /**
+     * The widgets of this page that show, in `/Annots` order, each with its field, as [widgetAt]
+     * finds them: with a [formState], a widget that a script hid is left out and one that it
+     * showed again is in (#360). One pass over the annotations, where a [widgetAt] for each
+     * widget walks them once per widget (#666).
+     */
+    public fun visibleWidgets(formState: PdfFormState? = null): List<PdfWidgetHit> {
+        val owners = document.widgetOwners
+        val out = ArrayList<PdfWidgetHit>()
+        for ((reference, annotation) in annotationEntries) {
+            if (annotation.subtype != PdfAnnotation.Subtype.Widget) continue
+            val (field, index) = reference?.let { owners[it] } ?: continue
+            val hidden = formState?.hiddenOverride(field.fullyQualifiedName) ?: annotation.isHidden
+            if (!hidden) out += PdfWidgetHit(field, field.widgets[index], index)
+        }
+        return out
+    }
+
+    /**
      * The indirect references of this page's annotations, in the order `/Annots` lists them.
      * A caller that has an annotation's reference, such as a form field's widget, uses this to
      * find which page holds it, without building every annotation.

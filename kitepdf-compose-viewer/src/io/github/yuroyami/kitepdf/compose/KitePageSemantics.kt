@@ -1,5 +1,8 @@
 package io.github.yuroyami.kitepdf.compose
 
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,7 +72,11 @@ internal val LocalViewerTap = compositionLocalOf<((androidx.compose.ui.geometry.
  * The nodes of [page]: its reading order, then its links, then its form fields when [formState]
  * holds them. Reads the page's text, so a caller runs it off the main thread.
  */
-internal fun accessNodes(page: KitePage, formState: PdfFormState?, strings: KiteViewerStrings): List<PageAccessNode> {
+internal fun accessNodes(page: KitePage, formState: PdfFormState?, strings: KiteViewerStrings): List<PageAccessNode> =
+    contentNodes(page, strings) + widgetNodes(page, formState, strings)
+
+/** The nodes of [page] that do not follow the form: its reading order, then its links (#666). */
+internal fun contentNodes(page: KitePage, strings: KiteViewerStrings): List<PageAccessNode> {
     val out = ArrayList<PageAccessNode>()
     for (item in runCatching { page.readingOrder() }.getOrDefault(emptyList())) {
         val kind = when (item.role) {
@@ -93,39 +100,49 @@ internal fun accessNodes(page: KitePage, formState: PdfFormState?, strings: Kite
             out += PageAccessNode(link.rect, textIn(text, link.rect) ?: link.uri ?: strings.link, AccessKind.LINK)
         }
     }
-    if (page is PdfPage && formState != null) {
-        for (annotation in runCatching { page.annotations }.getOrDefault(emptyList())) {
-            if (annotation.subtype != PdfAnnotation.Subtype.Widget) continue
-            val r = annotation.rect
-            // The widget with its field, as a tap at its centre finds it, and with its live visibility.
-            val hit = runCatching { page.widgetAt((r.left + r.right) / 2, (r.bottom + r.top) / 2, formState) }.getOrNull() ?: continue
-            val field = hit.field
-            val name = field.tooltip?.takeIf { it.isNotBlank() } ?: field.partialName?.takeIf { it.isNotBlank() } ?: strings.formField
-            val value = if (field.type == PdfFormField.FieldType.Choice) {
-                val chosen = formState.choiceSelection(field.fullyQualifiedName)
-                chosen?.let { selection ->
-                    field.choiceOptions.filter { it.index in selection.indices }.map { it.label }
-                        .plus(listOfNotNull(selection.freeText)).plus(selection.unresolvedValues).joinToString(", ")
-                }
-            } else formState.value(field.fullyQualifiedName)
-            val kind = when (field.type) {
-                PdfFormField.FieldType.Text -> AccessKind.TEXT_FIELD
-                PdfFormField.FieldType.Choice -> AccessKind.CHOICE
-                PdfFormField.FieldType.Button -> when {
-                    field.flags and PUSH_BUTTON != 0 -> AccessKind.BUTTON
-                    field.flags and RADIO != 0 -> AccessKind.RADIO
-                    else -> AccessKind.CHECKBOX
-                }
-                else -> AccessKind.BUTTON
+    return out
+}
+
+/**
+ * The form field nodes of [page], when [formState] holds them: one for each widget that shows,
+ * named and valued from the field that a tap at its centre finds (#666).
+ */
+internal fun widgetNodes(page: KitePage, formState: PdfFormState?, strings: KiteViewerStrings): List<PageAccessNode> {
+    if (page !is PdfPage || formState == null) return emptyList()
+    val out = ArrayList<PageAccessNode>()
+    val widgets = runCatching { page.visibleWidgets(formState) }.getOrDefault(emptyList())
+    for (own in widgets) {
+        val r = own.widget.rect?.normalized() ?: continue
+        val cx = (r.left + r.right) / 2
+        val cy = (r.bottom + r.top) / 2
+        // The widget with its field, as a tap at its centre finds it: the last that shows there.
+        val hit = widgets.lastOrNull { w -> w.widget.rect?.normalized()?.let { cx >= it.left && cx <= it.right && cy >= it.bottom && cy <= it.top } == true } ?: own
+        val field = hit.field
+        val name = field.tooltip?.takeIf { it.isNotBlank() } ?: field.partialName?.takeIf { it.isNotBlank() } ?: strings.formField
+        val value = if (field.type == PdfFormField.FieldType.Choice) {
+            val chosen = formState.choiceSelection(field.fullyQualifiedName)
+            chosen?.let { selection ->
+                field.choiceOptions.filter { it.index in selection.indices }.map { it.label }
+                    .plus(listOfNotNull(selection.freeText)).plus(selection.unresolvedValues).joinToString(", ")
             }
-            val onState = hit.widget.onStateName
-            val checked = if (kind == AccessKind.CHECKBOX || kind == AccessKind.RADIO) onState != null && value == onState else null
-            // ISO 32000-1, 12.7.4.3, Table 228: a password "should not be echoed visibly", and a screen
-            // reader or any accessibility service reads this tree, so the node never holds the value (#953).
-            val password = kind == AccessKind.TEXT_FIELD && field.flags and PASSWORD != 0
-            val state = if (password) null else value?.takeIf { checked == null }
-            out += PageAccessNode(page.pageToDisplay(r), name, kind, state = state, checked = checked, enabled = !formState.isReadOnly(field.fullyQualifiedName), password = password)
+        } else formState.value(field.fullyQualifiedName)
+        val kind = when (field.type) {
+            PdfFormField.FieldType.Text -> AccessKind.TEXT_FIELD
+            PdfFormField.FieldType.Choice -> AccessKind.CHOICE
+            PdfFormField.FieldType.Button -> when {
+                field.flags and PUSH_BUTTON != 0 -> AccessKind.BUTTON
+                field.flags and RADIO != 0 -> AccessKind.RADIO
+                else -> AccessKind.CHECKBOX
+            }
+            else -> AccessKind.BUTTON
         }
+        val onState = hit.widget.onStateName
+        val checked = if (kind == AccessKind.CHECKBOX || kind == AccessKind.RADIO) onState != null && value == onState else null
+        // ISO 32000-1, 12.7.4.3, Table 228: a password "should not be echoed visibly", and a screen
+        // reader or any accessibility service reads this tree, so the node never holds the value (#953).
+        val password = kind == AccessKind.TEXT_FIELD && field.flags and PASSWORD != 0
+        val state = if (password) null else value?.takeIf { checked == null }
+        out += PageAccessNode(page.pageToDisplay(r), name, kind, state = state, checked = checked, enabled = !formState.isReadOnly(field.fullyQualifiedName), password = password)
     }
     return out
 }
@@ -163,23 +180,37 @@ internal fun PageSemantics(state: KiteDocViewState, page: KitePage, pageIndex: I
     // :target restyle or a layer change keeps the page object, and nodes of the old layout would
     // name text and tap links that are no longer there (#673). A new version drops them at once.
     val contentVersion = state.contentVersionOf(page)
-    var nodes by remember(page, contentVersion) { mutableStateOf<List<PageAccessNode>>(emptyList()) }
+    // The text and the links follow the page's content only, and the fields the form too, so a
+    // form that changes at frame rate rebuilds only its field nodes, at most every
+    // WIDGET_NODES_INTERVAL (#666).
+    var content by remember(page, contentVersion) { mutableStateOf<List<PageAccessNode>>(emptyList()) }
+    var widgets by remember(page, contentVersion) { mutableStateOf<List<PageAccessNode>>(emptyList()) }
     val shown by remember(state, pageIndex) { derivedStateOf { state.inZoomedView(pageIndex) && state.pageGeometry.containsKey(pageIndex) } }
-    LaunchedEffect(page, contentVersion, formState, strings, state.formRevision) {
+    LaunchedEffect(page, contentVersion, strings) {
         // The text is read once the page shows and the view rests, not for every page scrolled past.
         snapshotFlow { shown && state.adapter?.isScrollInProgress != true }.first { it }
-        val built = try {
-            withContext(kitepdfRasterDispatcher()) { accessNodes(page, formState, strings) }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Throwable) {
-            io.github.yuroyami.kitepdf.core.kiteWarn { "accessibility: the content of page $pageIndex cannot be read: ${failure.message}" }
-            emptyList()
-        }
+        val built = buildNodes(pageIndex) { contentNodes(page, strings) }
         // The nodes are state that composition reads, so they are written on its thread (#443).
         backOnComposeThread()
-        nodes = built
+        content = built
+        state.accessNodeBuilds++
     }
+    val lastWidgetBuild = remember(page) { arrayOfNulls<TimeSource.Monotonic.ValueTimeMark>(1) }
+    LaunchedEffect(page, contentVersion, formState, strings, state.formRevision) {
+        if (page !is PdfPage || formState == null) {
+            widgets = emptyList()
+            return@LaunchedEffect
+        }
+        snapshotFlow { shown && state.adapter?.isScrollInProgress != true }.first { it }
+        val wait = lastWidgetBuild[0]?.let { WIDGET_NODES_INTERVAL - it.elapsedNow() }
+        if (wait != null && wait.isPositive()) delay(wait)
+        val built = buildNodes(pageIndex) { widgetNodes(page, formState, strings) }
+        backOnComposeThread()
+        lastWidgetBuild[0] = TimeSource.Monotonic.markNow()
+        widgets = built
+        state.widgetNodeBuilds++
+    }
+    val nodes = if (widgets.isEmpty()) content else content + widgets
     if (nodes.isEmpty()) return
     Layout(
         content = {
@@ -275,3 +306,16 @@ private const val RADIO = 1 shl 15
 
 /** `/Ff` bit 14 of a text field: it takes a password (ISO 32000-1, 12.7.4.3, Table 228). */
 private const val PASSWORD = 1 shl 13
+
+/** Runs [build] off the main thread; a page whose content cannot be read gives no nodes. */
+private suspend fun buildNodes(pageIndex: Int, build: () -> List<PageAccessNode>): List<PageAccessNode> = try {
+    withContext(kitepdfRasterDispatcher()) { build() }
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (failure: Throwable) {
+    io.github.yuroyami.kitepdf.core.kiteWarn { "accessibility: the content of page $pageIndex cannot be read: ${failure.message}" }
+    emptyList()
+}
+
+/** The least time between two builds of a page's field nodes, so a form that changes at frame rate costs a few builds a second (#666). */
+private val WIDGET_NODES_INTERVAL = 250.milliseconds

@@ -2318,6 +2318,10 @@ public class KiteDocViewState(
         null
     }
 
+    /** How many times the pages built their text and link nodes, and their field nodes, for a test (#666). */
+    internal var accessNodeBuilds: Int = 0
+    internal var widgetNodeBuilds: Int = 0
+
     /** Chapters whose layout threw. They stay placeholders, and nothing lays them out again (#331). */
     private val failedChapters = HashSet<Int>()
 

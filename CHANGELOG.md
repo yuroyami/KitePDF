@@ -888,6 +888,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The accessibility nodes of a page follow its content: after a book's script changes the chapter on screen, a
   `:target` restyle or a layer change, the nodes of the old layout go, and the page's new text and links take
   their place (#673).
+- A form that changes often no longer rebuilds every accessibility node of the pages on screen: their text and
+  links are built once per content, and their field nodes at most four times a second, from one pass over the
+  widgets. The new `PdfPage.visibleWidgets(formState)` lists the widgets that show (#666).
 
 ## [0.13.0] - 2026-10-09
 
