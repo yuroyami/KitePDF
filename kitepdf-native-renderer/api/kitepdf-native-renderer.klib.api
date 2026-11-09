@@ -54,3 +54,12 @@ final class io.github.yuroyami.kitepdf.nativerenderer/Canvas2dCanvas : io.github
     final fun rasterStep(io.github.yuroyami.kitepdf.core/KiteRectangle, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core.render/KiteRasterStep): kotlin/Boolean // io.github.yuroyami.kitepdf.nativerenderer/Canvas2dCanvas.rasterStep|rasterStep(io.github.yuroyami.kitepdf.core.KiteRectangle;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.KiteRasterStep){}[0]
     final fun strokePath(io.github.yuroyami.kitepdf.core.render/KitePath, io.github.yuroyami.kitepdf.core.render/KiteMatrix, io.github.yuroyami.kitepdf.core.render/RgbColor, kotlin/Double, kotlin/Double, io.github.yuroyami.kitepdf.core.render/KiteBlendMode, kotlin.collections/List<kotlin/Double>?, kotlin/Double, kotlin/Int, kotlin/Int, kotlin/Double) // io.github.yuroyami.kitepdf.nativerenderer/Canvas2dCanvas.strokePath|strokePath(io.github.yuroyami.kitepdf.core.render.KitePath;io.github.yuroyami.kitepdf.core.render.KiteMatrix;io.github.yuroyami.kitepdf.core.render.RgbColor;kotlin.Double;kotlin.Double;io.github.yuroyami.kitepdf.core.render.KiteBlendMode;kotlin.collections.List<kotlin.Double>?;kotlin.Double;kotlin.Int;kotlin.Int;kotlin.Double){}[0]
 }
+
+// Targets: [js]
+final object io.github.yuroyami.kitepdf.nativerenderer/KiteBrowserPrint { // io.github.yuroyami.kitepdf.nativerenderer/KiteBrowserPrint|null[0]
+    final const val CONTAINER_CLASS // io.github.yuroyami.kitepdf.nativerenderer/KiteBrowserPrint.CONTAINER_CLASS|{}CONTAINER_CLASS[0]
+        final fun <get-CONTAINER_CLASS>(): kotlin/String // io.github.yuroyami.kitepdf.nativerenderer/KiteBrowserPrint.CONTAINER_CLASS.<get-CONTAINER_CLASS>|<get-CONTAINER_CLASS>(){}[0]
+
+    final fun print(io.github.yuroyami.kitepdf.core/KiteDocument, kotlin/Double = ..., io.github.yuroyami.kitepdf/PdfFormState? = ...) // io.github.yuroyami.kitepdf.nativerenderer/KiteBrowserPrint.print|print(io.github.yuroyami.kitepdf.core.KiteDocument;kotlin.Double;io.github.yuroyami.kitepdf.PdfFormState?){}[0]
+    final fun printableElement(io.github.yuroyami.kitepdf.core/KiteDocument, kotlin/Double = ..., io.github.yuroyami.kitepdf/PdfFormState? = ...): org.w3c.dom/HTMLElement // io.github.yuroyami.kitepdf.nativerenderer/KiteBrowserPrint.printableElement|printableElement(io.github.yuroyami.kitepdf.core.KiteDocument;kotlin.Double;io.github.yuroyami.kitepdf.PdfFormState?){}[0]
+}

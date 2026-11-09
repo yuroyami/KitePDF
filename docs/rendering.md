@@ -276,7 +276,13 @@ job.setPageable(KitePrintable(document, job.defaultPage(), formState))
 job.print(KitePrintable.attributesOf(document))
 ```
 
-Android, Apple and the web have no print path in the library yet (#951).
+In a web page, `KiteBrowserPrint` of `kitepdf-native-renderer` draws each page onto a canvas through `Canvas2dCanvas`, at 150 dots per inch unless you ask for another resolution, and opens the browser's print dialog. While the dialog is open the web page shows only the document:
+
+```kotlin
+KiteBrowserPrint.print(document)
+```
+
+Android and Apple have no print path in the library yet (#951).
 
 ## Memory
 

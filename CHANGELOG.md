@@ -1022,6 +1022,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says, and layers in their print states. On the JVM, KitePrintable of kitepdf-native-renderer prints any
   document through java.awt.print, as vectors, fitted to the paper and turned for a wide page, with the PDF's
   /NumCopies, /Duplex and /PrintPageRange as the dialog's defaults (#951).
+- In a web page, KiteBrowserPrint of kitepdf-native-renderer prints any document with the browser's print dialog:
+  each page drawn as it prints onto a canvas at 150 dots per inch, laid out at its size in points with a page
+  break after it (#951).
 
 ## [0.13.0] - 2026-10-09
 
