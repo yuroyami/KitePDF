@@ -150,13 +150,27 @@ class KeyboardAndWheelSceneTest {
 
     @Test
     fun the_left_arrow_goes_forward_where_pages_advance_to_the_left() {
+        // A right-to-left book pages to the left in any app, and a left-to-right one to the right (#652).
+        for (direction in listOf(LayoutDirection.Ltr, LayoutDirection.Rtl)) {
+            withViewer(layout = KiteDocLayout.Paged(reverseLayout = true), direction = direction) { scene, state, driver ->
+                click(scene)
+                driver.pumpFrames(30)
+                key(scene, Key.DirectionLeft)
+                driver.pumpUntilState { state.currentPage == 1 }
+                key(scene, Key.DirectionRight)
+                driver.pumpUntilState { state.currentPage == 0 }
+            }
+        }
+    }
+
+    /** In a right-to-left app, a left-to-right book still pages to the right (#652). */
+    @Test
+    fun a_right_to_left_app_pages_a_left_to_right_book_to_the_right() {
         withViewer(direction = LayoutDirection.Rtl) { scene, state, driver ->
             click(scene)
             driver.pumpFrames(30)
-            key(scene, Key.DirectionLeft)
-            driver.pumpUntilState { state.currentPage == 1 }
             key(scene, Key.DirectionRight)
-            driver.pumpUntilState { state.currentPage == 0 }
+            driver.pumpUntilState { state.currentPage == 1 }
         }
     }
 

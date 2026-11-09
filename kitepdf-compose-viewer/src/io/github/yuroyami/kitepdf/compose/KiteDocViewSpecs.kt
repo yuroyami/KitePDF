@@ -74,7 +74,10 @@ public sealed interface KiteDocLayout {
          * Reverses the paging direction so page N+1 sits visually LEFT of
          * page N (up in a vertical pager). Use this for right-to-left books (manga,
          * Arabic/Hebrew). Navigation stays logical: `nextPage()` is always
-         * index +1. See [pagedFor] for automatic selection.
+         * index +1. See [pagedFor] for automatic selection. The direction is the
+         * book's, not the app's: false puts page N+1 to the right of page N in a
+         * right-to-left app too, and the swipe, the edge turn and the arrow keys
+         * follow it (#652).
          */
         val reverseLayout: Boolean = false,
         /** How each page fits the viewport: whole, or across the width with the rest a pan away. */
@@ -101,7 +104,8 @@ public sealed interface KiteDocLayout {
      * A page without a partner centres alone. [reverseLayout] swaps both the
      * swipe direction and the in-spread visual order (the first page on the
      * right), for right-to-left books. Navigation stays logical (`nextPage()` =
-     * index +1; the visible spread advances once the step leaves it). Meant for
+     * index +1; the visible spread advances once the step leaves it). As in
+     * [Paged], the direction is the book's, whatever the app's (#652). Meant for
      * fixed-layout content (PDF, pre-paginated EPUB); reflowable EPUB gains
      * nothing from it. Spreads pair the pages of the whole book, so a book shows
      * a chapter placeholder until every chapter is laid out.

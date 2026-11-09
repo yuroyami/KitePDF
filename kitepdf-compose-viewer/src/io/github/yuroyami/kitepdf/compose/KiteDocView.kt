@@ -1209,7 +1209,8 @@ private fun PagedLayout(
     val direction = LocalLayoutDirection.current
     val pageTurn = remember(layout, direction) {
         val horizontal = layout.orientation == Orientation.Horizontal
-        PageTurn(layout.orientation, reversed = (horizontal && direction == LayoutDirection.Rtl) != layout.reverseLayout, spread = false)
+        // reverseLayout is absolute: the book's direction, not the app's (#652).
+        PageTurn(layout.orientation, reversed = horizontal && layout.reverseLayout, spread = false)
     }
     val pagerPlace = remember { NodePlace() }
     val pageContent: @Composable (Int) -> Unit = { index ->
@@ -1262,7 +1263,8 @@ private fun PagedLayout(
             pageSpacing = pageSpacing,
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
-            reverseLayout = layout.reverseLayout,
+            // Compose reads reverseLayout relative to the app's direction; the layout's is absolute (#652).
+            reverseLayout = layout.reverseLayout != (direction == LayoutDirection.Rtl),
             // Semantic keys: a chapter landing before the reader re-anchors
             // the pager on the same content at measure time (issue #5).
             key = { state.items[it].key },
@@ -2299,7 +2301,8 @@ private fun SpreadLayout(
     val direction = LocalLayoutDirection.current
     val pageTurn = remember(layout, direction) {
         val horizontal = layout.orientation == Orientation.Horizontal
-        PageTurn(layout.orientation, reversed = (horizontal && direction == LayoutDirection.Rtl) != layout.reverseLayout, spread = true)
+        // reverseLayout is absolute: the book's direction, not the app's (#652).
+        PageTurn(layout.orientation, reversed = horizontal && layout.reverseLayout, spread = true)
     }
     // Read through a derived state, so a zoom frame recomposes the pager only when the flag flips (#373).
     val overflows by remember(state) { derivedStateOf { state.overflows } }
@@ -2341,7 +2344,8 @@ private fun SpreadLayout(
             pageSpacing = pageSpacing,
             beyondViewportPageCount = layout.offscreenPages,
             userScrollEnabled = pagerScrollEnabled,
-            reverseLayout = layout.reverseLayout,
+            // Compose reads reverseLayout relative to the app's direction; the layout's is absolute (#652).
+            reverseLayout = layout.reverseLayout != (direction == LayoutDirection.Rtl),
         ) { spreadContent(it) }
         Orientation.Vertical -> VerticalPager(
             state = pagerState,

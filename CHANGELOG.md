@@ -925,6 +925,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The docs and the KDoc say that a `KiteDocViewState` is shown by one `KiteDocView` at a time, and a second view
   of the same state logs a warning, since the two views overwrite each other's scroll container, zoom range and
   page geometry (#656).
+- In a right-to-left app, `reverseLayout` keeps its meaning: a left-to-right book pages to the right and a right-
+  to-left book to the left, and a spread reads and turns in that one direction. The pager used to mirror with the
+  app, against the order inside a spread (#652).
 
 ## [0.13.0] - 2026-10-09
 

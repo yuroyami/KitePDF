@@ -132,4 +132,42 @@ class SpreadRtlSceneTest {
         assertFalse(ltr.metadata.rightToLeft)
         assertFalse(KiteDocLayout.pagedFor(ltr).reverseLayout)
     }
+
+    /**
+     * In a right-to-left app, a left-to-right spread still reads left to right and the next spread
+     * comes from the right, and a right-to-left one the other way: the direction is the book's (#652).
+     */
+    @Test
+    fun a_right_to_left_app_keeps_the_book_direction_of_a_spread() {
+        val doc = KitePDF.open(rgbDoc(4))
+        for (reverse in listOf(false, true)) {
+            val state = KiteDocViewState(doc)
+            ImageComposeScene(width = 200, height = 200, density = Density(1f)) {
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+                    KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Spread(reverseLayout = reverse))
+                }
+            }.use { scene ->
+                val driver = SceneTestDriver(scene)
+                driver.pumpUntil { px ->
+                    if (reverse) px[50, 100].blue > 0.8f && px[150, 100].red > 0.8f else px[50, 100].red > 0.8f && px[150, 100].blue > 0.8f
+                }
+                // The way this book turns: a swipe to the left for a left-to-right book.
+                val (from, to) = if (reverse) 20f to 180f else 180f to 20f
+                onTestUiThread {
+                    scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Press, androidx.compose.ui.geometry.Offset(from, 100f), type = androidx.compose.ui.input.pointer.PointerType.Touch)
+                }
+                for (step in 1..20) {
+                    val x = from + (to - from) * step / 20
+                    onTestUiThread {
+                        scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Move, androidx.compose.ui.geometry.Offset(x, 100f), type = androidx.compose.ui.input.pointer.PointerType.Touch)
+                    }
+                    driver.pumpFrames(1)
+                }
+                onTestUiThread {
+                    scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Release, androidx.compose.ui.geometry.Offset(to, 100f), type = androidx.compose.ui.input.pointer.PointerType.Touch)
+                }
+                driver.pumpUntilState { state.currentPage == 2 && state.adapter?.isScrollInProgress != true }
+            }
+        }
+    }
 }

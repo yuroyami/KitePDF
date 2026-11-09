@@ -55,12 +55,13 @@ class ZoomedPanSceneTest {
         direction: LayoutDirection = LayoutDirection.Ltr,
         userScrollEnabled: Boolean = true,
         zoomSpec: KiteZoomSpec = KiteZoomSpec(),
+        layout: KiteDocLayout.Paged = KiteDocLayout.Paged(),
         block: (ImageComposeScene, KiteDocViewState, SceneTestDriver) -> Unit,
     ) {
         val state = KiteDocViewState(pagesPdf(3))
         ImageComposeScene(width = 200, height = 300, density = Density(1f)) {
             CompositionLocalProvider(LocalLayoutDirection provides direction) {
-                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = KiteDocLayout.Paged(), userScrollEnabled = userScrollEnabled, zoomSpec = zoomSpec)
+                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = layout, userScrollEnabled = userScrollEnabled, zoomSpec = zoomSpec)
             }
         }.use { scene ->
             val driver = SceneTestDriver(scene)
@@ -111,7 +112,8 @@ class ZoomedPanSceneTest {
 
     @Test
     fun in_a_right_to_left_pager_a_drag_past_the_left_edge_turns_forward() {
-        withZoomedPager(LayoutDirection.Rtl) { scene, state, driver ->
+        // A right-to-left book pages to the left, in a right-to-left app as in any other (#652).
+        withZoomedPager(LayoutDirection.Rtl, layout = KiteDocLayout.Paged(reverseLayout = true)) { scene, state, driver ->
             drag(scene, 10f, 190f, steps = 30, msPerStep = 30)
             driver.pumpFrames(30)
             drag(scene, 10f, 190f, steps = 30, msPerStep = 30)

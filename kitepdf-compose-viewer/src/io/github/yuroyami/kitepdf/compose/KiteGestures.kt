@@ -560,7 +560,8 @@ internal fun keyAction(
         is KiteDocLayout.Continuous -> (layout.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) to false
         else -> false to false
     }
-    val forwardIsLeft = horizontal && ((direction == LayoutDirection.Rtl) != reversed)
+    // A pager's reverseLayout is absolute, the book's direction (#652); a strip mirrors with the app.
+    val forwardIsLeft = horizontal && if (layout is KiteDocLayout.Continuous) direction == LayoutDirection.Rtl else reversed
     return when (event.key) {
         Key.PageDown, Key.DirectionDown -> next
         Key.PageUp, Key.DirectionUp -> previous
