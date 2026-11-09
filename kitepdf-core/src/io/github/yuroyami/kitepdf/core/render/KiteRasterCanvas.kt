@@ -44,6 +44,12 @@ public class KiteRasterCanvas(
      * group costs its own area (#842).
      */
     private class Layer(val pixels: IntArray, val clipBase: Int, val left: Int, val top: Int, val w: Int, val h: Int) {
+        /**
+         * The pixels a knockout group started from, or null for a layer whose paints composite
+         * over each other: each paint of a knockout group replaces, inside its shape, what the
+         * earlier paints left over these (ISO 32000-1, 11.4.6; #759).
+         */
+        var knockoutBase: IntArray? = null
         val right: Int get() = left + w
         val bottom: Int get() = top + h
         fun index(x: Int, y: Int): Int = (y - top) * w + (x - left)
@@ -266,7 +272,46 @@ public class KiteRasterCanvas(
         // The group's layer covers its box under the CTM, cut to where it can composite (#842).
         val b = bbox.normalized()
         val box = intersect(deviceBox(KitePath.Builder().apply { rectangle(b.left, b.bottom, b.right - b.left, b.top - b.bottom) }.build(), ctm), paintBox())
-        layers.add(layerOver(box))
+        val layer = layerOver(box)
+        // A non-isolated group starts from its backdrop, so a paint inside blends with the page, and
+        // at the end the layer mixes with the page by the group's alpha, which is exact over an
+        // opaque backdrop. One with a blend mode of its own starts transparent, as on the other
+        // canvases (ISO 32000-1, 11.4.5; #759).
+        if (!isolated && blendMode == KiteBlendMode.Normal) copyBackdrop(layer)
+        if (knockout) layer.knockoutBase = layer.pixels.copyOf()
+        layers.add(layer)
+    }
+
+    /** Fills [layer] with the pixels under it, in the layer it opens over. */
+    private fun copyBackdrop(layer: Layer) {
+        val under = target
+        for (y in layer.top until layer.bottom) for (x in layer.left until layer.right) layer.pixels[layer.index(x, y)] = under.at(x, y)
+    }
+
+    /**
+     * Lays the premultiplied paint ([r], [g], [b], [a]) in [mode] at [i] of [layer] with coverage
+     * [k]: over what is there, or in a knockout group over the group's initial pixels, mixed in
+     * by the coverage, so a paint replaces the earlier paints of its group inside its shape.
+     */
+    private fun lay(layer: Layer, i: Int, r: Float, g: Float, b: Float, a: Float, k: Float, mode: KiteBlendMode) {
+        val dst = layer.pixels
+        val base = layer.knockoutBase
+        if (base == null) {
+            dst[i] = RasterBlend.over(dst[i], r * k, g * k, b * k, a * k, mode)
+            return
+        }
+        val full = RasterBlend.over(base[i], r, g, b, a, mode)
+        dst[i] = if (k >= 1f) full else mix(dst[i], full, k)
+    }
+
+    /** [from] towards [to] by [t], channel by channel, both premultiplied ARGB. */
+    private fun mix(from: Int, to: Int, t: Float): Int {
+        fun ch(shift: Int): Int {
+            val a = from ushr shift and 0xFF
+            val b = to ushr shift and 0xFF
+            return (a + (b - a) * t + 0.5f).toInt().coerceIn(0, 255)
+        }
+        return (ch(24) shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }
 
     private class GroupState(val alpha: Float, val blendMode: KiteBlendMode)
@@ -288,7 +333,11 @@ public class KiteRasterCanvas(
         // The content and the mask cover where the content can composite, not the canvas (#842). A
         // luminosity mask's backdrop can show outside its box, so the mask's box does not bound them.
         val box = paintBox()
-        layers.add(layerOver(box))
+        // The content starts from the page under it, so each paint blends with the real backdrop in
+        // its own mode, and the mask then mixes the result into the page (ISO 32000-1, 11.6.4.3; #764).
+        val contentLayer = layerOver(box)
+        copyBackdrop(contentLayer)
+        layers.add(contentLayer)
         failSafe(layers.size - 1) { render() }
         val content = popLayer() ?: return
         // The renderer hands the same callback while the same mask applies, so a mask rendered under
@@ -308,7 +357,25 @@ public class KiteRasterCanvas(
             }
             Mask(values, maskLayer.left, maskLayer.top, maskLayer.w, maskLayer.h).also { lastMask = key to it }
         }
-        composite(content, mask, 1f, KiteBlendMode.Normal)
+        mixIn(content, mask)
+    }
+
+    /**
+     * Mixes [content], a layer that started from the pixels under it, into the current layer by
+     * [mask] and the clip: the page where the mask is 0, the content where it is 1. For a paint in
+     * Normal this is the masked paint over the page; in another mode it keeps the blend (#764).
+     */
+    private fun mixIn(content: Layer, mask: Mask) {
+        val c = clip
+        val layer = target
+        val dst = layer.pixels
+        val box = intersect(paintBox(), intArrayOf(content.left, content.top, content.right, content.bottom))
+        for (y in box[1] until box[3]) for (x in box[0] until box[2]) {
+            val k = mask.at(x, y) * (c?.at(x, y) ?: 1f)
+            if (k <= 0f) continue
+            val i = layer.index(x, y)
+            dst[i] = mix(dst[i], content.pixels[content.index(x, y)], k)
+        }
     }
 
     /**
@@ -392,7 +459,6 @@ public class KiteRasterCanvas(
     private fun composite(src: Layer, mask: Mask?, alpha: Float, mode: KiteBlendMode) {
         val c = clip
         val layer = target
-        val dst = layer.pixels
         val box = intersect(paintBox(), intArrayOf(src.left, src.top, src.right, src.bottom))
         for (y in box[1] until box[3]) {
             for (x in box[0] until box[2]) {
@@ -400,11 +466,7 @@ public class KiteRasterCanvas(
                 if (p == 0) continue
                 val k = alpha * (mask?.at(x, y) ?: 1f) * (c?.at(x, y) ?: 1f)
                 if (k <= 0f) continue
-                val i = layer.index(x, y)
-                dst[i] = RasterBlend.over(
-                    dst[i], (p ushr 16 and 255) / 255f * k, (p ushr 8 and 255) / 255f * k, (p and 255) / 255f * k,
-                    (p ushr 24) / 255f * k, mode,
-                )
+                lay(layer, layer.index(x, y), (p ushr 16 and 255) / 255f, (p ushr 8 and 255) / 255f, (p and 255) / 255f, (p ushr 24) / 255f, k, mode)
             }
         }
     }
@@ -420,7 +482,6 @@ public class KiteRasterCanvas(
     private fun paint(evenOdd: Boolean, source: Source, mode: KiteBlendMode) {
         val c = clip
         val layer = target
-        val dst = layer.pixels
         val color = FloatArray(4)
         val box = paintBox()
         scan.fill(evenOdd, box[0], box[1], box[2], box[3]) { y, from, to, coverage ->
@@ -428,8 +489,7 @@ public class KiteRasterCanvas(
                 val k = coverage[x] * (c?.at(x, y) ?: 1f)
                 if (k <= 0f) continue
                 if (!source.at(x + 0.5, y + 0.5, color)) continue
-                val i = layer.index(x, y)
-                dst[i] = RasterBlend.over(dst[i], color[0] * k, color[1] * k, color[2] * k, color[3] * k, mode)
+                lay(layer, layer.index(x, y), color[0], color[1], color[2], color[3], k, mode)
             }
         }
     }

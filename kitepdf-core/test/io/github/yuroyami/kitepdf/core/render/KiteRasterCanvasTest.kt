@@ -242,4 +242,48 @@ class KiteRasterCanvasTest {
         c.fillPath(rect(0.0, 0.0, 10.0, 10.0), KiteMatrix.IDENTITY, red, evenOdd = false)
         assertEquals(0xFFFF0000.toInt(), c.toRaster().pixels[55])
     }
+
+    @Test
+    fun a_non_isolated_group_blends_with_the_page_and_a_knockout_group_replaces_its_earlier_paints() {
+        val all = rect(0.0, 0.0, 10.0, 10.0)
+        val box = KiteRectangle(0.0, 0.0, 10.0, 10.0)
+        // ISO 32000-1, 11.4.5: blue multiplied onto red inside a non-isolated group is black (#759).
+        val nonIsolated = KiteRasterCanvas(10, 10)
+        nonIsolated.fillPath(all, KiteMatrix.IDENTITY, red, evenOdd = false)
+        nonIsolated.beginTransparencyGroup(box, KiteMatrix.IDENTITY, isolated = false, knockout = false, alpha = 1.0, blendMode = KiteBlendMode.Normal)
+        nonIsolated.fillPath(all, KiteMatrix.IDENTITY, blue, evenOdd = false, alpha = 1.0, blendMode = KiteBlendMode.Multiply)
+        nonIsolated.endTransparencyGroup()
+        assertEquals(0xFF000000.toInt(), nonIsolated.toRaster()[5, 5])
+        // 11.4.6: in a knockout group a half blue over red shows half blue over the white page, not over the red.
+        val knockout = KiteRasterCanvas(10, 10)
+        knockout.clear(RgbColor(1.0, 1.0, 1.0))
+        knockout.beginTransparencyGroup(box, KiteMatrix.IDENTITY, isolated = true, knockout = true, alpha = 1.0, blendMode = KiteBlendMode.Normal)
+        knockout.fillPath(all, KiteMatrix.IDENTITY, red, evenOdd = false)
+        knockout.fillPath(all, KiteMatrix.IDENTITY, blue, evenOdd = false, alpha = 0.5)
+        knockout.endTransparencyGroup()
+        val p = knockout.toRaster()[5, 5]
+        assertTrue((p ushr 16 and 0xFF) in 125..130 && (p ushr 8 and 0xFF) in 125..130 && (p and 0xFF) == 255, "half blue over white: ${p.toString(16)}")
+    }
+
+    @Test
+    fun a_soft_masked_paint_keeps_its_blend_mode() {
+        // ISO 32000-1, 11.6.4.3: an opaque mask leaves a Multiply paint as it is: red onto blue is black (#764).
+        val all = rect(0.0, 0.0, 10.0, 10.0)
+        val c = KiteRasterCanvas(10, 10)
+        c.fillPath(all, KiteMatrix.IDENTITY, blue, evenOdd = false)
+        c.applySoftMask(SoftMask.Kind.Alpha, KiteRectangle(0.0, 0.0, 10.0, 10.0), KiteMatrix.IDENTITY,
+            render = { c.fillPath(all, KiteMatrix.IDENTITY, red, evenOdd = false, alpha = 1.0, blendMode = KiteBlendMode.Multiply) },
+            renderMask = { mask -> mask.fillPath(all, KiteMatrix.IDENTITY, RgbColor(1.0, 1.0, 1.0), evenOdd = false) },
+        )
+        assertEquals(0xFF000000.toInt(), c.toRaster()[5, 5])
+        // A half mask leaves half of the page and half of the black.
+        val half = KiteRasterCanvas(10, 10)
+        half.fillPath(all, KiteMatrix.IDENTITY, blue, evenOdd = false)
+        half.applySoftMask(SoftMask.Kind.Alpha, KiteRectangle(0.0, 0.0, 10.0, 10.0), KiteMatrix.IDENTITY,
+            render = { half.fillPath(all, KiteMatrix.IDENTITY, red, evenOdd = false, alpha = 1.0, blendMode = KiteBlendMode.Multiply) },
+            renderMask = { mask -> mask.fillPath(all, KiteMatrix.IDENTITY, RgbColor(1.0, 1.0, 1.0), evenOdd = false, alpha = 0.5) },
+        )
+        val p = half.toRaster()[5, 5]
+        assertTrue((p and 0xFF) in 125..130 && (p ushr 16 and 0xFF) == 0, "half blue: ${p.toString(16)}")
+    }
 }
