@@ -2980,13 +2980,13 @@ public class EpubPage internal constructor(
     }
 
     /**
-     * An inline-block's box (#840): the background over the border box, which is the em of the
-     * box's text with its padding and border around it, then each border edge that paints, solid.
+     * An inline-block's box (#840): the background over the border box, which the layout placed,
+     * then each border edge that paints, solid.
      */
     private fun paintInlineBox(box: InlineBox, run: PlacedRun, canvas: KiteCanvas, ctm: KiteMatrix) {
         val w = run.paintWidth
-        val bottom = -0.2 * run.fontSize - box.paddingBottom - box.borderBottom.effective
-        val height = run.fontSize + box.paddingTop + box.paddingBottom + box.borderTop.effective + box.borderBottom.effective
+        val bottom = run.boxBottom
+        val height = run.boxHeight
         box.background?.let { rectFill(canvas, ctm, 0.0, bottom, w, height, it.color, it.alpha) }
         if (box.borderLeft.visible) rectFill(canvas, ctm, 0.0, bottom, box.borderLeft.width, height, box.borderLeft.color)
         if (box.borderRight.visible) rectFill(canvas, ctm, w - box.borderRight.width, bottom, box.borderRight.width, height, box.borderRight.color)

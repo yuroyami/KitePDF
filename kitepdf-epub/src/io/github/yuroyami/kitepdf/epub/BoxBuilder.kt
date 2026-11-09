@@ -834,12 +834,7 @@ internal class BoxBuilder(
         // An inline-block with inline content is one unit of its line, with its own box (#840).
         val atom = if (style.display == Display.INLINE_BLOCK && style.cssFloat == CssFloat.NONE && !inl.inBox &&
             !hasBlockContent(el, ancestors, style)
-        ) InlineBox(
-            style.widthPt, style.minWidthPt,
-            style.paddingTopPt, style.paddingRightPt, style.paddingBottomPt, style.paddingLeftPt,
-            style.borderTop, style.borderRight, style.borderBottom, style.borderLeft,
-            style.marginLeftPt, style.marginRightPt, style.backgroundColor,
-        ) else null
+        ) InlineBox(style) else null
         val background = inl.beginBackground(if (atom == null) style.backgroundColor else null)
         val outerBox = atom?.let { inl.beginBox(it) }
         try {

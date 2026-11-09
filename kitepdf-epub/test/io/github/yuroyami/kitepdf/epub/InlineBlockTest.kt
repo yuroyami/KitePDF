@@ -77,6 +77,21 @@ class InlineBlockTest {
     }
 
     @Test
+    fun a_percentage_is_of_the_block_that_holds_the_line() {
+        // CSS 2.1, 10.2 and 8.4: width and padding percentages are of the containing block's
+        // width, here the 100pt div, not the 300pt page: 50 of width and 10 of padding each side.
+        val line = lines(
+            """<div style="width:100pt"><p><span style="display:inline-block;width:50%;padding:0 10%">i</span></p></div>""",
+        ).single()
+        val box = line.runs.single { it.box != null }
+        assertEquals(70.0, box.paintWidth, 1e-6)
+        val i = line.runs.first { r -> r.glyphs.any { it.text == "i" } }
+        assertEquals(box.x + 10.0, i.x, 1e-6, "the text starts inside the padding")
+        val min = lines("""<div style="width:200pt"><p><span style="display:inline-block;min-width:25%">i</span></p></div>""").single()
+        assertEquals(50.0, min.runs.single { it.box != null }.paintWidth, 1e-6, "min-width: 25% of 200pt")
+    }
+
+    @Test
     fun an_inline_block_with_a_block_inside_keeps_the_inline_layout() {
         val all = lines("""<p>a <span style="display:inline-block"><span style="display:block">b</span></span> c</p>""")
         assertTrue(all.all { line -> line.runs.none { it.box != null } }, "no box for an inline-block that holds a block")

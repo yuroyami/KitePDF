@@ -2006,7 +2006,7 @@ internal class BoxLayout(
             if (i == 0 && marker != null) {
                 markerRun(marker, style.fontSizePt, contentLeft, contentLeft + contentW, rtl, markerColor)?.let(placed::add)
             }
-            placed.addAll(placeRuns(cells, xStart, extraPerSpace, images, maths))
+            placed.addAll(placeRuns(cells, xStart, extraPerSpace, contentW, images, maths))
             out.add(PositionedLine(placed, y, lineHeight, ascent, images, lengths[i], ends[i], maths, starts[i]))
             y += lineHeight
         }
@@ -2694,16 +2694,17 @@ internal class BoxLayout(
             }
         }
         endWord()
-        padBoxes(tokens)
+        padBoxes(tokens, contentW)
         return tokens
     }
 
     /**
      * Gives each inline-block's box its room (#840): its left margin, border and padding before its
      * first cell, and after its last its right ones and what its text lacks of its `width` or
-     * `min-width`. Its words then measure what the box takes on the line.
+     * `min-width`. Its words then measure what the box takes on the line. A percentage is of
+     * [containingWidth], the width of the block that holds the line (CSS 2.1, 10.2 and 10.3.9).
      */
-    private fun padBoxes(tokens: MutableList<Token>) {
+    private fun padBoxes(tokens: MutableList<Token>, containingWidth: Double) {
         val first = LinkedHashMap<InlineBox, Cell>()
         val last = HashMap<InlineBox, Cell>()
         val content = HashMap<InlineBox, Double>()
@@ -2722,10 +2723,11 @@ internal class BoxLayout(
         }
         if (first.isEmpty()) return
         for ((b, c) in first) {
-            c.padBefore += b.before
+            val s = b.within(boxContainingWidth(containingWidth))
+            c.padBefore += s.boxBefore
             val text = content.getValue(b)
-            val extra = maxOf(0.0, (b.widthPt ?: 0.0) - text, (b.minWidthPt ?: 0.0) - text)
-            last.getValue(b).padAfter += extra + b.after
+            val extra = maxOf(0.0, (s.widthPt ?: 0.0) - text, (s.minWidthPt ?: 0.0) - text)
+            last.getValue(b).padAfter += extra + s.boxAfter
         }
         for (i in tokens.indices) {
             val t = tokens[i]
@@ -3127,11 +3129,14 @@ internal class BoxLayout(
         else -> GenericFont.SERIF
     }
 
+    /** The width an inline-block's percentages are of: 0 while the layout measures at an unbounded width (#840). */
+    private fun boxContainingWidth(contentW: Double): Double = if (contentW.isFinite() && contentW < FLEX_UNBOUNDED) contentW else 0.0
+
     /**
      * The box of each inline-block on the line (#840), first in [out] so it paints behind its text:
      * from its first cell to its last, without its margins, each cell placed as [placeRuns] places it.
      */
-    private fun boxRuns(cells: List<Cell>, xStart: Double, extraPerSpace: Double, out: MutableList<PlacedRun>) {
+    private fun boxRuns(cells: List<Cell>, xStart: Double, extraPerSpace: Double, containingWidth: Double, out: MutableList<PlacedRun>) {
         if (cells.none { it.box != null }) return
         fun advance(c: Cell): Double =
             if (isGap(c.cp)) c.width + if (isWordSeparator(c.cp)) extraPerSpace else 0.0 else c.padBefore + c.width + c.padAfter
@@ -3145,10 +3150,17 @@ internal class BoxLayout(
             k++
             if (b == null) continue
             while (k < cells.size && cells[k].box === b) x += advance(cells[k++])
-            val left = start + b.marginLeft
-            val right = x - b.marginRight
+            val sides = b.within(boxContainingWidth(containingWidth))
+            val left = start + sides.marginLeftPt
+            val right = x - sides.marginRightPt
             if (right > left) {
-                out.add(PlacedRun(emptyList(), left, c.fontSize, c.spec, c.color, c.shift, null, backgroundColor = b.background, paintWidth = right - left, box = b))
+                // The border box: the em of the box's text with its padding and border around it.
+                val bottom = -0.2 * c.fontSize - sides.paddingBottomPt - sides.borderBottom.effective
+                val height = c.fontSize + sides.paddingTopPt + sides.paddingBottomPt + sides.borderTop.effective + sides.borderBottom.effective
+                out.add(PlacedRun(
+                    emptyList(), left, c.fontSize, c.spec, c.color, c.shift, null, backgroundColor = b.background, paintWidth = right - left, box = b,
+                    boxBottom = bottom, boxHeight = height,
+                ))
             }
         }
     }
@@ -3157,11 +3169,13 @@ internal class BoxLayout(
         cells: List<Cell>,
         xStart: Double,
         extraPerSpace: Double,
+        /** The width of the block that holds the line, which an inline-block's percentages are of (#840). */
+        containingWidth: Double,
         imageSink: MutableList<PlacedImage>? = null,
         mathSink: MutableList<PlacedMath>? = null,
     ): List<PlacedRun> {
         val out = ArrayList<PlacedRun>()
-        boxRuns(cells, xStart, extraPerSpace, out)
+        boxRuns(cells, xStart, extraPerSpace, containingWidth, out)
         var x = xStart
         var i = 0
         // Ruby envelope tracking: a group's overlay is centered over

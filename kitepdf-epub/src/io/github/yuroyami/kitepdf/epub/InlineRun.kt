@@ -13,38 +13,44 @@ import io.github.yuroyami.kitepdf.epub.css.ObjectFit
 import io.github.yuroyami.kitepdf.core.render.RgbColor
 import io.github.yuroyami.kitepdf.svg.SvgImage
 import io.github.yuroyami.kitepdf.epub.css.Edge
+import io.github.yuroyami.kitepdf.epub.css.ComputedStyle
+import io.github.yuroyami.kitepdf.epub.css.within
 
 /**
  * An element of `display: inline-block` whose content is inline (CSS 2.1, 9.2.4; #840): its text
  * stays runs of the line, so it reads, searches and selects as before, but the runs form one unit
- * that no line breaks inside. The unit takes the element's [widthPt] or [minWidthPt] when its text
- * is narrower, its horizontal padding, border and margins as room before and after it, and paints
- * its [background] and border as one box behind its text.
+ * that no line breaks inside. The unit takes the element's `width` or `min-width` when its text
+ * is narrower, its padding, border and margins as room around it, and paints its background and
+ * border as one box behind its text. Its margin box is its height in the line, and its
+ * `vertical-align` places that box (CSS 2.1, 10.8 and 10.8.1).
  *
  * One object for each element, compared by identity. An inline-block with a block inside it keeps
  * the old layout, as inline text.
  */
 internal class InlineBox(
-    val widthPt: Double?,
-    val minWidthPt: Double?,
-    val paddingTop: Double,
-    val paddingRight: Double,
-    val paddingBottom: Double,
-    val paddingLeft: Double,
-    val borderTop: Edge,
-    val borderRight: Edge,
-    val borderBottom: Edge,
-    val borderLeft: Edge,
-    val marginLeft: Double,
-    val marginRight: Double,
-    val background: CssBackground?,
+    /** The element's computed style, whose width percentages [within] resolves. */
+    val style: ComputedStyle,
 ) {
-    /** The room before the text: the left margin, border and padding. */
-    val before: Double get() = marginLeft + borderLeft.effective + paddingLeft
+    val borderTop: Edge get() = style.borderTop
+    val borderRight: Edge get() = style.borderRight
+    val borderBottom: Edge get() = style.borderBottom
+    val borderLeft: Edge get() = style.borderLeft
+    val background: CssBackground? get() = style.backgroundColor
 
-    /** The room after the text, without the shortfall from [widthPt]: the right padding, border and margin. */
-    val after: Double get() = paddingRight + borderRight.effective + marginRight
+    /**
+     * The box's sizes, padding and margins in a containing block [containingWidth] wide: a
+     * percentage is of that width (CSS 2.1, 8.3, 8.4, 10.2 and 10.3.9). The layout passes 0 for a
+     * width it does not know, as when it measures text at an unbounded width, which leaves a
+     * percentage width as narrow as `auto` and a percentage of the rest 0, as an intrinsic size does.
+     */
+    fun within(containingWidth: Double): ComputedStyle = style.within(containingWidth)
 }
+
+/** The room before the box's text: its left margin, border and padding. */
+internal val ComputedStyle.boxBefore: Double get() = marginLeftPt + borderLeft.effective + paddingLeftPt
+
+/** The room after the box's text, without the shortfall from its width: its right padding, border and margin. */
+internal val ComputedStyle.boxAfter: Double get() = paddingRightPt + borderRight.effective + marginRightPt
 
 /**
  * A maximal span of text sharing one computed inline style. Everything the layout
