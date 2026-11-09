@@ -1066,6 +1066,7 @@ private fun PageSlotContent(
                 imageCache = state.vectorImageCacheFor(renderSpec.imageCacheBudgetBytes),
                 contentVersion = contentVersion,
                 hostLines = state.hostTextOffMain,
+                onScreen = { pageIndex in state.visiblePages },
             )
         }
         // What a screen reader finds on the page: its text, links and fields at their places (#427).
@@ -1753,6 +1754,8 @@ private fun KitePageVector(
     contentVersion: Int = 0,
     /** False to draw host-font text through Compose's text, as a browser does. See [KiteDocViewState.hostTextOffMain]. */
     hostLines: Boolean = hostTextAnyThread,
+    /** Whether the page's slot is in the viewport: snapshot state, read only when its content is out of memory. */
+    onScreen: () -> Boolean = { true },
 ) {
     val textMeasurer = rememberTextMeasurer()
     val theme = colors.theme
@@ -1762,11 +1765,21 @@ private fun KitePageVector(
     // A page whose chapter the layout budget dropped would lay it out here, on the UI thread
     // (#377). It shows its paper instead, and its chapter comes back on the raster dispatcher.
     var loads by remember(page) { mutableIntStateOf(0) }
-    if (!page.isContentLoaded) {
-        LaunchedEffect(page, loads) {
-            withContext(kitepdfRasterDispatcher()) { runCatching { page.loadContent() } }
+    // A load that throws is not tried again for this page, as the loader keeps a failed chapter a
+    // placeholder (#331), and a load that the budget drops at once, as for a neighbour that a pager
+    // composes off screen, is tried again only when the slot comes on screen or leaves it (#679).
+    var failed by remember(page) { mutableStateOf(false) }
+    val shown by remember(page) { derivedStateOf(onScreen) }
+    if (!page.isContentLoaded && !failed) {
+        LaunchedEffect(page, loads, shown) {
+            val loaded = withContext(kitepdfRasterDispatcher()) { runCatching { page.loadContent() } }
             backOnComposeThread()
-            loads++
+            if (loaded.isFailure) {
+                failed = true
+                io.github.yuroyami.kitepdf.core.kiteWarn { "render: the content of a page cannot load: ${loaded.exceptionOrNull()?.message}" }
+            } else if (page.isContentLoaded) {
+                loads++
+            }
         }
     }
     // A layer of its own, so an overlay change above it, a hit, a highlight, the selection or a

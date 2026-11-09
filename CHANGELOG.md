@@ -894,6 +894,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteViewerStrings` and `KiteChoiceStrings` compare by value, so a set built inline under
   `LocalKiteViewerStrings`, as the KDoc shows, no longer recomposes the whole viewer each time the composable
   around it recomposes (#675).
+- A Vectorized page whose content does not come back, because its layout throws or the budget drops it at once,
+  no longer loads it again on every frame: a failed load is not tried again for that page, and a dropped one
+  again only when its slot comes on screen or leaves it (#679).
 
 ## [0.13.0] - 2026-10-09
 
