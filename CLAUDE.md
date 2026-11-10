@@ -50,6 +50,8 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - Kotlin/JS keeps a `Float` as a double, so `toFloat().toDouble()` rounds nothing there. Round to float32 with `Float.fromBits(x.toFloat().toBits())` (#609).
 - A lone surrogate in a string literal becomes `?` on Kotlin/JS. Build it from `Char` values with `charArrayOf(...).concatToString()`.
 - A debug build for Kotlin/Native takes about 10 KB of stack for each level of EPUB layout, three times a release build, and a secondary thread on Apple platforms has 512 KB. Measure a nesting limit there, not on the JVM (#450).
+- The JVM runs a book's scripts on a 16 MB thread, so a host walk that recurses once per DOM level passes there and overflows Node's stack on JS and wasm. Walk a script's tree with a stack of its own (#955).
+- KiteJS 0.7.0 frees the handles of collected wrappers in quadratic time, and on JS the collector runs inside whichever test allocates, so a test that builds a big tree pays for the garbage of the tests before it and outruns the 5 s script budget. KiteJS 324a862 fixes it; delete this line once KitePDF takes a KiteJS release with it.
 - The page text has a line break wherever a narrow box wraps, so two words that a test looks for can sit on two lines. Fold white space before the search, or wrapped text reads as lost text (#450).
 - Git treats a PDF without NUL bytes as text, and `core.autocrlf=input` rewrote the line endings of a corpus PDF on commit, so its SHA-256 no longer matched. `.gitattributes` marks PDF and EPUB binary; keep it that way.
 - JFR's default execution samples do not see native frames, so zlib inflate and Java2D drawing vanish from a profile. Add native-method samples or a stage timer before you trust the shares (#462).

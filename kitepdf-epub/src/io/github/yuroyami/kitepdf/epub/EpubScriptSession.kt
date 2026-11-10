@@ -443,13 +443,30 @@ public class EpubScriptSession(
         }
 
         /** The iframe and object elements of the tree that show a document, in tree order (#613). */
-        private fun frameElements(): List<KiteXmlNode.Element> {
+        private fun frameElements(): List<KiteXmlNode.Element> =
+            elementsAt(dom.root) { (isHtml(it, "iframe") || isHtml(it, "object")) && document.frameTargetOf(dir, it) != null }
+
+        /**
+         * The elements at and under [node] that [keep] takes, in tree order, looking inside a kept one
+         * only when [inside]. A loop and a stack of its own, as ScriptDom's walks have, because a script
+         * can nest its tree past any call stack: 30,000 levels overflowed it on JS and wasm (#955).
+         */
+        private fun elementsAt(
+            node: KiteXmlNode,
+            inside: Boolean = true,
+            keep: (KiteXmlNode.Element) -> Boolean,
+        ): List<KiteXmlNode.Element> {
             val out = ArrayList<KiteXmlNode.Element>()
-            fun walk(e: KiteXmlNode.Element) {
-                if ((isHtml(e, "iframe") || isHtml(e, "object")) && document.frameTargetOf(dir, e) != null) out.add(e)
-                for (c in e.children) if (c is KiteXmlNode.Element) walk(c)
+            val stack = ArrayList<KiteXmlNode.Element>()
+            if (node is KiteXmlNode.Element) stack.add(node)
+            while (stack.isNotEmpty()) {
+                val e = stack.removeAt(stack.lastIndex)
+                if (keep(e)) {
+                    out.add(e)
+                    if (!inside) continue
+                }
+                for (i in e.children.indices.reversed()) (e.children[i] as? KiteXmlNode.Element)?.let(stack::add)
             }
-            walk(dom.root)
             return out
         }
 
@@ -706,15 +723,8 @@ public class EpubScriptSession(
         }
 
         /** The HTML `img` elements with a `src` at and under [node], in tree order. */
-        private fun imagesIn(node: KiteXmlNode): List<KiteXmlNode.Element> {
-            val out = ArrayList<KiteXmlNode.Element>()
-            fun walk(e: KiteXmlNode.Element) {
-                if (isHtml(e, "img") && dom.attr(e, "src") != null) out.add(e)
-                for (c in e.children) if (c is KiteXmlNode.Element) walk(c)
-            }
-            if (node is KiteXmlNode.Element) walk(node)
-            return out
-        }
+        private fun imagesIn(node: KiteXmlNode): List<KiteXmlNode.Element> =
+            elementsAt(node) { isHtml(it, "img") && dom.attr(it, "src") != null }
 
         /** The [tag] elements under [el], in tree order, not looking inside one. */
         private fun elementsIn(el: KiteXmlNode.Element, tag: String): List<KiteXmlNode.Element> {
@@ -827,6 +837,11 @@ public class EpubScriptSession(
             def("imageSize") { args -> element(args, 0)?.let(::canvasImage)?.let { listOf(it.width, it.height) } }
             // The img elements with a src at and under a node, which start to load when markup makes them (#611).
             def("images") { args -> node(args, 0)?.let { n -> imagesIn(n).map(dom::idOf) } ?: emptyList<Int>() }
+            // The prelude walked the tree itself with four calls here for each node, and each innerHTML
+            // looks for the scripts it made, so 30,000 elements outran the budget of a debug native build.
+            def("scripts") { args ->
+                node(args, 0)?.let { n -> elementsAt(n, inside = false) { dom.kind(it) == 1 && isHtml(it, "script") }.map(dom::idOf) } ?: emptyList<Int>()
+            }
             def("matrixParse") { args ->
                 when (val r = CssMatrixParser.parse(string(args, 0))) {
                     is CssMatrixParser.Result.Matrix -> r.m.toList() + (if (r.is2D) 1.0 else 0.0)

@@ -212,6 +212,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a stack of its own. A chapter whose script nested 30,000 elements made `chapterOpened` throw
   `StackOverflowError` (#955).
 
+- On JS and wasm, a book's script can nest its tree past the call stack there: the walks that find a chapter's
+  frames, images and scripts use a stack of their own, where a 30,000-level tree threw `RangeError: Maximum
+  call stack size exceeded`. Each `innerHTML` finds the scripts it made in one host call, not four for each
+  element, so setting 30,000 elements no longer takes 2.6 s of a script's five-second budget in a debug
+  Kotlin/Native build, but 0.34 s (#955).
+
 - A FlateDecode stream that ends early, lacks its Adler-32 trailer or has a corrupt block keeps what it
   inflated before the damage, with a warning, as MuPDF does. A page whose content had no trailer read as
   empty (#813). A PNG predictor decodes a short last row as far as it goes, reads an unknown row filter or

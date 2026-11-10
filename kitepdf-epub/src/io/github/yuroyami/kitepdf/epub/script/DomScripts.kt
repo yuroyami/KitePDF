@@ -16,18 +16,9 @@ var startedScripts = new Map(), scriptLoads = [];
 var globalEval = global.eval;
 /* How many script elements scripts made: until one did, an insertion has none to look for. */
 var scriptsMade = 0;
-/* The script elements at and under [id], in tree order, walked without recursion, as a tree can nest deep. */
-function scriptElementsAt(id) {
-  var out = [], stack = [id];
-  while (stack.length) {
-    var n = ArrayPop(stack), kind = K.kind(n);
-    if (kind === 1 && isHtml(n, 'script')) { ArrayPush(out, n); continue; }
-    if (kind !== 1 && kind !== 9 && kind !== 11) continue;
-    var c = K.children(n) || [];
-    for (var i = c.length - 1; i >= 0; i--) ArrayPush(stack, c[i]);
-  }
-  return out;
-}
+/* The script elements at and under [id], in tree order, not looking inside one. The host walks
+   the tree, in one call where a walk here cost four for each node (#955). */
+function scriptElementsAt(id) { return K.scripts(id); }
 /* Marks the scripts that markup parsing put at and under [id] as started, so none of them runs. */
 function markMarkupScripts(id) {
   var list = scriptElementsAt(id);
