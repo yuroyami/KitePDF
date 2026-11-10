@@ -53,6 +53,9 @@ class AndroidLayerBoundsTest {
 
     private fun check(name: String, pdf: ByteArray, colour: Int) {
         val s = 300.0 / 72.0
+        // The first render of a run also loads Robolectric's native graphics and warms the JIT, which
+        // took a CI runner past the budget on its own, so only a second render is timed.
+        renderOnBitmap(pdf, s)
         val start = System.nanoTime()
         val image = renderOnBitmap(pdf, s)
         val ms = (System.nanoTime() - start) / 1_000_000
