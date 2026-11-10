@@ -206,7 +206,10 @@ internal class CanvasHost(
             "scale" -> c.transform(KiteMatrix(d(args, 2), 0.0, 0.0, d(args, 3), 0.0, 0.0))
             "rotate" -> {
                 val a = d(args, 2)
-                if (a.isFinite()) c.transform(KiteMatrix(kotlin.math.cos(a), kotlin.math.sin(a), -kotlin.math.sin(a), kotlin.math.cos(a), 0.0, 0.0))
+                if (a.isFinite()) {
+                    val (sin, cos) = canvasSinCos(a)
+                    c.transform(KiteMatrix(cos, sin, -sin, cos, 0.0, 0.0))
+                }
             }
             "transform" -> c.transform(matrixAt(args, 2))
             "setTransform" -> c.setTransform(matrixAt(args, 2))

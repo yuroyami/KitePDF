@@ -65,6 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On Windows, a book's canvas rotates by the same sine and cosine as on the other targets and in Chromium:
+  `rotate(Math.PI / 2)` followed by `getTransform()` read a cosine of 6.1230318e-17, where Chromium reads
+  6.1232340e-17, because mingw-w64's `cos` is the x87 `fcos`. The angle is reduced by pi/2 in three parts first.
+
 - A crafted PDF whose `/Length` references chain thousands of levels deep no longer ends the process on
   Windows with a stack overflow. The resolution depth cap is 32 levels, not 256: one level takes 10.6 KB of
   stack in a debug Kotlin/Native build, and the main thread of a Windows executable has 1 MB. A conforming
