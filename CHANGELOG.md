@@ -65,6 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A crafted PDF whose `/Length` references chain thousands of levels deep no longer ends the process on
+  Windows with a stack overflow. The resolution depth cap is 32 levels, not 256: one level takes 10.6 KB of
+  stack in a debug Kotlin/Native build, and the main thread of a Windows executable has 1 MB. A conforming
+  file nests about four (ISO 32000-1, 7.5.7).
+
 - A label that a page draws twice in one place reads once in `structuredText`, in search and selection, and
   in the reading order. Aeronautical charts make a label bold by filling it and then stroking it, or by
   filling it twice a fraction of a point apart. A second fill always read twice, and since 0.11.0 the text

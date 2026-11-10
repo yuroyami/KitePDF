@@ -1213,10 +1213,16 @@ public class PdfDocument private constructor(
         /**
          * Backstop for non-cyclic but absurdly deep reference chains: a
          * crafted file can nest indirections thousands of levels deep, and a
-         * stack overflow is an uncatchable crash on Kotlin/Native. Real
-         * documents resolve in single-digit depth.
+         * stack overflow is an uncatchable crash on Kotlin/Native. A parse
+         * resolves again only for a stream's indirect /Length and an object
+         * stream's container, and an object stream's /Length is never in an
+         * object stream (ISO 32000-1, 7.5.7), so a conforming file nests about
+         * four levels. One level takes 10.6 KB of stack in a debug native
+         * build, so 256 levels needed 2.7 MB, more than the main thread of a
+         * Windows executable has, and the depth test ended the mingwX64 run
+         * with STATUS_STACK_OVERFLOW. 32 levels take 340 KB.
          */
-        private const val MAX_RESOLUTION_DEPTH = 256
+        private const val MAX_RESOLUTION_DEPTH = 32
 
         /** The default of [imageCacheBudgetBytes]: 32 MB, a small share of a 192 MB Android heap. */
         public const val DEFAULT_IMAGE_CACHE_BUDGET_BYTES: Long = 32L * 1024 * 1024
