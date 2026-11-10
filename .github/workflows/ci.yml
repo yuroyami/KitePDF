@@ -88,8 +88,8 @@ jobs:
         run: python3 -m unittest discover -s scripts -p test_inspect_artifacts.py -v
 
       # Each published module's resources/META-INF carries LICENSE and NOTICE into its jar, and
-      # kitepdf-core also the licence texts of its bundled fonts, patterns and PDFium data, which
-      # ask for their notice in binary copies (#703).
+      # kitepdf-core also the licence texts of its bundled fonts and PDFium data, and kitepdf-epub
+      # those of its hyphenation patterns, which ask for their notice in binary copies (#703).
       - name: Check the notices that the jars carry
         run: |
           for m in kitepdf kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps \
@@ -99,7 +99,7 @@ jobs:
             cmp NOTICE "$m/resources/META-INF/NOTICE"
           done
           python3 tools/generate_license_notices.py
-          git diff --exit-code -- kitepdf-core/resources/META-INF
+          git diff --exit-code -- kitepdf-core/resources/META-INF kitepdf-epub/resources/META-INF
 
       # The public documents are in the checkout; this fails on a changed or missing one.
       - name: Verify the licensed public documents

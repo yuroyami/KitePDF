@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes the third-party licence texts that kitepdf-core's jar carries in META-INF (#703).
+"""Writes the third-party licence texts that the jars of kitepdf-core and kitepdf-epub carry in META-INF (#703).
 
 The licences of the URW fonts (SIL OFL 1.1, condition 2) and of the hyphenation patterns (MIT,
 BSD-3-Clause, LPPL and notices of their own) ask for their notice in every copy, binary copies
@@ -16,6 +16,9 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CORE = ROOT / "kitepdf-core/src/io/github/yuroyami/kitepdf/core"
 OUT = ROOT / "kitepdf-core/resources/META-INF"
+# The hyphenation patterns moved to kitepdf-epub, so their licence texts ride in its jar.
+EPUB = ROOT / "kitepdf-epub/src/io/github/yuroyami/kitepdf/core"
+EPUB_OUT = ROOT / "kitepdf-epub/resources/META-INF"
 
 
 def header(path: pathlib.Path) -> str:
@@ -70,9 +73,11 @@ def main() -> None:
     (OUT / "LICENSE-URW-FONTS").write_text(fonts, encoding="utf-8")
     (OUT / "LICENSE-PDFIUM").write_text(header(CORE / "render/AdobeCmykTable.kt") + "\n" + PDFIUM_LICENSE, encoding="utf-8")
     parts = []
-    for f in sorted((CORE / "text/hyphen").glob("Hyph*.kt")):
+    for f in sorted((EPUB / "text/hyphen").glob("Hyph*.kt")):
         parts.append("=" * 78 + "\n" + f.name + "\n" + "=" * 78 + "\n\n" + header(f))
-    (OUT / "LICENSE-HYPHENATION").write_text("\n".join(parts), encoding="utf-8")
+    if not parts:
+        sys.exit("no hyphenation pattern files found")
+    (EPUB_OUT / "LICENSE-HYPHENATION").write_text("\n".join(parts), encoding="utf-8")
 
 
 if __name__ == "__main__":

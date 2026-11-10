@@ -5,9 +5,10 @@ This product includes software developed by the KitePDF authors, licensed under
 the Apache License, Version 2.0. See LICENSE.
 
 Every published artifact carries this file and LICENSE in META-INF. The jar of
-kitepdf-core also carries the licence texts that items 6, 7 and 8 point to:
-META-INF/LICENSE-HYPHENATION, META-INF/LICENSE-URW-FONTS and
-META-INF/LICENSE-PDFIUM, which tools/generate_license_notices.py writes.
+kitepdf-core also carries the licence texts that items 7 and 8 point to,
+META-INF/LICENSE-URW-FONTS and META-INF/LICENSE-PDFIUM, and the jar of
+kitepdf-epub the ones item 6 points to, META-INF/LICENSE-HYPHENATION.
+tools/generate_license_notices.py writes all three.
 
 --------------------------------------------------------------------------------
 Third-party data
@@ -63,7 +64,7 @@ listed here with where it comes from and its license.
    call for: CSS 2.1, Appendix D and the HTML Standard's Rendering section.
 
 6. Hyphenation patterns from the hyph-utf8 project
-   Used in: kitepdf-core .../core/text/hyphen/ (one file per pattern set)
+   Used in: kitepdf-epub .../core/text/hyphen/ (one file per pattern set)
    Knuth-Liang hyphenation patterns and exception lists from
    https://github.com/hyphenation/tex-hyphen, written by
    tools/generate_hyphenation.py. Each Kotlin file is a mechanical
