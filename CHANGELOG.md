@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An EPUB inline-block of Japanese or Chinese text wraps at the edge of its line again. The min-content measure took a CJK sentence as one word, so since the inline-block cell of #840 such a box was as wide as its longest sentence and ran off a narrow page, and the W3C `css-epub-line-break` check failed.
 - On Windows, a book's canvas rotates by the same sine and cosine as on the other targets and in Chromium:
   `rotate(Math.PI / 2)` followed by `getTransform()` read a cosine of 6.1230318e-17, where Chromium reads
   6.1232340e-17, because mingw-w64's `cos` is the x87 `fcos`. The angle is reduced by pi/2 in three parts first.

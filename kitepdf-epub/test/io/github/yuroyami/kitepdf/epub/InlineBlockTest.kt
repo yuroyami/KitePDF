@@ -209,6 +209,19 @@ class InlineBlockTest {
     }
 
     @Test
+    fun an_inline_block_of_japanese_text_wraps_at_the_edge_of_the_line() {
+        // A CJK sentence has a break between its letters, so its shrink-to-fit width is the room
+        // there is, not its unwrapped 216 points. It was one word, and the box ran off the page
+        // (w3c/epub-tests css-epub-line-break).
+        val html = """<p><span style="display:inline-block">auto:<br/>そこは湖のほとりで木々が輝いていた。</span></p>"""
+        val box = lines(html, width = 100.0).flatMap { it.blocks }.single()
+        assertTrue(box.borderBoxWidth <= 100.02, "the box is ${box.borderBoxWidth} wide in 100")
+        val inner = box.textLines()
+        assertTrue(inner.size >= 3, "the sentence wraps: ${inner.map { it.text() }}")
+        assertTrue(inner.none { l -> l.text().startsWith("々") }, "and no line starts with the iteration mark")
+    }
+
+    @Test
     fun an_inline_block_that_holds_blocks_takes_its_width_and_aligns() {
         // A width of 50% of the 200pt div, and a box that clips its overflow has its bottom margin
         // edge as its baseline (CSS 2.1, 10.8.1): 20 of height and 2 of margin over the baseline.

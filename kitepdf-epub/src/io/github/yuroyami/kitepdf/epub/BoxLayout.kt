@@ -1845,10 +1845,17 @@ internal class BoxLayout(
         else -> 0.0 to 0.0 // images/nested tables: sized by their column
     }
 
-    /** Unwrapped content width (longest line) and minimum width (longest word). */
+    /**
+     * Unwrapped content width (longest line) and minimum width (longest word). A CJK letter is a
+     * word of its own, as the line layout breaks it, joined only where kinsoku holds it to the
+     * letter before; a sentence of them was one word, so an inline-block of Japanese text was as
+     * wide as its longest sentence and ran off a narrow page.
+     */
     private fun measureRuns(runs: List<InlineRun>): Pair<Double, Double> {
         var line = 0.0; var maxLine = 0.0; var word = 0.0; var maxWord = 0.0
-        fun endLine() { if (line > maxLine) maxLine = line; line = 0.0 }
+        // The letter before, while it breaks per character as a CJK one does; -1 otherwise.
+        var prevCjk = -1
+        fun endLine() { if (line > maxLine) maxLine = line; line = 0.0; prevCjk = -1 }
         fun endWord() { if (word > maxWord) maxWord = word; word = 0.0 }
         for (run in runs) {
             if (run.hardBreak) { endWord(); endLine(); continue }
@@ -1872,7 +1879,12 @@ internal class BoxLayout(
                 isFixedSpace(cp) -> { line += gapWidthPt(cp, run); endWord() }
                 isWhitespace(cp) -> { line += FontMetrics.advancePt(' '.code, run.fontSizePt, run.bold, run.italic, run.family); endWord() }
                 else -> {
-                    val w = FontMetrics.advancePt(cp, run.fontSizePt, run.bold, run.italic, run.family); line += w; word += w
+                    val w = FontMetrics.advancePt(cp, run.fontSizePt, run.bold, run.italic, run.family)
+                    val cjk = FontMetrics.isWide(cp) && run.rubyGroup < 0 && !run.keepAll && !run.noWrap
+                    // A break falls before a CJK letter and after one, unless the closer or the opener holds them (#840).
+                    if ((cjk || prevCjk >= 0) && word > 0.0 && !isCloser(cp, run.lineBreak) && !(prevCjk >= 0 && isOpener(prevCjk, run.lineBreak))) endWord()
+                    line += w; word += w
+                    prevCjk = if (cjk) cp else -1
                     if (run.lineBreak == LineBreak.ANYWHERE) endWord()
                 }
             }
