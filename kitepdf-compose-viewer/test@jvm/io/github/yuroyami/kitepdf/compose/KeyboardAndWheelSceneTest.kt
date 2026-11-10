@@ -50,12 +50,13 @@ class KeyboardAndWheelSceneTest {
     private fun withViewer(
         layout: KiteDocLayout = KiteDocLayout.Paged(),
         direction: LayoutDirection = LayoutDirection.Ltr,
+        onTap: ((Offset) -> Unit)? = null,
         block: (ImageComposeScene, KiteDocViewState, SceneTestDriver) -> Unit,
     ) {
         val state = KiteDocViewState(pagesPdf(4))
         ImageComposeScene(width = 200, height = 300, density = Density(1f)) {
             CompositionLocalProvider(LocalLayoutDirection provides direction) {
-                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = layout)
+                KiteDocView(state = state, modifier = Modifier.fillMaxSize(), layout = layout, onTap = onTap)
             }
         }.use { scene ->
             val driver = SceneTestDriver(scene)
@@ -137,9 +138,14 @@ class KeyboardAndWheelSceneTest {
 
     @Test
     fun a_field_with_the_caret_keeps_the_page_keys() {
-        withViewer { scene, state, driver ->
+        // The click is also a tap on the page, which lands once the double-tap timeout passes in
+        // wall-clock time and takes the caret out of a field. Thirty frames can be shorter than that
+        // timeout on a loaded machine, so the tap took the caret this test gave and the page key
+        // turned the page. Wait for the tap itself.
+        val tapped = java.util.concurrent.atomic.AtomicBoolean(false)
+        withViewer(onTap = { tapped.set(true) }) { scene, state, driver ->
             click(scene)
-            driver.pumpFrames(30)
+            driver.pumpUntilState { tapped.get() }
             onTestUiThread { state.focusField("name") }
             driver.pumpFrames(5)
             key(scene, Key.PageDown)
