@@ -141,9 +141,13 @@ def install_npm_packages(output, module, platform):
     klib of the module names fails the run with its name.
     """
     imported = set()
+    # A static import or export starts its line, and a dynamic import is a call. Kotlin/JS writes a string
+    # literal on one line, so a CSS `@import "a.css"` that a test holds as text matches neither.
+    bare = r"""['"](@?[a-z0-9][\w.-]*(?:/[\w.-]+)*)['"]"""
+    pattern = re.compile(rf"""^\s*(?:import|export)\b[^'"\n;]*?{bare}|(?<![@\w$.])import\s*\(\s*{bare}\s*\)""", re.M)
     for script in output.rglob("*.mjs"):
-        for specifier in re.findall(r"""(?:\bfrom|\bimport)\s*\(?\s*['"](@?[a-z0-9][\w.-]*(?:/[\w.-]+)*)['"]""",
-                                    script.read_text()):
+        for static, dynamic in pattern.findall(script.read_text()):
+            specifier = static or dynamic
             parts = specifier.split("/")
             imported.add("/".join(parts[:2]) if specifier.startswith("@") else parts[0])
     imported -= node_builtins()
