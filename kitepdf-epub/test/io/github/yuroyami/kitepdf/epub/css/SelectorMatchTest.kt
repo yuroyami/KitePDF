@@ -210,27 +210,56 @@ class SelectorMatchTest {
 
     @Test
     fun sibling_steps_cost_one_step_each() {
-        // A scan from the first child for every sibling step made h1 ~ p cost n^3/6 (#990).
+        // A scan from the first child for every sibling step made h1 ~ p cost n^3/6 (#990), and a count
+        // of the siblings before each element made p:nth-child(odd) cost n^2/2: 33 s on a debug native
+        // build. Steps are counted, not timed, so a slow build cannot fail it and a quadratic one cannot pass.
         val n = 20_000
         val html = "<body><h1>t</h1>" + "<p>x</p>\n".repeat(n) + "</body>"
         val tree = HtmlParser.parse(html)
         val paragraphs = ArrayList<KiteXmlNode.Element>()
         fun collect(el: KiteXmlNode.Element) { if (el.tag == "p") paragraphs.add(el); for (c in el.children) if (c is KiteXmlNode.Element) collect(c) }
         collect(tree)
-        val start = kotlin.time.TimeSource.Monotonic.markNow()
-        for (rule in listOf("h1 ~ p", "p + p", "p:nth-child(odd)", "p:last-child")) {
+        for (rule in listOf("h1 ~ p", "p + p", "p:nth-child(odd)", "p:nth-last-child(3n)", "p:nth-of-type(2n+1)", "p:last-child")) {
             val sel = Selector.parse(rule)!!
+            val counting = CountingTree()
+            val nth = NthIndex { it.tag }
+            val cx = MatchContext(counting, null, nth)
             var matched = 0
-            for (p in paragraphs) if (sel.matches(p)) matched++
+            for (p in paragraphs) if (sel.matches(p, cx)) matched++
             assertTrue(matched > 0, rule)
+            // Each paragraph tests a compound or two, and an :nth- pass visits the body's 2n + 1 children once.
+            val steps = counting.tests + nth.visits
+            assertTrue(steps <= 4 * n, "$rule took $steps steps for $n siblings")
         }
-        assertTrue(start.elapsedNow().inWholeSeconds < 20, "took ${start.elapsedNow()}")
+        // The index answers as a count does, among mixed types and text, and again once the children change.
+        val mixed = HtmlParser.parse("<body>" + (0 until 200).joinToString("") { listOf("<p>a</p>", "<h2>b</h2> ", "<div>c</div>")[it * 7 % 3] } + "</body>")
+            .children.single { it is KiteXmlNode.Element && it.tag == "body" } as KiteXmlNode.Element
+        val index = MatchContext(LayoutTree, null, NthIndex { it.tag })
+        val rules = listOf("p:nth-child(odd)", "div:nth-last-child(3n+1)", "h2:nth-of-type(4n)", "p:nth-last-of-type(-n+5)", ":nth-child(7)")
+        repeat(2) {
+            val elements = mixed.children.filterIsInstance<KiteXmlNode.Element>()
+            for (rule in rules) {
+                val sel = Selector.parse(rule)!!
+                assertEquals(elements.map { sel.matches(it) }, elements.map { sel.matches(it, index) }, rule)
+            }
+            mixed.children.removeAt(mixed.children.indexOfFirst { it is KiteXmlNode.Element && it.tag == "h2" })
+        }
         // A tree that changes is scanned again, so the answer stays right.
         val body = paragraphs[0].parent!!
         val moved = paragraphs[5]
         body.children.remove(moved)
         body.children.add(0, moved)
         assertEquals(null, previousElement(moved))
+    }
+
+    /** The layout's tree, counting the compounds that matching tests, each of which asks an element's local name once. */
+    private class CountingTree : SelectorTree by LayoutTree {
+        var tests = 0
+
+        override fun localName(el: KiteXmlNode.Element): String {
+            tests++
+            return LayoutTree.localName(el)
+        }
     }
 
     @Test

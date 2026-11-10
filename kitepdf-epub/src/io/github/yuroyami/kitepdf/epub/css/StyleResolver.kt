@@ -108,13 +108,16 @@ internal class StyleResolver(
     /** How many selectors this resolver has tested against an element, which a test counts (#856). */
     internal var selectorTests = 0
 
+    /** The layout's tree, with the places of its elements among their siblings counted once for this resolver (#990). */
+    private val matchContext = MatchContext(LayoutTree, null, NthIndex { it.tag })
+
     /** The highest specificity by which each rule of [index] matches [el], by the rule's order. */
     private fun matchedRules(index: RuleIndex, el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element>): Map<Int, Int> {
         val matched = HashMap<Int, Int>()
         index.candidates(el) { e ->
             selectorTests++
             val spec = e.selector.specificity
-            if ((matched[e.order] ?: -1) < spec && e.selector.matches(el, ancestors)) matched[e.order] = spec
+            if ((matched[e.order] ?: -1) < spec && e.selector.matches(el, matchContext)) matched[e.order] = spec
         }
         return matched
     }
@@ -373,7 +376,7 @@ internal class StyleResolver(
         val winner = HashMap<String, Declaration>()
         for ((order, rule) in svgRules) {
             var spec = -1
-            for (sel in rule.selectors) if (sel.pseudoElement == null && sel.matches(el)) spec = maxOf(spec, sel.specificity)
+            for (sel in rule.selectors) if (sel.pseudoElement == null && sel.matches(el, matchContext)) spec = maxOf(spec, sel.specificity)
             if (spec < 0) continue
             for (d in rule.declarations) {
                 if (d.property !in SVG_PROPERTIES || (root && d.property in BOX_PROPERTIES)) continue

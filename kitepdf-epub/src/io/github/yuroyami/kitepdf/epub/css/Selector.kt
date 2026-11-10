@@ -89,7 +89,72 @@ internal const val SVG_NS = "http://www.w3.org/2000/svg"
 internal const val MATHML_NS = "http://www.w3.org/1998/Math/MathML"
 
 /** What a match reads besides the element: the tree, and the element `:scope` names, or null when that is the root. */
-internal class MatchContext(val tree: SelectorTree, val scope: KiteXmlNode.Element?)
+internal class MatchContext(
+    val tree: SelectorTree,
+    val scope: KiteXmlNode.Element?,
+    /** The places of elements among their siblings, kept for a styling pass over a tree that does not change meanwhile, or none. */
+    val nth: NthIndex? = null,
+)
+
+/**
+ * Each element's place among its siblings, and among those of its type, counted in one pass over its
+ * parent's children and kept for the rest of a styling pass, as Blink's NthIndexCache keeps it. The
+ * `:nth-` pseudo-classes counted the siblings before each element they tested, so `p:nth-child(odd)`
+ * over n siblings cost n^2/2 steps: 33 s for 20,000 paragraphs in a debug native build. The tree a
+ * pass styles does not change meanwhile; a parent whose child count moved is counted again. [typeOf]
+ * names an element's type as the tree's [SelectorTree.sameType] compares types.
+ */
+internal class NthIndex(private val typeOf: (KiteXmlNode.Element) -> Any) {
+    /** For the child at each index: the elements before it, and those of its type, or -1 for one that is no element. */
+    private class Counts(val size: Int, val before: IntArray, val typeBefore: IntArray, val elements: Int, val types: Map<Any, Int>)
+
+    private val byParent = HashMap<KiteXmlNode.Element, Counts>()
+
+    /** How many children the `:nth-` pseudo-classes have visited with this index, in its passes or in a count, which a test counts (#990). */
+    internal var visits = 0
+
+    /**
+     * The place of the element at [at] among the children of [parent], from 1, counted among its
+     * element siblings or those of its type when [ofType], and from the last one when [last].
+     */
+    fun position(parent: KiteXmlNode.Element, at: Int, last: Boolean, ofType: Boolean): Long {
+        val siblings = parent.children
+        val counts = byParent[parent]?.takeIf { it.size == siblings.size } ?: count(siblings).also { byParent[parent] = it }
+        return when {
+            !ofType && !last -> counts.before[at] + 1L
+            !ofType -> (counts.elements - counts.before[at]).toLong()
+            !last -> counts.typeBefore[at] + 1L
+            else -> ((counts.types[typeOf(siblings[at] as KiteXmlNode.Element)] ?: 0) - counts.typeBefore[at]).toLong()
+        }
+    }
+
+    private fun count(siblings: List<KiteXmlNode>): Counts {
+        val before = IntArray(siblings.size)
+        val typeBefore = IntArray(siblings.size)
+        val types = HashMap<Any, Int>()
+        var elements = 0
+        for (k in siblings.indices) {
+            visits++
+            val c = siblings[k]
+            if (c !is KiteXmlNode.Element) {
+                before[k] = -1
+                typeBefore[k] = -1
+                continue
+            }
+            before[k] = elements++
+            val type = typeOf(c)
+            val seen = types[type] ?: 0
+            typeBefore[k] = seen
+            types[type] = seen + 1
+        }
+        return Counts(siblings.size, before, typeBefore, elements, types)
+    }
+
+    companion object {
+        /** Up to this many siblings a count is cheaper than a pass and its arrays. */
+        const val SCAN_LIMIT = 32
+    }
+}
 
 /** A condition of a compound selector past its type: an id, a class, an attribute or a pseudo-class. */
 internal sealed class Condition {
@@ -206,10 +271,15 @@ internal class NthCondition(val a: Int, val b: Int, val last: Boolean, val ofTyp
     override fun matches(el: KiteXmlNode.Element, cx: MatchContext): Boolean {
         if (of != null && of.none { it.matchFrom(el, cx) }) return false
         var position = 1L
-        val siblings = el.parent?.children
-        if (siblings != null) {
+        val parent = el.parent
+        val siblings = parent?.children
+        val index = cx.nth
+        if (parent != null && siblings != null && index != null && of == null && siblings.size > NthIndex.SCAN_LIMIT && el.indexInParent() >= 0) {
+            position = index.position(parent, el.indexInParent(), last, ofType)
+        } else if (siblings != null) {
             val at = el.indexInParent()
             val range = if (last) (at + 1 until siblings.size) else (0 until at)
+            if (index != null && !range.isEmpty()) index.visits += range.last - range.first + 1
             for (k in range) {
                 val s = siblings[k] as? KiteXmlNode.Element ?: continue
                 val counts = when {
@@ -417,6 +487,9 @@ internal class Selector(
     @Suppress("UNUSED_PARAMETER")
     fun matches(el: KiteXmlNode.Element, ancestors: List<KiteXmlNode.Element> = emptyList()): Boolean =
         !otherPseudoElement && matchFrom(el, LAYOUT)
+
+    /** [matches] in [cx], which a styling pass keeps for every element it styles, with its [MatchContext.nth]. */
+    fun matches(el: KiteXmlNode.Element, cx: MatchContext): Boolean = !otherPseudoElement && matchFrom(el, cx)
 
     /** Whether [el] is this selector's subject in [tree], with [scope] as `:scope`: never when the subject is a pseudo-element. */
     fun matchesElement(el: KiteXmlNode.Element, tree: SelectorTree, scope: KiteXmlNode.Element?): Boolean =
