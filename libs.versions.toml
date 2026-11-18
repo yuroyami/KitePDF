@@ -4,7 +4,7 @@
 
 # Compose Multiplatform material3, used by :sample only. The other Compose libraries come from the toolchain's
 # $compose catalog, which follows settings.compose.version.
-composeMaterial3 = "1.13.0-alpha02"
+composeMaterial3 = "1.13.0-beta02"
 
 # Android platform bridge (sample only)
 activityCompose = "1.14.0-alpha03"
@@ -12,12 +12,15 @@ activityCompose = "1.14.0-alpha03"
 # Skiko: JetBrains' Skia bindings. Used by :kitepdf-skia-renderer. Compose Multiplatform
 # rides on Skiko under the hood on JVM Desktop + iOS, so this gives us the same
 # renderer Compose uses, without the Compose runtime sitting on top.
-skiko = "0.153.0"
+skiko = "0.156.1"
 
-# ImageKodec. The Kite lineage's shared image engine, and :kitepdf-core's one
-# runtime dependency beyond kotlin-stdlib. CONTRIBUTING.md describes how to test
-# an unpublished revision in an isolated local Maven repository.
+# ImageKodec. The Kite lineage's shared image engine, a runtime dependency of :kitepdf-core.
+# CONTRIBUTING.md describes how to test an unpublished revision in an isolated local Maven repository.
 imagekodec = "0.3.0"
+
+# ArchiveKodec. The Kite lineage's compression engine, a runtime dependency of :kitepdf-core
+# (DEFLATE, zlib and CRC-32) and :kitepdf-epub (Brotli for WOFF2).
+archivekodec = "0.2.0"
 
 # KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
 # so no other module carries a script engine. Its code sees only kitejs-api; QuickJS runs underneath.
@@ -28,11 +31,11 @@ kiteplayer = "0.3.0"
 
 # Robolectric, for the Android host tests of :kitepdf-compose-viewer and :kitepdf-native-renderer only: its
 # native graphics draw a canvas on the JVM, so Android drawing and text can be checked without a device.
-robolectric = "4.17"
+robolectric = "4.18"
 
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
 # No other module may depend on it: the engine stays kotlin-stdlib + ImageKodec.
-ktor = "3.6.0"
+ktor = "3.6.1"
 
 # kotlinx.coroutines. :kitepdf-epub fetches a book's remote resources with it (#38), and Compose and
 # Ktor bring the same library to the viewer and :kitepdf-net. The version Ktor itself depends on.
@@ -45,6 +48,9 @@ navigationevent = "1.1.0"
 # ImageKodec supplies every image codec :kitepdf-core decodes through: JPEG
 # PNG, GIF, BMP, WebP, TIFF, JPEG 2000, AVIF, JPEG XL, JBIG2 and CCITT.
 imagekodec = { module = "io.github.yuroyami:imagekodec", version.ref = "imagekodec" }
+
+# ArchiveKodec supplies DEFLATE, zlib, CRC-32 and Brotli.
+archivekodec = { module = "io.github.yuroyami:archivekodec", version.ref = "archivekodec" }
 
 # KiteJS runs document JavaScript, :kitepdf-javascript only.
 kitejs-api = { module = "io.github.yuroyami:kitejs-api", version.ref = "kitejs" }

@@ -10,10 +10,10 @@ tasks:
       moduleSourceDir: ${module.rootDir}/src
       classpath: ${module.runtimeClasspath}
       dokkaCli:
-        - org.jetbrains.dokka:dokka-cli:2.3.0-Beta
+        - org.jetbrains.dokka:dokka-cli:2.3.0
       dokkaPlugins:
-        - org.jetbrains.dokka:dokka-base:2.3.0-Beta
-        - org.jetbrains.dokka:analysis-kotlin-symbols:2.3.0-Beta
+        - org.jetbrains.dokka:dokka-base:2.3.0
+        - org.jetbrains.dokka:analysis-kotlin-symbols:2.3.0
       workDir: ${taskOutputDir}
       outputDir: ${project.rootDir}/build/dokka/modules/${module.name}
 
@@ -23,12 +23,12 @@ tasks:
       moduleVersion: ${module.settings.publishing.version}
       modulesDir: ${project.rootDir}/build/dokka/modules
       dokkaCli:
-        - org.jetbrains.dokka:dokka-cli:2.3.0-Beta
+        - org.jetbrains.dokka:dokka-cli:2.3.0
       dokkaPlugins:
-        - org.jetbrains.dokka:dokka-base:2.3.0-Beta
-        - org.jetbrains.dokka:analysis-kotlin-symbols:2.3.0-Beta
-        - org.jetbrains.dokka:all-modules-page-plugin:2.3.0-Beta
-        - org.jetbrains.dokka:templating-plugin:2.3.0-Beta
+        - org.jetbrains.dokka:dokka-base:2.3.0
+        - org.jetbrains.dokka:analysis-kotlin-symbols:2.3.0
+        - org.jetbrains.dokka:all-modules-page-plugin:2.3.0
+        - org.jetbrains.dokka:templating-plugin:2.3.0
       workDir: ${taskOutputDir}
       siteDir: ${project.rootDir}/build/dokka/html
 

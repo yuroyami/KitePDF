@@ -35,7 +35,7 @@ apply:
 # Skiko's Android artifact is only in the Compose dev repository, not on Maven Central.
 repositories:
   - id: compose-dev
-    url: https://maven.pkg.jetbrains.space/public/p/compose/dev
+    url: https://packages.jetbrains.team/maven/p/cmp/dev
 
 dependencies:
   - //kitepdf-pdf
