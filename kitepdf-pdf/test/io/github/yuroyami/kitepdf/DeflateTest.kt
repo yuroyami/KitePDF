@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.compression.Deflate
+import io.github.yuroyami.archivekodec.checksum.Adler32
+import io.github.yuroyami.archivekodec.codec.deflate.Deflate as ArchiveDeflate
 import io.github.yuroyami.kitepdf.core.compression.Inflate
 import io.github.yuroyami.kitepdf.core.compression.Zlib
 import kotlin.random.Random
@@ -17,7 +18,7 @@ import kotlin.test.assertTrue
 class DeflateTest {
 
     private fun assertDeflateRoundTrips(data: ByteArray) {
-        val inflated = Inflate.decode(Deflate.encode(data))
+        val inflated = Inflate.decodePlatform(ArchiveDeflate.encode(data))
         assertTrue(data.contentEquals(inflated), "bare DEFLATE round-trip failed (${data.size} bytes)")
         val unzipped = Zlib.decode(Zlib.encode(data)) // also verifies the Adler-32 trailer
         assertTrue(data.contentEquals(unzipped), "zlib round-trip failed (${data.size} bytes)")
@@ -65,6 +66,6 @@ class DeflateTest {
 
     @Test fun adler32_is_correct_for_known_vector() {
         // RFC 1950 / well-known: Adler-32("Wikipedia") == 0x11E60398.
-        assertEquals(0x11E60398, Zlib.adler32("Wikipedia".encodeToByteArray()))
+        assertEquals(0x11E60398, Adler32.of("Wikipedia".encodeToByteArray()).toInt())
     }
 }

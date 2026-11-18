@@ -24,7 +24,7 @@ This page takes you from an empty project to a document on screen. You add KiteP
     }
     ```
 
-The `kitepdf` artifact holds every format (PDF, EPUB, CBZ, SVG, XPS and OpenXPS) and depends only on `kotlin-stdlib`, the pure-Kotlin ImageKodec decoders and `kotlinx-coroutines-core`. For one format only, you can add `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` instead.
+The `kitepdf` artifact holds every format (PDF, EPUB, CBZ, SVG, XPS and OpenXPS) and depends only on `kotlin-stdlib`, the pure-Kotlin ImageKodec decoders, the pure-Kotlin ArchiveKodec codecs and `kotlinx-coroutines-core`. For one format only, you can add `kitepdf-pdf`, `kitepdf-epub`, `kitepdf-cbz`, `kitepdf-svg` or `kitepdf-xps` instead.
 
 The other artifacts are optional:
 
@@ -32,10 +32,10 @@ The other artifacts are optional:
 | --- | --- | --- |
 | `kitepdf-compose-viewer` | show documents in Compose (`KiteDocView`) | |
 | `kitepdf-native-renderer` | render a page to an image on the platform canvas | |
-| `kitepdf-skia-renderer` | render a page to an image on Skia | on Android, the repository `maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`. On the JVM without Compose, the Skia runtime of each system, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.153.0` |
+| `kitepdf-skia-renderer` | render a page to an image on Skia | on Android, the repository `maven("https://packages.jetbrains.team/maven/p/cmp/dev")`. On the JVM without Compose, the Skia runtime of each system, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.153.0` |
 | `kitepdf-javascript` | run the JavaScript of PDF forms and EPUB books | |
 | `kitepdf-media` | play EPUB audio and video in `KiteDocView` | on iOS, the linker flags and privacy manifest entries of [KitePlayer](https://github.com/yuroyami/KitePlayer#install) |
-| `kitepdf-net` | open a document from a URL | a Ktor client engine, such as `io.ktor:ktor-client-cio:3.6.0` |
+| `kitepdf-net` | open a document from a URL | a Ktor client engine, such as `io.ktor:ktor-client-cio:3.6.1` |
 
 !!! warning
     Without the extra item in the last column, the build, the download or the first render fails. The one exception is a missing privacy manifest entry on iOS, which Apple flags only during app review.

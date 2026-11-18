@@ -1,5 +1,8 @@
 package io.github.yuroyami.kitepdf.epub.convert
 
+import io.github.yuroyami.archivekodec.ArchiveException
+import io.github.yuroyami.archivekodec.codec.huffcdic.HuffCdic
+import io.github.yuroyami.archivekodec.codec.palmdoc.PalmDoc
 import io.github.yuroyami.kitepdf.core.compression.Inflate
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.text.TextEncoding
@@ -140,7 +143,7 @@ internal object MobiBook {
 
     /** The text of the book that starts at record [base]: each text record decompressed, without its trailing entries. */
     private fun text(pdb: Pdb, base: Int, h: Header): ByteArray {
-        val huff = if (h.compression == HUFF) Huff(pdb, base + h.huffRecord, h.huffCount) else null
+        val huff = if (h.compression == HUFF) huffCdic(pdb, base + h.huffRecord, h.huffCount) else null
         val out = Bytes(h.textRecords * 4096)
         for (i in 1..h.textRecords) {
             val rec = pdb.rec(base + i)
@@ -148,7 +151,7 @@ internal object MobiBook {
             when (h.compression) {
                 1 -> out.add(rec, 0, size)
                 2 -> lz77(rec, size, out)
-                else -> out.add(huff!!.unpack(rec, size))
+                else -> out.add(archive { huff!!.decode(rec, 0, size) })
             }
         }
         return out.toArray()
@@ -183,115 +186,33 @@ internal object MobiBook {
         return num.coerceAtMost(data.size)
     }
 
-    /** PalmDOC compression: literals, runs of literals, a space and a letter, and LZ77 copies of up to 10 bytes. */
+    /**
+     * PalmDOC compression, decoded by ArchiveKodec. A copy from before this record's output is
+     * damage: the decode stops there and keeps what came before, as a reader does.
+     */
     internal fun lz77(b: ByteArray, size: Int, out: Bytes) {
-        val start = out.size
-        var i = 0
-        while (i < size) {
-            val c = b[i++].toInt() and 0xFF
-            when {
-                c in 1..8 -> { val n = minOf(c, size - i); out.add(b, i, n); i += n }
-                c < 0x80 -> out.add(c)
-                c >= 0xC0 -> { out.add(' '.code); out.add(c xor 0x80) }
-                else -> {
-                    if (i >= size) break
-                    val v = (c shl 8) or (b[i++].toInt() and 0xFF)
-                    val dist = (v ushr 3) and 0x7FF
-                    val len = (v and 7) + 3
-                    // A copy from before this record's output is corrupt: stop, as a reader does.
-                    if (dist == 0 || dist > out.size - start) break
-                    for (k in 0 until len) out.add(out[out.size - dist])
-                }
-            }
-        }
+        out.add(PalmDoc.decode(b, 0, size, keepPartialOutput = true).output)
     }
 
     /**
-     * HUFF/CDIC compression: a canonical Huffman code whose symbols are phrases of the CDIC
-     * dictionaries. A phrase not marked as plain text is itself compressed, and is unpacked once.
+     * The HUFF/CDIC decoder of the book: the HUFF record at [first] and the CDIC records after it,
+     * up to the first record that is not one. ArchiveKodec decodes the phrases.
      */
-    private class Huff(pdb: Pdb, first: Int, count: Int) {
-        private val codeLen = IntArray(256)
-        private val term = BooleanArray(256)
-        private val maxCode1 = LongArray(256)
-        private val minCode = LongArray(33)
-        private val maxCode = LongArray(33)
-        private val phrases = ArrayList<ByteArray?>()
-        private val plain = ArrayList<Boolean>()
-
-        init {
-            val huff = pdb.rec(first)
-            if (ascii(huff, 0, 4) != "HUFF" || huff.size < 24) throw EpubFormatException("no HUFF record at $first")
-            val off1 = s32(huff, 8)
-            val off2 = s32(huff, 12)
-            if (off1 < 0 || off1 + 1024 > huff.size || off2 < 0 || off2 + 256 > huff.size) throw EpubFormatException("truncated HUFF record")
-            for (i in 0 until 256) {
-                val v = u32(huff, off1 + i * 4)
-                codeLen[i] = (v and 0x1F).toInt()
-                term[i] = v and 0x80 != 0L
-                if (codeLen[i] == 0 || (codeLen[i] <= 8 && !term[i])) throw EpubFormatException("bad HUFF code table")
-                maxCode1[i] = (((v ushr 8) + 1) shl (32 - codeLen[i])) - 1
-            }
-            for (len in 1..32) {
-                minCode[len] = u32(huff, off2 + (len - 1) * 8) shl (32 - len)
-                maxCode[len] = ((u32(huff, off2 + (len - 1) * 8 + 4) + 1) shl (32 - len)) - 1
-            }
-            for (k in 1 until count) {
-                val cdic = pdb.rec(first + k)
-                if (ascii(cdic, 0, 4) != "CDIC" || cdic.size < 16) break
-                val total = s32(cdic, 8)
-                val bits = s32(cdic, 12).coerceIn(0, 30)
-                val n = minOf(1 shl bits, total - phrases.size)
-                for (j in 0 until n) {
-                    if (16 + j * 2 + 2 > cdic.size) break
-                    val off = 16 + u16(cdic, 16 + j * 2)
-                    if (off + 2 > cdic.size) { phrases += ByteArray(0); plain += true; continue }
-                    val bl = u16(cdic, off)
-                    val end = minOf(off + 2 + (bl and 0x7FFF), cdic.size)
-                    phrases += cdic.copyOfRange(off + 2, end)
-                    plain += bl and 0x8000 != 0
-                }
-            }
+    private fun huffCdic(pdb: Pdb, first: Int, count: Int): HuffCdic {
+        val cdics = ArrayList<ByteArray>()
+        for (k in 1 until count) {
+            val cdic = pdb.rec(first + k)
+            if (ascii(cdic, 0, 4) != "CDIC" || cdic.size < 16) break
+            cdics += cdic
         }
+        return archive { HuffCdic(pdb.rec(first), cdics) }
+    }
 
-        fun unpack(data: ByteArray, size: Int = data.size, depth: Int = 0): ByteArray {
-            if (depth > 32) throw EpubFormatException("HUFF phrases nest too deep")
-            val out = Bytes(size * 4)
-            var bitsLeft = size.toLong() * 8
-            var pos = 0
-            fun window(p: Int): Long {
-                var x = 0L
-                for (k in 0 until 8) x = (x shl 8) or (if (p + k < size) (data[p + k].toLong() and 0xFF) else 0L)
-                return x
-            }
-            var x = window(0)
-            var n = 32
-            while (true) {
-                if (n <= 0) { pos += 4; x = window(pos); n += 32 }
-                val code = (x ushr n) and 0xFFFFFFFFL
-                val top = (code ushr 24).toInt()
-                var len = codeLen[top]
-                var max = maxCode1[top]
-                if (!term[top]) {
-                    while (len < 32 && code < minCode[len]) len++
-                    max = maxCode[len]
-                }
-                n -= len
-                bitsLeft -= len
-                if (bitsLeft < 0) break
-                val r = ((max - code) ushr (32 - len)).toInt()
-                if (r !in phrases.indices) throw EpubFormatException("HUFF code out of the dictionary")
-                var phrase = phrases[r] ?: throw EpubFormatException("a HUFF phrase that contains itself")
-                if (!plain[r]) {
-                    phrases[r] = null
-                    phrase = unpack(phrase, phrase.size, depth + 1)
-                    phrases[r] = phrase
-                    plain[r] = true
-                }
-                out.add(phrase)
-            }
-            return out.toArray()
-        }
+    /** Runs [block], with ArchiveKodec's errors turned into [EpubFormatException]. */
+    private inline fun <T> archive(block: () -> T): T = try {
+        block()
+    } catch (e: ArchiveException) {
+        throw EpubFormatException("MOBI text: ${e.message}")
     }
 
     // ---- Indexes ----

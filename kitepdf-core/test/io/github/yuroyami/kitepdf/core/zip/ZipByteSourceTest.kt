@@ -87,9 +87,10 @@ class ZipByteSourceTest {
     }
 
     /**
-     * Two directory records that name one local header, as a damaged or crafted archive has, must
-     * not end the first entry where it starts. A bare binary search can land on either record and
-     * bound the entry to zero bytes, and the array read the entry before the bound existed.
+     * Two directory records that name one local header must not end the entry where it starts.
+     * A bare binary search can land on either record and bound the entry to zero bytes. The
+     * records agree on the method, the flags and the sizes, because ArchiveKodec refuses an
+     * archive whose records for one header disagree.
      */
     @Test
     fun two_records_that_share_a_local_header_still_read() {
@@ -99,13 +100,17 @@ class ZipByteSourceTest {
                 ZipFixture.Spec("b.bin", hello, deflate = true),
             ),
         )
-        // Point the second central record at the first local header.
+        // Make the second central record a copy of the first under its own name: the flags,
+        // method, time, CRC-32, sizes (bytes 8 to 27) and the local header offset (42 to 45).
         val eocd = zip.size - 22
         val cdStart = u32(zip, eocd + 16)
         val second = cdStart + 46 + "a.bin".length
-        for (i in 0 until 4) zip[second + 42 + i] = 0
+        for (i in 8 until 28) zip[second + i] = zip[cdStart + i]
+        for (i in 42 until 46) zip[second + i] = zip[cdStart + i]
         for (reader in listOf(ZipReader(zip), ZipReader(CountingSource(zip)))) {
+            assertEquals(setOf("a.bin", "b.bin"), reader.names)
             assertContentEquals(long, reader.read("a.bin"))
+            assertContentEquals(long, reader.read("b.bin"))
             assertContentEquals(long.copyOf(100), reader.readPrefix("a.bin", 100))
         }
     }

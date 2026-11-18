@@ -35,9 +35,10 @@ apply:
   - //common.module-template.yaml
   - //library.module-template.yaml
 
-# The one runtime dependency beyond kotlin-stdlib: the image codecs of the Kite lineage.
+# The runtime dependencies beyond kotlin-stdlib: the image codecs and the compression codecs of the Kite lineage.
 dependencies:
   - $libs.imagekodec
+  - $libs.archivekodec
 
 settings:
   kotlin:

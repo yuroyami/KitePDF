@@ -1,5 +1,7 @@
 package io.github.yuroyami.kitepdf.core.compression
 
+import io.github.yuroyami.archivekodec.checksum.Adler32
+import io.github.yuroyami.archivekodec.codec.deflate.Deflate as ArchiveDeflate
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertFailsWith
@@ -50,8 +52,8 @@ class PlatformFlateRoundTripTest {
         // Pure-Kotlin-encoded stream (bypassing any fast path) must decode
         // through Zlib.decode whichever implementation that picks.
         val pure = run {
-            val body = Deflate.encode(payload)
-            val adler = Zlib.adler32(payload)
+            val body = ArchiveDeflate.encode(payload)
+            val adler = Adler32.of(payload).toInt()
             byteArrayOf(0x78, 0x9C.toByte()) + body + byteArrayOf(
                 ((adler ushr 24) and 0xFF).toByte(),
                 ((adler ushr 16) and 0xFF).toByte(),
@@ -64,7 +66,7 @@ class PlatformFlateRoundTripTest {
         // Whatever Zlib.encode produced (native dynamic-Huffman blocks on the
         // JVM) must decode through the PURE inflater too.
         val encoded = Zlib.encode(payload)
-        val pureDecoded = Inflate.decode(encoded, offset = 2, length = encoded.size - 6)
+        val pureDecoded = Flate.inflateRaw(encoded, 2, encoded.size - 6, Int.MAX_VALUE).output
         assertContentEquals(payload, pureDecoded, "pure inflate reads the fast-path encoder's output")
     }
 

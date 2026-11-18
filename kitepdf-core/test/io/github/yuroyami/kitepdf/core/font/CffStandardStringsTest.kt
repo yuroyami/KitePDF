@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core.font
 
-import io.github.yuroyami.kitepdf.core.compression.Inflate
+import io.github.yuroyami.kitepdf.core.compression.Flate
 import io.github.yuroyami.kitepdf.core.parser.IndirectResolver
 import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
@@ -22,7 +22,7 @@ class CffStandardStringsTest {
 
     /** A real CFF program: Nimbus Sans, whose charset uses the standard strings. */
     private val nimbusSans: ByteArray =
-        Inflate.decode(Base64.decode(Standard14FontData.chunks("NimbusSans-Regular")!!.joinToString("")))
+        Flate.inflate(Base64.decode(Standard14FontData.chunks("NimbusSans-Regular")!!.joinToString("")))
 
     @Test
     fun standard_strings_above_149_name_their_glyphs() {

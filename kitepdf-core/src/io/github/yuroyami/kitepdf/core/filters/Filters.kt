@@ -1,5 +1,9 @@
 package io.github.yuroyami.kitepdf.core.filters
 
+import io.github.yuroyami.archivekodec.ArchiveException
+import io.github.yuroyami.archivekodec.codec.packbits.PackBits
+import io.github.yuroyami.archivekodec.codec.packbits.PackBitsOptions
+import io.github.yuroyami.archivekodec.security.ArchiveLimits
 import io.github.yuroyami.kitepdf.core.kiteWarn
 import io.github.yuroyami.kitepdf.core.ByteArrayBuilder
 import io.github.yuroyami.kitepdf.core.compression.Zlib
@@ -20,7 +24,8 @@ import io.github.yuroyami.kitepdf.core.parser.PdfStream
  *
  * Filter coverage:
  *   - FlateDecode (with TIFF + PNG predictors), ASCIIHexDecode, ASCII85Decode,
- *     RunLengthDecode, LZWDecode, CCITTFaxDecode: implemented here.
+ *     RunLengthDecode, LZWDecode, CCITTFaxDecode. ArchiveKodec decodes the
+ *     DEFLATE, LZW and run-length data; the rest is implemented here.
  *   - DCTDecode (JPEG), JPXDecode (JPEG 2000) and JBIG2Decode: image codecs,
  *     not byte filters, so they are handled at the image-XObject layer
  *     ([io.github.yuroyami.kitepdf.core.render.KiteImageData]). [FilterChain.decode]
@@ -63,6 +68,12 @@ public object FilterChain {
      * null object / placeholder image, so the file still opens.
      */
     public const val MAX_DECODED_STREAM: Int = 512 shl 20
+
+    /** ArchiveKodec limits for one filter: the [MAX_DECODED_STREAM] cap and no ratio check. */
+    internal fun archiveLimits(): ArchiveLimits = ArchiveLimits {
+        maxUncompressedBytes = MAX_DECODED_STREAM.toLong()
+        maxCompressionRatio = Int.MAX_VALUE
+    }
 
     /** Apply every filter in this stream's /Filter chain to its raw bytes. */
     public fun decode(stream: PdfStream): ByteArray {
@@ -273,29 +284,13 @@ public object Ascii85Filter : PdfFilter {
 public object RunLengthFilter : PdfFilter {
     override val name: String = "RunLengthDecode"
 
+    /** ArchiveKodec's `PackBits` decodes it, with the length byte 128 as the end of the data. */
     override fun decode(input: ByteArray, params: PdfDictionary?): ByteArray {
-        val out = ByteArrayBuilder(input.size * 2)
-        var i = 0
-        while (i < input.size) {
-            val length = input[i++].toInt()
-            when {
-                length in 0..127 -> {
-                    val n = length + 1
-                    if (i + n > input.size) throw PdfFormatException("RLE: literal runs past end")
-                    out.append(input, i, n)
-                    i += n
-                }
-                length in -127..-1 -> {
-                    val n = 1 - length
-                    if (i >= input.size) throw PdfFormatException("RLE: repeat byte missing")
-                    out.appendFill(input[i++], n)
-                }
-                length == -128 -> return out.toByteArray()  // EOD marker
-            }
-            if (out.size() > FilterChain.MAX_DECODED_STREAM) {
-                throw PdfFormatException("RLE output exceeds cap (${FilterChain.MAX_DECODED_STREAM} bytes)")
-            }
+        val options = PackBitsOptions.PDF_RUN_LENGTH.copy { limits = FilterChain.archiveLimits() }
+        return try {
+            PackBits.decode(input, options).output
+        } catch (e: ArchiveException) {
+            throw PdfFormatException("RLE: ${e.message}")
         }
-        return out.toByteArray()
     }
 }

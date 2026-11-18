@@ -40,6 +40,8 @@ dependencies:
   - //kitepdf-core: exported
   - //kitepdf-svg: exported
   - $libs.kotlinx.coroutines.core: exported
+  # Brotli for WOFF2 fonts.
+  - $libs.archivekodec
 
 test-dependencies:
   - $libs.kotlinx.coroutines.test

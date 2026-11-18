@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core.font
 
-import io.github.yuroyami.kitepdf.core.compression.Inflate
+import io.github.yuroyami.kitepdf.core.compression.Flate
 import kotlin.io.encoding.Base64
 
 /**
@@ -46,6 +46,6 @@ internal object Standard14Fonts {
 
     private fun load(file: String): CffFont? = runCatching {
         val chunks = Standard14FontData.chunks(file) ?: return null
-        CffFont.parse(Inflate.decode(Base64.decode(chunks.joinToString(""))))
+        CffFont.parse(Flate.inflate(Base64.decode(chunks.joinToString(""))))
     }.getOrNull()
 }

@@ -116,8 +116,8 @@ commonMain.dependencies {
 
 | If you add | You also need |
 | --- | --- |
-| `kitepdf-net` | A Ktor client engine (such as `io.ktor:ktor-client-cio:3.6.0`) |
-| `kitepdf-skia-renderer` on Android | One more repository (`maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")`) |
+| `kitepdf-net` | A Ktor client engine (such as `io.ktor:ktor-client-cio:3.6.1`) |
+| `kitepdf-skia-renderer` on Android | One more repository (`maven("https://packages.jetbrains.team/maven/p/cmp/dev")`) |
 | `kitepdf-skia-renderer` on the JVM without Compose | The Skia runtime of each system that runs the app, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.153.0` ([Skia on every platform](https://yuroyami.github.io/KitePDF/rendering/)) |
 
 > [!NOTE]

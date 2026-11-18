@@ -1,6 +1,8 @@
 package io.github.yuroyami.kitepdf.epub.convert
 
-import io.github.yuroyami.kitepdf.core.zip.Crc32
+import io.github.yuroyami.archivekodec.archive.zip.ZipMethod
+import io.github.yuroyami.archivekodec.archive.zip.ZipWriter
+import io.github.yuroyami.kitepdf.core.kiteWarn
 
 /**
  * Builds an EPUB 3 package in memory from chapters and resources, so a format that is one file of
@@ -72,39 +74,23 @@ internal class BookPackager(private val title: String, private val language: Str
         /** [s] as an XML attribute value in double quotes. */
         fun attr(s: String): String = text(s).replace("\"", "&quot;")
 
-        /** A ZIP of stored entries, with their CRCs, that the EPUB reader reads. */
+        /**
+         * A ZIP of stored entries that the EPUB reader reads, written by ArchiveKodec's [ZipWriter].
+         * An entry whose name the writer refuses (a `..` part from an HTML link, for example) is
+         * left out with a warning, so one bad link does not lose the book.
+         */
         fun storedZip(entries: List<Pair<String, ByteArray>>): ByteArray {
-            val out = io.github.yuroyami.kitepdf.core.ByteArrayBuilder()
-            fun u16(v: Int) { out.append((v and 0xFF).toByte()); out.append(((v ushr 8) and 0xFF).toByte()) }
-            fun u32(v: Long) { for (s in 0 until 32 step 8) out.append(((v ushr s) and 0xFF).toByte()) }
-            class Cd(val name: ByteArray, val offset: Int, val size: Int, val crc: Long)
-            val cds = ArrayList<Cd>()
-            for ((name, data) in entries) {
-                val nb = name.encodeToByteArray()
-                val offset = out.size()
-                val crc = Crc32.of(data)
-                // Bit 11 of the flags: the name is UTF-8.
-                u32(0x04034b50L); u16(20); u16(0x0800); u16(0); u16(0); u16(0)
-                u32(crc); u32(data.size.toLong()); u32(data.size.toLong())
-                u16(nb.size); u16(0)
-                out.append(nb); out.append(data)
-                cds += Cd(nb, offset, data.size, crc)
+            fun spec(entry: Pair<String, ByteArray>) = ZipWriter.FileSpec(entry.first, entry.second, ZipMethod.STORED)
+            return try {
+                ZipWriter.write(entries.map(::spec))
+            } catch (_: IllegalArgumentException) {
+                val kept = entries.filter { entry ->
+                    runCatching { ZipWriter.write(listOf(spec(entry.first to ByteArray(0)))) }.isSuccess.also { ok ->
+                        if (!ok) kiteWarn { "book: the entry name '${entry.first}' cannot go in a ZIP and is left out" }
+                    }
+                }
+                ZipWriter.write(kept.map(::spec))
             }
-            val cdStart = out.size()
-            for (cd in cds) {
-                u32(0x02014b50L); u16(20); u16(20); u16(0x0800); u16(0)
-                u16(0); u16(0); u32(cd.crc)
-                u32(cd.size.toLong()); u32(cd.size.toLong())
-                u16(cd.name.size); u16(0); u16(0)
-                u16(0); u16(0); u32(0L)
-                u32(cd.offset.toLong())
-                out.append(cd.name)
-            }
-            val cdSize = out.size() - cdStart
-            u32(0x06054b50L); u16(0); u16(0)
-            u16(cds.size); u16(cds.size)
-            u32(cdSize.toLong()); u32(cdStart.toLong()); u16(0)
-            return out.toByteArray()
         }
     }
 }

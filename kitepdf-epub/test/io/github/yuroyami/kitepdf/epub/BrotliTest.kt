@@ -1,13 +1,14 @@
 package io.github.yuroyami.kitepdf.epub
 
+import io.github.yuroyami.archivekodec.ArchiveException
+import io.github.yuroyami.archivekodec.security.DecompressionBombException
 import io.github.yuroyami.kitepdf.epub.brotli.Brotli
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 /**
- * The pure-Kotlin Brotli decoder against streams produced by the
+ * The Brotli decoder (ArchiveKodec's, behind KitePDF's wrapper) against streams produced by the
  * reference `brotli` CLI. The compressed vectors are embedded as Base64;
  * the ORIGINAL inputs are regenerated in Kotlin below (same paragraph
  * constant / same LCG), so each test is a true reference round-trip:
@@ -113,16 +114,15 @@ class BrotliTest {
 
     @Test
     fun output_cap_guards_against_bombs() {
-        val e = assertFailsWith<IllegalStateException> {
+        assertFailsWith<DecompressionBombException> {
             Brotli.decode(decodeBase64(PARA50_Q11), maxOutputBytes = 1000)
         }
-        assertTrue("exceeds" in (e.message ?: ""), "cap error is explicit: ${e.message}")
     }
 
     @Test
     fun truncated_input_fails_cleanly() {
         val full = decodeBase64(PARA50_Q11)
-        assertFailsWith<IllegalStateException> {
+        assertFailsWith<ArchiveException> {
             Brotli.decode(full.copyOf(full.size / 2))
         }
     }

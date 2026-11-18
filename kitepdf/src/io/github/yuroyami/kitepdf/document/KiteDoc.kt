@@ -130,7 +130,7 @@ public object KiteDoc {
         KiteDocFormat.Text -> EpubDocument.openText(bytes, epubSettings)
         // One last try as a damaged PDF, by the String overload, which retries a non-ASCII password
         // as Latin-1. A wrong password stays a KiteWrongPasswordException, as the KDoc promises (#823).
-        // A CBR or a CB7 says what it is, not that it is no format at all (#952).
+        // A CBR, a CB7 or a CBT opens as a comic, and a damaged one names its archive kind (#952).
         null -> if (CbzDocument.archiveKindOf(bytes) != null) CbzDocument.open(bytes) else try {
             PdfDocument.open(bytes, password)
         } catch (e: KiteWrongPasswordException) {

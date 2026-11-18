@@ -48,10 +48,10 @@ class CbzByteSourceTest {
     }
 
     @Test
-    fun a_rar_or_7z_source_says_which_archive_it_is() {
+    fun a_damaged_rar_source_says_which_archive_it_is() {
         val rar = byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00) + ByteArray(64)
         val e = assertFailsWith<KiteFormatException> { CbzDocument.open(CountingSource(rar)) }
-        assertTrue(e.message!!.startsWith("RAR archives are not supported"), e.message)
+        assertTrue(e.message!!.startsWith("not a readable RAR archive"), e.message)
         assertNull(CbzDocument.openOrNull(CountingSource(ByteArray(3))))
     }
 }

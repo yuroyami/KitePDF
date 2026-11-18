@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core.font
 
-import io.github.yuroyami.kitepdf.core.compression.Inflate
+import io.github.yuroyami.kitepdf.core.compression.Flate
 import kotlin.io.encoding.Base64
 
 /**
@@ -27,7 +27,7 @@ internal object CidUnicode {
     }
 
     private fun decode(data: String): Table {
-        val v = Leb128(Inflate.decode(Base64.decode(data)))
+        val v = Leb128(Flate.inflate(Base64.decode(data)))
         val count = v.next()
         val cids = IntArray(count)
         val offsets = IntArray(count + 1)

@@ -35,9 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `KiteXml.tokenizeHtml`, the token stream of a document served as `text/html`, whose numeric character references follow
   HTML's rules (#871).
 - `CssValues.length` with a viewport width and height, which `vw`, `vh`, `vmin` and `vmax` resolve against (#849).
+- `CbzDocument.open` and `KiteDoc.open` read comics in RAR, 7z and TAR archives (CBR, CB7, CBT) through
+  ArchiveKodec, where they named the archive kind and refused it before. A RAR 4 archive opens only when its
+  pages are stored, not compressed. `CbzDocument.archiveKindOf` also returns `"TAR"` (#952).
 
 ### Changed
 
+- `kitepdf-core`, `kitepdf-epub` and `kitepdf-cbz` depend on `io.github.yuroyami:archivekodec:0.2.0`.
+  DEFLATE, zlib, CRC-32, Brotli, the `LZWDecode` and `RunLengthDecode` filters, the ZIP reader, the EPUB
+  packager of the TXT, HTML, FB2 and MOBI converters, and the PalmDOC and HUFF/CDIC text of MOBI books now
+  come from ArchiveKodec instead of KitePDF's own copies of that code. On the JVM and Android, `Zlib` and
+  `Inflate.decodePlatform` still use the platform's zlib, now through ArchiveKodec's platform option.
+- `ZipReader` keeps its API and its lenient contract. Two directory records that point at one local header
+  must now agree on the method, the flags and the sizes, or the archive opens as an empty one.
+- `Inflate.decode`, `Deflate.encode` and `Zlib.adler32` are deprecated. Use `Inflate.decodePlatform`,
+  or ArchiveKodec's `Inflate`, `Deflate` and `Adler32`.
 - KitePDF builds with the [Kotlin Toolchain](https://github.com/JetBrains/kotlin-toolchain) instead of
   Gradle: the `./kotlin` script, `project.yaml` and one `module.yaml` per module. CONTRIBUTING.md has the
   new commands. Kotlin stays at 2.4.21. The coordinates, the artifact IDs and the klib names stay the same,

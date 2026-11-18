@@ -56,16 +56,16 @@ class KiteDocCbzTest {
         assertEquals(KiteDocFormat.Epub, KiteDoc.formatOf(sampleEpub()))
     }
 
-    /** A CBR and a CB7 say what they are, from both calls, though neither opens yet (#952). */
+    /** A damaged CBR or CB7 names its archive kind from both calls, not "no format at all" (#952). */
     @Test
-    fun a_rar_or_7z_comic_says_its_archive_is_not_supported() {
+    fun a_damaged_rar_or_7z_comic_names_its_archive_kind() {
         val rar5 = byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00) + ByteArray(200)
         val rar4 = byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00) + ByteArray(200)
         val sevenZip = byteArrayOf(0x37, 0x7A, 0xBC.toByte(), 0xAF.toByte(), 0x27, 0x1C) + ByteArray(200)
         for ((bytes, kind) in listOf(rar5 to "RAR", rar4 to "RAR", sevenZip to "7z")) {
             for (open in listOf({ io.github.yuroyami.kitepdf.cbz.CbzDocument.open(bytes) }, { KiteDoc.open(bytes) })) {
                 val e = kotlin.test.assertFailsWith<io.github.yuroyami.kitepdf.core.KiteFormatException> { open() }
-                kotlin.test.assertTrue(e.message!!.startsWith("$kind archives are not supported"), "${e.message}")
+                kotlin.test.assertTrue(e.message!!.startsWith("not a readable $kind archive"), "${e.message}")
             }
         }
     }

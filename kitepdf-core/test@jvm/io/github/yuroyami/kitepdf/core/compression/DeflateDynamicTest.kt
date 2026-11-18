@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf.core.compression
 
+import io.github.yuroyami.archivekodec.codec.deflate.Deflate as ArchiveDeflate
 import java.util.zip.Deflater as JdkDeflater
 import java.util.zip.Inflater as JdkInflater
 import kotlin.test.Test
@@ -57,8 +58,8 @@ class DeflateDynamicTest {
     }
 
     private fun roundTrip(payload: ByteArray) {
-        val encoded = Deflate.encode(payload)
-        assertContentEquals(payload, Inflate.decode(encoded), "pure inflate, n=${payload.size}")
+        val encoded = ArchiveDeflate.encode(payload)
+        assertContentEquals(payload, Flate.inflate(encoded), "pure inflate, n=${payload.size}")
         assertContentEquals(payload, jdkInflateRaw(encoded, payload.size), "java.util.zip strict, n=${payload.size}")
     }
 
@@ -78,7 +79,7 @@ class DeflateDynamicTest {
     @Test
     fun ratio_within_budget_of_zlib_level_6() {
         val payload = repetitive(3 shl 20) + noise(3 shl 20, 7L)
-        val ours = Deflate.encode(payload)
+        val ours = ArchiveDeflate.encode(payload)
         val jdk = jdkDeflate6(payload)
         val ratio = ours.size.toDouble() / jdk.size
         println("[bench] 6MB pure deflate: ours=${ours.size} zlib6=${jdk.size} ratio=${(ratio * 1000).toInt() / 1000.0}")
@@ -88,7 +89,7 @@ class DeflateDynamicTest {
     @Test
     fun incompressible_data_does_not_expand_meaningfully() {
         val payload = noise(1 shl 20, 3L)
-        val ours = Deflate.encode(payload)
+        val ours = ArchiveDeflate.encode(payload)
         // Stored blocks cap the overhead at ~5 bytes per 64 KiB chunk.
         assertTrue(
             ours.size <= payload.size + payload.size / 1000 + 64,

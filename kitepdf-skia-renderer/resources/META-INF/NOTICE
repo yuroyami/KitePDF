@@ -134,11 +134,13 @@ listed here with where it comes from and its license.
    Copyright the HarfBuzz authors as listed in its COPYING file, licensed under
    HarfBuzz's Old MIT license (https://github.com/harfbuzz/harfbuzz/blob/main/COPYING).
 
-13. Brotli static dictionary and transforms
-   Used in: kitepdf-epub .../epub/brotli/BrotliData.kt
-   The static dictionary, context lookup table and word transforms of
-   RFC 7932, byte-identical to the reference data in google/brotli.
-   Copyright 2013 Google Inc., licensed MIT.
+13. ArchiveKodec
+   Used in: kitepdf-core, kitepdf-epub and kitepdf-cbz, as the dependency
+   io.github.yuroyami:archivekodec, for DEFLATE, zlib, CRC-32, Brotli, LZW,
+   run-length data, PalmDOC, HUFF/CDIC, and the ZIP, RAR, 7z and TAR archives.
+   Licensed under the Apache License, Version 2.0. The NOTICE of ArchiveKodec
+   lists the origins of its code, among them the Brotli static dictionary of
+   google/brotli (Copyright 2013 Google Inc., licensed MIT).
 
 14. HTML named character references
    Used in: kitepdf-core .../core/xml/HtmlEntities.kt

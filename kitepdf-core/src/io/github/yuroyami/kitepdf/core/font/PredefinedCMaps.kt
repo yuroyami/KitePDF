@@ -1,6 +1,6 @@
 package io.github.yuroyami.kitepdf.core.font
 
-import io.github.yuroyami.kitepdf.core.compression.Inflate
+import io.github.yuroyami.kitepdf.core.compression.Flate
 import kotlin.io.encoding.Base64
 
 /**
@@ -330,7 +330,7 @@ internal class TableCMapReader private constructor(
          * A code is added as a 32-bit pattern, so a code from 80000000 up wraps as it should.
          */
         private fun decode(table: String): Decoded {
-            val v = Leb128(Inflate.decode(Base64.decode(table)))
+            val v = Leb128(Flate.inflate(Base64.decode(table)))
             val csCount = v.next()
             val codespaces = ArrayList<CodespaceReader.Range>(csCount)
             repeat(csCount) {

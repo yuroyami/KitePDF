@@ -87,7 +87,7 @@ class DecompressionBombTest {
         // Expands to 1 + 40 * 258 = 10321 bytes; cap it far below that.
         val bomb = deflateBomb(matches = 40)
         val ex = assertFailsWith<InflateException> {
-            Inflate.decode(bomb, maxOutputBytes = 1_000)
+            Inflate.decodePlatform(bomb, maxOutputBytes = 1_000)
         }
         assertTrue("exceeds cap" in ex.message.orEmpty(), "unexpected message: ${ex.message}")
     }
@@ -95,7 +95,7 @@ class DecompressionBombTest {
     @Test
     fun inflate_without_cap_still_works() {
         val data = deflateBomb(matches = 40)
-        val decoded = Inflate.decode(data)
+        val decoded = Inflate.decodePlatform(data)
         assertEquals(1 + 40 * 258, decoded.size)
         assertTrue(decoded.all { it == 0.toByte() })
     }

@@ -111,7 +111,7 @@ dependencies {
     implementation("io.github.yuroyami:kitepdf-net:0.13.0")
 
     // Or the OkHttp, Darwin or Js engine
-    implementation("io.ktor:ktor-client-cio:3.6.0")
+    implementation("io.ktor:ktor-client-cio:3.6.1")
 }
 ```
 

@@ -1,7 +1,7 @@
 package io.github.yuroyami.kitepdf
 
-import io.github.yuroyami.kitepdf.core.compression.Deflate
-import io.github.yuroyami.kitepdf.core.compression.Zlib
+import io.github.yuroyami.archivekodec.checksum.Adler32
+import io.github.yuroyami.archivekodec.codec.deflate.Deflate as ArchiveDeflate
 import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
 import io.github.yuroyami.kitepdf.font.orSkip
 import java.io.File
@@ -29,10 +29,10 @@ class DeflateWriterOracleTest {
         listOfNotNull(System.getenv("MUTOOL"), "/opt/homebrew/bin/mutool", "/usr/local/bin/mutool", "mutool")
             .firstOrNull { runCatching { ProcessBuilder(it, "-v").start().waitFor() }.getOrNull() == 0 }
 
-    /** Manual zlib wrapper over the PURE encoder (Zlib.encode fast-paths on JVM). */
+    /** Manual zlib wrapper over the pure-Kotlin encoder of ArchiveKodec (Zlib.encode fast-paths on JVM). */
     private fun pureZlib(data: ByteArray): ByteArray {
-        val body = Deflate.encode(data)
-        val adler = Zlib.adler32(data)
+        val body = ArchiveDeflate.encode(data)
+        val adler = Adler32.of(data).toInt()
         return byteArrayOf(0x78, 0x9C.toByte()) + body + byteArrayOf(
             ((adler ushr 24) and 0xFF).toByte(),
             ((adler ushr 16) and 0xFF).toByte(),
@@ -48,7 +48,7 @@ class DeflateWriterOracleTest {
         val content = doc.pages[0].contentBytes
         assertTrue(content.size > 1000, "page 0 has a real content stream (${content.size} B)")
 
-        val ours = Deflate.encode(content)
+        val ours = ArchiveDeflate.encode(content)
         val jdk = run {
             val d = java.util.zip.Deflater(6, true)
             d.setInput(content)

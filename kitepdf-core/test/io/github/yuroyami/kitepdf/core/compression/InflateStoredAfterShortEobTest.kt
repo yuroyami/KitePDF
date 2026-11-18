@@ -27,7 +27,7 @@ class InflateStoredAfterShortEobTest {
         )
         for ((text, tail) in cases) {
             val stream = (head + tail + stored).map { it.toByte() }.toByteArray()
-            assertEquals(text + "stored!", Inflate.decode(stream).decodeToString(), "literals $text")
+            assertEquals(text + "stored!", Flate.inflate(stream).decodeToString(), "literals $text")
         }
     }
 }

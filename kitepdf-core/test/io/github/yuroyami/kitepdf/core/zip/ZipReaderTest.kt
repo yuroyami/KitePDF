@@ -1,11 +1,11 @@
 package io.github.yuroyami.kitepdf.core.zip
 
-import io.github.yuroyami.kitepdf.core.compression.Deflate
+import io.github.yuroyami.archivekodec.codec.deflate.Deflate as ArchiveDeflate
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -337,7 +337,7 @@ internal object ZipFixture {
 
         val placed = ArrayList<Placed>()
         for (s in specs) {
-            var payload = s.payload ?: if (s.deflate) Deflate.encode(s.data) else s.data
+            var payload = s.payload ?: if (s.deflate) ArchiveDeflate.encode(s.data) else s.data
             val crc = Crc32.of(s.data)
             if (s.corruptData) {
                 payload = payload.copyOf()

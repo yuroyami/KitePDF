@@ -1,5 +1,6 @@
 package io.github.yuroyami.kitepdf
 
+import io.github.yuroyami.archivekodec.checksum.Adler32
 import io.github.yuroyami.kitepdf.core.compression.Inflate
 import io.github.yuroyami.kitepdf.core.compression.Zlib
 import kotlin.test.Test
@@ -14,7 +15,7 @@ class InflateTest {
     fun adler32_hello() {
         val data = "Hello".encodeToByteArray()
         val expected = 0x058C01F5
-        assertEquals(expected, Zlib.adler32(data))
+        assertEquals(expected, Adler32.of(data).toInt())
     }
 
     /** A stored (uncompressed) DEFLATE block, the easiest kind to hand-craft. */
@@ -27,7 +28,7 @@ class InflateTest {
             'H'.code.toByte(), 'e'.code.toByte(),
             'l'.code.toByte(), 'l'.code.toByte(), 'o'.code.toByte(),
         )
-        val decoded = Inflate.decode(bytes)
+        val decoded = Inflate.decodePlatform(bytes)
         assertContentEquals("Hello".encodeToByteArray(), decoded)
     }
 

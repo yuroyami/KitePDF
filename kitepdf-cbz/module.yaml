@@ -36,6 +36,7 @@ apply:
 
 dependencies:
   - //kitepdf-core: exported
+  - $libs.archivekodec
 
 settings:
   kotlin:
