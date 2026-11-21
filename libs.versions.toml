@@ -4,7 +4,7 @@
 
 # Compose Multiplatform material3, used by :sample only. The other Compose libraries come from the toolchain's
 # $compose catalog, which follows settings.compose.version.
-composeMaterial3 = "1.13.0-beta02"
+composeMaterial3 = "1.13.0-rc01"
 
 # Android platform bridge (sample only)
 activityCompose = "1.14.0-alpha03"
@@ -27,11 +27,11 @@ archivekodec = "0.2.0"
 kitejs = "0.7.0"
 # KitePlayer: the Kite lineage's media player. Used ONLY by :kitepdf-media, the optional
 # EPUB audio and video artifact. It carries FFmpeg through KiteFFmpeg.
-kiteplayer = "0.3.0"
+kiteplayer = "0.4.0"
 
 # Robolectric, for the Android host tests of :kitepdf-compose-viewer and :kitepdf-native-renderer only: its
 # native graphics draw a canvas on the JVM, so Android drawing and text can be checked without a device.
-robolectric = "4.18"
+robolectric = "4.18.1"
 
 # Ktor client. Used ONLY by :kitepdf-net, the optional remote-loading artifact.
 # No other module may depend on it: the engine stays kotlin-stdlib + ImageKodec.
