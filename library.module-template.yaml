@@ -19,7 +19,7 @@ settings:
     enabled: true
     group: io.github.yuroyami
     # After a change, run `./kotlin do updateVersion` to update KITEPDF_VERSION in kitepdf-pdf.
-    version: 0.13.0
+    version: 0.14.0
     pom:
       url: https://github.com/yuroyami/KitePDF
       licenses:
