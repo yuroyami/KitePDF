@@ -6,7 +6,6 @@ import io.github.yuroyami.archivekodec.archive.ArchiveOpenOptions
 import io.github.yuroyami.archivekodec.archive.ByteArrayRandomAccessSource
 import io.github.yuroyami.archivekodec.archive.CrcMismatchListener
 import io.github.yuroyami.archivekodec.archive.CrcPolicy
-import io.github.yuroyami.archivekodec.archive.DuplicateNamePolicy
 import io.github.yuroyami.archivekodec.archive.RandomAccessSource
 import io.github.yuroyami.archivekodec.archive.zip.ZipReader as ArchiveZipReader
 import io.github.yuroyami.archivekodec.security.ArchiveLimits
@@ -112,11 +111,11 @@ public class ZipReader private constructor(
                 maxEntries = this@ZipReader.maxEntries
                 // Names are looked up, never written to disk, so an odd name is no danger here.
                 rejectUnsafeNames = false
+                rejectDuplicateNames = true
             }
             nameDecoder = ArchiveNameDecoder.UTF8_OR_CP437
             crcPolicy = CrcPolicy.LENIENT
             crcMismatchListener = CrcMismatchListener { _, _, _ -> crcMismatch = true }
-            duplicateNames = DuplicateNamePolicy.REJECT
         },
     )
 
