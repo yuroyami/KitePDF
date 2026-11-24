@@ -25,6 +25,7 @@ final enum class io.github.yuroyami.kitepdf.document/KiteDocFormat : kotlin/Enum
     final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.document/KiteDocFormat // io.github.yuroyami.kitepdf.document/KiteDocFormat.valueOf|valueOf#static(kotlin.String){}[0]
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.document/KiteDocFormat> // io.github.yuroyami.kitepdf.document/KiteDocFormat.values|values#static(){}[0]
 }
+
 final enum class io.github.yuroyami.kitepdf.writer/TextAlign : kotlin/Enum<io.github.yuroyami.kitepdf.writer/TextAlign> { // io.github.yuroyami.kitepdf.writer/TextAlign|null[0]
     enum entry Center // io.github.yuroyami.kitepdf.writer/TextAlign.Center|null[0]
     enum entry End // io.github.yuroyami.kitepdf.writer/TextAlign.End|null[0]
@@ -39,6 +40,7 @@ final enum class io.github.yuroyami.kitepdf.writer/TextAlign : kotlin/Enum<io.gi
     final fun valueOf(kotlin/String): io.github.yuroyami.kitepdf.writer/TextAlign // io.github.yuroyami.kitepdf.writer/TextAlign.valueOf|valueOf#static(kotlin.String){}[0]
     final fun values(): kotlin/Array<io.github.yuroyami.kitepdf.writer/TextAlign> // io.github.yuroyami.kitepdf.writer/TextAlign.values|values#static(){}[0]
 }
+
 final enum class io.github.yuroyami.kitepdf.writer/TextDirection : kotlin/Enum<io.github.yuroyami.kitepdf.writer/TextDirection> { // io.github.yuroyami.kitepdf.writer/TextDirection|null[0]
     enum entry Auto // io.github.yuroyami.kitepdf.writer/TextDirection.Auto|null[0]
     enum entry LeftToRight // io.github.yuroyami.kitepdf.writer/TextDirection.LeftToRight|null[0]
@@ -63,6 +65,7 @@ final class io.github.yuroyami.kitepdf.writer/PdfParagraph { // io.github.yuroya
     final val overflow // io.github.yuroyami.kitepdf.writer/PdfParagraph.overflow|{}overflow[0]
         final fun <get-overflow>(): kotlin/String // io.github.yuroyami.kitepdf.writer/PdfParagraph.overflow.<get-overflow>|<get-overflow>(){}[0]
 }
+
 final class io.github.yuroyami.kitepdf.writer/ShapedFont { // io.github.yuroyami.kitepdf.writer/ShapedFont|null[0]
     final val font // io.github.yuroyami.kitepdf.writer/ShapedFont.font|{}font[0]
         final fun <get-font>(): io.github.yuroyami.kitepdf.writer/EmbeddedFont // io.github.yuroyami.kitepdf.writer/ShapedFont.font.<get-font>|<get-font>(){}[0]
@@ -82,8 +85,8 @@ final object io.github.yuroyami.kitepdf.bundle/KitePDFBundle { // io.github.yuro
 final object io.github.yuroyami.kitepdf.document/KiteDoc { // io.github.yuroyami.kitepdf.document/KiteDoc|null[0]
     final fun formatOf(kotlin/ByteArray): io.github.yuroyami.kitepdf.document/KiteDocFormat? // io.github.yuroyami.kitepdf.document/KiteDoc.formatOf|formatOf(kotlin.ByteArray){}[0]
     final fun open(io.github.yuroyami.kitepdf.core/KiteByteSource, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ..., kotlin/Int = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/KiteDoc.open|open(io.github.yuroyami.kitepdf.core.KiteByteSource;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings;kotlin.Int){}[0]
-    final fun open(kotlin/ByteArray, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/KiteDoc.open|open(kotlin.ByteArray;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
     final fun open(kotlin/ByteArray, io.github.yuroyami.kitepdf.document/KiteDocFormat, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/KiteDoc.open|open(kotlin.ByteArray;io.github.yuroyami.kitepdf.document.KiteDocFormat;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
+    final fun open(kotlin/ByteArray, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/KiteDoc.open|open(kotlin.ByteArray;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
     final fun openBase64(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument // io.github.yuroyami.kitepdf.document/KiteDoc.openBase64|openBase64(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
     final fun openBase64OrNull(kotlin/String, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument? // io.github.yuroyami.kitepdf.document/KiteDoc.openBase64OrNull|openBase64OrNull(kotlin.String;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]
     final fun openOrNull(io.github.yuroyami.kitepdf.core/KiteByteSource, kotlin/String = ..., io.github.yuroyami.kitepdf.epub/EpubSettings = ...): io.github.yuroyami.kitepdf.core/KiteDocument? // io.github.yuroyami.kitepdf.document/KiteDoc.openOrNull|openOrNull(io.github.yuroyami.kitepdf.core.KiteByteSource;kotlin.String;io.github.yuroyami.kitepdf.epub.EpubSettings){}[0]

@@ -238,7 +238,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    timeout-minutes: 75
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
@@ -414,7 +414,17 @@ jobs:
 
   other-apple:
     runs-on: macos-latest
-    timeout-minutes: 90
+    # Each platform takes 15 to 40 minutes, so the eight platforms run as four parallel jobs.
+    strategy:
+      fail-fast: false
+      matrix:
+        platforms:
+          - iosArm64 iosX64
+          - tvosArm64 tvosSimulatorArm64
+          - watchosArm32 watchosArm64
+          - watchosDeviceArm64 watchosSimulatorArm64
+    name: other-apple (${{ matrix.platforms }})
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -428,10 +438,12 @@ jobs:
           restore-keys: kotlin-toolchain-${{ runner.os }}-
 
       # The tests of these targets compile and link here, but CI does not run them.
-      - name: Build every module (iOS devices, Intel iOS simulator, tvOS, watchOS)
+      - name: Build every module (${{ matrix.platforms }})
         # One platform per call, so fewer compiler JVMs share the runner's 7 GB.
+        env:
+          PLATFORMS: ${{ matrix.platforms }}
         run: |
-          for platform in iosArm64 iosX64 tvosArm64 tvosSimulatorArm64 watchosArm32 watchosArm64 watchosDeviceArm64 watchosSimulatorArm64; do
+          for platform in $PLATFORMS; do
             echo "::group::$platform"
             ./kotlin build -p "$platform"
             echo "::endgroup::"
