@@ -316,7 +316,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       # The toolchain runs one task for each core, and each Kotlin/Native compiler takes up to 3 GB.
       # With four at once this 16 GB runner shut down mid-build, most likely out of memory.
@@ -361,10 +361,15 @@ jobs:
           path: build/test-counts/
           if-no-files-found: ignore
 
-      - name: Compile the other native targets
-        run: >
-          ./kotlin build -p linuxArm64 -p mingwX64
-          -p androidNativeArm32 -p androidNativeArm64 -p androidNativeX64 -p androidNativeX86
+      # One target per call. With all six in one call, GitHub shut the runner down about 20 minutes
+      # in, twice on 2026-11-10, most likely out of memory.
+      - name: Compile the other native targets, one at a time
+        run: |
+          for platform in linuxArm64 mingwX64 androidNativeArm32 androidNativeArm64 androidNativeX64 androidNativeX86; do
+            echo "::group::$platform"
+            ./kotlin build -p "$platform"
+            echo "::endgroup::"
+          done
 
   # The Windows target has platform code of its own and was only compiled, never tested (#641). The
   # modules that declare mingwX64 run their tests here: the format modules, kitepdf, -net and -javascript.
