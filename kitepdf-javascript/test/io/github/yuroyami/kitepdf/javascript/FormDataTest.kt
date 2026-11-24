@@ -152,7 +152,9 @@ class FormDataTest {
     private suspend fun logged(html: Boolean): List<String> {
         val console = ArrayList<String>()
         val book = ScriptBooks.chapter(body, extraFiles = mapOf("a.js" to script), html = html)
-        val runner = EpubScriptRunner(book, onConsole = { _, message -> console += message }).also { runners += it }
+        // A budget that a busy CI runner does not reach: this test checks the results, not the time.
+        val policy = EpubScriptPolicy(budgetMillis = 120_000)
+        val runner = EpubScriptRunner(book, policy, onConsole = { _, message -> console += message }).also { runners += it }
         runner.chapterOpened(0)
         assertEquals(emptyList(), runner.failures.map { it.message })
         return console.flatMap { it.lines() }

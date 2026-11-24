@@ -175,7 +175,16 @@ jobs:
       - name: Test every module (JVM, Android host tests)
         env:
           KITEPDF_REQUIRE_ORACLES: "1"
-        run: ./kotlin test -p jvm -p android
+        # kitepdf-media plays real-time audio and video in its tests, so it runs after the others, alone.
+        run: |
+          modules=$(./kotlin show tasks | sed -nE 's/^task :([a-z-]+):compile(Jvm|Android)Test(Debug)?( .*)?$/\1/p' | sort -u | grep -vx kitepdf-media)
+          test -n "$modules"
+          args=()
+          for m in $modules; do args+=(-m "$m"); done
+          status=0
+          ./kotlin test -p jvm -p android "${args[@]}" || status=1
+          ./kotlin test -p jvm -p android -m kitepdf-media || status=1
+          exit "$status"
 
       # The counts per module, in the job summary, marked where skips rose or tests fell since the last
       # green run on main (#942). Reading them never fails the run.
@@ -261,8 +270,29 @@ jobs:
             echo "::endgroup::"
           done
 
+      # One module at a time: test binaries that run side by side share the runner's three cores, and the
+      # tests that bound their time failed on a busy runner.
       - name: Test the iOS simulator and macOS arm64 suites
-        run: ./kotlin test -p iosSimulatorArm64 -p macosArm64
+        run: |
+          tasks=$(./kotlin show tasks)
+          failed=""
+          for platform in IosSimulatorArm64 MacosArm64; do
+            p="$(echo "${platform:0:1}" | tr '[:upper:]' '[:lower:]')${platform:1}"
+            modules=$(echo "$tasks" | sed -nE "s/^task :([a-z-]+):link${platform}TestDebug( .*)?$/\1/p" | sort -u)
+            test -n "$modules"
+            for m in $modules; do
+              echo "::group::$m ($p)"
+              # A module whose tests are all JVM-only still has a test binary, which finds no tests.
+              if ./kotlin test -p "$p" -m "$m" > "$RUNNER_TEMP/test.log" 2>&1; then
+                cat "$RUNNER_TEMP/test.log"
+              else
+                cat "$RUNNER_TEMP/test.log"
+                grep -q "No tests were discovered" "$RUNNER_TEMP/test.log" || failed="$failed $m($p)"
+              fi
+              echo "::endgroup::"
+            done
+          done
+          if [ -n "$failed" ]; then echo "::error::Tests failed in:$failed"; exit 1; fi
 
       # The counts per module, in the job summary, marked where skips rose or tests fell since the last
       # green run on main (#942). Reading them never fails the run.
@@ -452,7 +482,7 @@ jobs:
   api:
     runs-on: macos-latest
     # The libraries of every target, then a publish of every module for the two consumers.
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
@@ -490,6 +520,19 @@ jobs:
       # ./kotlin do updateAbi, updateAndroidAbi or updateKlibAbi and commit the api/ files with it.
       - name: Check the public API against the dumps, and KITEPDF_VERSION
         run: ./kotlin check abi androidAbi klibAbi version
+
+      # The publish below needs the release klib of every native platform. Each platform compiles in a call of
+      # its own first, because the toolchain would start all their compiler JVMs at once.
+      - name: Compile the native release libraries, one platform at a time
+        run: |
+          tasks=$(./kotlin show tasks | sed -nE 's/^task (:kitepdf[a-z-]*:compile[A-Za-z0-9]+Release)( .*)?$/\1/p' | grep -vE 'Test|AndroidRelease$')
+          test -n "$tasks"
+          for platform in $(echo "$tasks" | sed -nE 's/^:[a-z-]+:compile([A-Za-z0-9]+)Release$/\1/p' | sort -u); do
+            echo "::group::$platform"
+            # shellcheck disable=SC2046
+            ./kotlin task $(echo "$tasks" | grep -E ":compile${platform}Release$")
+            echo "::endgroup::"
+          done
 
       # Maven Local needs no real signing key, so this job signs with a throwaway one. Every module that
       # publish.yml releases, so the consumers resolve each one from here, never from Maven Central (#678).

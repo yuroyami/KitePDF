@@ -83,6 +83,20 @@ class ReadAloudTest {
         audio,
     )
 
+    /**
+     * The three sentences with a first clip of five seconds, so a pause on a busy CI runner still
+     * lands inside it.
+     */
+    private fun longFirstSentence(): EpubDocument = book(
+        listOf(
+            Chapter(
+                """<p id="s1">One.</p><p id="s2">Two.</p><p id="s3">Three.</p>""",
+                par(1, "s1", "pause.wav", 0.0, 5.0) + par(1, "s2", "pause.wav", 5.0, 6.0) + par(1, "s3", "pause.wav", 6.0, 7.0),
+            ),
+        ),
+        mapOf("pause.wav" to NarratedBooks.wav(7)),
+    )
+
     /** The read-aloud highlight as it changed, when, in milliseconds from the start, and on which page the reader was. */
     private class Mark(val ms: Long, val highlight: KiteHighlight?, val page: KiteLocation) {
         override fun toString(): String = "${highlight?.hit?.quads?.firstOrNull()?.bottom?.toInt()}@${ms}ms"
@@ -175,7 +189,7 @@ class ReadAloudTest {
     fun a_paused_reading_holds_its_clip_and_goes_on_from_there() = runComposeUiTest {
         val playing = mutableStateOf(true)
         val log = Log()
-        read(KiteDocViewState(threeSentences()), playing, log)
+        read(KiteDocViewState(longFirstSentence()), playing, log)
         waitUntil(timeoutMillis = 30_000) { players.isNotEmpty() && players[0].state.value.status.isActive }
         playing.value = false
         waitForIdle()
@@ -185,7 +199,7 @@ class ReadAloudTest {
         Thread.sleep(1_500)
         assertEquals(at, player.position(), "the position moved while paused")
         assertEquals(listOf("s1"), log.clips.toList(), "the reading moved on while paused")
-        assertTrue(at.inWholeMilliseconds < 1_000, "paused at $at, past the first clip")
+        assertTrue(at.inWholeMilliseconds < 5_000, "paused at $at, past the first clip")
 
         playing.value = true
         waitUntil(timeoutMillis = 30_000) { log.finished }

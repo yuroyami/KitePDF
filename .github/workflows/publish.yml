@@ -103,6 +103,19 @@ jobs:
           echo "args=$args" >> "$GITHUB_OUTPUT"
           echo "names=$modules" >> "$GITHUB_OUTPUT"
 
+      # The publish below needs the release klib of every native platform. Each platform compiles in a call of
+      # its own first, because the toolchain would start all their compiler JVMs at once.
+      - name: Compile the native release libraries, one platform at a time
+        run: |
+          tasks=$(./kotlin show tasks | sed -nE 's/^task (:kitepdf[a-z-]*:compile[A-Za-z0-9]+Release)( .*)?$/\1/p' | grep -vE 'Test|AndroidRelease$')
+          test -n "$tasks"
+          for platform in $(echo "$tasks" | sed -nE 's/^:[a-z-]+:compile([A-Za-z0-9]+)Release$/\1/p' | sort -u); do
+            echo "::group::$platform"
+            # shellcheck disable=SC2046
+            ./kotlin task $(echo "$tasks" | grep -E ":compile${platform}Release$")
+            echo "::endgroup::"
+          done
+
       # Every run first publishes to Maven Local, signed, and inspects what a user would get: the
       # class files' version, the licence files and the Android minSdk (#683, #703, #721). Only
       # artifacts that pass go to Maven Central.

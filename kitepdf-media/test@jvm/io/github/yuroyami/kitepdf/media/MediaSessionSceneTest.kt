@@ -67,7 +67,7 @@ class MediaSessionSceneTest {
         runOnIdle { runBlocking { state.scrollTo(KiteLocation(0, 0), animate = false) } }
         waitUntil(timeoutMillis = 30_000) { players.size == 2 && players[1].state.value.seekable }
         val second = players[1]
-        waitUntil(timeoutMillis = 10_000) { (second.position() - 1.2.seconds).absoluteValue <= 150.milliseconds }
+        waitUntil(timeoutMillis = 30_000) { (second.position() - 1.2.seconds).absoluteValue <= 150.milliseconds }
         assertTrue(!second.state.value.status.isActive, "the element came back playing")
         assertTrue(second.state.value.muted, "the element came back with its sound on")
     }

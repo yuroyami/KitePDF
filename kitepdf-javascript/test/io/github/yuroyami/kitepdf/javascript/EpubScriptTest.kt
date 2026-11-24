@@ -1144,7 +1144,8 @@ class EpubScriptTest {
                 var e = document.body; for (var i = 0; i < 2000; i++) { var d = document.createElement('div'); e.appendChild(d); e = d; }
                 e.textContent = 'deeper';</script>""",
         )
-        val r = runner(book)
+        // The tree takes seconds to build on a slow debug native build, which the default budget stops.
+        val r = runner(book, EpubScriptPolicy(budgetMillis = 120_000))
         r.chapterOpened(0)
         val text = book.page(io.github.yuroyami.kitepdf.core.KiteLocation(0, 0)).textContent().plainText
         assertTrue("deep" in text, text)
@@ -1162,7 +1163,8 @@ class EpubScriptTest {
                 document.body.innerHTML = html;
                 console.log(html.length + ' ' + text + ' ' + document.body.textContent);</script>""",
         )
-        val r = runner(book, console = console)
+        // The tree takes seconds to build on a slow debug native build, which the default budget stops.
+        val r = runner(book, EpubScriptPolicy(budgetMillis = 120_000), console = console)
         r.chapterOpened(0)
         assertTrue(r.failures.none { "StackOverflow" in it.message.orEmpty() }, "${r.failures.map { it.message }}")
         // An XHTML chapter writes XML, whose first element also declares its namespace.

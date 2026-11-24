@@ -111,7 +111,7 @@ class FullScreenSceneTest {
     private fun ComposeUiTest.videoBounds(where: SemanticsMatcher): Rect = onNode(video and where).fetchSemanticsNode().boundsInWindow
 
     private fun ComposeUiTest.awaitFullScreen() {
-        waitUntil(timeoutMillis = 10_000) { onAllNodes(video and inLayer).fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 30_000) { onAllNodes(video and inLayer).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun ComposeUiTest.awaitBox() {
