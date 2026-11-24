@@ -5,7 +5,6 @@ import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.core.render.RecordingCanvas
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /** The members of a page's content array share one budget, and a repeated member decodes once (#1018). */
 class PageContentsBudgetTest {
@@ -45,10 +44,13 @@ class PageContentsBudgetTest {
 
     @Test
     fun manyCopiesOfALargeMemberStopAtThePageBudget() {
-        // Sixteen names of 32 MiB of spaces would join 512 MiB.
+        // Sixteen names of 32 MiB of spaces would join 512 MiB. The budget of 256 MiB drops the eighth
+        // name and all after it, so the square that the array names last never draws.
         val spaces = ByteArray(32 shl 20) { ' '.code.toByte() }
         val start = kotlin.time.TimeSource.Monotonic.markNow()
-        fills(pdf("[" + "5 0 R ".repeat(16) + "6 0 R]", spaces))
-        assertTrue(start.elapsedNow().inWholeSeconds < 60, "took ${start.elapsedNow()}")
+        val drawn = fills(pdf("[" + "5 0 R ".repeat(16) + "6 0 R]", spaces))
+        // This test only reports the time. A debug binary on the iOS simulator needs about a minute here.
+        println("manyCopiesOfALargeMemberStopAtThePageBudget took ${start.elapsedNow()}")
+        assertEquals(0, drawn, "the square after the budget drew")
     }
 }
