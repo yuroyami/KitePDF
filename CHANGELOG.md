@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-24
+
 ### Added
 
 - `KiteByteSource` in `kitepdf-core`: bytes that a reader fetches at any offset, such as a file.
@@ -41,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `kitepdf-core` depends on `io.github.yuroyami:imagekodec:0.4.0` instead of 0.3.0.
 - `kitepdf-core`, `kitepdf-epub` and `kitepdf-cbz` depend on `io.github.yuroyami:archivekodec:0.2.0`.
   DEFLATE, zlib, CRC-32, Brotli, the `LZWDecode` and `RunLengthDecode` filters, the ZIP reader, the EPUB
   packager of the TXT, HTML, FB2 and MOBI converters, and the PalmDOC and HUFF/CDIC text of MOBI books now
@@ -4443,7 +4446,8 @@ Other breaking changes:
   editor, encryption, and font handling, callable from `commonMain` and running
   unchanged across Android, iOS, JVM, JS, Wasm, and Kotlin/Native.
 
-[Unreleased]: https://github.com/yuroyami/KitePDF/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/yuroyami/KitePDF/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/yuroyami/KitePDF/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/yuroyami/KitePDF/compare/v0.12.0...v0.13.0
 [0.3.1]: https://github.com/yuroyami/KitePDF/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/yuroyami/KitePDF/compare/v0.2.0...v0.3.0

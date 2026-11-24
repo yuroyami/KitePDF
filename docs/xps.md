@@ -18,7 +18,7 @@ println("${firstPage.displayWidth} x ${firstPage.displayHeight} points")
 val text = firstPage.textContent().plainText
 ```
 
-Add `io.github.yuroyami:kitepdf:0.13.0` for every format, or `io.github.yuroyami:kitepdf-xps:0.13.0` for XPS alone. `KiteDoc` checks a ZIP file for an XPS package before it tries the file as a comic archive, see [Loading a document](loading.md).
+Add `io.github.yuroyami:kitepdf:0.14.0` for every format, or `io.github.yuroyami:kitepdf-xps:0.14.0` for XPS alone. `KiteDoc` checks a ZIP file for an XPS package before it tries the file as a comic archive, see [Loading a document](loading.md).
 
 ## Package and pages
 

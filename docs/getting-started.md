@@ -10,7 +10,7 @@ This page takes you from an empty project to a document on screen. You add KiteP
     kotlin {
         sourceSets {
             commonMain.dependencies {
-                implementation("io.github.yuroyami:kitepdf:0.13.0")
+                implementation("io.github.yuroyami:kitepdf:0.14.0")
             }
         }
     }
@@ -20,7 +20,7 @@ This page takes you from an empty project to a document on screen. You add KiteP
 
     ```kotlin
     dependencies {
-        implementation("io.github.yuroyami:kitepdf:0.13.0")
+        implementation("io.github.yuroyami:kitepdf:0.14.0")
     }
     ```
 
@@ -32,7 +32,7 @@ The other artifacts are optional:
 | --- | --- | --- |
 | `kitepdf-compose-viewer` | show documents in Compose (`KiteDocView`) | |
 | `kitepdf-native-renderer` | render a page to an image on the platform canvas | |
-| `kitepdf-skia-renderer` | render a page to an image on Skia | on Android, the repository `maven("https://packages.jetbrains.team/maven/p/cmp/dev")`. On the JVM without Compose, the Skia runtime of each system, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.153.0` |
+| `kitepdf-skia-renderer` | render a page to an image on Skia | on Android, the repository `maven("https://packages.jetbrains.team/maven/p/cmp/dev")`. On the JVM without Compose, the Skia runtime of each system, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.156.1` |
 | `kitepdf-javascript` | run the JavaScript of PDF forms and EPUB books | |
 | `kitepdf-media` | play EPUB audio and video in `KiteDocView` | on iOS, the linker flags and privacy manifest entries of [KitePlayer](https://github.com/yuroyami/KitePlayer#install) |
 | `kitepdf-net` | open a document from a URL | a Ktor client engine, such as `io.ktor:ktor-client-cio:3.6.1` |

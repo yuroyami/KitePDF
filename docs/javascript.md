@@ -6,7 +6,7 @@ The core library reads these scripts and runs none of them. The `kitepdf-javascr
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf-javascript:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-javascript:0.14.0")
 }
 ```
 

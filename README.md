@@ -59,22 +59,22 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // Every format: PDF, EPUB, CBZ, SVG, XPS and OpenXPS
-            implementation("io.github.yuroyami:kitepdf:0.13.0")
+            implementation("io.github.yuroyami:kitepdf:0.14.0")
 
             // Or one format only
-            implementation("io.github.yuroyami:kitepdf-pdf:0.13.0")
-            implementation("io.github.yuroyami:kitepdf-epub:0.13.0")
-            implementation("io.github.yuroyami:kitepdf-cbz:0.13.0")
-            implementation("io.github.yuroyami:kitepdf-svg:0.13.0")
-            implementation("io.github.yuroyami:kitepdf-xps:0.13.0")
+            implementation("io.github.yuroyami:kitepdf-pdf:0.14.0")
+            implementation("io.github.yuroyami:kitepdf-epub:0.14.0")
+            implementation("io.github.yuroyami:kitepdf-cbz:0.14.0")
+            implementation("io.github.yuroyami:kitepdf-svg:0.14.0")
+            implementation("io.github.yuroyami:kitepdf-xps:0.14.0")
 
             // Optional, depending on what you build
-            implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")   // KiteDocView for Compose Multiplatform
-            implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")  // page to image on the platform canvas
-            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")    // page to image on Skia (on Android, add one repository)
-            implementation("io.github.yuroyami:kitepdf-javascript:0.13.0")       // runs the JavaScript inside PDFs and EPUBs (pulls in KiteJS)
-            implementation("io.github.yuroyami:kitepdf-net:0.13.0")              // loads documents from a URL (add a Ktor engine too)
-            implementation("io.github.yuroyami:kitepdf-media:0.13.0")            // plays EPUB audio and video in KiteDocView (pulls in KitePlayer)
+            implementation("io.github.yuroyami:kitepdf-compose-viewer:0.14.0")   // KiteDocView for Compose Multiplatform
+            implementation("io.github.yuroyami:kitepdf-native-renderer:0.14.0")  // page to image on the platform canvas
+            implementation("io.github.yuroyami:kitepdf-skia-renderer:0.14.0")    // page to image on Skia (on Android, add one repository)
+            implementation("io.github.yuroyami:kitepdf-javascript:0.14.0")       // runs the JavaScript inside PDFs and EPUBs (pulls in KiteJS)
+            implementation("io.github.yuroyami:kitepdf-net:0.14.0")              // loads documents from a URL (add a Ktor engine too)
+            implementation("io.github.yuroyami:kitepdf-media:0.14.0")            // plays EPUB audio and video in KiteDocView (pulls in KitePlayer)
         }
     }
 }
@@ -84,19 +84,19 @@ In a [Kotlin Toolchain](https://github.com/JetBrains/kotlin-toolchain) project, 
 
 ```yaml
 dependencies:
-  - io.github.yuroyami:kitepdf:0.13.0
-  - io.github.yuroyami:kitepdf-compose-viewer:0.13.0
+  - io.github.yuroyami:kitepdf:0.14.0
+  - io.github.yuroyami:kitepdf-compose-viewer:0.14.0
 ```
 
 For example, a reader app that shows every format in Compose with JavaScript, media playback and network loading needs these lines:
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf:0.13.0")
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
-    implementation("io.github.yuroyami:kitepdf-javascript:0.13.0")
-    implementation("io.github.yuroyami:kitepdf-media:0.13.0")
-    implementation("io.github.yuroyami:kitepdf-net:0.13.0")
+    implementation("io.github.yuroyami:kitepdf:0.14.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.14.0")
+    implementation("io.github.yuroyami:kitepdf-javascript:0.14.0")
+    implementation("io.github.yuroyami:kitepdf-media:0.14.0")
+    implementation("io.github.yuroyami:kitepdf-net:0.14.0")
 }
 ```
 
@@ -104,8 +104,8 @@ A server or a command-line tool that only turns PDF pages into images, with no C
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf-pdf:0.13.0")
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")   // or kitepdf-skia-renderer, with its Skia runtime (see below)
+    implementation("io.github.yuroyami:kitepdf-pdf:0.14.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.14.0")   // or kitepdf-skia-renderer, with its Skia runtime (see below)
 }
 ```
 
@@ -118,7 +118,7 @@ commonMain.dependencies {
 | --- | --- |
 | `kitepdf-net` | A Ktor client engine (such as `io.ktor:ktor-client-cio:3.6.1`) |
 | `kitepdf-skia-renderer` on Android | One more repository (`maven("https://packages.jetbrains.team/maven/p/cmp/dev")`) |
-| `kitepdf-skia-renderer` on the JVM without Compose | The Skia runtime of each system that runs the app, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.153.0` ([Skia on every platform](https://yuroyami.github.io/KitePDF/rendering/)) |
+| `kitepdf-skia-renderer` on the JVM without Compose | The Skia runtime of each system that runs the app, such as `org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.156.1` ([Skia on every platform](https://yuroyami.github.io/KitePDF/rendering/)) |
 
 > [!NOTE]
 > `kitepdf-compose-viewer` and `kitepdf-media` are built on Compose Multiplatform 1.13.0-alpha02, a pre-release, and depend on it. An app on an older Compose release that adds them gets 1.13.0-alpha02 in its build.

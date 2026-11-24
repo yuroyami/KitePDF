@@ -45,7 +45,7 @@ That means the logic lives in `commonMain` instead of being handed off to a diff
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf:0.13.0")
+    implementation("io.github.yuroyami:kitepdf:0.14.0")
 }
 ```
 

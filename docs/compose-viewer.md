@@ -16,7 +16,7 @@
     kotlin {
         sourceSets {
             commonMain.dependencies {
-                implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
+                implementation("io.github.yuroyami:kitepdf-compose-viewer:0.14.0")
             }
         }
     }
@@ -26,7 +26,7 @@
 
     ```kotlin
     dependencies {
-        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
+        implementation("io.github.yuroyami:kitepdf-compose-viewer:0.14.0")
     }
     ```
 

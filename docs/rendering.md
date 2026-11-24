@@ -31,7 +31,7 @@ The rasterizers share these rules:
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-native-renderer:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-native-renderer:0.14.0")
 }
 ```
 
@@ -108,7 +108,7 @@ fun savePreview(page: PdfPage) {
 
 ```kotlin
 dependencies {
-    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-skia-renderer:0.14.0")
 }
 ```
 
@@ -124,11 +124,11 @@ dependencies {
     On Android, `kitepdf-native-renderer` needs no extra repository and adds no Skia library.
 
 !!! warning "The JVM needs the native Skia library"
-    On the JVM, Skiko loads a native library for each operating system and processor. A Compose Desktop app has it already. Without Compose, add the runtime for each system that runs your app, or `skiko-awt-runtime-all` for all of them. Use the Skiko version of KitePDF (0.153.0 for KitePDF 0.13.0):
+    On the JVM, Skiko loads a native library for each operating system and processor. A Compose Desktop app has it already. Without Compose, add the runtime for each system that runs your app, or `skiko-awt-runtime-all` for all of them. Use the Skiko version of KitePDF (0.156.1 for KitePDF 0.14.0):
 
     ```kotlin
     dependencies {
-        implementation("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.153.0")
+        implementation("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.156.1")
     }
     ```
 

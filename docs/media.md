@@ -8,8 +8,8 @@ Without `kitepdf-media`, nothing changes: the viewer shows the posters, and your
 
 ```kotlin
 commonMain.dependencies {
-    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.13.0")
-    implementation("io.github.yuroyami:kitepdf-media:0.13.0")
+    implementation("io.github.yuroyami:kitepdf-compose-viewer:0.14.0")
+    implementation("io.github.yuroyami:kitepdf-media:0.14.0")
 }
 ```
 
