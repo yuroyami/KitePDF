@@ -259,6 +259,28 @@ class KeyboardAndWheelSceneTest {
     }
 
     @Test
+    fun a_sideways_swipe_whose_tail_comes_after_the_pager_settles_stays_sideways() {
+        withViewer { scene, state, driver ->
+            // On a slow machine the pager ends its scroll before the tail, so the tail reaches the wheel paging unconsumed.
+            var time = 1_000L
+            repeat(10) {
+                scene.sendPointerEvent(
+                    PointerEventType.Scroll, Offset(100f, 150f), scrollDelta = Offset(0.1f, 0f), timeMillis = time,
+                    type = PointerType.Mouse,
+                )
+                time += 10
+            }
+            driver.pumpFrames(60)
+            repeat(4) {
+                plainWheel(scene, 0.2f, time)
+                time += 10
+            }
+            driver.pumpFrames(60)
+            assertEquals(0, state.currentPage, "the tail of a sideways swipe turned the page")
+        }
+    }
+
+    @Test
     fun a_zoomed_page_keeps_the_wheel() {
         withViewer { scene, state, driver ->
             onTestUiThread { state.setZoom(2f) }

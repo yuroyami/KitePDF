@@ -464,6 +464,9 @@ internal fun Modifier.kiteWheelPaging(
                     sumY = 0f
                 }
                 last = time
+                // The pager may consume part of a sideways gesture; it still counts toward the gesture's direction.
+                sumX += change.scrollDelta.x
+                sumY += change.scrollDelta.y
                 if (change.isConsumed) continue
                 if (event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed) continue
                 if (pans && state.overflows) {
@@ -476,8 +479,6 @@ internal fun Modifier.kiteWheelPaging(
                     }
                 } else if (state.isZoomed) continue
                 val turnsSpread = turns ?: continue
-                sumX += change.scrollDelta.x
-                sumY += change.scrollDelta.y
                 if (abs(sumY) <= abs(sumX)) continue
                 change.consume()
                 if (!armed || abs(sumY) < WHEEL_TURN_DELTA) continue

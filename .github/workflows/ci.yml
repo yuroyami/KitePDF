@@ -375,6 +375,21 @@ jobs:
       - name: Install the libraries that Skiko links
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfontconfig-dev libfreetype-dev libgl1
 
+      # The toolchain starts one 3 GB Kotlin/Native compiler for each module, with no limit. On 2026-11-24
+      # the runner lost contact in the native compile step, most likely out of memory. Swap makes it slow instead.
+      - name: Add 16 GB of swap
+        run: |
+          dir=/mnt
+          [ "$(df --output=avail -BG "$dir" 2>/dev/null | tail -1 | tr -dc 0-9)" -ge 30 ] 2>/dev/null || dir=/
+          if sudo swapoff -a && sudo rm -f "$dir/swapfile" && sudo fallocate -l 16G "$dir/swapfile" &&
+            sudo chmod 600 "$dir/swapfile" && sudo mkswap "$dir/swapfile" && sudo swapon "$dir/swapfile"; then
+            echo "Swap file in $dir"
+          else
+            echo "::warning::Could not add swap"
+          fi
+          free -h
+          df -h /
+
       - name: Test the Linux x64 suites
         run: ./kotlin test -p linuxX64
 

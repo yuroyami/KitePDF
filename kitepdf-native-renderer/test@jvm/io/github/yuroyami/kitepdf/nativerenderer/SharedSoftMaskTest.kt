@@ -140,12 +140,12 @@ class SharedSoftMaskTest {
     @Test
     fun awt_renders_a_shared_mask_once() {
         // Each of 1,600 squares rendered the 600 by 600 mask group again (#912).
+        // This test only reports the times. A shared CI runner makes a time ratio flaky, so the render count test checks the fix.
         val masked = pdf(1600)
         val keptMs = millis(masked) { awt(it, bounded = true, keep = true) }
         val againMs = millis(masked) { awt(it, bounded = true, keep = false) }
         val controlMs = millis(pdf(1600, control = true)) { awt(it, bounded = true) }
         println("[shared-mask] AWT, 1,600 squares: the mask kept $keptMs ms, rendered for each $againMs ms, /ca 0.6 $controlMs ms")
-        assertTrue(keptMs * 1.5 < againMs, "the kept mask took $keptMs ms, a mask for each paint $againMs ms")
     }
 
     @Test
