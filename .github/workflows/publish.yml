@@ -28,7 +28,7 @@ jobs:
   publish:
     name: Publish to Maven Central
     runs-on: macos-latest
-    timeout-minutes: 180
+    timeout-minutes: 300
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -85,13 +85,15 @@ jobs:
       - name: List the published modules
         id: modules
         run: |
+          modules="kitepdf kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps \
+            kitepdf-javascript kitepdf-media kitepdf-net kitepdf-native-renderer kitepdf-skia-renderer kitepdf-compose-viewer"
           args=""
-          for m in kitepdf kitepdf-core kitepdf-pdf kitepdf-epub kitepdf-cbz kitepdf-svg kitepdf-xps \
-            kitepdf-javascript kitepdf-media kitepdf-net kitepdf-native-renderer kitepdf-skia-renderer kitepdf-compose-viewer; do
+          for m in $modules; do
             test -f "$m/module.yaml" || { echo "::error::$m has no module.yaml"; exit 1; }
             args="$args -m $m"
           done
           echo "args=$args" >> "$GITHUB_OUTPUT"
+          echo "names=$modules" >> "$GITHUB_OUTPUT"
 
       # Every run first publishes to Maven Local, signed, and inspects what a user would get: the
       # class files' version, the licence files and the Android minSdk (#683, #703, #721). Only
@@ -106,15 +108,38 @@ jobs:
       - name: Inspect the built artifacts
         run: python3 scripts/inspect_artifacts.py --version "${{ steps.version.outputs.version }}"
 
-      - name: Publish to Maven Central
-        if: ${{ github.event_name == 'release' || !inputs.dry_run }}
+      # The toolchain zips each module on its own and would upload one deployment per module. The
+      # script merges the zips into one, so Central checks the whole release and publishes all of it
+      # or nothing. A dry run builds the same zip, so it tests all but the upload.
+      - name: Build the Maven Central zip
         env:
-          KOTLIN_TOOLCHAIN_MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          KOTLIN_TOOLCHAIN_MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           KOTLIN_TOOLCHAIN_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           KOTLIN_TOOLCHAIN_SIGNING_KEY_PASSPHRASE: ${{ secrets.SIGNING_KEY_PASSWORD }}
         # shellcheck disable=SC2086
-        run: ./kotlin publish mavenCentral --non-transitive ${{ steps.modules.outputs.args }}
+        run: scripts/central-zip.sh build/central-bundle.zip ${{ steps.modules.outputs.names }}
+
+      - name: List the files in the Maven Central zip
+        run: zipinfo -1 build/central-bundle.zip
+
+      # publishingMode of library.module-template.yaml sets what Central does after its checks:
+      # auto publishes the deployment, manual waits until the owner clicks Publish on the Central Portal.
+      - name: Upload to Maven Central
+        if: ${{ github.event_name == 'release' || !inputs.dry_run }}
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mode=$(awk '/^    mavenCentral:/ { found = 1 } found && /^      publishingMode:/ { print $2; exit }' library.module-template.yaml)
+          case $mode in
+            auto) type=AUTOMATIC ;;
+            manual) type=USER_MANAGED ;;
+            *)
+              echo "::error::publishingMode of library.module-template.yaml is '$mode', not auto or manual"
+              exit 1
+              ;;
+          esac
+          scripts/central-upload.sh build/central-bundle.zip "KitePDF $VERSION" "$type"
 
   # The consumer test against Maven Central, once Central serves the release, as CONTRIBUTING.md,
   # Consumer check, asks after a release.
