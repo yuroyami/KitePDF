@@ -253,7 +253,13 @@ jobs:
 
       # Every Apple target compiles the same src@apple code, so one simulator and macOS are enough for tests.
       - name: Build every module (iOS simulator, macOS)
-        run: ./kotlin build -p iosSimulatorArm64 -p macosArm64
+        # One platform per call, so fewer compiler JVMs share the runner's 7 GB.
+        run: |
+          for platform in iosSimulatorArm64 macosArm64; do
+            echo "::group::$platform"
+            ./kotlin build -p "$platform"
+            echo "::endgroup::"
+          done
 
       - name: Test the iOS simulator and macOS arm64 suites
         run: ./kotlin test -p iosSimulatorArm64 -p macosArm64
@@ -423,9 +429,13 @@ jobs:
 
       # The tests of these targets compile and link here, but CI does not run them.
       - name: Build every module (iOS devices, Intel iOS simulator, tvOS, watchOS)
-        run: >
-          ./kotlin build -p iosArm64 -p iosX64 -p tvosArm64 -p tvosSimulatorArm64
-          -p watchosArm32 -p watchosArm64 -p watchosDeviceArm64 -p watchosSimulatorArm64
+        # One platform per call, so fewer compiler JVMs share the runner's 7 GB.
+        run: |
+          for platform in iosArm64 iosX64 tvosArm64 tvosSimulatorArm64 watchosArm32 watchosArm64 watchosDeviceArm64 watchosSimulatorArm64; do
+            echo "::group::$platform"
+            ./kotlin build -p "$platform"
+            echo "::endgroup::"
+          done
 
   api:
     runs-on: macos-latest
@@ -453,8 +463,16 @@ jobs:
         run: |
           tasks=$(./kotlin show tasks | sed -nE 's/^task (:kitepdf[a-z-]*:compile[A-Za-z0-9]+)( .*)?$/\1/p' | grep -vE 'Test|Release|Metadata|Jvm$')
           test -n "$tasks"
-          # shellcheck disable=SC2086
-          ./kotlin task $tasks
+          # The toolchain starts a compiler JVM of up to 3 GB for each native task with no limit, so a macOS
+          # runner swaps for hours on all platforms at once. Each platform compiles in a call of its own.
+          for platform in $(echo "$tasks" | sed -nE 's/^:[a-z-]+:compile([A-Za-z0-9]+)Debug$/\1/p' | sort -u); do
+            echo "::group::$platform"
+            # shellcheck disable=SC2046
+            ./kotlin task $(echo "$tasks" | grep -E ":compile${platform}Debug$")
+            echo "::endgroup::"
+          done
+          # shellcheck disable=SC2046
+          ./kotlin task $(echo "$tasks" | grep -vE 'Debug$')
 
       # A failure here means the public API changed. If the change is intended, run
       # ./kotlin do updateAbi, updateAndroidAbi or updateKlibAbi and commit the api/ files with it.

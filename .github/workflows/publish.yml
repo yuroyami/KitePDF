@@ -75,8 +75,16 @@ jobs:
         run: |
           tasks=$(./kotlin show tasks | sed -nE 's/^task (:kitepdf[a-z-]*:compile[A-Za-z0-9]+)( .*)?$/\1/p' | grep -vE 'Test|Release|Metadata|Jvm$')
           test -n "$tasks"
-          # shellcheck disable=SC2086
-          ./kotlin task $tasks
+          # The toolchain starts a compiler JVM of up to 3 GB for each native task with no limit, so a macOS
+          # runner swaps for hours on all platforms at once. Each platform compiles in a call of its own.
+          for platform in $(echo "$tasks" | sed -nE 's/^:[a-z-]+:compile([A-Za-z0-9]+)Debug$/\1/p' | sort -u); do
+            echo "::group::$platform"
+            # shellcheck disable=SC2046
+            ./kotlin task $(echo "$tasks" | grep -E ":compile${platform}Debug$")
+            echo "::endgroup::"
+          done
+          # shellcheck disable=SC2046
+          ./kotlin task $(echo "$tasks" | grep -vE 'Debug$')
 
       - name: Check the public API against the dumps, and KITEPDF_VERSION
         run: ./kotlin check abi androidAbi klibAbi version
