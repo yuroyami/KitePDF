@@ -16,7 +16,7 @@ skiko = "0.156.1"
 
 # ImageKodec. The Kite lineage's shared image engine, a runtime dependency of :kitepdf-core.
 # CONTRIBUTING.md describes how to test an unpublished revision in an isolated local Maven repository.
-imagekodec = "0.3.0"
+imagekodec = "0.4.0"
 
 # ArchiveKodec. The Kite lineage's compression engine, a runtime dependency of :kitepdf-core
 # (DEFLATE, zlib and CRC-32) and :kitepdf-epub (Brotli for WOFF2).
