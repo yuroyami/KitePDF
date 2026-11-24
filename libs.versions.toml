@@ -25,6 +25,9 @@ archivekodec = "0.2.0"
 # KiteJS. The Kite lineage's JavaScript engine. Used ONLY by :kitepdf-javascript,
 # so no other module carries a script engine. Its code sees only kitejs-api; QuickJS runs underneath.
 kitejs = "0.8.0"
+# The npm package with the time zone data that KiteJS imports on JS and Wasm. KiteJS cannot declare it,
+# so apps add it, and scripts/web-tests/run.py installs it for the tests. Keep it at KiteJS's version.
+jsJodaTimezone = "2.23.0"
 # KitePlayer: the Kite lineage's media player. Used ONLY by :kitepdf-media, the optional
 # EPUB audio and video artifact. It carries FFmpeg through KiteFFmpeg.
 kiteplayer = "0.4.0"

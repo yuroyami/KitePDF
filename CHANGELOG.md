@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `kitepdf-core` depends on `io.github.yuroyami:imagekodec:0.4.0` instead of 0.3.0.
+- `kitepdf-javascript` depends on KiteJS 0.8.0. On JS and Wasm, KiteJS imports the npm package
+  `@js-joda/timezone` but cannot declare it, so an app adds it to its build. The JavaScript page of the
+  docs shows how.
 - `kitepdf-core`, `kitepdf-epub` and `kitepdf-cbz` depend on `io.github.yuroyami:archivekodec:0.2.0`.
   DEFLATE, zlib, CRC-32, Brotli, the `LZWDecode` and `RunLengthDecode` filters, the ZIP reader, the EPUB
   packager of the TXT, HTML, FB2 and MOBI converters, and the PalmDOC and HUFF/CDIC text of MOBI books now

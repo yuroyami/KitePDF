@@ -10,6 +10,13 @@ commonMain.dependencies {
 }
 ```
 
+On JS and Wasm, KiteJS reads time zones from the npm package `@js-joda/timezone`. KiteJS cannot declare that package, so add it to your build. Without it, only UTC and fixed offsets work in a script:
+
+```kotlin
+jsMain.dependencies { implementation(npm("@js-joda/timezone", "2.23.0")) }
+wasmJsMain.dependencies { implementation(npm("@js-joda/timezone", "2.23.0")) }
+```
+
 - [PDF scripts](#pdf-scripts) covers `PdfScriptRunner`.
 - [Scripts in the Compose viewer](#scripts-in-the-compose-viewer) covers `KiteDocView`.
 - [Scripts in an EPUB](#scripts-in-an-epub) covers `EpubScriptRunner`.

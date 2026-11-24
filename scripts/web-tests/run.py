@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import tomllib
 import urllib.parse
 import zipfile
 
@@ -127,6 +128,16 @@ def npm_versions(module, platform):
 
 
 @functools.cache
+def undeclared_npm_packages():
+    """The npm packages that a dependency imports but cannot declare, which apps add themselves.
+
+    KiteJS imports @js-joda/timezone on JS and Wasm. The Kotlin Toolchain cannot write it into a klib.
+    """
+    versions = tomllib.loads((ROOT / "libs.versions.toml").read_text())["versions"]
+    return {"@js-joda/timezone": versions["jsJodaTimezone"]}
+
+
+@functools.cache
 def node_builtins():
     """The modules that Node itself provides, which no npm package brings."""
     names = subprocess.run([node(), "-p", "require('module').builtinModules.join('\\n')"], text=True,
@@ -153,7 +164,7 @@ def install_npm_packages(output, module, platform):
     imported -= node_builtins()
     if not imported:
         return
-    versions = npm_versions(module, platform)
+    versions = npm_versions(module, platform) | undeclared_npm_packages()
     unknown = sorted(imported - versions.keys())
     if unknown:
         raise RuntimeError(f"{module} {platform} imports {', '.join(unknown)}, which no klib of the module lists")
