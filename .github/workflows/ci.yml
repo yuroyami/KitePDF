@@ -365,11 +365,22 @@ jobs:
       # in, twice on 2026-11-10, most likely out of memory.
       - name: Compile the other native targets, one at a time
         run: |
-          for platform in linuxArm64 mingwX64 androidNativeArm32 androidNativeArm64 androidNativeX64 androidNativeX86; do
+          for platform in mingwX64 androidNativeArm32 androidNativeArm64 androidNativeX64 androidNativeX86; do
             echo "::group::$platform"
             ./kotlin build -p "$platform"
             echo "::endgroup::"
           done
+          # Skia's Linux library needs fontconfig, FreeType and libGL for its target, and this x64 runner has
+          # the x64 copies only. So the Skia renderer compiles its code and tests for linuxArm64 but links nothing.
+          echo "::group::linuxArm64"
+          args=()
+          for m in $(./kotlin show tasks | sed -nE 's/^task :([a-z-]+):compileLinuxArm64Debug( .*)?$/\1/p' | sort -u); do
+            [ "$m" = kitepdf-skia-renderer ] || args+=(-m "$m")
+          done
+          test "${#args[@]}" -gt 0
+          ./kotlin build -p linuxArm64 "${args[@]}"
+          ./kotlin task :kitepdf-skia-renderer:compileLinuxArm64Debug :kitepdf-skia-renderer:compileLinuxArm64TestDebug
+          echo "::endgroup::"
 
   # The Windows target has platform code of its own and was only compiled, never tested (#641). The
   # modules that declare mingwX64 run their tests here: the format modules, kitepdf, -net and -javascript.
