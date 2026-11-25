@@ -10,9 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `runCancellableDecodes` in `kitepdf-core`: an image decode inside it stops once its `KiteCancellation`
-  reads true. PDF, EPUB and CBZ pages render inside it, so a cancelled render stops in the middle of a
+  reads true. PDF, EPUB, CBZ, SVG and XPS pages render inside it, so a cancelled render stops in the middle of a
   large image instead of after it. A cancelled decode caches nothing and logs nothing, so the next render
   decodes the image again (#905).
+- `KiteApplePrint` in `kitepdf-native-renderer` prints on iOS and macOS. `printData` draws each page as it
+  prints through `CoreGraphicsCanvas` into a PDF, and `print` hands that PDF to `UIPrintInteractionController`
+  on iOS or to the print operation of PDFKit on macOS (#951).
 
 ### Fixed
 
@@ -24,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A JPEG 2000 image of four components reads its ink in the `/ColorSpace` of its dictionary, such as
   `/DeviceCMYK`. The decoder read cyan, magenta and yellow as red, green and blue and black as opacity, or
   converted a CMYK JP2 with a formula of its own (#808).
+- On CoreGraphics, a group nested in a knockout group replaces the earlier paints of its parent inside its
+  shape. A transparency layer composited over them, so a red square showed through a translucent blue
+  group as purple (#756).
+- On CoreGraphics, a transparency group opens a layer of its own box, not of the whole clip, so a page of
+  many small groups no longer costs a page-sized layer for each (#824).
+- On CoreGraphics, a glyph outline becomes a path once and is placed by the glyph's matrix, and a soft
+  mask that the paint before used is not rendered again (#911, #912).
 
 ## [0.14.0] - 2026-11-25
 

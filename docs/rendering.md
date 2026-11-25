@@ -298,7 +298,14 @@ A document script that asks to print sends a `PdfScriptRequest.Print` to its run
 KitePrintAdapter.print(context, document, jobName = "Statement")   // Android's print dialog
 ```
 
-Apple has no print path in the library yet (#951).
+On iOS and macOS, `KiteApplePrint` of `kitepdf-native-renderer` draws each page through `CoreGraphicsCanvas` into a PDF, one sheet a page at the page's own size, and hands that PDF to the system's print dialog. On iOS the dialog is `UIPrintInteractionController`, and the PDF's `/Duplex` sets the default sides. On macOS it is the print operation of PDFKit, which scales each page to fit the paper unless the PDF asks for `/PrintScaling /None`, and the PDF's `/NumCopies` sets the default copies. Call it on the main thread:
+
+```kotlin
+KiteApplePrint.print(document, jobName = "Statement")   // the print dialog of iOS or macOS
+val pdf: NSData? = KiteApplePrint.printData(document)    // or only the PDF, for a dialog of your own
+```
+
+tvOS cannot print, so it has `printData` only.
 
 ## Memory
 

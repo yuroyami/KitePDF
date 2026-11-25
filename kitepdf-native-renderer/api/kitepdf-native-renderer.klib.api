@@ -1,6 +1,7 @@
 // Klib ABI Dump
 // Targets: [iosArm64, iosSimulatorArm64, iosX64, js, macosArm64, tvosArm64, tvosSimulatorArm64]
 // Alias: apple => [iosArm64, iosSimulatorArm64, iosX64, macosArm64, tvosArm64, tvosSimulatorArm64]
+// Alias: ios => [iosArm64, iosSimulatorArm64, iosX64]
 // Rendering settings:
 // - Signature version: 2
 // - Show manifest properties: true
@@ -34,6 +35,14 @@ final object io.github.yuroyami.kitepdf.nativerenderer/ApplePdfRasterizer { // i
     final fun renderToPngData(io.github.yuroyami.kitepdf/PdfPage, kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ...): platform.Foundation/NSData? // io.github.yuroyami.kitepdf.nativerenderer/ApplePdfRasterizer.renderToPngData|renderToPngData(io.github.yuroyami.kitepdf.PdfPage;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double){}[0]
     final fun renderToPngData(io.github.yuroyami.kitepdf/PdfPage, kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Double = ..., kotlin/Long): platform.Foundation/NSData? // io.github.yuroyami.kitepdf.nativerenderer/ApplePdfRasterizer.renderToPngData|renderToPngData(io.github.yuroyami.kitepdf.PdfPage;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Double;kotlin.Long){}[0]
 }
+
+// Targets: [apple]
+final object io.github.yuroyami.kitepdf.nativerenderer/KiteApplePrint { // io.github.yuroyami.kitepdf.nativerenderer/KiteApplePrint|null[0]
+    final fun printData(io.github.yuroyami.kitepdf.core/KiteDocument, io.github.yuroyami.kitepdf/PdfFormState? = ...): platform.Foundation/NSData? // io.github.yuroyami.kitepdf.nativerenderer/KiteApplePrint.printData|printData(io.github.yuroyami.kitepdf.core.KiteDocument;io.github.yuroyami.kitepdf.PdfFormState?){}[0]
+}
+
+// Targets: [ios, macosArm64]
+final fun (io.github.yuroyami.kitepdf.nativerenderer/KiteApplePrint).io.github.yuroyami.kitepdf.nativerenderer/print(io.github.yuroyami.kitepdf.core/KiteDocument, kotlin/String = ..., io.github.yuroyami.kitepdf/PdfFormState? = ...): kotlin/Boolean // io.github.yuroyami.kitepdf.nativerenderer/print|print@io.github.yuroyami.kitepdf.nativerenderer.KiteApplePrint(io.github.yuroyami.kitepdf.core.KiteDocument;kotlin.String;io.github.yuroyami.kitepdf.PdfFormState?){}[0]
 
 // Targets: [js]
 final class io.github.yuroyami.kitepdf.nativerenderer/Canvas2dCanvas : io.github.yuroyami.kitepdf.core.render/KiteCanvas { // io.github.yuroyami.kitepdf.nativerenderer/Canvas2dCanvas|null[0]
