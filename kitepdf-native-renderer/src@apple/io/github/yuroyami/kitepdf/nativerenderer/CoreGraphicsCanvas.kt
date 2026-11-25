@@ -34,10 +34,12 @@ import kotlinx.cinterop.cValue
 import kotlinx.cinterop.cValuesOf
 import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.pin
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.set
+import kotlinx.cinterop.toLong
 import kotlinx.cinterop.useContents
 import kotlinx.cinterop.usePinned
 import kotlin.math.ceil
@@ -78,6 +80,7 @@ import platform.CoreGraphics.CGContextAddCurveToPoint
 import platform.CoreGraphics.CGContextAddQuadCurveToPoint
 import platform.CoreGraphics.CGContextBeginPath
 import platform.CoreGraphics.CGContextBeginTransparencyLayer
+import platform.CoreGraphics.CGContextBeginTransparencyLayerWithRect
 import platform.CoreGraphics.CGContextClip
 import platform.CoreGraphics.CGContextClosePath
 import platform.CoreGraphics.CGContextConcatCTM
@@ -171,16 +174,26 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         openLayers = 0
         layers = 0
         groups.clear()
+        dropKeptMask()
     }
 
     override fun endPage() {
+        // A nested group the page left open ends on its own bitmap, so the host gets its context back.
+        while (groups.any { it.nested != null }) endTransparencyGroup()
         while (openLayers > 0) {
             CGContextRestoreGState(ctx)
             openLayers--
         }
         layers = 0
         groups.clear()
+        releaseCaches()
+    }
+
+    /** Releases what this canvas keeps between paints: host faces, glyph paths and a kept mask. */
+    private fun releaseCaches() {
         releaseHostFonts()
+        releaseGlyphPaths()
+        dropKeptMask()
     }
 
     /**
@@ -249,6 +262,45 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
             }
         }
         return if (any) b.build() else null
+    }
+
+    /**
+     * Glyph outlines as paths in font units, the ones used last kept, up to [GLYPH_PATHS], as the
+     * Android canvas keeps them (#911). A font gives each glyph one outline object. [endPage]
+     * releases them.
+     */
+    private val glyphPaths = LinkedHashMap<KitePath, platform.CoreGraphics.CGMutablePathRef>()
+
+    /** How many glyph outlines this canvas has turned into a path, for a test. */
+    internal var glyphPathConversions: Int = 0
+        private set
+
+    private fun glyphPath(outline: KitePath): platform.CoreGraphics.CGPathRef {
+        // Taken out and put back, so the map's order is the order of last use.
+        glyphPaths.remove(outline)?.let { glyphPaths[outline] = it; return it }
+        glyphPathConversions++
+        val path = platform.CoreGraphics.CGPathCreateMutable()!!
+        for (seg in outline.segments) {
+            when (seg) {
+                is KitePath.Segment.MoveTo -> platform.CoreGraphics.CGPathMoveToPoint(path, null, seg.x, seg.y)
+                is KitePath.Segment.LineTo -> platform.CoreGraphics.CGPathAddLineToPoint(path, null, seg.x, seg.y)
+                is KitePath.Segment.CurveTo ->
+                    platform.CoreGraphics.CGPathAddCurveToPoint(path, null, seg.x1, seg.y1, seg.x2, seg.y2, seg.x3, seg.y3)
+                is KitePath.Segment.QuadTo -> platform.CoreGraphics.CGPathAddQuadCurveToPoint(path, null, seg.x1, seg.y1, seg.x2, seg.y2)
+                KitePath.Segment.Close -> platform.CoreGraphics.CGPathCloseSubpath(path)
+            }
+        }
+        glyphPaths[outline] = path
+        if (glyphPaths.size > GLYPH_PATHS) {
+            val oldest = glyphPaths.keys.first()
+            glyphPaths.remove(oldest)?.let { CGPathRelease(it) }
+        }
+        return path
+    }
+
+    private fun releaseGlyphPaths() {
+        for (path in glyphPaths.values) CGPathRelease(path)
+        glyphPaths.clear()
     }
 
     private fun releaseHostFonts() {
@@ -344,7 +396,13 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
                     val glyphMatrix = textToDevice
                         .concat(KiteMatrix.translation(penX + glyph.xOffset * unitScale, glyph.yOffset * unitScale))
                         .concat(KiteMatrix(unitScale, 0.0, 0.0, unitScale, 0.0, 0.0))
-                    buildPath(outline, glyphMatrix)
+                    val path = glyphPath(outline)
+                    // The current path is not part of the graphics state, so the restore keeps it for the fill.
+                    CGContextSaveGState(ctx)
+                    CGContextConcatCTM(ctx, glyphMatrix.toCGAffine())
+                    CGContextBeginPath(ctx)
+                    CGContextAddPath(ctx, path)
+                    CGContextRestoreGState(ctx)
                     CGContextFillPath(ctx)
                 }
                 penX += glyph.advanceWidth * advanceScale + glyph.advanceAdjust
@@ -807,14 +865,112 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         // composites, not to each of its paints (ISO 32000-1, 11.6.6; #897).
         val masked = groups.lastOrNull()?.masked == true
         val layered = isolated || knockout || knockingOut || masked || alpha < 1.0 || blendMode != KiteBlendMode.Normal
-        groups.addLast(Group(layered, knockout))
-        if (!layered) return
+        if (!layered) {
+            groups.addLast(Group(layered = false, knockout = knockout))
+            return
+        }
+        if (knockingOut) {
+            beginNestedGroup(bbox, ctm, knockout, alpha, blendMode)?.let { groups.addLast(it); return }
+        }
+        groups.addLast(Group(layered = true, knockout = knockout))
         CGContextSaveGState(ctx)
         platform.CoreGraphics.CGContextSetAlpha(ctx, alpha)
         CGContextSetBlendMode(ctx, blendMode.toCG())
-        CGContextBeginTransparencyLayer(ctx, null)
+        // The layer covers the group's box only, so a small group does not cost a page-sized layer (#824).
+        val box = userBounds(bbox, ctm)
+        if (box != null) {
+            CGContextBeginTransparencyLayerWithRect(ctx, CGRectMake(box[0], box[1], box[2] - box[0], box[3] - box[1]), null)
+        } else {
+            CGContextBeginTransparencyLayer(ctx, null)
+        }
         openLayers++
         layers++
+    }
+
+    /** The bounds of [bbox] under [ctm] as left, bottom, right and top in user space, or null when not finite. */
+    private fun userBounds(bbox: KiteRectangle, ctm: KiteMatrix): DoubleArray? {
+        val b = bbox.normalized()
+        return deviceBounds(b.left, b.bottom, b.right, b.top, ctm)?.takeIf { it[2] - it[0] < 1e9 && it[3] - it[1] < 1e9 }
+    }
+
+    /**
+     * A group nested in a knockout group paints into a bitmap context of its own box. A
+     * transparency layer composites once, over the parent's earlier paints, but in a knockout
+     * group the nested group replaces them inside its shape (ISO 32000-1, 11.4.6 and 11.4.4,
+     * #756). [endTransparencyGroup] draws the bitmap twice: first with destination-out at full
+     * strength, which takes the earlier paints away under its shape, then with the group's alpha
+     * and blend mode. Null when the box is empty, not finite or too large, which keeps a layer.
+     */
+    private fun beginNestedGroup(
+        bbox: KiteRectangle, ctm: KiteMatrix, knockout: Boolean, alpha: Double, blendMode: KiteBlendMode,
+    ): Group? {
+        val toDevice = CGContextGetUserSpaceToDeviceSpaceTransform(ctx)
+        val userToDevice = toDevice.useContents { KiteMatrix(a, b, c, d, tx, ty) }
+        val area = maskArea(bbox, userToDevice.concat(ctm), userToDevice) ?: return null
+        val width = area[2] - area[0]
+        val height = area[3] - area[1]
+        if (width <= 0 || height <= 0 || width.toLong() * height > MASK_PIXEL_BUDGET) return null
+        val pixels = ByteArray(width * height * 4)
+        val pinned = pixels.pin()
+        val space = CGColorSpaceCreateDeviceRGB()
+        val bitmap = CGBitmapContextCreate(
+            pinned.addressOf(0), width.toULong(), height.toULong(), 8u, (width * 4).toULong(), space,
+            CGImageAlphaInfo.kCGImageAlphaPremultipliedLast.value,
+        )
+        CGColorSpaceRelease(space)
+        if (bitmap == null) {
+            pinned.unpin()
+            return null
+        }
+        // The bitmap's pixel (0, 0) is device pixel (x0, y0) of the host, as for a soft mask's group.
+        CGContextTranslateCTM(bitmap, -area[0].toDouble(), -area[1].toDouble())
+        CGContextConcatCTM(bitmap, toDevice)
+        val nested = NestedGroup(bitmap, pinned, ctx, toDevice, area, alpha, blendMode, openLayers, layers)
+        ctx = bitmap
+        openLayers = 0
+        layers = 0
+        return Group(layered = true, knockout = knockout, nested = nested)
+    }
+
+    /** The bitmap a group nested in a knockout group paints into, and what goes back when it ends (#756). */
+    private class NestedGroup(
+        val bitmap: CGContextRef,
+        val pixels: kotlinx.cinterop.Pinned<ByteArray>,
+        val host: CGContextRef,
+        val toDevice: CValue<CGAffineTransform>,
+        val area: IntArray,
+        val alpha: Double,
+        val blendMode: KiteBlendMode,
+        val hostOpenLayers: Int,
+        val hostLayers: Int,
+    )
+
+    /** Ends [nested] on its bitmap and draws the bitmap onto the host: the shape out, then the group in. */
+    private fun endNestedGroup(nested: NestedGroup) {
+        while (layers > 0) { CGContextEndTransparencyLayer(ctx); layers-- }
+        while (openLayers > 0) { CGContextRestoreGState(ctx); openLayers-- }
+        ctx = nested.host
+        openLayers = nested.hostOpenLayers
+        layers = nested.hostLayers
+        val image = CGBitmapContextCreateImage(nested.bitmap)
+        CGContextRelease(nested.bitmap)
+        nested.pixels.unpin()
+        if (image == null) return
+        val a = nested.area
+        val rect = CGRectMake(a[0].toDouble(), a[1].toDouble(), (a[2] - a[0]).toDouble(), (a[3] - a[1]).toDouble())
+        CGContextSaveGState(ctx)
+        try {
+            CGContextConcatCTM(ctx, CGAffineTransformInvert(nested.toDevice))
+            CGContextSetInterpolationQuality(ctx, kCGInterpolationNone)
+            CGContextSetBlendMode(ctx, CGBlendMode.kCGBlendModeDestinationOut)
+            CGContextDrawImage(ctx, rect, image)
+            CGContextSetBlendMode(ctx, nested.blendMode.toCG())
+            platform.CoreGraphics.CGContextSetAlpha(ctx, nested.alpha.coerceIn(0.0, 1.0))
+            CGContextDrawImage(ctx, rect, image)
+        } finally {
+            CGContextRestoreGState(ctx)
+            CGImageRelease(image)
+        }
     }
 
     /**
@@ -822,7 +978,7 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
      * the entry of a soft mask's content, which a single paint keeps as a clip, so that it keeps
      * its blend mode against the page (#79), and a group inside paints into a layer (#897).
      */
-    private class Group(val layered: Boolean, val knockout: Boolean, val masked: Boolean = false)
+    private class Group(val layered: Boolean, val knockout: Boolean, val masked: Boolean = false, val nested: NestedGroup? = null)
 
     private val groups = ArrayDeque<Group>()
 
@@ -836,7 +992,9 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
     private fun paintBlend(mode: KiteBlendMode): CGBlendMode = if (knockingOut) CGBlendMode.kCGBlendModeCopy else mode.toCG()
 
     override fun endTransparencyGroup() {
-        if (groups.removeLastOrNull()?.layered != true) return
+        val group = groups.removeLastOrNull() ?: return
+        if (!group.layered) return
+        group.nested?.let { endNestedGroup(it); return }
         if (openLayers > 0) {
             CGContextEndTransparencyLayer(ctx)
             CGContextRestoreGState(ctx)
@@ -1075,11 +1233,20 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         val scale = if (pixels > MASK_PIXEL_BUDGET) sqrt(MASK_PIXEL_BUDGET.toDouble() / pixels) else 1.0
         val w = maxOf(1, ceil(width * scale).toInt())
         val h = maxOf(1, ceil(height * scale).toInt())
-        val values = maskValues(kind, w, h, x0, y0, scale, toDevice, renderMask)
-        if (values != null && transfer != null) {
-            for (i in values.indices) values[i] = transfer[values[i].toInt() and 255].toByte()
+        // A mask that the paint before used, under the same matrix and in the same pixels, is not
+        // rendered again: 49 squares under one mask rendered its group 49 times (#912).
+        val key = MaskKey(renderMask, kind, transfer, maskBBox, maskCtm, ctx.toLong(), userToDevice, area.toList(), scale)
+        val mask = keptMask?.takeIf { keptKey == key } ?: run {
+            val values = maskValues(kind, w, h, x0, y0, scale, toDevice, renderMask)
+            if (values != null && transfer != null) {
+                for (i in values.indices) values[i] = transfer[values[i].toInt() and 255].toByte()
+            }
+            dropKeptMask()
+            values?.let { greyImage(it, w, h) }?.also {
+                keptMask = it
+                keptKey = key
+            }
         }
-        val mask = values?.let { greyImage(it, w, h) }
         if (mask == null) {
             render()
             return
@@ -1096,8 +1263,34 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         } finally {
             groups.removeLastOrNull()
             CGContextRestoreGState(ctx)
-            CGImageRelease(mask)
         }
+    }
+
+    /** What a kept mask is kept by: everything that decides its pixels (#912). */
+    private data class MaskKey(
+        val renderMask: (KiteCanvas) -> Unit,
+        val kind: SoftMask.Kind,
+        val transfer: KiteMaskTransfer?,
+        val box: KiteRectangle,
+        val maskCtm: KiteMatrix,
+        val context: Long,
+        val userToDevice: KiteMatrix,
+        val area: List<Int>,
+        val scale: Double,
+    )
+
+    /** The grey mask the last masked paint used, until the key or the page changes. */
+    private var keptMask: CGImageRef? = null
+    private var keptKey: MaskKey? = null
+
+    /** How many mask groups this canvas has rendered, for a test. */
+    internal var maskRenders: Int = 0
+        private set
+
+    private fun dropKeptMask() {
+        keptMask?.let { CGImageRelease(it) }
+        keptMask = null
+        keptKey = null
     }
 
     /**
@@ -1139,6 +1332,7 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
         kind: SoftMask.Kind, w: Int, h: Int, x0: Int, y0: Int, scale: Double,
         toDevice: CValue<CGAffineTransform>, renderMask: (KiteCanvas) -> Unit,
     ): ByteArray? {
+        maskRenders++
         val rgba = ByteArray(w * h * 4)
         rgba.usePinned { pinned ->
             val space = CGColorSpaceCreateDeviceRGB()
@@ -1157,7 +1351,13 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
                 CGContextScaleCTM(maskCtx, scale, scale)
                 CGContextTranslateCTM(maskCtx, -x0.toDouble(), -y0.toDouble())
                 CGContextConcatCTM(maskCtx, toDevice)
-                renderMask(CoreGraphicsCanvas(maskCtx))
+                // The mask group's canvas paints no page, so what it kept goes with it.
+                val maskCanvas = CoreGraphicsCanvas(maskCtx)
+                try {
+                    renderMask(maskCanvas)
+                } finally {
+                    maskCanvas.releaseCaches()
+                }
             } finally {
                 CGContextRelease(maskCtx)
             }
@@ -1251,6 +1451,9 @@ public class CoreGraphicsCanvas(ctx: CGContextRef) : KiteCanvas {
     private companion object {
         /** The size a host face is laid out at, in units to the em, before the scale to the font size. */
         const val HOST_EM = 1000.0
+
+        /** Glyph outline paths one canvas keeps, the count AWT keeps glyph rasters for (#911). */
+        const val GLYPH_PATHS = 4096
 
         /** Pixels one soft mask may use before it drops to a lower resolution, as on AWT. */
         const val MASK_PIXEL_BUDGET = KITE_DEFAULT_MAX_RASTER_PIXELS

@@ -37,19 +37,21 @@ class CoreGraphicsSoftMaskTest {
      * A page that fills a red square under a soft mask of [kind], whose group draws
      * [mask] with the resources in [maskResources]. The mask dictionary also holds
      * [entries], and the group has the box [bbox] and the colour space [space]. The page draws
-     * [content] with [pageResources] besides /GS1, and [extra] objects follow from 7.
+     * [content] with [pageResources] besides /GS1, and [extra] objects follow from 7. [state]
+     * goes into the ExtGState of /GS1 besides its mask.
      */
     private fun pdf(
         kind: String, mask: String, maskResources: String = "",
         entries: String = "", bbox: String = "0 0 $side $side", space: String = "DeviceRGB",
         content: String = "q /GS1 gs 1 0 0 rg 20 20 160 160 re f Q", pageResources: String = "", extra: List<String> = emptyList(),
+        state: String = "",
     ): ByteArray {
         val objects = listOf(
             "<< /Type /Catalog /Pages 2 0 R >>",
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 $side $side] /Resources << /ExtGState << /GS1 5 0 R >> $pageResources >> /Contents 4 0 R >>",
             "<< /Length ${content.length} >>\nstream\n$content\nendstream",
-            "<< /Type /ExtGState /SMask << /S /$kind /G 6 0 R $entries >> >>",
+            "<< /Type /ExtGState $state /SMask << /S /$kind /G 6 0 R $entries >> >>",
             "<< /Type /XObject /Subtype /Form /BBox [$bbox] /Group << /S /Transparency /CS /$space >> " +
                 "$maskResources /Length ${mask.length} >>\nstream\n$mask\nendstream",
         ) + extra
@@ -164,5 +166,18 @@ class CoreGraphicsSoftMaskTest {
         val pixels = render(pdf("Luminosity", "1 g 0 0 100 200 re f"))
         pixels.assertPixel(60, 100, listOf(255, 0, 0))
         pixels.assertPixel(140, 100, listOf(255, 255, 255))
+    }
+
+    @Test
+    fun an_opaque_mask_leaves_the_blend_mode_of_its_paint() {
+        // ISO 32000-1, 11.6.4.3 and 11.3.5: the mask scales the paint, which still blends with the
+        // page. Red multiplied onto blue is black, with an alpha mask, a luminosity mask and a
+        // transfer function that keeps 1 at 1. The canvas clips to the mask and paints on the page (#764).
+        val blue = "0 0 1 rg 0 0 200 200 re f q /GS1 gs 1 0 0 rg 20 20 160 160 re f Q"
+        for ((kind, entries) in listOf("Alpha" to "", "Luminosity" to "", "Luminosity" to SQUARE, "Alpha" to SQUARE)) {
+            val pixels = render(pdf(kind, "1 g 0 0 200 200 re f", entries = entries, content = blue, state = "/BM /Multiply"))
+            pixels.assertPixel(100, 100, listOf(0, 0, 0))
+            pixels.assertPixel(10, 10, listOf(0, 0, 255))
+        }
     }
 }
