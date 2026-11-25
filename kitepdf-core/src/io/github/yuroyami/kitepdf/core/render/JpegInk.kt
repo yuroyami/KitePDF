@@ -37,7 +37,7 @@ internal object JpegInk {
 
     /** CMYK samples at [reduction] (1, 2, 4 or 8), or null when the JPEG does not decode. */
     fun decode(jpeg: ByteArray, layout: Layout, reduction: Int): KiteImageSamples.Decoded? {
-        val decoded = runCatching { ImageKodec.decodeJpegComponents(jpeg, reduction) }.getOrNull() ?: return null
+        val decoded = decodeOrNull { ImageKodec.decodeJpegComponents(jpeg, reduction, cancellationCheck = decodeCheck()) } ?: return null
         if (decoded.componentCount != 4) return null
         // The last Adobe marker overrides /ColorTransform, as in MuPDF. With neither, four
         // components mean CMYK (ISO 32000-1, Table 13). /Decode still applies after this step.

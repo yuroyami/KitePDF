@@ -25,6 +25,8 @@ internal class KiteImageSamples private constructor(
     val colorSpace: String,
     /** What a JPEG's samples convert to: as stored for a PDF's, sRGB through its profile for a file of its own (#833). */
     private val target: ColorTarget = ColorTarget.Source,
+    /** For a JPEG 2000 image: true to decode its components as stored, four CMYK samples a pixel (#808). */
+    private val stored: Boolean = false,
 ) {
     /** The bytes this holds: the encoded image. */
     val encodedSize: Int get() = bytes.size
@@ -43,14 +45,20 @@ internal class KiteImageSamples private constructor(
     fun decode(reduction: Int): Decoded? {
         if (failed) return null
         val decoded = try {
-            if (jpx) {
-                JpxDecoder.decode(bytes, reduction)?.let { Decoded(it.width, it.height, inSpace(it)) }
+            if (jpx && stored) {
+                ImageKodec.decodeJpxComponents(bytes, reduction, cancellationCheck = decodeCheck())
+                    .takeIf { it.componentCount == 4 }?.let { Decoded(it.width, it.height, it.samples) }
+            } else if (jpx) {
+                JpxDecoder.decode(bytes, reduction, cancellationCheck = decodeCheck())?.let { Decoded(it.width, it.height, inSpace(it)) }
             } else if (ink != null) {
                 JpegInk.decode(bytes, ink, reduction)
             } else {
-                val bitmap = ImageKodec.decodeReduced(bytes, reduction, target)
+                val bitmap = ImageKodec.decodeReduced(bytes, reduction, target, cancellationCheck = decodeCheck())
                 Decoded(bitmap.width, bitmap.height, if (gray) bitmap.toGrayBytes() else bitmap.toRgbBytes())
             }
+        } catch (cancelled: DecodeCancelled) {
+            // A cancelled decode says nothing of the data, so the next draw decodes it again (#905).
+            throw cancelled
         } catch (damaged: Exception) {
             null
         } catch (outOfMemory: Throwable) {
@@ -111,11 +119,24 @@ internal class KiteImageSamples private constructor(
             val info = runCatching { ImageKodec.probe(bytes) }.getOrNull() ?: return null
             if (!info.isDecodable || info.width <= 0 || info.height <= 0 || info.hasAlpha) return null
             val space = jpxDecodedSpace(bytes) ?: run {
-                val check = runCatching { JpxDecoder.decode(bytes, 8) }.getOrNull() ?: return null
+                val check = decodeOrNull { JpxDecoder.decode(bytes, 8, cancellationCheck = decodeCheck()) } ?: return null
                 if (check.alpha != null) return null
                 check.colorSpace
             }
             return KiteImageSamples(bytes, info.width, info.height, jpx = true, gray = false, ink = null, space)
+        }
+
+        /**
+         * [bytes], a JPEG 2000 image of four components, as its stored samples that decode on
+         * demand, CMYK, or null when its headers give another count. The decoder's own colour
+         * stage would turn the fourth component into opacity or convert the ink to RGB, so these
+         * skip it, and the PDF's `/ColorSpace` reads them (ISO 32000-1, 8.9.5.2, #808).
+         */
+        fun jpxCmyk(bytes: ByteArray): KiteImageSamples? {
+            if (jpxComponentCount(bytes) != 4) return null
+            val info = runCatching { ImageKodec.probe(bytes) }.getOrNull() ?: return null
+            if (!info.isDecodable || info.width <= 0 || info.height <= 0) return null
+            return KiteImageSamples(bytes, info.width, info.height, jpx = true, gray = false, ink = null, "DeviceCMYK", stored = true)
         }
     }
 }

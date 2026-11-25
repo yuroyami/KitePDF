@@ -2513,7 +2513,12 @@ public class EpubPage internal constructor(
 
     private fun render(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         val page = laidOut()
-        if (page.vertical) renderVerticalTo(page, canvas, deviceCtm, cancellation) else renderHorizontalTo(page, canvas, deviceCtm, cancellation)
+        // An image decode reads the cancellation too, so one large image cannot hold the render (#905).
+        val finished = io.github.yuroyami.kitepdf.core.runCancellableDecodes(cancellation) {
+            if (page.vertical) renderVerticalTo(page, canvas, deviceCtm, cancellation) else renderHorizontalTo(page, canvas, deviceCtm, cancellation)
+        }
+        // The stopped decode left the page open.
+        if (!finished) canvas.endPage()
     }
 
     private fun renderHorizontalTo(page: PageRender, canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?, nested: Boolean = false) {

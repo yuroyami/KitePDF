@@ -155,6 +155,55 @@ class KiteImageDataTest {
         assertEquals(0x808080, grey)
     }
 
+    /** An 8 x 8 lossless raw codestream of four components, by opj_compress 2.5.4: cyan ink on the left half, black on the right. */
+    private val jpxCmyk = hexBytes(
+        "ff4fff510032000000000008000000080000000000000000000000080000000800000000000000000004070101070101070101070101" +
+            "ff52000c00000001010104040001ff5c00074040484850ff640025000143726561746564206279204f70656e4a504547207665727369" +
+            "6f6e20322e352e34ff90000a00000000005d0001ff93df80782167f34cf41c509f70346ce882a76380ff187817d5eb54635c12541d21" +
+            "509cb1708fdf8090114f85fdc84446e96b84eb7d6d2eada5d5b4c3ea030017d8b380cfc00c17d8b4c7da0600172bbcffd9",
+    )
+
+    /** The same codestream in a JP2 whose colr box says CMYK (enumerated space 12). */
+    private val jp2Cmyk = hexBytes(
+        "0000000c6a5020200d0a870a00000014667479706a703220000000006a7032200000002d6a7032680000001669686472000000080000" +
+            "00080004070700000000000f636f6c720100000000000c000000db6a703263ff4fff5100320000000000080000000800000000000000" +
+            "00000000080000000800000000000000000004070101070101070101070101ff52000c00000001010104040001ff5c00074040484850" +
+            "ff640025000143726561746564206279204f70656e4a5045472076657273696f6e20322e352e34ff90000a00000000005d0001ff93df" +
+            "80782167f34cf41c509f70346ce882a76380ff187817d5eb54635c12541d21509cb1708fdf8090114f85fdc84446e96b84eb7d6d2ead" +
+            "a5d5b4c3ea030017d8b380cfc00c17d8b4c7da0600172bbcffd9",
+    )
+
+    @Test
+    fun a_four_component_jpx_image_reads_its_ink_in_the_space_its_dictionary_names() {
+        // The decoder's colour stage read C, M and Y as RGB and K as opacity, or converted a CMYK JP2
+        // with a formula of its own. The stored ink must draw as the same ink in a raw image does (#808).
+        val ink = ByteArray(8 * 8 * 4) { i -> val x = (i / 4) % 8; val c = i % 4; if (if (x < 4) c == 0 else c == 3) -1 else 0 }
+        val flat = PdfStream(
+            dict = PdfDictionary(linkedMapOf(
+                "Type" to PdfName("XObject"), "Subtype" to PdfName("Image"),
+                "Width" to PdfInt(8), "Height" to PdfInt(8), "BitsPerComponent" to PdfInt(8),
+                "ColorSpace" to PdfName("DeviceCMYK"), "Length" to PdfInt(ink.size.toLong()),
+            )),
+            rawBytes = ink,
+        )
+        val expected = KiteImageData.from(flat, refs = { null }).toRgbaBytes()!!
+        val cyan = expected.rgbAt(0)
+        assertTrue(cyan and 0xFF > 0xC0 && (cyan shr 16) < 0x40, "the raw image draws cyan, not ${cyan.toString(16)}")
+        for ((name, bytes) in listOf("codestream" to jpxCmyk, "JP2" to jp2Cmyk)) {
+            // The lazy path: nothing needs the samples before the draw.
+            val lazy = KiteImageData.from(jpxImage(bytes, PdfName("DeviceCMYK")), refs = { null }).toRgbaBytes()!!
+            assertEquals(cyan, lazy.rgbAt(0), "$name, lazy: cyan")
+            assertEquals(expected.rgbAt(7), lazy.rgbAt(7), "$name, lazy: black")
+            assertEquals(0xFF, lazy[7 * 4 + 3].toInt() and 0xFF, "$name, lazy: the black ink is not opacity")
+            // The full path: a colour key needs the samples now.
+            val plain = jpxImage(bytes, PdfName("DeviceCMYK"))
+            val keyed = PdfStream(dict = PdfDictionary(plain.dict.map + ("Mask" to PdfArray(List(8) { PdfInt(1) }))), rawBytes = bytes)
+            val full = KiteImageData.from(keyed, refs = { null }).toRgbaBytes()!!
+            assertEquals(cyan, full.rgbAt(0), "$name, full: cyan")
+            assertEquals(expected.rgbAt(7), full.rgbAt(7), "$name, full: black")
+        }
+    }
+
     @Test
     fun image_mask_paints_fill_color_where_sample_is_zero() {
         // 8×1 /ImageMask, one byte 0b10101010: MSB(bit0)=1→transparent, bit1=0→paint.

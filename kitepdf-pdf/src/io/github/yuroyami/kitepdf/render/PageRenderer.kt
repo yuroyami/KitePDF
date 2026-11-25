@@ -281,7 +281,11 @@ public class PageRenderer(
     ) {
         // Its warnings reach the document's listener, with the page (#899).
         io.github.yuroyami.kitepdf.core.KiteWarningScope.with(page.internalDocument.warnings, page.internalDocument, page.index) {
-            renderAnnotationsScoped(page, deviceCtm, annotations)
+            // An image decode reads the cancellation too, so one large image cannot hold the render (#905).
+            val finished = io.github.yuroyami.kitepdf.core.runCancellableDecodes(cancellation) {
+                renderAnnotationsScoped(page, deviceCtm, annotations)
+            }
+            if (!finished) cancelled = true
         }
     }
 
@@ -324,7 +328,11 @@ public class PageRenderer(
     ) {
         // Its warnings reach the document's listener, with the page (#899).
         io.github.yuroyami.kitepdf.core.KiteWarningScope.with(page.internalDocument.warnings, page.internalDocument, page.index) {
-            renderScoped(page, deviceCtm, annotations)
+            // An image decode reads the cancellation too, so one large image cannot hold the render (#905).
+            val finished = io.github.yuroyami.kitepdf.core.runCancellableDecodes(cancellation) {
+                renderScoped(page, deviceCtm, annotations)
+            }
+            if (!finished) cancelled = true
         }
     }
 

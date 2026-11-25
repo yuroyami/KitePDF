@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `runCancellableDecodes` in `kitepdf-core`: an image decode inside it stops once its `KiteCancellation`
+  reads true. PDF, EPUB and CBZ pages render inside it, so a cancelled render stops in the middle of a
+  large image instead of after it. A cancelled decode caches nothing and logs nothing, so the next render
+  decodes the image again (#905).
+
+### Fixed
+
+- A page whose `/Contents` is a reference to an array of streams draws, and its text reads. The reference
+  resolved only as a stream, so the page was empty with no warning. An edit of such a page now starts from
+  its content too (#1026).
+- On Windows, `KiteDoc.openFile` opens a path with a character outside ASCII, such as `C:\Users\Zoë\book.pdf`.
+  The path now goes to `_wfopen` as UTF-16, because the C runtime reads a narrow name in the ANSI code page (#1027).
+- A JPEG 2000 image of four components reads its ink in the `/ColorSpace` of its dictionary, such as
+  `/DeviceCMYK`. The decoder read cyan, magenta and yellow as red, green and blue and black as opacity, or
+  converted a CMYK JP2 with a formula of its own (#808).
+
 ## [0.14.0] - 2026-11-25
 
 ### Added

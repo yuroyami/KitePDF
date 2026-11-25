@@ -75,12 +75,18 @@ public class CbzPage internal constructor(
 
     private fun render(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
+        try {
+            // An image decode reads the cancellation too, so one large scan cannot hold the render (#905).
+            io.github.yuroyami.kitepdf.core.runCancellableDecodes(cancellation) { paint(canvas, deviceCtm, cancellation) }
+        } finally {
+            canvas.endPage()
+        }
+    }
+
+    private fun paint(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         val image = decoded?.get(entryName) ?: run {
             val bytes = readEntry()
-            if (cancellation?.isCancelled() == true) {
-                canvas.endPage()
-                return
-            }
+            if (cancellation?.isCancelled() == true) return
             bytes?.let { KiteImageData.fromEncodedImage(it) }?.withIdentity(imageIdentity)
                 ?.also { decoded?.put(entryName, it) }
         }
@@ -99,7 +105,6 @@ public class CbzPage internal constructor(
             // An animated scan draws the frame its player is on (#939).
             canvas.drawImage(animation?.currentFrame() ?: image, ctm)
         }
-        canvas.endPage()
     }
 
     private companion object {

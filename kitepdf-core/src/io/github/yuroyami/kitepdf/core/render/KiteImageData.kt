@@ -386,7 +386,7 @@ public class KiteImageData internal constructor(
                         null
                     }
                     val inked = if (lazy == null && ink != null) JpegInk.decode(terminal.bytes, ink, 1) else null
-                    val bm = if (lazy != null || inked != null) null else runCatching { ImageKodec.decode(terminal.bytes) }.getOrNull()
+                    val bm = if (lazy != null || inked != null) null else decodeOrNull { ImageKodec.decode(terminal.bytes, cancellationCheck = decodeCheck()) }
                     // The RGB of a four-component JPEG is converted already, so it stays device RGB.
                     val keep = keepsSpace && (lazy != null || inked != null || (bm != null && ink == null))
                     // The file stays in encodedBytes as well, the same array. If the first draw finds data
@@ -422,7 +422,7 @@ public class KiteImageData internal constructor(
                     // /DecodeParms entry (see loadJbig2Globals) (D-5).
                     val terminal = terminalBytesOf(stream)
                     val globals = loadJbig2Globals(terminal.terminalParams, dict["DecodeParms"], refs)
-                    val decoded = runCatching { Jbig2Decoder.decode(terminal.bytes, globals, width, height) }.getOrNull()
+                    val decoded = decodeOrNull { Jbig2Decoder.decode(terminal.bytes, globals, width, height, cancellationCheck = decodeCheck()) }
                     if (decoded != null) KiteImageData(
                         width, height, 1, "DeviceGray", Kind.RAW,
                         encodedBytes = ByteArray(0), pixelBytes = decoded,
@@ -450,8 +450,12 @@ public class KiteImageData internal constructor(
                     val declared = if (isMask) null else resolvedCs
                     val declaredComps = if (declared is KiteColorSpace.Indexed) 1 else declared?.componentCount ?: 0
                     val asStored = declared != null && (declaredComps == 1 || declaredComps == 3) && jpxStoresSamples(terminal.bytes)
+                    // Four components are read as stored, past the decoder's colour stage, which would
+                    // turn the fourth into opacity or convert the ink to RGB.
+                    val inkSpace = declaredComps == 4 && !isMask
                     fun keeps(decodedSpace: String): Boolean =
-                        asStored && declaredComps == (if (decodedSpace == "DeviceRGB") 3 else 1)
+                        if (decodedSpace == "DeviceCMYK") inkSpace
+                        else asStored && declaredComps == (if (decodedSpace == "DeviceRGB") 3 else 1)
                     fun spaceOf(decodedSpace: String): KiteColorSpace? = when {
                         keeps(decodedSpace) -> declared
                         decodedSpace == "DeviceRGB" -> KiteColorSpace.DeviceRGB
@@ -461,12 +465,19 @@ public class KiteImageData internal constructor(
                     // a mask, a colour key or its own opacity channel needs the samples now. A palette
                     // needs exact indices, which a reduced decode averages, so it decodes in full.
                     val lazy = if (alpha == null && colorKey == null && !isMask && declared !is KiteColorSpace.Indexed) {
-                        KiteImageSamples.jpx(terminal.bytes)
+                        (if (inkSpace) KiteImageSamples.jpxCmyk(terminal.bytes) else null) ?: KiteImageSamples.jpx(terminal.bytes)
                     } else {
                         null
                     }
-                    val raw = if (lazy != null) null else runCatching { JpxDecoder.decode(terminal.bytes) }.getOrNull()
-                    if (lazy != null) KiteImageData(
+                    val ink = if (lazy != null || !inkSpace) null else decodeOrNull {
+                        ImageKodec.decodeJpxComponents(terminal.bytes, cancellationCheck = decodeCheck())
+                    }?.takeIf { it.componentCount == 4 }
+                    val raw = if (lazy != null || ink != null) null else decodeOrNull { JpxDecoder.decode(terminal.bytes, cancellationCheck = decodeCheck()) }
+                    if (ink != null) KiteImageData(
+                        ink.width, ink.height, 8, cs, Kind.RAW, encodedBytes = ByteArray(0), pixelBytes = ink.samples,
+                        softMaskAlpha = alpha, softMaskWidth = smW, softMaskHeight = smH, softMaskMatte = matte,
+                        resolvedColorSpace = declared, colorKeyMask = colorKey, maskFill = fillColor,
+                    ) else if (lazy != null) KiteImageData(
                         lazy.width, lazy.height, 8, if (keeps(lazy.colorSpace)) cs else lazy.colorSpace, Kind.RAW, encodedBytes = ByteArray(0),
                         resolvedColorSpace = spaceOf(lazy.colorSpace),
                         maskFill = fillColor, samples = lazy,
@@ -544,15 +555,15 @@ public class KiteImageData internal constructor(
             val target = if (convertColor) ColorTarget.Srgb() else ColorTarget.Source
             return when (ImageFormat.sniff(bytes)) {
                 ImageFormat.PNG, ImageFormat.GIF, ImageFormat.WEBP, ImageFormat.AVIF, ImageFormat.JXL ->
-                    runCatching { ImageKodec.decode(bytes, applyOrientation, target) }.getOrNull()?.toKiteImageData()
+                    decodeOrNull { ImageKodec.decode(bytes, applyOrientation, target, cancellationCheck = decodeCheck()) }?.toKiteImageData()
                         ?.also { it.animation = KiteImageAnimation.of(bytes, applyOrientation) }
                 ImageFormat.JP2 -> encodedSamples(bytes, applyOrientation, jpx = true, target)
-                    ?: runCatching { ImageKodec.decode(bytes, applyOrientation, target) }.getOrNull()?.toKiteImageData()
+                    ?: decodeOrNull { ImageKodec.decode(bytes, applyOrientation, target, cancellationCheck = decodeCheck()) }?.toKiteImageData()
                 ImageFormat.BMP, ImageFormat.TIFF ->
-                    runCatching { ImageKodec.decode(bytes, applyOrientation, target) }.getOrNull()?.toKiteImageData()
+                    decodeOrNull { ImageKodec.decode(bytes, applyOrientation, target, cancellationCheck = decodeCheck()) }?.toKiteImageData()
                 ImageFormat.JPEG -> {
                     encodedSamples(bytes, applyOrientation, jpx = false, target)?.let { return it }
-                    runCatching { ImageKodec.decode(bytes, applyOrientation, target) }.getOrNull()?.let { return it.toKiteImageData() }
+                    decodeOrNull { ImageKodec.decode(bytes, applyOrientation, target, cancellationCheck = decodeCheck()) }?.let { return it.toKiteImageData() }
                     // A damaged or unsupported JPEG stream keeps
                     // its file and draws as a placeholder (#184), at its upright size.
                     val (fw, fh) = jpegFrame(bytes) ?: return null
@@ -703,13 +714,13 @@ public class KiteImageData internal constructor(
                     val bpc = (mdict.getInt("BitsPerComponent") ?: 8L).toInt()
                     bytes?.let { grayPlane(it, bpc, mw, mh) }?.let { Triple(it, mw, mh) }
                 }
-                Kind.JPEG -> runCatching { ImageKodec.decode(terminalBytesOf(mask).bytes) }.getOrNull()
+                Kind.JPEG -> decodeOrNull { ImageKodec.decode(terminalBytesOf(mask).bytes, cancellationCheck = decodeCheck()) }
                     ?.takeIf { it.width.toLong() * it.height <= MAX_MASK_SAMPLES }
                     ?.let { bm ->
                         val rgb = bm.toRgbBytes()
                         Triple(ByteArray(bm.width * bm.height) { rgb[it * 3] }, bm.width, bm.height)
                     }
-                Kind.JPEG2000 -> runCatching { JpxDecoder.decode(terminalBytesOf(mask).bytes) }.getOrNull()
+                Kind.JPEG2000 -> decodeOrNull { JpxDecoder.decode(terminalBytesOf(mask).bytes, cancellationCheck = decodeCheck()) }
                     ?.takeIf { it.width.toLong() * it.height in 1..MAX_MASK_SAMPLES }
                     ?.let { jpx ->
                         val n = (jpx.pixelBytes.size / (jpx.width * jpx.height)).coerceAtLeast(1)
@@ -858,7 +869,7 @@ public class KiteImageData internal constructor(
             Kind.JBIG2 -> {
                 val terminal = terminalBytesOf(mask)
                 val globals = loadJbig2Globals(terminal.terminalParams, mdict["DecodeParms"], refs)
-                runCatching { Jbig2Decoder.decode(terminal.bytes, globals, mw, mh) }.getOrNull()
+                decodeOrNull { Jbig2Decoder.decode(terminal.bytes, globals, mw, mh, cancellationCheck = decodeCheck()) }
             }
             else -> null
         }

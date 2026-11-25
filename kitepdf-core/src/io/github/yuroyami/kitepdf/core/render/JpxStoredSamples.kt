@@ -114,3 +114,28 @@ private fun sizComponents(d: ByteArray, start: Int): Int? {
     if (d[start + 2] != 0xFF.toByte() || d[start + 3] != 0x51.toByte()) return null
     return ((d[start + 40].toInt() and 0xFF) shl 8) or (d[start + 41].toInt() and 0xFF)
 }
+
+/**
+ * The component count of the codestream of [data], a raw codestream or a JP2, read from its SIZ
+ * segment, or null when the headers are cut short. ISO/IEC 15444-1, A.5.1 and I.5.1 (#808).
+ */
+internal fun jpxComponentCount(data: ByteArray): Int? {
+    if (data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0x4F.toByte()) return sizComponents(data, 0)
+    if (data.size < 12 || u32(data, 0) != 12L || u32(data, 4) != 0x6A502020L) return null
+    var p = 12
+    while (p + 8 <= data.size) {
+        var length = u32(data, p)
+        var body = p + 8
+        if (length == 1L) {
+            if (p + 16 > data.size) return null
+            length = (u32(data, p + 8) shl 32) or u32(data, p + 12)
+            body = p + 16
+        } else if (length == 0L) {
+            length = (data.size - p).toLong()
+        }
+        if (length < body - p || p + length > data.size) return null
+        if (u32(data, p + 4) == 0x6A703263L) return sizComponents(data, body) // jp2c
+        p = (p + length).toInt()
+    }
+    return null
+}

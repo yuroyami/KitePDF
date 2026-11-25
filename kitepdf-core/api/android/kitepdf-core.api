@@ -87,6 +87,10 @@ public abstract interface class io/github/yuroyami/kitepdf/core/KiteCancellation
 	public abstract fun isCancelled ()Z
 }
 
+public final class io/github/yuroyami/kitepdf/core/KiteCancellationKt {
+	public static final fun runCancellableDecodes (Lio/github/yuroyami/kitepdf/core/KiteCancellation;Lkotlin/jvm/functions/Function0;)Z
+}
+
 public final class io/github/yuroyami/kitepdf/core/KiteCaret {
 	public fun <init> (DDDDZ)V
 	public final fun getFrom ()D
