@@ -7,9 +7,8 @@ import kotlin.test.assertTrue
 
 /**
  * An encrypted file whose catalog and page tree sit in an object stream opens: the stream is decrypted as
- * a whole before its filters run (ISO 32000-1, 7.5.7, 7.6.2, #793). The files are
- * audit/fixtures/encrypted-object-streams/enc_objstm_r4.pdf and enc_objstm_r6.pdf, written by pikepdf
- * with an empty user password.
+ * a whole before its filters run (ISO 32000-1, 7.5.7, 7.6.2, #793). pikepdf wrote both files with an
+ * empty user password, one with AES-128 (revision 4) and one with AES-256 (revision 6).
  */
 class EncryptedObjectStreamTest {
 
