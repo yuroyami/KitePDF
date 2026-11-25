@@ -14,11 +14,11 @@ import platform.posix.fseek
 import platform.posix.ftell
 
 /*
- * This file is deliberately byte-identical in posixLp64Main, posixIlp32Main
- * and posixLlp64Main; keep the three copies in sync. One shared copy cannot
- * exist because the metadata compiler refuses stdio signatures whose C widths
- * differ between member targets. convert()/toLong() absorb the per-family
- * widths (ftell is 64-bit on LP64, 32-bit on ILP32 and MinGW).
+ * This file is deliberately byte-identical in posixLp64Main and posixIlp32Main; keep the two
+ * copies in sync. The posixLlp64Main copy differs only in its open call, which takes a UTF-16
+ * path on Windows (#1027). One shared copy cannot exist because the metadata compiler refuses
+ * stdio signatures whose C widths differ between member targets. convert()/toLong() absorb the
+ * per-family widths (ftell is 64-bit on LP64, 32-bit on ILP32 and MinGW).
  */
 @Suppress("REDUNDANT_CALL_OF_CONVERSION_METHOD")
 @OptIn(ExperimentalForeignApi::class)
