@@ -1,6 +1,7 @@
 package io.github.yuroyami.kitepdf
 
 import io.github.yuroyami.kitepdf.difftest.MutoolAcceptance
+import io.github.yuroyami.kitepdf.font.orOracle
 import io.github.yuroyami.kitepdf.writer.EmbeddedFont
 import io.github.yuroyami.kitepdf.writer.PdfBuilder
 import java.io.File
@@ -63,10 +64,11 @@ class Cff2PopplerTest {
 
     @Test
     fun mutool_accepts_the_file() {
-        val mutool = tool("mutool")
-        assumeTrue("mutool", mutool != null)
+        // CI provides its pinned oracle only through MUTOOL, so a lookup on the usual paths alone
+        // skipped this test on every CI run (#688).
+        val mutool = (System.getenv("MUTOOL")?.takeIf { File(it).canExecute() } ?: tool("mutool")).orOracle("mutool")
         val file = pdf()
         val png = File.createTempFile("cff2", ".png").apply { deleteOnExit() }
-        MutoolAcceptance.assertAccepted(MutoolAcceptance.run(File(mutool!!), "draw", "-o", png.absolutePath, file.absolutePath), "the PDF with a CFF2 font")
+        MutoolAcceptance.assertAccepted(MutoolAcceptance.run(File(mutool), "draw", "-o", png.absolutePath, file.absolutePath), "the PDF with a CFF2 font")
     }
 }
