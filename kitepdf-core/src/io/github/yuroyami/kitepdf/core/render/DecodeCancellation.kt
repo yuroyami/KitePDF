@@ -1,9 +1,13 @@
 package io.github.yuroyami.kitepdf.core.render
 
 import io.github.yuroyami.kitepdf.core.DecodeCancellationSlot
+import kotlin.coroutines.cancellation.CancellationException
 
-/** Thrown by [decodeCheck] to stop an image decode whose render was cancelled (#905). */
-internal class DecodeCancelled : RuntimeException("the image decode was cancelled")
+/**
+ * Thrown by [decodeCheck] to stop an image decode whose render was cancelled (#905). It is a
+ * [CancellationException], so a module that catches failures around a decode can let it through.
+ */
+internal class DecodeCancelled : CancellationException("the image decode was cancelled")
 
 /**
  * The check that an ImageKodec decode on this thread runs, or null outside

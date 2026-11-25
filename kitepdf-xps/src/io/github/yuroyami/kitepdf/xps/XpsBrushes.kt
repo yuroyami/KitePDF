@@ -94,6 +94,9 @@ internal class XpsBrushes(
                 val decoded = profile?.let { stored.withIccProfile(it) } ?: stored
                 val dpi = imageDpi(bytes)
                 Image(decoded, decoded.width * 96.0 / dpi.first, decoded.height * 96.0 / dpi.second)
+            }.onFailure {
+                // A cancelled decode is not an unreadable image, so it is neither kept nor warned about (#905).
+                if (it is kotlin.coroutines.cancellation.CancellationException) throw it
             }.getOrNull()
         } ?: run {
             unreadable += key

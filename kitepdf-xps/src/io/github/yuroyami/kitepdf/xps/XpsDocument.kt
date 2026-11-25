@@ -153,7 +153,12 @@ public class XpsPage internal constructor(
                 val ctm = deviceCtm.concat(KiteMatrix.scaling(POINTS_PER_UNIT, POINTS_PER_UNIT))
                 val clip = KitePath.Builder().apply { rectangle(0.0, 0.0, width, height) }.build()
                 canvas.pushClip(clip, ctm, false)
-                try { XpsRenderer(packageData, part, cancellation).render(page, canvas, ctm) } finally { canvas.popClip() }
+                try {
+                    // An image decode reads the cancellation too, so one large image cannot hold the render (#905).
+                    io.github.yuroyami.kitepdf.core.runCancellableDecodes(cancellation) {
+                        XpsRenderer(packageData, part, cancellation).render(page, canvas, ctm)
+                    }
+                } finally { canvas.popClip() }
             }
         } finally { canvas.endPage() }
     }

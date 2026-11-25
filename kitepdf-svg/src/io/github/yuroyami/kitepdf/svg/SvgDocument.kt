@@ -79,7 +79,10 @@ public class SvgPage internal constructor(
 
     private fun render(canvas: KiteCanvas, deviceCtm: KiteMatrix, cancellation: KiteCancellation?) {
         canvas.beginPage(displayWidth, displayHeight, deviceCtm)
-        image.render(canvas, deviceCtm, loadResource = null, stop = cancellation)
+        // An image decode reads the cancellation too, so one large embedded image cannot hold the render (#905).
+        io.github.yuroyami.kitepdf.core.runCancellableDecodes(cancellation) {
+            image.render(canvas, deviceCtm, loadResource = null, stop = cancellation)
+        }
         canvas.endPage()
     }
 

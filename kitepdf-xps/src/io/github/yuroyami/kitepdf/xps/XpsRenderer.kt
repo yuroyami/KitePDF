@@ -162,6 +162,9 @@ internal class XpsRenderer(
                     mark.name?.let { name -> mark.nameBox?.let { pass.names.getOrPut(name) { it } } }
                 }
             }
+        } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
+            // A cancelled image decode stops the render; it is not an unreadable element (#905).
+            throw cancelled
         } catch (_: Exception) {
             kiteWarn { "xps: skipped unreadable ${el.tag} element" }
         }
