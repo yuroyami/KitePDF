@@ -15,7 +15,6 @@ import io.github.yuroyami.kitepdf.core.parser.PdfDictionary
 import io.github.yuroyami.kitepdf.core.parser.PdfInt
 import io.github.yuroyami.kitepdf.core.parser.PdfReal
 import io.github.yuroyami.kitepdf.core.parser.PdfReference
-import io.github.yuroyami.kitepdf.core.parser.PdfStream
 import io.github.yuroyami.kitepdf.core.render.KiteMatrix
 import io.github.yuroyami.kitepdf.render.PageRenderer
 import io.github.yuroyami.kitepdf.core.render.KiteCanvas
@@ -220,7 +219,7 @@ public class PdfPage internal constructor(
      */
     public val contentBytes: ByteArray
         get() = contentCache ?: (
-            PageContents.concatenated(node["Contents"]) { document.resolve(it) as? PdfStream }
+            PageContents.concatenated(node["Contents"]) { document.resolve(it) }
                 ?: ByteArray(0).also { kiteWarn { "page $index: /Contents is not a stream or an array" } }
             ).also { contentCache = it; document.pageCachesFilled(this) }
 

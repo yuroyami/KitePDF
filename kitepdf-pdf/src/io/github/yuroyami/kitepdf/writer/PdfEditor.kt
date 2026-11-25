@@ -1422,7 +1422,7 @@ public class PdfEditor internal constructor(
      */
     private fun effectiveContentBytes(ref: PdfReference): ByteArray =
         io.github.yuroyami.kitepdf.PageContents.concatenated(effectivePageDict(ref)["Contents"]) {
-            effectiveObject(it.objectNumber) as? PdfStream
+            effectiveObject(it.objectNumber)
         } ?: ByteArray(0)
 
     /**

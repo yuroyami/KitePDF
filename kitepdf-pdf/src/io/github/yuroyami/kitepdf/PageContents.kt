@@ -20,37 +20,47 @@ internal object PageContents {
      * between them; a member that will not resolve or decode is skipped, so
      * one bad chunk cannot blank the page. Returns null for a `/Contents`
      * value of an illegal type, so the caller picks throw or empty.
+     *
+     * A reference may name the array itself as well as a stream (ISO 32000-1, 7.7.3.3, Table 30),
+     * so [resolve] returns any object and the array branch runs for it (#1026).
      */
     fun concatenated(
         contents: PdfObject?,
-        resolveStream: (PdfReference) -> PdfStream?,
+        resolve: (PdfReference) -> PdfObject?,
     ): ByteArray? = when (contents) {
         null -> ByteArray(0)
-        is PdfReference -> resolveStream(contents)?.let(::decodeOrNull) ?: ByteArray(0)
-        is PdfStream -> decodeOrNull(contents) ?: ByteArray(0)
-        is PdfArray -> {
-            val buf = ByteArrayBuilder(4096)
-            var first = true
-            // A member that the array names again reuses its decoded bytes, and the members share
-            // one budget: the 512 MiB cap was per member, so a 66 KB file that named one 64 MiB
-            // stream of spaces 16 times joined a gigabyte and threw OutOfMemoryError (#1018).
-            val decoded = HashMap<PdfReference, ByteArray?>()
-            var total = 0L
-            for (part in contents) {
-                val ref = part as? PdfReference ?: continue
-                val bytes = (if (decoded.containsKey(ref)) decoded[ref] else resolveStream(ref)?.let(::decodeOrNull).also { decoded[ref] = it }) ?: continue
-                total += bytes.size + 1
-                if (total > MAX_PAGE_CONTENT) {
-                    kiteWarn { "render: the content of a page passes $MAX_PAGE_CONTENT bytes; the rest is dropped" }
-                    break
-                }
-                if (!first) buf.append('\n'.code.toByte())
-                buf.append(bytes)
-                first = false
-            }
-            buf.toByteArray()
+        is PdfReference -> when (val target = resolve(contents)) {
+            is PdfStream -> decodeOrNull(target) ?: ByteArray(0)
+            is PdfArray -> joined(target) { resolve(it) as? PdfStream }
+            else -> ByteArray(0)
         }
+        is PdfStream -> decodeOrNull(contents) ?: ByteArray(0)
+        is PdfArray -> joined(contents) { resolve(it) as? PdfStream }
         else -> null
+    }
+
+    /** The members of a `/Contents` array, decoded and joined with a newline between them. */
+    private fun joined(contents: PdfArray, resolveStream: (PdfReference) -> PdfStream?): ByteArray {
+        val buf = ByteArrayBuilder(4096)
+        var first = true
+        // A member that the array names again reuses its decoded bytes, and the members share
+        // one budget: the 512 MiB cap was per member, so a 66 KB file that named one 64 MiB
+        // stream of spaces 16 times joined a gigabyte and threw OutOfMemoryError (#1018).
+        val decoded = HashMap<PdfReference, ByteArray?>()
+        var total = 0L
+        for (part in contents) {
+            val ref = part as? PdfReference ?: continue
+            val bytes = (if (decoded.containsKey(ref)) decoded[ref] else resolveStream(ref)?.let(::decodeOrNull).also { decoded[ref] = it }) ?: continue
+            total += bytes.size + 1
+            if (total > MAX_PAGE_CONTENT) {
+                kiteWarn { "render: the content of a page passes $MAX_PAGE_CONTENT bytes; the rest is dropped" }
+                break
+            }
+            if (!first) buf.append('\n'.code.toByte())
+            buf.append(bytes)
+            first = false
+        }
+        return buf.toByteArray()
     }
 
     /**
