@@ -46,10 +46,19 @@ class SvgCancelledImageDecodeTest {
         return ByteArrayOutputStream().also { ImageIO.write(image, "jpg", it) }.toByteArray()
     }
 
-    private fun millis(block: () -> Unit): Long {
-        val start = System.nanoTime()
-        block()
-        return (System.nanoTime() - start) / 1_000_000
+    /**
+     * A cancellation that turns true at its [flipAt]th call, or never when [flipAt] is 0, and keeps
+     * the time of that call. The render reads it between elements and the decode reads it as it
+     * goes, so the call at a tenth of a full render's calls is well inside the image decode.
+     */
+    private class CountingCancellation(private val flipAt: Int, private val markAt: Int = flipAt) : KiteCancellation {
+        var calls = 0
+        var markedAt = 0L
+        override fun isCancelled(): Boolean {
+            calls++
+            if (calls == markAt) markedAt = System.nanoTime()
+            return flipAt in 1..calls
+        }
     }
 
     @Test
@@ -65,15 +74,24 @@ class SvgCancelledImageDecodeTest {
             }
         val page = SvgDocument.open(bytes).pages.single()
 
+        // The clock starts inside the decode, so the parse and the base64 decode of the data URL,
+        // which no cancellation reaches, count in neither render (#905).
         val warm = FullDecodeCanvas()
-        val full = millis { render(page, warm) }
+        val counter = CountingCancellation(flipAt = 0)
+        render(page, warm, counter)
         assertEquals(1, warm.drawn, "the image decodes")
+        val mark = counter.calls / 10
+        assertTrue(mark > 1, "the decode read the cancellation ${counter.calls} times")
+        val timed = CountingCancellation(flipAt = 0, markAt = mark)
+        render(page, FullDecodeCanvas(), timed)
+        val full = (System.nanoTime() - timed.markedAt) / 1_000_000
 
         val cancelledCanvas = FullDecodeCanvas()
-        val start = System.nanoTime()
-        val cancelled = millis { render(page, cancelledCanvas, KiteCancellation { System.nanoTime() - start > 10_000_000 }) }
+        val flip = CountingCancellation(flipAt = mark)
+        render(page, cancelledCanvas, flip)
+        val cancelled = (System.nanoTime() - flip.markedAt) / 1_000_000
         assertEquals(0, cancelledCanvas.drawn, "the cancelled render drew the image")
-        assertTrue(cancelled * 4 < full, "the cancelled render took $cancelled ms, the full one $full ms")
+        assertTrue(cancelled * 4 < full, "the cancelled render took $cancelled ms after the cancel, the full one $full ms")
 
         val again = FullDecodeCanvas()
         render(page, again)
