@@ -2,9 +2,33 @@
 
 A Kotlin Multiplatform library for reading and writing PDF, EPUB, CBZ, SVG and XPS/OpenXPS, with one Compose viewer for all of them.
 
-Read `CONTRIBUTING.md` first: it holds the ground rules, the references, and the gate you must run before every commit.
+Read `CONTRIBUTING.md` first: it holds the ground rules, the references, and the gate. Where it and the rules below differ, the rules below apply to an agent.
 
 Open work lives in GitHub Issues. There is no private planning file, and there never will be one again. If a plan needs writing, it is a tracking issue.
+
+## Rules for agents
+
+### Git and CI
+
+- Work on the current branch, which is `main`. Do not create or switch branches.
+- Write commit subjects in lower case, as Conventional Commits. Add no `Co-Authored-By` line and no "Generated with" line.
+- Fetch, then push after each batch of commits. Do not ask first.
+- A CI run takes hours. Push one batch, then wait for its run to end before the next push, because a new push cancels the run.
+- Add `[skip ci]` to the last commit of a push that only changes docs, removes files or syncs history.
+- Never re-run a failed job or start `workflow_dispatch` without the maintainer's yes.
+- Write `Fixes #n` in a commit body only when the commit proves the whole "How to check it is done" of the issue, because GitHub closes the issue on push. Otherwise name the issue in the subject.
+- Close an issue only when its check is proven. Otherwise post a short comment that names the commit and what is still open.
+
+### Builds and tests
+
+- Before a build, check that `settings.kotlin.version` in `common.module-template.yaml` is 2.4.21 or newer. An older version downloads a Kotlin/Native toolchain of about 10 GB into `~/.konan` again. If it is older, ask before you build.
+- Other sessions build on the same machine. Run heavy jobs (`./kotlin`, test runs) one at a time. Check `jps -l` and `memory_pressure | tail -1` first. If free memory is under about 25%, wait or build fewer modules.
+- Test the modules that a change touches, with `-m <module> -p jvm` for each. Run the full `./kotlin test -p jvm` when a change can move a rendered page, because the differential sweep lives in kitepdf-native-renderer.
+- Compile a Kotlin/Native target only when the change has code for it: for example `src@apple`, `src@ios`, `src@macos` or `src@mingw`, cinterop, or Swift and Xcode files. For any other change, the JVM and common compile is enough. This rule wins over the "Build every target on a Mac" step of CONTRIBUTING.md.
+- For a public API change in common code, edit the `.klib.api` dump by hand, in the form of the lines next to it. CI's `api` job checks every target. When a macOS klib of the module is already built, check the new line against it with `~/.konan/kotlin-native-prebuilt-macos-aarch64-2.4.21/bin/klib dump-abi build/tasks/_<module>_compileMacosArm64Debug/<module>.klib`.
+- A declaration that only some targets have gets its own `// Targets:` block and alias in the dump, which a hand edit gets wrong. Build those targets and run `./kotlin do updateKlibAbi -m <module>` instead.
+- Never boot an emulator or a simulator without the maintainer's yes in the current session. `-p iosSimulatorArm64` tests boot a simulator. macOS host tests (`-p macosArm64`) and Android host tests (`-p android`, on Robolectric) need no device. CI's `apple` job runs the iOS simulator tests.
+- Never say a change works without command output. Check what you changed: build and test code, parse config files, and re-read docs.
 
 ## Gotchas
 
@@ -53,7 +77,6 @@ Things a previous change taught the hard way. One line each. Delete a line when 
 - A lone surrogate in a string literal becomes `?` on Kotlin/JS. Build it from `Char` values with `charArrayOf(...).concatToString()`.
 - A debug build for Kotlin/Native takes about 10 KB of stack for each level of EPUB layout, three times a release build, and a secondary thread on Apple platforms has 512 KB. Measure a nesting limit there, not on the JVM (#450).
 - The JVM runs a book's scripts on a 16 MB thread, so a host walk that recurses once per DOM level passes there and overflows Node's stack on JS and wasm. Walk a script's tree with a stack of its own (#955).
-- KiteJS 0.7.0 frees the handles of collected wrappers in quadratic time, and on JS the collector runs inside whichever test allocates, so a test that builds a big tree pays for the garbage of the tests before it and outruns the 5 s script budget. KiteJS 324a862 fixes it; delete this line once KitePDF takes a KiteJS release with it.
 - The page text has a line break wherever a narrow box wraps, so two words that a test looks for can sit on two lines. Fold white space before the search, or wrapped text reads as lost text (#450).
 - Git treats a PDF without NUL bytes as text, and `core.autocrlf=input` rewrote the line endings of a corpus PDF on commit, so its SHA-256 no longer matched. `.gitattributes` marks PDF and EPUB binary; keep it that way.
 - JFR's default execution samples do not see native frames, so zlib inflate and Java2D drawing vanish from a profile. Add native-method samples or a stage timer before you trust the shares (#462).
