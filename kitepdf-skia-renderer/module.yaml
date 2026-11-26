@@ -22,11 +22,10 @@ description: >-
   Compose-free Skia (Skiko) rasterizer for KitePDF - headless page-to-PNG rendering of PDF and EPUB for JVM servers
   and CLIs.
 
-# The targets whose tests draw through Skiko on this machine's kind of host: the JVM and Linux.
-# Android host tests cannot load Skiko's Android library, and the Apple targets link through Xcode,
-# which only a Mac checks (#768).
+# The targets whose tests draw through Skiko in CI: the JVM, Linux, macOS and the iOS simulator.
+# Android host tests cannot load Skiko's Android library (#768).
 aliases:
-  - skikoHost: [ jvm, linuxX64, linuxArm64 ]
+  - skikoHost: [ jvm, linuxX64, linuxArm64, macosArm64, iosSimulatorArm64 ]
 
 apply:
   - //common.module-template.yaml

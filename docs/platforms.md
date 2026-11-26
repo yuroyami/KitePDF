@@ -77,10 +77,10 @@ CI compiles every target in the table on each push and pull request. It runs the
 | --- | --- |
 | JVM | All artifacts, plus the pixel comparisons with MuPDF and PDFium, and the font, shaping and signature oracle tests against MuPDF's fonts, `hb-shape` and `pdfsig` |
 | Android | Host tests on the JVM for the format modules, `-javascript`, `-compose-viewer` and `-native-renderer`. No test runs on a device or an emulator. |
-| iOS simulator arm64 | The format modules, `kitepdf`, `-javascript`, `-net`, and the common tests of `-compose-viewer` and `-native-renderer` |
-| macOS arm64 | The format modules, `kitepdf`, `-javascript`, `-net`, `-native-renderer` and `-compose-viewer` |
+| iOS simulator arm64 | The format modules, `kitepdf`, `-javascript`, `-net`, `-media`, `-skia-renderer`, and the common tests of `-compose-viewer` and `-native-renderer` |
+| macOS arm64 | The format modules, `kitepdf`, `-javascript`, `-net`, `-native-renderer`, `-compose-viewer` and `-skia-renderer` |
 | JS | The format modules, `-javascript` and `-net` on Node, and `-native-renderer` in headless Chrome |
-| Linux x64 | The format modules, `-javascript` and `-net` |
+| Linux x64 | The format modules, `-javascript`, `-net` and `-skia-renderer` |
 | Windows x64 | The format modules, `kitepdf`, `-javascript` and `-net` |
 | wasmJs | The format modules, `-javascript` and `-net` on Node, and `-compose-viewer` in headless Chrome |
 | wasmWasi | The format modules on Node |

@@ -48,7 +48,7 @@ private fun UIWindowScene.requestOrientations(mask: ULong) {
 }
 
 /** UIKit defines each orientation's mask as one shifted left by the orientation's value. */
-private fun maskOf(orientation: UIInterfaceOrientation): ULong = 1uL shl orientation.toInt()
+internal fun maskOf(orientation: UIInterfaceOrientation): ULong = 1uL shl orientation.toInt()
 
 /** The scene's geometry request, which iOS 16 added. */
 private const val GEOMETRY_REQUEST = "requestGeometryUpdateWithPreferences:errorHandler:"
